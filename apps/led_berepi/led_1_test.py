@@ -85,6 +85,6 @@ while True:
         ledall_off()
         ledr_on()
 
-    time.sleep(1)
+    time.sleep(0.5)
 
 GPIO.cleanup()
