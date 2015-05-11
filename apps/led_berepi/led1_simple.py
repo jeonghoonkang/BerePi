@@ -1,4 +1,4 @@
-## This code for LED BD 00
+## This code for BEREPI_LED_BD_00
 
 import serial,os,time
 import sys
