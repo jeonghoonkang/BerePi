@@ -80,17 +80,32 @@ led_time_idx = 0
 
 while True:
     led_time_idx += 1
-    if ((led_time_idx % 3) == 0) :
+    if ((led_time_idx % 6) == 0) :
         ledall_off()
         ledb0_on()
         ledb1_on()
 
-    elif ((led_time_idx % 3) == 1) :
+    elif ((led_time_idx % 6) == 1) :
         ledall_off()
         ledg0_on()
         ledg1_on()
 
-    elif ((led_time_idx % 3) ==  2) :
+    elif ((led_time_idx % 6) ==  2) :
+        ledall_off()
+        ledr0_on()
+        ledr1_on()
+
+    elif ((led_time_idx % 6) == 3) :
+        ledall_off()
+        ledb1_on()
+        ledb0_on()
+
+    elif ((led_time_idx % 6) == 4) :
+        ledall_off()
+        ledg0_on()
+        ledg1_on()
+
+    elif ((led_time_idx % 6) ==  5) :
         ledall_off()
         ledr0_on()
         ledr1_on()

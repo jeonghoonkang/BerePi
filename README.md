@@ -1,4 +1,5 @@
 # BerePi
+# Jeonghoon Kang (jeonghoon.kang at gmail)
 Wireless Sensor Network (WSN) using RaspberryPi 
 
 
