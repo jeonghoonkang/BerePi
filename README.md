@@ -6,5 +6,5 @@ You can add wireless sensors to your cyber space simply trying to add BerePi mod
 BerePi project opens software which using BerePi hardware modules. 
 Please keep track the project.
 
-Simple LED video \\
+Simple LED video 
 https://youtu.be/ygJ3qMiGQvw
