@@ -1,5 +1,5 @@
 # http://www.raspberrypi-spy.co.uk/2012/07/16x2-lcd-module-control-using-python/
-
+# Hitachi HD44780 LCD controller
 #!/usr/bin/python
 #--------------------------------------
 #    ___  ___  _ ____
