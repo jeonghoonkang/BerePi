@@ -1,12 +1,12 @@
 ## This code for LED BD 00
 
-thispath='...raspi/hwlib/leds/'
+thispath='...BerePi/trunk/apps/led_berepi'
 
 import time
 import sys
 import RPi.GPIO as GPIO
 
-debug_print = 0
+debug_print = 1
 # if LED PCB has GND pcb_GND = 1, otherwise 0
 # hsetting : it is HW setting, you should check it
 pcb_GND = 1
@@ -18,7 +18,6 @@ bdname = "led.00"
 bled = 16
 gled = 20
 rled = 21
-
 
 # below assuming that you are using LEDs PCB board with GND
 def ledb_on(): 

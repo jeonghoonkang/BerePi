@@ -2,11 +2,13 @@
 ## It will show LED Blue ON, 30secs after booting
 ## We can easily check the booting has problem
 
+thispath='...BerePi/trunk/apps/led_berepi'
+
 import sys
 sys.path.append("../leds")
 from ledinit import *
 
-debug_print = 0
+debug_print = 1
 
 def BootLed():
 	ledb_on()
@@ -15,8 +17,8 @@ def BootLed():
 	time.sleep(1)
 
 if __name__== "__main__" :
-    if debug_print is 1: print "(booted.py) >> Starting "
+    if debug_print is 1: print "(%s/booted.py) >> Starting " %thispath
     while True:
         BootLed()
-        if debug_print is 1: print "(booted.py) >> end of a loop"
+        if debug_print is 1: print "(%s/booted.py) >> end of a loop" %thispath
     GPIO.cleanup()
