@@ -3,3 +3,8 @@
     - Unzip it and write img file to SD card
     - if you using more size than 8 GB SD Card, run sudo raspi-config and expand SD memory size
     - check by "df -h", whether you are using full of SD memory size which you want.
+  - After installation BerePi supports automatic installation of Python packages and shell config settting
+    - if you have init.sh in /home/pi, just "source init.sh"
+    - otherwise, use " wget http://125.7.128.54:8070/wordpress/pub/init.sh" to download installation script.
+    - and just "source init.sh"
+  
