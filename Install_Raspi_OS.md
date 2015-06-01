@@ -8,4 +8,4 @@
     - if you have "init.sh" file in '/home/pi', just "source init.sh"
     - otherwise, use " wget http://125.7.128.54:8070/wordpress/pub/init.sh" to download installation script.
     - and just "source init.sh"
-  
+  - id / password : pi / tinyos, it has sudo permission
