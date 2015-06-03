@@ -1,5 +1,6 @@
-## This code for T100, ELT CO2 sensor
-## Please see details for the CO2 sensor : ....
+## This code for T110, ELT CO2 sensor
+## Please see details for the CO2 sensor data sheet : ....
+## Author : jeonghoon.kang@gmail.com
 
 import serial,os,time
 import sys
@@ -49,11 +50,13 @@ def led2Off():
 	GPIO.output(24, False)
 def led3Off():
 	GPIO.output(25, False)
+	
 def ledAllOff():
 	led0Off()
 	led1Off()
 	led2Off()
 	led3Off()
+	
 def ledAllOn():
 	led0On()
 	led1On()
@@ -77,6 +80,7 @@ def rled2Off():
 	led2On()
 def rled3Off():
 	led3On()
+	
 def rledAllOff():
 	ledAllOn()
 def rledAllOn():
@@ -92,6 +96,7 @@ def rled0Blink():
 	led0Off()
 	time.sleep(0.3)
 	led0On()
+	
 def rled1Blink():
 	led1On()
 	time.sleep(0.5)
@@ -102,6 +107,7 @@ def rled1Blink():
 	led1Off()
 	time.sleep(0.3)
 	led1On()
+	
 def rled2Blink():
 	led2On()
 	time.sleep(0.5)
@@ -112,6 +118,7 @@ def rled2Blink():
 	led2Off()
 	time.sleep(0.3)
 	led2On()
+	
 def rled3Blink():
 	led3On()
 	time.sleep(0.5)
