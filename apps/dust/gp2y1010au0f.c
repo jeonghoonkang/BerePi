@@ -1,4 +1,4 @@
-
+/*
 GP2Y1010AU0F library 0x01
 
 copyright (c) Davide Gironi, 2012
