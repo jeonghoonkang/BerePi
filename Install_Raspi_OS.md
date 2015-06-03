@@ -1,4 +1,4 @@
-## Install Raspi OS
+##### Install Raspi OS
   - Please download below RasberryPi OS - Rapberrian based on 2015 05 05 version
     - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_8G_2015_0531.zip
     - Unzip it and write img file to SD card
@@ -10,5 +10,10 @@
     - otherwise, use " wget http://125.7.128.54:8070/wordpress/pub/init.sh" to download installation script.
     - and just "source init.sh"
   - id / password : pi / tinyos, it has sudo permission
-   
+
+##### Setup shell environment and packages
+  - download shell script from http://125.7.128.54:8070/pub/init.sh
+  - and just run 'source init.sh'
+    - Be carefull that init.sh will change your /etc/rc.local, /etc/resolv, /etc/network/interfaces
+    - If you just want update SW package installation, look into the file init.sh, which has setup_apt.sh process, you will be able to easily catch the path
   
