@@ -1,3 +1,5 @@
+
+
 # Author: jeonghoon.kang@gmail.com
 
 wget -N http://125.7.128.54:8070/wordpress/pub/devel/setup_linux/setup_shell.sh
