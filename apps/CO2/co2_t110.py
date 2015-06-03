@@ -210,7 +210,7 @@ except serial.SerialException, e:
 	rled2Off()
 	rled3Off()
 
-while 1:
+while True:
 	ppm = 0
 	try:
 		in_byte = serial_in_device.read(SERIAL_READ_BYTE) 
