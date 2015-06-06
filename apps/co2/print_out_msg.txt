@@ -1,0 +1,70 @@
+-----\/---------\/------
+serial_in_byte[0]:  String:       Hex:  20
+serial_in_byte[1]:  String:       Hex:  20
+serial_in_byte[2]:  String:       Hex:  20
+serial_in_byte[3]:  String: 8     Hex:  38
+serial_in_byte[4]:  String: 7     Hex:  37
+serial_in_byte[5]:  String: 0     Hex:  30
+serial_in_byte[6]:  String:       Hex:  20
+serial_in_byte[7]:  String: p     Hex:  70
+serial_in_byte[8]:  String: p     Hex:  70
+serial_in_byte[9]:  String: m     Hex:  6d
+serial_in_byte[10]:  escape: 0x0d  Hex:  0d
+serial_in_byte[11]:  escape: 0x0a  Hex:  0a
+CO2 Level is 870 ppm : 2015-03-28 23:12:50
+-----\/---------\/------
+serial_in_byte[0]:  String:       Hex:  20
+serial_in_byte[1]:  String:       Hex:  20
+serial_in_byte[2]:  String:       Hex:  20
+serial_in_byte[3]:  String: 8     Hex:  38
+serial_in_byte[4]:  String: 6     Hex:  36
+serial_in_byte[5]:  String: 6     Hex:  36
+serial_in_byte[6]:  String:       Hex:  20
+serial_in_byte[7]:  String: p     Hex:  70
+serial_in_byte[8]:  String: p     Hex:  70
+serial_in_byte[9]:  String: m     Hex:  6d
+serial_in_byte[10]:  escape: 0x0d  Hex:  0d
+serial_in_byte[11]:  escape: 0x0a  Hex:  0a
+CO2 Level is 866 ppm : 2015-03-28 23:12:55
+-----\/---------\/------
+serial_in_byte[0]:  String:       Hex:  20
+serial_in_byte[1]:  String:       Hex:  20
+serial_in_byte[2]:  String:       Hex:  20
+serial_in_byte[3]:  String: 8     Hex:  38
+serial_in_byte[4]:  String: 6     Hex:  36
+serial_in_byte[5]:  String: 3     Hex:  33
+serial_in_byte[6]:  String:       Hex:  20
+serial_in_byte[7]:  String: p     Hex:  70
+serial_in_byte[8]:  String: p     Hex:  70
+serial_in_byte[9]:  String: m     Hex:  6d
+serial_in_byte[10]:  escape: 0x0d  Hex:  0d
+serial_in_byte[11]:  escape: 0x0a  Hex:  0a
+CO2 Level is 863 ppm : 2015-03-28 23:13:00
+-----\/---------\/------
+serial_in_byte[0]:  String:       Hex:  20
+serial_in_byte[1]:  String:       Hex:  20
+serial_in_byte[2]:  String:       Hex:  20
+serial_in_byte[3]:  String: 8     Hex:  38
+serial_in_byte[4]:  String: 6     Hex:  36
+serial_in_byte[5]:  String: 1     Hex:  31
+serial_in_byte[6]:  String:       Hex:  20
+serial_in_byte[7]:  String: p     Hex:  70
+serial_in_byte[8]:  String: p     Hex:  70
+serial_in_byte[9]:  String: m     Hex:  6d
+serial_in_byte[10]:  escape: 0x0d  Hex:  0d
+serial_in_byte[11]:  escape: 0x0a  Hex:  0a
+CO2 Level is 861 ppm : 2015-03-28 23:13:05
+-----\/---------\/------
+serial_in_byte[0]:  String:       Hex:  20
+serial_in_byte[1]:  String:       Hex:  20
+serial_in_byte[2]:  String:       Hex:  20
+serial_in_byte[3]:  String: 8     Hex:  38
+serial_in_byte[4]:  String: 5     Hex:  35
+serial_in_byte[5]:  String: 9     Hex:  39
+serial_in_byte[6]:  String:       Hex:  20
+serial_in_byte[7]:  String: p     Hex:  70
+serial_in_byte[8]:  String: p     Hex:  70
+serial_in_byte[9]:  String: m     Hex:  6d
+serial_in_byte[10]:  escape: 0x0d  Hex:  0d
+serial_in_byte[11]:  escape: 0x0a  Hex:  0a
+CO2 Level is 859 ppm : 2015-03-28 23:13:10
