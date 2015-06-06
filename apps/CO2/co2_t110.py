@@ -1,5 +1,5 @@
 ## This code for T110, ELT CO2 sensor
-## Please see details for the CO2 sensor data sheet : ....
+## Please see details for the CO2 sensor data sheet : http://eltsensor.co.kr/2012/eng/pdf/T-110/DS_T-110-3V_ver1.210.pdf
 ## Author : jeonghoon.kang@gmail.com
 
 import serial,os,time
