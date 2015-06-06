@@ -1,5 +1,6 @@
+# Author : jeonghoon.kang@gmail.com
 
-export DNPATH='http://125.7.128.54:8070/wordpress/pub/devel/setup_linux'
+export DNPATH='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup'
 
 export bashrc_file=$DNPATH/.bashrc
 wget -N $bashrc_file
