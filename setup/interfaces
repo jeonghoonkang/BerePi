@@ -4,7 +4,7 @@ iface lo inet loopback
 
 auto eth0
 allow-hotplug eth0
-iface eth0 inet manual
+#iface eth0 inet manual
 
 #allow-hotplug wlan0
 #iface wlan0 inet manual
@@ -25,8 +25,8 @@ iface eth0 inet manual
 #broadcast 168.126.63.1
 #dns-nameservers 8.8.8.8
 
-auto wlan0
-allow-hotplug wlan0
-iface wlan0 inet dhcp
-wpa-ssid "yebbi"
-wpa-psk ""
+#auto wlan0
+#allow-hotplug wlan0
+#iface wlan0 inet dhcp
+#wpa-ssid "yebbi"
+#wpa-psk ""
