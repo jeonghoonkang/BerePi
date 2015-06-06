@@ -1,0 +1,49 @@
+#!/bin/sh -e
+#
+# rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Make sure that the script will "exit 0" on success or any other
+# value on error.
+#
+# In order to enable or disable this script just change the execution
+# bits.
+#
+# By default this script does nothing.
+
+# Print the IP address
+_IP=$(hostname -I) || true
+if [ "$_IP" ]; then
+  printf "My IP address is %s\n" "$_IP"
+fi
+
+#####################################################################
+# Using Dust Sensor, CO2 Sensor
+#####################################################################
+#cd /home/pi/devel/danalytics/raspi/hw_driver/sensor/dust/
+#screen -dms dust sudo python /home/pi/devel/danalytics/raspi/hw_driver/sensor/dust/dust_gp2y1010.py
+#screen -dms co2 sudo python /home/pi/devel/danalytics/raspi/hw_driver/sensor/co2/t110/co2_t110_3v.py
+
+#####################################################################
+# Using LED Booting : BerePi
+#####################################################################
+cd /home/pi/BerePi/trunk/apps/led_berepi
+pwd
+echo "make run start LED"
+screen -dmS ledtest sudo python booted.py
+cd
+
+#####################################################################
+# Using STALK : remote channel access 
+#####################################################################
+echo "make run STALK"
+cd /home/pi/devel/danalytics/thingsweb/stalk/client/
+screen -dmS volotestssh python /home/pi/devel/danalytics/thingsweb/stalk/client/app.py register $(hostname) localhost 22 &
+cd
+#####################################################################
+
+#echo "make run ntpdate sw"
+#please do it last, sometimes ntp.ubuntu.com is down
+#sudo ntpdate -u ntp.ubuntu.com
+
+exit 0
