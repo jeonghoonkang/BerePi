@@ -9,14 +9,13 @@ int adc_rd = 0;
 
 void light_on(){
     digitalWrite (pin_num, HIGH);
-    return void;
 }
 
 int main (void) {
     unsigned int end, start = 0;
     unsigned int delayOn = 280;   //micro-sec
     unsigned int delayStay = 40;   //micro-sec
-    unsigned int delayOff = 9680;   //micro-sec
+    unsigned int delayOff = 9680-165;   //micro-sec
     unsigned int delayCycle = 10000; //micro-sec
 
     wiringPiSetup () ;
