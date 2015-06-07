@@ -18,7 +18,7 @@ import RPi.GPIO as GPIO
 #    return adcout 
 um = 0
 sensorname = "dust.ws"
-url = "http://125.7.128.53:4242/api/put"
+url = "http://xxx.xxx.xxx.xxx/api/put"
 
 # HW setup, GPIO
 # GIO PIN5
