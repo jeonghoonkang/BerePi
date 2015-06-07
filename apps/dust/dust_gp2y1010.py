@@ -42,13 +42,13 @@ loggerinit(sensorname)
 while True : 
     # setup GPIO 5
     # set high GPIO 5
-    GPIO.output(5, True) # on 
-    time.sleep(0.000175) # 0.000280
+    GPIO.output(5, True)  # on 
+    time.sleep(0.000175)  # 0.000280
     r = read(adc_port) 
-    time.sleep(0.000000) # 0.000040
+    time.sleep(0.000000)  # 0.000040
     # set low GPIO 5
     GPIO.output(5, False) # off 
-    time.sleep(0.009550)  # 0.00968
+    time.sleep(0.009550)  # 0.009680
 
     if r > 187 :
         um = (500.0/2.9)*(3.3/1024)*r-103.44
