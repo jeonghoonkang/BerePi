@@ -1,0 +1,153 @@
+u-sec : 43 / target 40 usec 
+start= 2004081 
+endt= 2004123 
+u-sec : 42 / target 40 usec 
+start= 2504911 
+endt= 2504953 
+u-sec : 42 / target 40 usec 
+start= 3005753 
+endt= 3005797 
+u-sec : 44 / target 40 usec 
+start= 3506976 
+endt= 3507020 
+u-sec : 44 / target 40 usec 
+start= 4008149 
+endt= 4008194 
+u-sec : 45 / target 40 usec 
+start= 4509529 
+endt= 4509573 
+u-sec : 44 / target 40 usec 
+start= 5010740 
+endt= 5010784 
+u-sec : 44 / target 40 usec 
+start= 5511885 
+endt= 5511929 
+u-sec : 44 / target 40 usec 
+start= 6012093 
+endt= 6012136 
+u-sec : 43 / target 40 usec 
+start= 6512296 
+endt= 6512339 
+u-sec : 43 / target 40 usec 
+start= 7012503 
+endt= 7012547 
+u-sec : 44 / target 40 usec 
+start= 7512710 
+endt= 7512755 
+u-sec : 45 / target 40 usec 
+start= 8012918 
+endt= 8012961 
+u-sec : 43 / target 40 usec 
+
+
+
+
+
+start= 7513316 
+endt= 7513496 
+u-sec : 180 / target 100 usec 
+start= 8014303 
+endt= 8014485 
+u-sec : 182 / target 100 usec 
+start= 8515374 
+endt= 8515555 
+u-sec : 181 / target 100 usec 
+start= 9016527 
+endt= 9016709 
+u-sec : 182 / target 100 usec 
+start= 9517538 
+endt= 9517718 
+u-sec : 180 / target 100 usec 
+start= 10018531 
+endt= 10018711 
+u-sec : 180 / target 100 usec 
+start= 10519515 
+endt= 10519695 
+u-sec : 180 / target 100 usec 
+start= 11020501 
+endt= 11020681 
+u-sec : 180 / target 100 usec 
+start= 11521465 
+endt= 11521647 
+u-sec : 182 / target 100 usec 
+start= 12022471 
+endt= 12022651 
+u-sec : 180 / target 100 usec 
+start= 12523498 
+endt= 12523678 
+u-sec : 180 / target 100 usec 
+
+
+
+
+
+
+start= 111143265 
+endt= 111143608 
+u-sec : 343 / target 260 usec 
+start= 111643850 
+endt= 111644191 
+u-sec : 341 / target 260 usec 
+start= 112144434 
+endt= 112144776 
+u-sec : 342 / target 260 usec 
+start= 112645025 
+endt= 112645365 
+u-sec : 340 / target 260 usec 
+start= 113145607 
+endt= 113145956 
+u-sec : 349 / target 260 usec 
+start= 113646216 
+endt= 113646560 
+u-sec : 344 / target 260 usec 
+start= 114146816 
+endt= 114147160 
+u-sec : 344 / target 260 usec 
+start= 114647423 
+endt= 114647766 
+u-sec : 343 / target 260 usec 
+start= 115148023 
+endt= 115148367 
+u-sec : 344 / target 260 usec 
+start= 115648629 
+endt= 115648972 
+u-sec : 343 / target 260 usec 
+start= 116149233 
+endt= 116149578 
+u-sec : 345 / target 260 usec 
+
+
+
+
+
+
+u-sec : 10000 / target 10000 usec 
+u-sec : 10001 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10006 / target 10000 usec 
+u-sec : 10001 / target 10000 usec 
+u-sec : 10005 / target 10000 usec 
+u-sec : 10001 / target 10000 usec 
+u-sec : 10003 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10003 / target 10000 usec 
+u-sec : 10003 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10000 / target 10000 usec 
+u-sec : 10004 / target 10000 usec 
+u-sec : 10001 / target 10000 usec 
+u-sec : 10003 / target 10000 usec 
+u-sec : 10003 / target 10000 usec 
+u-sec : 10003 / target 10000 usec 
+u-sec : 10005 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10001 / target 10000 usec 
+u-sec : 10007 / target 10000 usec 
+u-sec : 10000 / target 10000 usec 
+u-sec : 10006 / target 10000 usec 
+u-sec : 10001 / target 10000 usec 
+u-sec : 10004 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
+u-sec : 10002 / target 10000 usec 
