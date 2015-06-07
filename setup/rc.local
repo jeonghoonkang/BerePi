@@ -27,7 +27,7 @@ fi
 #####################################################################
 # Using LED Booting : BerePi
 #####################################################################
-cd /home/pi/BerePi/trunk/apps/led_berepi
+cd /home/pi/devel/BerePi/apps/led_berepi
 pwd
 echo "make run start LED"
 screen -dmS ledtest sudo python booted.py
