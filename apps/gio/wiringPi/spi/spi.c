@@ -27,3 +27,9 @@ int main (void) {
     return 0 ;
 }
 
+/* dust sensor timing
+0.000280 , wait until init and turn on LED in the sensor, read ADC
+0.000040 , after 40 usec, turn off LED
+0.009680 , keep off
+One Cycle is 10 msec
+*/
