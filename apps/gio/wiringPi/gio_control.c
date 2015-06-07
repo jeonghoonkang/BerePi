@@ -7,7 +7,7 @@ int main (void) {
 
     for (;;) {
         digitalWrite (pin_num, HIGH) ;
-        delay (50) ;
+        delayMicroseconds (50000) ;
         digitalWrite (pin_num,  LOW) ;
         delay (50) ;
     }
