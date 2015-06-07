@@ -4,16 +4,24 @@
 #include <wiringPi.h>
 #include <stdio.h>
 
+int pin_num = 25;
+
+void light_on(){
+    digitalWrite (pin_num, HIGH);
+    return void;
+}
+
 int main (void) {
     unsigned int end, start = 0;
-    unsigned int udelaytime = 3000;
-    int pin_num = 25;
+    unsigned int delayOn = 280;   //micro-sec
+    unsigned int delayStay = 40;   //micro-sec
+    unsigned int delayOff = 9680;   //micro-sec
 
     wiringPiSetup () ;
     pinMode (pin_num, OUTPUT) ;
 
     for (;;) {
-        digitalWrite (pin_num, HIGH) ;
+        digitalWrite (pin_num, HIGH);
         start = micros();
         delayMicroseconds (udelaytime);
         end = micros();
