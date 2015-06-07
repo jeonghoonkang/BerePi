@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 int pin_num = 25;
+int adc_rd = 0; 
 
 void light_on(){
     digitalWrite (pin_num, HIGH);
@@ -16,20 +17,21 @@ int main (void) {
     unsigned int delayOn = 280;   //micro-sec
     unsigned int delayStay = 40;   //micro-sec
     unsigned int delayOff = 9680;   //micro-sec
+    unsigned int delayCycle = 10000; //micro-sec
 
     wiringPiSetup () ;
     pinMode (pin_num, OUTPUT) ;
 
     for (;;) {
-        digitalWrite (pin_num, HIGH);
+        digitalWrite (pin_num, HIGH); //turn-on LED light
         start = micros();
-        delayMicroseconds (udelaytime);
+        delayMicroseconds (delayOn);
+        //adc_rd = readAdc();
+        delayMicroseconds (delayStay);
+        digitalWrite (pin_num, LOW) ;  //turn-off LED light
+        delayMicroseconds (delayOff);
         end = micros();
-        printf("start= %d \n",start);
-        printf("endt= %d \n",end);
-        printf("u-sec : %d / target %d usec \n",end-start, udelaytime);
-        digitalWrite (pin_num,  LOW) ;
-        delay (500) ;
+        printf("u-sec : %d / target %d usec \n",end-start, delayCycle);
     }
     return 0 ;
 }
