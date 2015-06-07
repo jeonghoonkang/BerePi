@@ -4,5 +4,5 @@
 #### installation
   - git clone git://git.drogon.net/wiringPi
   - and ./build
-  - compile option needs -lwiringpi >> see the wiringPi/Makefile
+  - compile option needs -lwiringPi >> see the wiringPi/Makefile
   
