@@ -1,7 +1,6 @@
 
 // Author : jeonghoon.kang@gmail.com
 
-
 #include <wiringPi.h>
 #include <stdio.h>
 
@@ -30,6 +29,6 @@ int main (void) {
 /* dust sensor timing
 0.000280 , wait until init and turn on LED in the sensor, read ADC
 0.000040 , after 40 usec, turn off LED
-0.009680 , keep off
+0.009680 , keep turn-off LED
 One Cycle is 10 msec
 */
