@@ -12,8 +12,8 @@
   - id / password : pi / tinyos, it has sudo permission
 
 ##### Setup shell environment and packages
-  - download shell script from https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh or http://125.7.128.54:8070/wordpress/pub/init.sh
-    - wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh or https://goo.gl/GDiYfN
+  - download shell script from https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh (https://goo.gl/GDiYfN) or http://125.7.128.54:8070/wordpress/pub/init.sh
+    - wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh
   - and just run 'source init.sh'
     - Be carefull that init.sh will change your /etc/rc.local, /etc/resolv, /etc/network/interfaces
     - If you just want update SW package installation, look into the file init.sh, which has setup_apt.sh process, you will be able to easily catch the path
