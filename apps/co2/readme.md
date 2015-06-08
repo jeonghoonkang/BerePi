@@ -7,6 +7,7 @@
   1. Remote DB logging
     - RESTful API, using PUT
     - Python "requests" module
+
 #### Photo of raspi2 board
   - photho with CO2 sensor and 3 LEDs --> https://goo.gl/NhEfXZ 
 
