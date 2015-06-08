@@ -10,7 +10,7 @@
     - SW : Python 
   2. Local log file
     - Python logging module
-  1. Remote DB logging
+  1. Remote DB insert support via webservice
     - RESTful API, using PUT
     - Python "requests" module
 
