@@ -15,7 +15,7 @@
     - Python "requests" module
 
 ##### Hardware
-  - photho with CO2 sensor and 3 LEDs *https://goo.gl/NhEfXZ*
+  - photho with CO2 sensor and 3 LEDs **https://goo.gl/NhEfXZ**
   - CO2 module will be update second week of June, it will be directly connected to Raspi2 pinout like LEDs PCB in the photo above. 
 
 ##### CO2 sensor specification
