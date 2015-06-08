@@ -8,7 +8,7 @@
   1. CO2 sensor reading
     - HW : Serial interface 
     - SW : Python 
-  2. Local logging file
+  2. Local log file
     - Python logging module
   1. Remote DB logging
     - RESTful API, using PUT
