@@ -1,0 +1,21 @@
+2015-06-09 01:37:34,441 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:37:39,250 - co2.ws - INFO - co2.ws CO2 Level is 561 ppm
+2015-06-09 01:37:39,570 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:37:44,378 - co2.ws - INFO - co2.ws CO2 Level is 562 ppm
+2015-06-09 01:37:44,786 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:37:49,594 - co2.ws - INFO - co2.ws CO2 Level is 563 ppm
+2015-06-09 01:37:49,684 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:37:54,492 - co2.ws - INFO - co2.ws CO2 Level is 566 ppm
+2015-06-09 01:37:54,559 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:37:59,367 - co2.ws - INFO - co2.ws CO2 Level is 569 ppm
+2015-06-09 01:37:59,438 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:38:04,246 - co2.ws - INFO - co2.ws CO2 Level is 570 ppm
+2015-06-09 01:38:04,338 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:38:09,146 - co2.ws - INFO - co2.ws CO2 Level is 572 ppm
+2015-06-09 01:38:09,207 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:38:14,016 - co2.ws - INFO - co2.ws CO2 Level is 573 ppm
+2015-06-09 01:38:14,110 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:38:18,918 - co2.ws - INFO - co2.ws CO2 Level is 573 ppm
+2015-06-09 01:38:18,998 - co2.ws - INFO - http ret <Response [204]>
+2015-06-09 01:38:23,807 - co2.ws - INFO - co2.ws CO2 Level is 573 ppm
+2015-06-09 01:38:23,894 - co2.ws - INFO - http ret <Response [204]>
