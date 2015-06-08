@@ -1,4 +1,12 @@
-##### CO2 sensor reading for RaspberryPi2
+##### CO2 sensor reading on RaspberryPi2
+  1. CO2 sensor reading
+    - HW : Serial interface 
+    - SW : Python 
+  2. Local logging file
+    - Python logging module
+  1. Remote DB logging
+    - RESTful API, using PUT
+    - Python "requests" module
 
 ##### CO2 sensor specification
   1. T110 3.3V 
