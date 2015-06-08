@@ -16,6 +16,7 @@ additional nice works :
 RaspberryPi 
   - Raspi init setting :
     - please use, wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh
+     - short URL is https://goo.gl/GDiYfN  
      - It downloads init.sh file
      - download and run : source init.sh
   - Raspi2 PinOut:
