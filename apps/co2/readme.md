@@ -1,5 +1,5 @@
 
-##### intro
+##### Intro
   - Author : jeonghoon.kang@gmail.com
   - Please check source code : **co2_t110.py**, it is simple and easy code.
   - also read the log.file.txt and print_out_msg.txt which are output of code. 
