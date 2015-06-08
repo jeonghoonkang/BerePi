@@ -15,8 +15,9 @@ additional nice works :
  
 RaspberryPi 
   - Raspi init setting :
-    - please use, wget http://125.7.128.54:8070/wordpress/pub/init.sh 
-    - download and run 
+    - please use, wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh
+     - It downloads init.sh file
+     - download and run : source init.sh
   - Raspi2 PinOut:
     - http://www.element14.com/community/docs/DOC-73950/l/raspberry-pi-2-model-b-gpio-40-pin-block-pinout
   
