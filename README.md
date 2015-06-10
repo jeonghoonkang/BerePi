@@ -8,8 +8,9 @@ BerePi project opens software which using BerePi hardware modules.
 Please keep track the project.
 
   - Simple LED video 01 ( YouTube : https://youtu.be/ygJ3qMiGQvw )
-  - BereCO2 update : 
-  - Rapi2 Case update : 
+  - BereCO2 update with enclosure
+    - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png
+    - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png
 
 additional nice works :
   1. http://www.raspberrypi-spy.co.uk/
