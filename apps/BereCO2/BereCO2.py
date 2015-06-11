@@ -14,6 +14,9 @@ import json
 import requests
 import fcntl, socket, struct
 
+sys.path.append("./lib")
+from co2led import *
+
 DEBUG_PRINT = 1
 SERIAL_READ_BYTE = 12
 FILEMAXBYTE = 1024 * 1024 * 100 #100MB
