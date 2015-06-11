@@ -285,44 +285,17 @@ if __name__== "__main__" :
     # level = 5, 1750~ ppm,     4 - LED
 
         if ppm < 800 :  
-            rled0Blink()
+            ledb_on()
         elif ppm < 1000 :  
-            rled0On()
-            rled1Off()
-            rled2Off()
-            rled3Off()
+            ledg_on()
         elif ppm < 1300 :  
-            rled0Off()
-            rled1On()
-            rled2Off()
-            rled3Off()
+            ledr_on()
         elif ppm < 1600:  
-            led0Off()
-            led1Off()
-            led2On()
-            led3Off()
+            ledb_on()
         elif ppm < 1900:  
-            led0Off()
-            led1Off()
-            rled2Blink()
-            rled2Blink()
-            rled2Blink()
-            led3Off()
+            ledb_on()
         elif ppm >= 1900 :  
-            led0Off()
-            led1Off()
-            led2Off()
-            rled0Blink()
-            rled0Blink()
-            rled0Blink()
-            rled1Blink()
-            rled1Blink()
-            rled1Blink()
-
-            rled2Blink()
-            rled3Blink()
-            rled3Blink()
-            rled3Blink()
+            ledb_on()
 
         GPIO.cleanup()
 
