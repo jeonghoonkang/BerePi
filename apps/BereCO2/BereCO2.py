@@ -54,20 +54,22 @@ def led3On():
 
 def led0Off():
     #GPIO.output(6, False)
-    GPIO.output(17, False)
+    GPIO.output(CO2LED_BLUE_PIN, False)
 def led1Off():
     #GPIO.output(13, False)
-    GPIO.output(27, False)
+    GPIO.output(CO2LED_GREEN_PIN, False)
 def led2Off():
     #GPIO.output(19, False)
-    GPIO.output(22, False)
+    GPIO.output(CO2LED_RED_PIN, False)
 def led3Off():
     GPIO.output(26, False)
+
 def ledAllOff():
     led0Off()
     led1Off()
     led2Off()
     led3Off()
+
 def ledAllOn():
     led0On()
     led1On()
@@ -97,25 +99,23 @@ def rledAllOn():
     ledAllOff()
 
 def rled0Blink():
-    led0On()
-    time.sleep(0.5)
     led0Off()
-    time.sleep(0.3)
+    time.sleep(1)
     led0On()
-    time.sleep(0.5)
+    time.sleep(1)
     led0Off()
-    time.sleep(0.3)
+    time.sleep(1)
     led0On()
+    
 def rled1Blink():
-    led1On()
-    time.sleep(0.5)
     led1Off()
-    time.sleep(0.3)
+    time.sleep(1)
     led1On()
-    time.sleep(0.5)
+    time.sleep(1)
     led1Off()
-    time.sleep(0.3)
+    time.sleep(1)
     led1On()
+    
 def rled2Blink():
     led2On()
     time.sleep(0.5)
