@@ -188,110 +188,102 @@ def init_process():
     logger.info(' *start* GPIO all set, trying to open serial port, SW starting ')
     rledAllOn()
 
-######################################################################
-# START Here. Main
-######################################################################
+if __name__== "__main__" :
 
-# set logger file
-logger = logging.getLogger(sensorname)
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+	# set logger file
+	logger = logging.getLogger(sensorname)
+	logger.setLevel(logging.DEBUG)
+	formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-fileHandler = logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=FILEMAXBYTE,backupCount=10)
-fileHandler.setLevel(logging.DEBUG)
-fileHandler.setFormatter(formatter)
-logger.addHandler(fileHandler)
+	fileHandler = logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=FILEMAXBYTE,backupCount=10)
+	fileHandler.setLevel(logging.DEBUG)
+	fileHandler.setFormatter(formatter)
+	logger.addHandler(fileHandler)
 
-#consoleHandler = logging.StreamHandler()
-#consoleHandler.setLevel(logging.DEBUG)
-#consoleHandler.setFormatter(formatter)
-#logger.addHandler(consoleHandler)
+	# call raspi init...
+	init_process()
 
-# call raspi init...
-init_process()
+	# open RASPI serial device, 38400
+	try:
+    	serial_in_device = serial.Serial('/dev/ttyAMA0',38400)
+	except serial.SerialException, e:
+		logger.error("Serial port open error")
+		rled0Off()
+		rled1Off()
+   		rled2Off()
+    	rled3Off()
 
-# open RASPI serial device, 38400
-try:
-    serial_in_device = serial.Serial('/dev/ttyAMA0',38400)
-except serial.SerialException, e:
-    logger.error("Serial port open error")
-    rled0Off()
-    rled1Off()
-    rled2Off()
-    rled3Off()
+	while True:
+    	ppm = 0
+    	try:
+    		in_byte = serial_in_device.read(SERIAL_READ_BYTE) 
+    		pos = 0
+	 	except serial.SerialException, e:
+        	rled0Off()
+        	rled1Off()
+        	rled2Off()
+        	rled3Off()
+    	if not (len(in_byte) is SERIAL_READ_BYTE) : 
+        	logger.error("Serial packet size is strange, %d, expected size is %d" % (len(in_byte),SERIAL_READ_BYTE))
+        	print 'serial byte read count error'
+        	continue
+	 	# sometimes, 12 byte alighn is in-correct
+	 	# espacially run on /etc/rc.local
+    	if not in_byte[9] is 'm':
+        	shift_byte = checkAlignment(in_byte)
+        	in_byte = shift_byte
+    	if ('ppm' in in_byte):
+        	if DEBUG_PRINT :
+            	print '-----\/---------\/------ DEBUG_PRINT set -----\/---------\/------ '
+            	for byte in in_byte :
+                	print "serial_in_byte[%d]: " %pos,
+                	pos += 1
+                	if ord(byte) is 0x0d :
+                    	print "escape:", '0x0d'," Hex: ", byte.encode('hex')
+                    	continue
+                	elif ord(byte) is 0x0a :
+                    	print "escape:", '0x0a'," Hex: ", byte.encode('hex')
+                    	continue
+                	print " String:", byte,  "    Hex: ", byte.encode('hex')
+        	if not (in_byte[2] is ' ') :
+            	ppm += (int(in_byte[2])) * 1000
+        	if not (in_byte[3] is ' ') :
+            	ppm += (int(in_byte[3])) * 100
+    		if not (in_byte[4] is ' ') :
+            	ppm += (int(in_byte[4])) * 10
+        	if not (in_byte[5] is ' ') :
+            	ppm += (int(in_byte[5]))  
 
-while 1:
-    ppm = 0
-    try:
-        in_byte = serial_in_device.read(SERIAL_READ_BYTE) 
-        pos = 0
-    except serial.SerialException, e:
-        rled0Off()
-        rled1Off()
-        rled2Off()
-        rled3Off()
-    if not (len(in_byte) is SERIAL_READ_BYTE) : 
-        logger.error("Serial packet size is strange, %d, expected size is %d" % (len(in_byte),SERIAL_READ_BYTE))
-        print 'serial byte read count error'
-        continue
-    # sometimes, 12 byte alighn is in-correct
-    # espacially run on /etc/rc.local
-    if not in_byte[9] is 'm':
-        shift_byte = checkAlignment(in_byte)
-        in_byte = shift_byte
+        	logline = sensorname + ' CO2 Level is '+ str(ppm) + ' ppm' 
+        	#now = time.localtime()
+        	#now_str = "%04d-%02d-%02d %02d:%02d:%02d" % (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
+        	#logline += now_str
+        	if DEBUG_PRINT :
+            	print logline
+        	if ppm > 2500 : 
+            	logger.error("%s", logline)
+            	continue
+        	else :
+            	logger.info("%s", logline)
+
+        	print "macAddr : " + macAddr
         
-    if ('ppm' in in_byte):
-        if DEBUG_PRINT :
-            print '-----\/---------\/------ DEBUG_PRINT set -----\/---------\/------ '
-            for byte in in_byte :
-                print "serial_in_byte[%d]: " %pos,
-                pos += 1
-                if ord(byte) is 0x0d :
-                    print "escape:", '0x0d'," Hex: ", byte.encode('hex')
-                    continue
-                elif ord(byte) is 0x0a :
-                    print "escape:", '0x0a'," Hex: ", byte.encode('hex')
-                    continue
-                print " String:", byte,  "    Hex: ", byte.encode('hex')
-        if not (in_byte[2] is ' ') :
-            ppm += (int(in_byte[2])) * 1000
-        if not (in_byte[3] is ' ') :
-            ppm += (int(in_byte[3])) * 100
-        if not (in_byte[4] is ' ') :
-            ppm += (int(in_byte[4])) * 10
-        if not (in_byte[5] is ' ') :
-            ppm += (int(in_byte[5]))  
-
-        logline = sensorname + ' CO2 Level is '+ str(ppm) + ' ppm' 
-        #now = time.localtime()
-        #now_str = "%04d-%02d-%02d %02d:%02d:%02d" % (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
-        #logline += now_str
-        if DEBUG_PRINT :
-            print logline
-        if ppm > 2500 : 
-            logger.error("%s", logline)
-            continue
-        else :
-            logger.info("%s", logline)
-
-        print "macAddr : " + macAddr
-        
-        data = {
-            "metric": "rc1.co2.ppm",
-            "timestamp": time.time(),
-            "value": ppm,
-            "tags": {
-                "eth0": macAddr,
-                "hw": "raspberrypi2" ,
-                "sensor" : "co2.t110",
-                "name" : sensorname,
-                "floor_room": "10fl_min_room",
-                "building": "woosung",
-                "owner": "kang",
-                "country": "kor"
-            }
-            #tags should be less than 9, 8 is alright, 9 returns http error
-        }
+        	data = {
+            	"metric": "rc1.co2.ppm",
+            	"timestamp": time.time(),
+            	"value": ppm,
+            	"tags": {
+                	"eth0": macAddr,
+                	"hw": "raspberrypi2" ,
+                	"sensor" : "co2.t110",
+                	"name" : sensorname,
+                	"floor_room": "10fl_min_room",
+                	"building": "woosung",
+                	"owner": "kang",
+                	"country": "kor"
+            	}
+            	#tags should be less than 9, 8 is alright, 9 returns http error
+        	}
 # level = 1, 0~1000 ppm,    no- LED
 # level = 2, 1000~1150 ppm, 1 - LED
 # level = 3, 1150~1300 ppm, 2 - LED
@@ -302,9 +294,6 @@ while 1:
         rled0Blink()
         rled0Blink()
         rled0Blink()
-        led1Off()
-        led2Off()
-        led3Off()
     elif ppm < 1000 :  
         led0On()
         led1Off()
