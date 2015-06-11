@@ -19,6 +19,10 @@ SERIAL_READ_BYTE = 12
 FILEMAXBYTE = 1024 * 1024 * 100 #100MB
 LOG_PATH = '/home/pi/log_tos.log'
 
+LED_BLUE_PIN = 17
+LED_GREEN_PIN = 22
+LED_RED_PIN = 26
+
 # important, sensorname shuould be pre-defined, unique sensorname
 sensorname = "co2.test"
 
