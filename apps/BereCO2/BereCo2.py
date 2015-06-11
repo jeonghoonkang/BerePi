@@ -38,34 +38,28 @@ def led0On():
 	GPIO.output(17, True)
 def led1On():
 	#GPIO.output(13, True)
-	GPIO.output(27, True)
+	GPIO.output(22, True)
 def led2On():
 	#GPIO.output(19, True)
-	GPIO.output(22, True)
-def led3On():
-	GPIO.output(26, True)
+	GPIO.output(27, True)
 
 def led0Off():
 	#GPIO.output(6, False)
 	GPIO.output(17, False)
 def led1Off():
 	#GPIO.output(13, False)
-	GPIO.output(27, False)
+	GPIO.output(22, False)
 def led2Off():
 	#GPIO.output(19, False)
-	GPIO.output(22, False)
-def led3Off():
-	GPIO.output(26, False)
+	GPIO.output(27, False)
 def ledAllOff():
 	led0Off()
 	led1Off()
 	led2Off()
-	led3Off()
 def ledAllOn():
 	led0On()
 	led1On()
 	led2On()
-	led3On()
 
 def rled0On():
 	led0Off()
@@ -73,8 +67,6 @@ def rled1On():
 	led1Off()
 def rled2On():
 	led2Off()
-def rled3On():
-	led3Off()
 
 def rled0Off():
 	led0On()
@@ -82,8 +74,6 @@ def rled1Off():
 	led1On()
 def rled2Off():
 	led2On()
-def rled3Off():
-	led3On()
 def rledAllOff():
 	ledAllOn()
 def rledAllOn():
@@ -119,16 +109,6 @@ def rled2Blink():
 	led2Off()
 	time.sleep(0.3)
 	led2On()
-def rled3Blink():
-	led3On()
-	time.sleep(0.5)
-	led3Off()
-	time.sleep(0.3)
-	led3On()
-	time.sleep(0.5)
-	led3Off()
-	time.sleep(0.3)
-	led3On()
 
 # check length, alignment of incoming packet string
 def syncfind():
@@ -177,7 +157,6 @@ def init_process():
 	GPIO.setup(27, GPIO.OUT)
 	#GPIO.setup(19, GPIO.OUT)
 	GPIO.setup(22, GPIO.OUT)
-	GPIO.setup(26, GPIO.OUT)
 	logger.info(' *start* GPIO all set, trying to open serial port, SW starting ')
 	rledAllOn()
 
@@ -211,7 +190,6 @@ except serial.SerialException, e:
 	rled0Off()
 	rled1Off()
 	rled2Off()
-	rled3Off()
 
 while 1:
 	ppm = 0
@@ -222,7 +200,6 @@ while 1:
 		rled0Off()
 		rled1Off()
 		rled2Off()
-		rled3Off()
 	if not (len(in_byte) is SERIAL_READ_BYTE) : 
 		logger.error("Serial packet size is strange, %d, expected size is %d" % (len(in_byte),SERIAL_READ_BYTE))
 		print 'serial byte read count error'
@@ -286,17 +263,18 @@ while 1:
 			#tags should be less than 9, 8 is alright, 9 returns http error
 		}
         
-        try :
-			ret = requests.post(url, data=json.dumps(data))
-			logger.info("http ret %s", ret)
-			if DEBUG_PRINT :
-				print "http return : %s" %ret
-        except requests.exceptions.Timeout :
-			logger.error("http connection error, Timeout  %s", ret)
-			continue;
-        except requests.exceptions.ConnectionError :
-			logger.error("http connection error, Too many requests %s", ret)
-			continue;
+        #try :
+		#	ret = requests.post(url, data=json.dumps(data))
+		#	logger.info("http ret %s", ret)
+		#	if DEBUG_PRINT :
+		#		print "http return : %s" %ret
+        #except requests.exceptions.Timeout :
+		#	logger.error("http connection error, Timeout  %s", ret)
+		#	continue;
+        #except requests.exceptions.ConnectionError :
+		#	logger.error("http connection error, Too many requests %s", ret)
+		#	continue;
+        
 
 # level = 1, 0~1000 ppm,    no- LED
 # level = 2, 1000~1150 ppm, 1 - LED
@@ -310,44 +288,28 @@ while 1:
 		rled0Blink()
 		led1Off()
 		led2Off()
-		led3Off()
 	elif ppm < 1000 :  
 		led0On()
 		led1Off()
 		led2Off()
-		led3Off()
 	elif ppm < 1300 :  
 		led0Off()
 		led1On()
 		led2Off()
-		led3Off()
 	elif ppm < 1600:  
-		led0Off()
+		led0On()
 		led1Off()
 		led2On()
-		led3Off()
 	elif ppm < 1900:  
 		led0Off()
 		led1Off()
-		rled2Blink()
-		rled2Blink()
-		rled2Blink()
-		led3Off()
+		led2On()
 	elif ppm >= 1900 :  
 		led0Off()
 		led1Off()
-		led2Off()
-		rled0Blink()
-		rled0Blink()
-		rled0Blink()
-		rled1Blink()
-		rled1Blink()
-		rled1Blink()
-
 		rled2Blink()
-		rled3Blink()
-		rled3Blink()
-		rled3Blink()
+		rled2Blink()
+		rled2Blink()
 
 GPIO.cleanup()
 
