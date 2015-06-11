@@ -23,7 +23,7 @@ LOG_PATH = '/home/pi/log_tos.log'
 sensorname = "co2.test"
 
 #url = "http://127.0.0.1:4242/api/put"
-url = "http://125.7.128.53:4242/api/put"
+url = "http://125.7.xxx.xxx:4242/api/put"
 
 def getHwAddr(ifname):
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
