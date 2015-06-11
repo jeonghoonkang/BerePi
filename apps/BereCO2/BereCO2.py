@@ -181,7 +181,7 @@ def init_process():
     GPIO.setup(CO2LED_RED_PIN, GPIO.OUT)
     GPIO.setup(26, GPIO.OUT)
     logger.info(' *start* GPIO all set, trying to open serial port, SW starting ')
-    rledAllOn()
+    ledall_off()
 
 if __name__== "__main__" :
 
@@ -203,10 +203,7 @@ if __name__== "__main__" :
         serial_in_device = serial.Serial('/dev/ttyAMA0',38400)
     except serial.SerialException, e:
         logger.error("Serial port open error") 
-        rled0Off()
-        rled1Off()
-        rled2Off()
-        rled3Off()
+        ledall_off()
 
     while True:
         ppm = 0
@@ -214,10 +211,7 @@ if __name__== "__main__" :
             in_byte = serial_in_device.read(SERIAL_READ_BYTE) 
             pos = 0
         except serial.SerialException, e:
-            rled0Off()
-            rled1Off()
-            rled2Off()
-            rled3Off()
+            ledall_off()
         if not (len(in_byte) is SERIAL_READ_BYTE) : 
             logger.error("Serial packet size is strange, %d, expected size is %d" % (len(in_byte),SERIAL_READ_BYTE))
             print 'serial byte read count error'
