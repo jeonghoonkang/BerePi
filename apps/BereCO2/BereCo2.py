@@ -19,9 +19,9 @@ SERIAL_READ_BYTE = 12
 FILEMAXBYTE = 1024 * 1024 * 100 #100MB
 LOG_PATH = '/home/pi/log_tos.log'
 
-LED_BLUE_PIN = 17
-LED_GREEN_PIN = 22
-LED_RED_PIN = 26
+CO2LED_BLUE_PIN = 17
+CO2LED_GREEN_PIN = 22
+CO2LED_RED_PIN = 27
 
 # important, sensorname shuould be pre-defined, unique sensorname
 sensorname = "co2.test"
@@ -42,13 +42,13 @@ ppm = 0
 
 def led0On():
 	#GPIO.output(6, True)
-	GPIO.output(17, True)
+	GPIO.output(CO2LED_BLUE_PIN, True)
 def led1On():
 	#GPIO.output(13, True)
-	GPIO.output(27, True)
+	GPIO.output(CO2LED_GREEN_PIN, True)
 def led2On():
 	#GPIO.output(19, True)
-	GPIO.output(22, True)
+	GPIO.output(CO2LED_RED_PIN, True)
 def led3On():
 	GPIO.output(26, True)
 
