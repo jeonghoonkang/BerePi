@@ -1,5 +1,8 @@
+
+# Current Author : Kowonsik, github.com/kowonsik
+# Author : Jeonghoonkang, github.com/jeonghoonkang
+
 ## This code for T100, ELT CO2 sensor
-## Please see details for the CO2 sensor : ....
 
 import serial,os,time
 import sys
