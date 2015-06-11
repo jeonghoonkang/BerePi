@@ -1,23 +1,24 @@
-## This code for LED BD 00
+## This code for LEDs on T110 BereCO2
 
-thispath='...BerePi/trunk/apps/led_berepi'
+thispath='...BerePi/apps/BereCO2/lib/'
 
 import time
 import sys
 import RPi.GPIO as GPIO
 
-debug_print = 1
+debug_print = 0
 # if LED PCB has GND pcb_GND = 1, otherwise 0
 # hsetting : it is HW setting, you should check it
 pcb_GND = 1
 
 # important, sensorname shuould be pre-defined, unique sensorname
-bdname = "led.00"
+bdname = "BereCO2.led"
 
 # hsetting : it is HW setting, you should check it
-bled = 13
-gled = 19
-rled = 26
+bled = 17
+gled = 22
+rled = 27
+
 
 # below assuming that you are using LEDs PCB board with GND
 def ledb_on(): 
