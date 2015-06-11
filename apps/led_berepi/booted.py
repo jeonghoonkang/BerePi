@@ -5,7 +5,6 @@
 thispath='...BerePi/trunk/apps/led_berepi'
 
 import sys
-sys.path.append("../leds")
 from ledinit import *
 
 debug_print = 1

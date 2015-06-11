@@ -15,9 +15,9 @@ pcb_GND = 1
 bdname = "led.00"
 
 # hsetting : it is HW setting, you should check it
-bled = 16
-gled = 20
-rled = 21
+bled = 13
+gled = 19
+rled = 26
 
 # below assuming that you are using LEDs PCB board with GND
 def ledb_on(): 
