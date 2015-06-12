@@ -10,4 +10,5 @@ cd stalk
 svn co https://github.com/321core/EnergyManagementSystem/trunk stalk
 cd
 
+# http://125.7.128.54:8070/wordpress/pub/devel/HEMS.apk
 
