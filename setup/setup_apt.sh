@@ -5,6 +5,7 @@ sudo apt-get -y install lynx
 sudo apt-get -y install subversion
 sudo apt-get -y install ntpdate
 sudo apt-get -y install vim-gnome
+sudo apt-get -y install tree
 
 sudo apt-get -y install python-pip
 sudo apt-get -y install python-matplotlib
