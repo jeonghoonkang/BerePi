@@ -16,12 +16,13 @@ Please keep track the project.
   - Download OS image and set up scripts and environemnt, automatically
   - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
 
+## Links
 additional nice works :
   1. http://www.raspberrypi-spy.co.uk/
   1. http://www.raspberrypi-spy.co.uk/berryclip-6-led-add-on-board/berryclip-6-led-add-on-board-instructions/
  
 RaspberryPi 
-  - Raspi init setting :
+  - Raspi init setting : same in the installation instruction
     - please use, wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh
      - short URL is https://goo.gl/GDiYfN  
      - It downloads init.sh file
