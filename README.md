@@ -14,7 +14,7 @@ Please keep track the project.
 
 ## Installation
   - Download OS image and set up scripts and environemnt, automatically
-  - 
+  - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
 
 additional nice works :
   1. http://www.raspberrypi-spy.co.uk/
