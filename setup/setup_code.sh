@@ -7,6 +7,7 @@ svn co svn://125.7.128.53/danalytics --username=tinyos
 
 mkdir stalk
 cd stalk
-svn co https://github.com/321core/STALK/trunk stalk
+svn co https://github.com/321core/EnergyManagementSystem/trunk stalk
 cd
+
 
