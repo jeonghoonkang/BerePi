@@ -37,9 +37,11 @@ cd
 # Using STALK : remote channel access 
 #####################################################################
 echo "make run STALK"
-cd /home/pi/devel/danalytics/thingsweb/stalk/client/
-screen -dmS volotestssh python /home/pi/devel/danalytics/thingsweb/stalk/client/app.py register $(hostname) localhost 22 &
+
+/home/pi/start.sh
 cd
+#cd /home/pi/devel/danalytics/thingsweb/stalk/client/
+#screen -dmS volotestssh python /home/pi/devel/danalytics/thingsweb/stalk/client/app.py register $(hostname) localhost 22 &
 #####################################################################
 
 #echo "make run ntpdate sw"
