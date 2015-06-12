@@ -12,6 +12,10 @@ Please keep track the project.
     - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png
     - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png
 
+## Installation
+  - Download OS image and set up scripts and environemnt, automatically
+  - 
+
 additional nice works :
   1. http://www.raspberrypi-spy.co.uk/
   1. http://www.raspberrypi-spy.co.uk/berryclip-6-led-add-on-board/berryclip-6-led-add-on-board-instructions/
