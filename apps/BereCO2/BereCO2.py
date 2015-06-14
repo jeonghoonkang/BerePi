@@ -180,7 +180,7 @@ if __name__== "__main__" :
         # level = 3, 1000~1300 ppm, green - LED
         # level = 4, 1300~1600 ppm, white - LED
         # level = 5, 1600~1900 ppm, yellow - LED
-        # level = 6, 1900~ ppm,     red - LED
+        # level = 6, 1900~ 2100 ppm,     purple - LED, if over 2100 - red LED
 
         if ppm < 800 :  
             ledblue_on()
