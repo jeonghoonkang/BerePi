@@ -11,7 +11,7 @@
   - 1001XX : XX 플러그 아이디  
 - HOSTName 변경하고 리붓하면, STALK 서버에 연결됨
   - 참고 : KEMCO stalk 
-   <pre> https://github.com/321core/EnergyManagementSystem/blob/master/README.md </pre>
+  <pre> https://github.com/321core/EnergyManagementSystem/blob/master/README.md </pre>
 
   
   
