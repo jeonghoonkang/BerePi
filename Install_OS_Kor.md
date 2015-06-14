@@ -6,6 +6,8 @@
   - 0 : 실증 가구 번호 백단위
   - 0 : 실증 가구 번호 십단위
   - 1 : 실증 가구 번호 일단위
+- 플러그의 아이디
+  - 1001XX : XX 플러그 아이디  
 - HOSTName 변경하고 리붓하면, STALK 서버에 연결됨
   - 참고 : KEMCO stalk 
   - https://github.com/321core/EnergyManagementSystem/blob/master/README.md
