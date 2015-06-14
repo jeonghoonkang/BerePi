@@ -1,4 +1,3 @@
-
 # Author : Kowonsik, github.com/kowonsik
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
@@ -43,98 +42,6 @@ macAddr = macAddr.replace(':','.')
 level = 0
 ppm = 0
 
-def led0On():
-	GPIO.output(CO2LED_BLUE_PIN, True)
-def led1On():
-	GPIO.output(CO2LED_GREEN_PIN, True)
-def led2On():
-	GPIO.output(CO2LED_RED_PIN, True)
-def led3On():
-    GPIO.output(26, True)
-
-def led0Off():
-    GPIO.output(CO2LED_BLUE_PIN, False)
-def led1Off():
-    GPIO.output(CO2LED_GREEN_PIN, False)
-def led2Off():
-    GPIO.output(CO2LED_RED_PIN, False)
-def led3Off():
-    GPIO.output(26, False)
-
-def ledAllOff():
-    led0Off()
-    led1Off()
-    led2Off()
-    led3Off()
-
-def ledAllOn():
-    led0On()
-    led1On()
-    led2On()
-    led3On()
-
-def rled0On():
-    led0Off()
-def rled1On():
-    led1Off()
-def rled2On():
-    led2Off()
-def rled3On():
-    led3Off()
-
-def rled0Off():
-    led0On()
-def rled1Off():
-    led1On()
-def rled2Off():
-    led2On()
-def rled3Off():
-    led3On()
-def rledAllOff():
-    ledAllOn()
-def rledAllOn():
-    ledAllOff()
-
-def rled0Blink():
-    led0Off()
-    time.sleep(1)
-    led0On()
-    time.sleep(1)
-    led0Off()
-    time.sleep(1)
-    led0On()
-    
-def rled1Blink():
-    led1Off()
-    time.sleep(1)
-    led1On()
-    time.sleep(1)
-    led1Off()
-    time.sleep(1)
-    led1On()
-    
-def rled2Blink():
-    led2On()
-    time.sleep(0.5)
-    led2Off()
-    time.sleep(0.3)
-    led2On()
-    time.sleep(0.5)
-    led2Off()
-    time.sleep(0.3)
-    led2On()
-
-def rled3Blink():
-    led3On()
-    time.sleep(0.5)
-    led3Off()
-    time.sleep(0.3)
-    led3On()
-    time.sleep(0.5)
-    led3Off()
-    time.sleep(0.3)
-    led3On()
-
 # check length, alignment of incoming packet string
 def syncfind():
     index = 0
@@ -172,15 +79,6 @@ def init_process():
     print "MSG - [S100, T110 CO2 Sensor Driver on RASPI2, Please check log file : ", LOG_PATH
     print "MSG - now starting to read SERIAL PORT"
     print " "
-    # HW setup, GPIO
-    GPIO.setwarnings(False)
-    GPIO.cleanup()
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(CO2LED_BLUE_PIN, GPIO.OUT)
-    GPIO.setup(CO2LED_GREEN_PIN, GPIO.OUT)
-    GPIO.setup(CO2LED_RED_PIN, GPIO.OUT)
-    GPIO.setup(26, GPIO.OUT)
-    logger.info(' *start* GPIO all set, trying to open serial port, SW starting ')
     ledall_off()
 
 if __name__== "__main__" :
@@ -244,12 +142,17 @@ if __name__== "__main__" :
                 ppm += (int(in_byte[5]))  
 
             logline = sensorname + ' CO2 Level is '+ str(ppm) + ' ppm' 
+            ledall_off()
 
             if DEBUG_PRINT :
                 print logline
 
-            if ppm > 2500 : 
+            if ppm > 2100 : 
                 logger.error("%s", logline)
+                # cancel insert data into DB, skip.... since PPM is too high,
+                # it's abnormal in indoor buidling
+                ledred_on()
+                ### maybe change to BLINK RED, later
                 continue
             else :
                 logger.info("%s", logline)
@@ -272,25 +175,23 @@ if __name__== "__main__" :
                 }
                 #tags should be less than 9, 8 is alright, 9 returns http error
             }
-    # level = 1, 0~1000 ppm,    no- LED
-    # level = 2, 1000~1150 ppm, 1 - LED
-    # level = 3, 1150~1300 ppm, 2 - LED
-    # level = 4, 1300~1700 ppm, 3 - LED
-    # level = 5, 1750~ ppm,     4 - LED
+        # level = 1, 0~800 ppm,     blue- LED
+        # level = 2, 800~1000 ppm,  blue green - LED
+        # level = 3, 1000~1300 ppm, green - LED
+        # level = 4, 1300~1600 ppm, white - LED
+        # level = 5, 1600~1900 ppm, yellow - LED
+        # level = 6, 1900~ ppm,     red - LED
 
         if ppm < 800 :  
-            ledb_on()
+            ledblue_on()
         elif ppm < 1000 :  
-            ledg_on()
+            ledbluegreen_on()
         elif ppm < 1300 :  
-            ledr_on()
+            ledgreen_on()
         elif ppm < 1600:  
-            ledb_on()
+            ledwhite_on()
         elif ppm < 1900:  
-            ledb_on()
+            ledyellow_on()
         elif ppm >= 1900 :  
-            ledb_on()
-
-        GPIO.cleanup()
-
-
+            ledpurple_on()
+      
