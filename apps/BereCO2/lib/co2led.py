@@ -19,65 +19,110 @@ bled = 17
 gled = 22
 rled = 27
 
+def linit():
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(bled, GPIO.OUT)
+    GPIO.setup(gled, GPIO.OUT)
+    GPIO.setup(rled, GPIO.OUT)
 
 # below assuming that you are using LEDs PCB board with GND
-def ledb_on(): 
+def ledblue_on(): 
+    linit()
     if (pcb_GND is 1) : 
         GPIO.output(bled, True) 
     else : 
         GPIO.output(bled, False)
 
-def ledg_on():
-	if pcb_GND is 1 :
+def ledgreen_on():
+    linit()
+    if pcb_GND is 1 :
    	    GPIO.output(gled, True)
-	else :
+    else :
    	    GPIO.output(gled, False)
 
-def ledr_on():
-	if pcb_GND is 1 :
+def ledred_on():
+    linit()
+    if pcb_GND is 1 :
 	    GPIO.output(rled, True)
-	else :
+    else :
    	    GPIO.output(rled, False)
 
-def ledb_off():
-	if pcb_GND is 1 :
+def ledbluegreen_on():
+    linit()
+    if pcb_GND is 1 :
+	    GPIO.output(bled, True)
+	    GPIO.output(gled, True)
+    else :
    	    GPIO.output(bled, False)
-	else :
-   	    GPIO.output(bled, True)
-def ledg_off():
-	if pcb_GND is 1 :
    	    GPIO.output(gled, False)
-	else :
+
+def ledyellow_on():
+    linit()
+    if pcb_GND is 1 :
+	    GPIO.output(rled, True)
+	    GPIO.output(gled, True)
+    else :
+   	    GPIO.output(rled, False)
+   	    GPIO.output(gled, False)
+
+def ledpurple_on():
+    linit()
+    if pcb_GND is 1 :
+	    GPIO.output(rled, True)
+	    GPIO.output(bled, True)
+    else :
+   	    GPIO.output(rled, False)
+   	    GPIO.output(bled, False)
+def ledwhite_on():
+    linit()
+    if pcb_GND is 1 :
+	    GPIO.output(bled, True)
+	    GPIO.output(gled, True)
+	    GPIO.output(rled, True)
+    else :
+   	    GPIO.output(bled, False)
+   	    GPIO.output(gled, False)
+   	    GPIO.output(rled, False)
+
+def ledblue_off():
+    linit()
+    if pcb_GND is 1 :
+   	    GPIO.output(bled, False)
+    else :
+   	    GPIO.output(bled, True)
+def ledgreen_off():
+    linit()
+    if pcb_GND is 1 :
+   	    GPIO.output(gled, False)
+    else :
    	    GPIO.output(gled, True)
-def ledr_off():
+def ledred_off():
+    linit()
     if pcb_GND is 1 :
    	    GPIO.output(rled, False)
     else : 
         GPIO.output(rled, True)
 
 def ledall_off():
-    ledb_off()
-    ledg_off()
-    ledr_off()
+    ledblue_off()
+    ledgreen_off()
+    ledred_off()
 
 def ledall_on():
-    ledb_on()
-    ledg_on()
-    ledr_on()
+    ledblue_on()
+    ledgreen_on()
+    ledred_on()
 
-def init() :
+def ledinit() :
     # HW setup, GPIO
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(bled, GPIO.OUT)
-    GPIO.setup(gled, GPIO.OUT)
-    GPIO.setup(rled, GPIO.OUT)
+    linit()
     ledall_on()
     time.sleep(0.3)
     ledall_off()
     # please check the HW connection between LEDs and CPU
     # if you using GND on the LED HW, GPIO.output(bled, True) will show LED ON
 
-init()
+ledinit()
 
 if __name__== "__main__" :
     print ">> Starting init"
