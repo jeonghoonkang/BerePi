@@ -14,6 +14,6 @@
   - 참고 : KEMCO stalk 
  <pre> https://github.com/321core/EnergyManagementSystem/blob/master/README.md </pre>
 - sudo raspi-config 를 실행하여, 1) SD 메모리 저장 공간 확장을 실행해 줌
-  - 용량 확인 df -h → 용량 확인  
+  - 용량 확인 `df -h` → 용량 확인  
   
   
