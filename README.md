@@ -9,8 +9,7 @@ Please keep track the project.
 
   - Simple LED video 01 ( YouTube : https://youtu.be/ygJ3qMiGQvw )
   - BereCO2 HW module 
-    - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png)
-    - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
+    - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png), ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
   - BereCO2 update with enclosure
     - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png
     - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png
