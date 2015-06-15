@@ -8,6 +8,9 @@ BerePi project opens software which using BerePi hardware modules.
 Please keep track the project.
 
   - Simple LED video 01 ( YouTube : https://youtu.be/ygJ3qMiGQvw )
+  - BereCO2 HW module 
+    - https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png
+    - https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png
   - BereCO2 update with enclosure
     - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png
     - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png
