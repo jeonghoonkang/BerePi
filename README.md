@@ -11,8 +11,7 @@ Please keep track the project.
   - BereCO2 HW module 
     - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png), ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
   - BereCO2 update with enclosure
-    - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png
-    - https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png
+    - ![BereCO2 Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png), ![BereCO2 Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
 
 ## Installation
   - Download OS image and set up scripts and environemnt, automatically
