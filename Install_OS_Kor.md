@@ -8,14 +8,22 @@
   - 0 : 실증 가구 번호 백단위
   - 0 : 실증 가구 번호 십단위
   - 1 : 실증 가구 번호 일단위
+  - 총 300개 내외의 실증을 진행할 예정임
+
 - 플러그의 아이디
   - 1001XX : XX 플러그 아이디  
+
 - HOSTName 변경하고 리붓하면, STALK 서버에 연결됨
   - 참고 : KEMCO stalk 
  <pre> https://github.com/321core/EnergyManagementSystem/blob/master/README.md </pre>
 - sudo raspi-config 를 실행하여, 1) SD 메모리 저장 공간 확장을 실행해 줌
   - 용량 확인 `df -h` → 용량 확인  
   
+
+
+
+
+
   First | Second 
 ------------ | -------------
 Content from cell 1 | Content from cell 2
