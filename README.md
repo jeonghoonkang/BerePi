@@ -2,7 +2,7 @@
 ##### People
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (), and YOU
 
-Wireless Sensor Network (WSN) using RaspberryPi 
+#### Wireless Sensor Network (WSN) using RaspberryPi 
 
 You can add wireless sensors to your cyber space simply trying to add BerePi module sensor, to your RaspberryPi.
 BerePi project opens software which using BerePi hardware modules. 
