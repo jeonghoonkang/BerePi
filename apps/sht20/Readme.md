@@ -10,7 +10,7 @@ use with "RASPI HT-CO2 Sensor"
 
 ![RASPI-HTCO2-Sensor](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
 
-###  I2C enable for raspberry pi 2 (1)###
+###  I2C enable for raspberry pi 2 ((https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c))###
 
 1. install I2C package (It's include BerePi install script)
 <pre>
@@ -36,4 +36,3 @@ i2c-dev
 like this
 ![/etc/modules/](https://learn.adafruit.com/system/assets/assets/000/003/054/medium800/learn_raspberry_pi_editing_modules_file.png)
 
-(1) https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c
