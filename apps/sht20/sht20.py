@@ -13,7 +13,7 @@ SHT20_CMD_R_RH = 0xF5   # no hold Master Mode (Humidity)
 #SHT20_READ_REG = 0xE7  # read user register 
 SHT20_CMD_RESET = 0xFE  # soft reset
 
-bus = smbus.SMBus(1)
+bus = smbus.SMBus(1)    # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
 
 def reading(v):
     bus.write_quick(SHT20_ADDR)
@@ -23,7 +23,9 @@ def reading(v):
         bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
     else:
         return False
+        
     time.sleep(.1)
+    
     b = (bus.read_byte(SHT20_ADDR)<<8)
     b += bus.read_byte(SHT20_ADDR)
     return b
@@ -46,3 +48,4 @@ if __name__== "__main__" :
         value = calc(temp, humi)
         print "temp : %s\thumi : %s" % (value[0], value[1])
         time.sleep(1)
+
