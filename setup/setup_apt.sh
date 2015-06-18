@@ -13,6 +13,7 @@ sudo apt-get -y install python-mysqldb
 
 sudo apt-get -y install vim
 sudo apt-get -y install dos2unix
+sudo apt-get -y install dosbox
 sudo apt-get -y install python-requests
 sudo apt-get -y install python-twisted
 sudo apt-get -y install rsync
