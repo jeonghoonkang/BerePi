@@ -1,6 +1,6 @@
 ## BerePi
 ##### People
-  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (), and YOU
+  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (), and YOU
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 
@@ -13,7 +13,10 @@ BerePi project opens software which using BerePi hardware modules.
   - BereCO2 update with enclosure
     - ![BereCO2 Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png)
     - (https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
-
+ - BereCO2 update with SHT20 (KETI motes sensor board)
+    - (https://github.com/jeonghoonkang/BerePi/blob/master/files/Raspi_temp_humi_sht20_keti_motes_bd_00.jpg)   
+    - (https://github.com/jeonghoonkang/BerePi/blob/master/files/Raspi_temp_humi_sht20_keti_motes_bd_01.jpg)
+     
 ## Installation
   - Download OS image and set up scripts and environemnt, automatically
   - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
