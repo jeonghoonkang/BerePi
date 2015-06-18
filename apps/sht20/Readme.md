@@ -1,6 +1,7 @@
-## SHT20 ##
-
+## SHT2x ##
 Desc : Temperature & Humidity sensor
+
+How to Run : just type `` python sht20.py``
 
 ![sht20 image](http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Bilder/ProductPictures/Sensirion_Humidity_SHT20.jpg)
 
