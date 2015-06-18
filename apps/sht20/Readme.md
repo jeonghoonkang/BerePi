@@ -40,5 +40,10 @@ i2c-dev
 like this
 ![/etc/modules/](https://learn.adafruit.com/system/assets/assets/000/003/054/medium800/learn_raspberry_pi_editing_modules_file.png)
 
-### Links ###
+#### Links 
 - https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c
+
+#### Photos
+- https://github.com/jeonghoonkang/BerePi/blob/master/files/Raspi_temp_humi_sht20_keti_motes_bd_00.jpg
+- https://github.com/jeonghoonkang/BerePi/blob/master/files/Raspi_temp_humi_sht20_keti_motes_bd_01.jpg
+
