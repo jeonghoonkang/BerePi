@@ -34,12 +34,15 @@ def calc(temp, humi):
 
     return tmp_temp, tmp_humi
 
-while True:
-    temp = reading(1)
-    humi = reading(2)
-    if not temp or not humi:
-        print "register error"
-        break
-    value = calc(temp, humi)
-    print "temp : %s\thumi : %s" % (value[0], value[1])
-    time.sleep(1)
+
+if __name__== "__main__" :
+
+    while True:
+        temp = reading(1)
+        humi = reading(2)
+        if not temp or not humi:
+            print "register error"
+            break
+        value = calc(temp, humi)
+        print "temp : %s\thumi : %s" % (value[0], value[1])
+        time.sleep(1)
