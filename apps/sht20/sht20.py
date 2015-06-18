@@ -1,3 +1,6 @@
+
+# Author : Philman Jeong (ipmstyle@gmail.com)
+
 import smbus
 import time
 
