@@ -1,5 +1,6 @@
 ## BerePi
-##### Jeonghoon Kang (jeonghoon.kang at gmail)
+##### People
+  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (), and YOU
 
 Wireless Sensor Network (WSN) using RaspberryPi 
 
