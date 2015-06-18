@@ -38,6 +38,7 @@ i2c-dev
 </pre>
 
 like this
+
 ![/etc/modules/](https://learn.adafruit.com/system/assets/assets/000/003/054/medium800/learn_raspberry_pi_editing_modules_file.png)
 
 #### Links 
