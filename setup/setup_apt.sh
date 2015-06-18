@@ -1,3 +1,6 @@
+
+#Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
+
 sudo apt-get -y install lrzsz
 sudo apt-get -y install htop
 sudo apt-get -y install screen
