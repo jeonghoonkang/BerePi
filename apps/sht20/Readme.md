@@ -1,9 +1,10 @@
+
 ## SHT2x driver for Raspi##
 Desc : Temperature & Humidity sensor
 
-Setup : install pythong smbus package (I2C lib, you can see below instruction in detail)
-Check HW connection : ``sudo i2cdetect 1`` it will show something on the printout, commonly 0x40 is SHT2x
-How to Run : just type `` python sht20.py``
+ - Setup : install pythong smbus package (I2C lib, you can see below instruction in detail)
+ - Check HW connection : ``sudo i2cdetect 1`` it will show something on the printout, commonly 0x40 is SHT2x
+ - How to Run : just type `` python sht20.py``
 
 ![sht20 image](http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Bilder/ProductPictures/Sensirion_Humidity_SHT20.jpg)
 
