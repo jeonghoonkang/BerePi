@@ -2,7 +2,7 @@
 
 Desc : Temperature & Humidity sensor
 
-![sht20 image](http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Bilder/ProductPictures/Sensirion_Humidity_SHT20.jpg =100px)
+![sht20 image](http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Bilder/ProductPictures/Sensirion_Humidity_SHT20.jpg)
 
 Datasheet : http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/Humidity/Sensirion_Humidity_SHT20_Datasheet_V3.pdf
 
