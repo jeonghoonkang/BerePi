@@ -38,6 +38,8 @@ def query_last_data_point(plug_id):
 
 # test
 plug_id = 100501
+GPIO.output(26, True)
+
 while True:
 	ret = query_last_data_point(plug_id)
 	if ret is not None:
@@ -51,7 +53,7 @@ while True:
 		else:
 			#print 'plug %d may be not connected to server. (%.1f seconds ago, %f watt)' % (plug_id, dt, v)
 			GPIO.output(19, True)
-			GPIO.output(26, False)
+			GPIO.output(26, True)
 
 	else:
 		#print 'plug %d does not exists on server!' % plug_id
