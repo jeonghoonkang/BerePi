@@ -17,6 +17,10 @@ if [ "$_IP" ]; then
   printf "My IP address is %s\n" "$_IP"
 fi
 
+
+
+
+
 #####################################################################
 # Using Dust Sensor, CO2 Sensor
 #####################################################################
@@ -27,11 +31,12 @@ fi
 #####################################################################
 # Using LED Booting : BerePi
 #####################################################################
-cd /home/pi/devel/BerePi/apps/led_berepi
-pwd
-echo "make run start LED"
-screen -dmS ledtest sudo python booted.py
-cd
+#cd /home/pi/devel/BerePi/apps/led_berepi
+#pwd
+#echo "make run start LED"
+#screen -dmS ledtest sudo python booted.py
+#cd
+
 
 #####################################################################
 # Using STALK : remote channel access 
@@ -44,8 +49,10 @@ cd
 #screen -dmS volotestssh python /home/pi/devel/danalytics/thingsweb/stalk/client/app.py register $(hostname) localhost 22 &
 #####################################################################
 
+sudo python /home/pi/devel/BerePi/apps/check/monitor.py &
+
 #echo "make run ntpdate sw"
 #please do it last, sometimes ntp.ubuntu.com is down
-#sudo ntpdate -u ntp.ubuntu.com
+sudo ntpdate -u ntp.ubuntu.com
 
 exit 0
