@@ -13,8 +13,8 @@ cd
 # http://125.7.128.54:8070/wordpress/pub/devel/HEMS.apk
 
 cd devel/BerePi/
-svn up
+svn up -y
 
 cd /home/pi/devel/stalk/
-svn up
+svn up -y
 cd
