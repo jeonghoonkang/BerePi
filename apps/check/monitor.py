@@ -31,7 +31,7 @@ def query_last_data_point(plug_id):
 				return ctx['result']['time'], ctx['result']['value']
 
 	except Exception:
-		traceback.print_exc()
+		pass
 
 	return None
 
