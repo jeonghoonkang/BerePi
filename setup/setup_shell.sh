@@ -2,6 +2,8 @@
 
 export DNPATH='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup'
 
+# 잠시 코멘트 아웃 
+if [ 1 -eq 0 ]; then 
 export bashrc_file=$DNPATH/.bashrc
 wget -N $bashrc_file
 sudo scp .bashrc /root
@@ -30,6 +32,12 @@ wget -N $rctest_file
 export vimjelly_file=$DNPATH/vim_conf/jellybeans.vim
 wget -N $vimjelly_file
 sudo mv jellybeans.vim /usr/share/vim/vim73/colors
+fi
+
+export rc_file=$DNPATH/rc.local
+wget -N $rc_file
+sudo mv rc.local /etc
+sudo chmod 775 /etc/rc.local
 
 unset DNPATH
 unset bashrc_file
