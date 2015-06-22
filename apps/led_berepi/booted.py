@@ -10,9 +10,9 @@ from ledinit import *
 debug_print = 1
 
 def BootLed():
-	ledr_on()
+	ledb_on()
 	time.sleep(1)
-	ledr_off()
+	ledb_off()
 	time.sleep(1)
 
 if __name__== "__main__" :
