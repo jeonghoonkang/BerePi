@@ -13,7 +13,7 @@ import json
 import requests
 import fcntl, socket, struct
 
-sys.path.append("./lib")
+sys.path.append("/home/pi/devel/BerePi/apps/BereCO2post/lib")
 from co2led import *
 
 DEBUG_PRINT = 0 

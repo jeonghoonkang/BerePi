@@ -1,6 +1,6 @@
 ## This code for LEDs on T110 BereCO2
 
-thispath='...BerePi/apps/BereCO2/lib/'
+thispath='...BerePi/apps/BereCO2post/lib/'
 
 import time
 import sys
