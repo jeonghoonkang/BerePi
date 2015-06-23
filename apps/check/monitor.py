@@ -20,8 +20,8 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(19,GPIO.OUT)
 GPIO.setup(26, GPIO.OUT)
 
-def query_last_data_point(plug_id):
-	url = 'http://%s/api/raw_plug_last/?plug_id=%d' % (SERVER_ADDR, plug_id)
+def query_last_data_point(bridge_id):
+	url = 'http://%s/api/raw_bridge_last/?bridge_id=%d' % (SERVER_ADDR, bridge_id)
 	
 	try:
 		ret = requests.get(url, timeout=10)
@@ -37,26 +37,23 @@ def query_last_data_point(plug_id):
 
 
 # test
-plug_id = 100501
+bridge_id = 1001
 GPIO.output(26, True)
 
 while True:
-	ret = query_last_data_point(plug_id)
+	ret = query_last_data_point(bridge_id)
 	if ret is not None:
 		t, v = ret
 		if t > time.time() - 30:
 			dt = time.time() - t 
-			#print 'plug %d operate correctly. (%.1f seconds ago, %f watt)' % (plug_id, dt, v)
 			GPIO.output(19, True)
 			GPIO.output(26, False)
 
 		else:
-			#print 'plug %d may be not connected to server. (%.1f seconds ago, %f watt)' % (plug_id, dt, v)
 			GPIO.output(19, True)
 			GPIO.output(26, True)
 
 	else:
-		#print 'plug %d does not exists on server!' % plug_id
 		GPIO.output(19, False)
 		GPIO.output(26, True)
 
