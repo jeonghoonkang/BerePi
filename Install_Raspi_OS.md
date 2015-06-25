@@ -8,7 +8,7 @@
     - efficient using smaller size of image file rather than over 16GB image, to reduce download, writing time.
   - After installation BerePi supports automatic installation of Python packages and shell config settting
     - if you have "init.sh" file in '/home/pi', just "source init.sh"
-    - otherwise, use " wget http://125.7.128.54:8070/wordpress/pub/init.sh" to download installation script.
+    - otherwise, use " wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/init.sh" to download installation script.
     - and just "source init.sh"
   - id / password : pi / tinyos, it has sudo permission
 
