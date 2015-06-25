@@ -9,7 +9,7 @@ if [ $1 = 'up' ]; then
     svn up --force
     cd
     
-else if [ $1 = 'install' ]; then
+else if [ $1 = 'co' ]; then
     echo "... installing"
     cd
     mkdir devel
