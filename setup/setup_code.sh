@@ -8,7 +8,9 @@ if [ $1 = 'up' ]; then
     cd /home/pi/devel/stalk/
     svn up --force
     cd
-else
+    
+else if [ $1 = 'install' ]; then
+    echo "... installing"
     cd
     mkdir devel
     cd devel
@@ -20,6 +22,9 @@ else
     cd /home/pi/devel/stalk/code/client
     cp start.sh /home/pi
     cd
+    
+else
+   echo "... do notihing for code install / update"
 fi
 
 # http://125.7.128.54:8070/wordpress/pub/devel/HEMS.apk
