@@ -2,7 +2,6 @@
 #Author: jeonghoonkang http://github.com/jeonghoonkang
 
 if [ $1 = 'up' ]; then
-then
     echo "... updating"
     cd
     cd devel/BerePi/
