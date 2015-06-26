@@ -2,6 +2,7 @@
 #Author: jeonghoonkang http://github.com/jeonghoonkang
 
 if [ $1 = 'up' ]; then
+then
     echo "... updating"
     cd
     cd devel/BerePi/
@@ -10,7 +11,7 @@ if [ $1 = 'up' ]; then
     svn up --force
     cd
     
-else if [ $1 = 'co' ]; then
+elif [ $1 = 'co' ]; then
     echo "... installing"
     cd
     mkdir devel
@@ -23,7 +24,6 @@ else if [ $1 = 'co' ]; then
     cd /home/pi/devel/stalk/code/client
     cp start.sh /home/pi
     cd
-    
 else
    echo "... do notihing for code install / update"
 fi
