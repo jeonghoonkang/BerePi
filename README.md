@@ -21,6 +21,7 @@ BerePi project opens software which using BerePi hardware modules.
   - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
 
 ## Links
+[BerePi at Slack](https://berepi.slack.com/messages/general/)
 additional nice works :
   1. http://www.raspberrypi-spy.co.uk/
   1. http://www.raspberrypi-spy.co.uk/berryclip-6-led-add-on-board/berryclip-6-led-add-on-board-instructions/
