@@ -3,6 +3,7 @@
 
 if [ $1 = 'up' ]; then
     echo "... updating"
+    cd
     cd devel/BerePi/
     svn up --force
     cd /home/pi/devel/stalk/
