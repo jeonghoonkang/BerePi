@@ -17,6 +17,8 @@ if [ $1 = 'co' ]; then
 elif [ $1 = 'up' ]; then
     echo ".... update"
     ./setup_code.sh up
+else
+    echo ".... no action... "
 fi
 
 unset gitdnpath
