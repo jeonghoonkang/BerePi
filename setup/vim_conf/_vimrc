@@ -45,3 +45,4 @@ set softtabstop=4
 set shiftround
 set autoindent
 
+set mouse=n
