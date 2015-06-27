@@ -36,6 +36,7 @@ set expandtab
 set softtabstop=4
 set shiftround
 set autoindent
+set mouse=n
 
 set nu
 "set lines=40 columns=100
