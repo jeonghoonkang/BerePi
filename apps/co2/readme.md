@@ -18,7 +18,7 @@
   - (HW ver.01) Photo, CO2 sensor and 3 LEDs - **https://goo.gl/NhEfXZ**
   - CO2 module will be update second week of June, it will be directly connected to Raspi2 pinout like LEDs PCB in the photo above. 
 
-##### CO2 sensor specification
+##### CO2 sensor specification, datasheet
   1. T110 3.3V 
      - http://eltsensor.co.kr/2012/eng/product/co2-sensor-module-T110-3V.html
      - http://eltsensor.co.kr/2012/eng/pdf/T-110/DS_T-110-3V_ver1.210.pdf
