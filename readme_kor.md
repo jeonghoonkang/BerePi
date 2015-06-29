@@ -19,6 +19,7 @@
   - 진행중
     - 캐릭터 LCD
     - Dust 센서
+    - NFC, T-money 연동
 
 -----
 
