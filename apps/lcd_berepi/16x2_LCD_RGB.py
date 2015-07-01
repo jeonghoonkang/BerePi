@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# Author : ipmstyle, https://github.com/ipmstyle
 
 # The wiring for the LCD is as follows:
 # 1 : GND
