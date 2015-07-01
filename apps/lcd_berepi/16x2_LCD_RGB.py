@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # Author : ipmstyle, https://github.com/ipmstyle
+#        : jeonghoonkang, https://github.com/jeonghoonkang
 
 # The wiring for the LCD is as follows:
 # 1 : GND
@@ -30,7 +31,7 @@ LCD_E  = 22
 LCD_D4 = 25
 LCD_D5 = 24
 LCD_D6 = 23
-LCD_D7 = 18
+LCD_D7 = 12
 #LED_ON = 4
 LCD_RED = 4
 LCD_GREEN = 17
@@ -84,30 +85,33 @@ def main():
 
 
   while True:
-    red_backlight(True)
+    GPIO.output(LCD_RED, True)
+    GPIO.output(LCD_GREEN, True)
+    GPIO.output(LCD_BLUE, True)
     lcd_string("Rasbperry Pi",LCD_LINE_1,2)
     lcd_string(": RED",LCD_LINE_2,2)
+    red_backlight(False)
 
     time.sleep(3) # 3 second delay
-    red_backlight(False)
-    time.sleep(.5)
     
-    green_backlight(True)
+    GPIO.output(LCD_RED, True)
+    GPIO.output(LCD_GREEN, True)
+    GPIO.output(LCD_BLUE, True)
     lcd_string("Rasbperry Pi",LCD_LINE_1,2)
     lcd_string(": GREEN",LCD_LINE_2,2)
-
-    time.sleep(3) # 3 second delay
     green_backlight(False)
 
-    time.sleep(.5)
-    
+    time.sleep(3) # 3 second delay
+
+    GPIO.output(LCD_RED, True)
+    GPIO.output(LCD_GREEN, True)
+    GPIO.output(LCD_BLUE, True)
     blue_backlight(True)
     lcd_string("Rasbperry Pi",LCD_LINE_1,2)
     lcd_string(": BLUE",LCD_LINE_2,2)
+    blue_backlight(False)
 
     time.sleep(3) # 3 second delay
-    blue_backlight(False)
-    time.sleep(.5)
 
     """
     #- RED +  GREEN
