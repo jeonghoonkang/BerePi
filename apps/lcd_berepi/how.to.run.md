@@ -1,3 +1,3 @@
 How to run the code
 
-** sudo python ....... **
+** sudo python OOO.py**
