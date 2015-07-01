@@ -151,21 +151,7 @@ def main():
 
     time.sleep(5)
     """
-
-def lcd_init():
-  # Initialise display
-  lcd_byte(0x33,LCD_CMD) # 110011 Initialise
-  lcd_byte(0x32,LCD_CMD) # 110010 Initialise
-  lcd_byte(0x06,LCD_CMD) # 000110 Cursor move direction
-  lcd_byte(0x0C,LCD_CMD) # 001100 Display On,Cursor Off, Blink Off
-  lcd_byte(0x28,LCD_CMD) # 101000 Data length, number of lines, font size
-  lcd_byte(0x01,LCD_CMD) # 000001 Clear display
-  time.sleep(E_DELAY)
-
-def lcd_clear():
-  lcd_byte(0x01,LCD_CMD) # 000001 Clear display
-  time.sleep(E_DELAY)
-
+  
 def lcd_byte(bits, mode):
   # Send byte to data pins
   # bits = data
@@ -207,6 +193,22 @@ def lcd_byte(bits, mode):
 
   # Toggle 'Enable' pin
   lcd_toggle_enable()
+  
+def lcd_init():
+  # Initialise display
+  lcd_byte(0x33,LCD_CMD) # 110011 Initialise
+  lcd_byte(0x32,LCD_CMD) # 110010 Initialise
+  lcd_byte(0x06,LCD_CMD) # 000110 Cursor move direction
+  lcd_byte(0x0C,LCD_CMD) # 001100 Display On,Cursor Off, Blink Off
+  lcd_byte(0x28,LCD_CMD) # 101000 Data length, number of lines, font size
+  lcd_byte(0x01,LCD_CMD) # 000001 Clear display
+  time.sleep(E_DELAY)
+
+def lcd_clear():
+  lcd_byte(0x01,LCD_CMD) # 000001 Clear display
+  time.sleep(E_DELAY)
+
+
 
 def lcd_toggle_enable():
   # Toggle enable
