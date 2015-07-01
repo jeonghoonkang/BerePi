@@ -48,20 +48,20 @@ LCD_LINE_2 = 0xC0 # LCD RAM address for the 2nd line
 E_PULSE = 0.0005
 E_DELAY = 0.0005
 
+GPIO.setmode(GPIO.BCM)       # Use BCM GPIO numbers
+GPIO.setup(LCD_E, GPIO.OUT)  # E
+GPIO.setup(LCD_RS, GPIO.OUT) # RS
+GPIO.setup(LCD_D4, GPIO.OUT) # DB4
+GPIO.setup(LCD_D5, GPIO.OUT) # DB5
+GPIO.setup(LCD_D6, GPIO.OUT) # DB6
+GPIO.setup(LCD_D7, GPIO.OUT) # DB7
+#GPIO.setup(LED_ON, GPIO.OUT) # Backlight enable
+GPIO.setup(LCD_RED, GPIO.OUT) # RED Backlight enable
+GPIO.setup(LCD_GREEN, GPIO.OUT) # GREEN Backlight enable
+GPIO.setup(LCD_BLUE, GPIO.OUT) # BLUEBacklight enable
+
 def main():
   # Main program block
-
-  GPIO.setmode(GPIO.BCM)       # Use BCM GPIO numbers
-  GPIO.setup(LCD_E, GPIO.OUT)  # E
-  GPIO.setup(LCD_RS, GPIO.OUT) # RS
-  GPIO.setup(LCD_D4, GPIO.OUT) # DB4
-  GPIO.setup(LCD_D5, GPIO.OUT) # DB5
-  GPIO.setup(LCD_D6, GPIO.OUT) # DB6
-  GPIO.setup(LCD_D7, GPIO.OUT) # DB7
-  #GPIO.setup(LED_ON, GPIO.OUT) # Backlight enable
-  GPIO.setup(LCD_RED, GPIO.OUT) # RED Backlight enable
-  GPIO.setup(LCD_GREEN, GPIO.OUT) # GREEN Backlight enable
-  GPIO.setup(LCD_BLUE, GPIO.OUT) # BLUEBacklight enable
 
   # Initialise display
   lcd_init()
@@ -259,6 +259,6 @@ if __name__ == '__main__':
   except KeyboardInterrupt:
     pass
   finally:
-    lcd_byte(0x01, LCD_CMD)
-    lcd_string("Goodbye!",LCD_LINE_1,2)
+    #lcd_byte(0x01, LCD_CMD)
+    #lcd_string("Goodbye!",LCD_LINE_1,2)
     GPIO.cleanup()
