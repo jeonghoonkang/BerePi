@@ -24,17 +24,17 @@ import RPi.GPIO as GPIO
 import time, os
 from subprocess import *
 
-# Define GPIO to LCD mapping
-LCD_RS = 27
-LCD_E  = 22
-LCD_D4 = 25
-LCD_D5 = 24
-LCD_D6 = 23
-LCD_D7 = 18
+# Define GPIO to LCD mapping, Raspi pin mapping
+LCD_RS = 27 # LCD pin 4 : RS (Register Select)
+LCD_E  = 22 # LCD pin 6 : Enable or Strobe
+LCD_D4 = 25 # LCD pin 11: Data Bit 4
+LCD_D5 = 24 # LCD pin 12: Data Bit 5
+LCD_D6 = 23 # LCD pin 13: Data Bit 6
+LCD_D7 = 18 # LCD pin 14: Data Bit 7
 #LED_ON = 4
-LCD_RED = 4
-LCD_GREEN = 17
-LCD_BLUE = 7
+LCD_RED = 4 # LCD pin 16: RED LCD Backlight (-)
+LCD_GREEN = 17 # LCD pin 17: GREEN LCD Backlight (-)
+LCD_BLUE = 7 # # LCD pin 18: BLUE LCD Backlight (-)
 
 # Define some device constants
 LCD_WIDTH = 16    # Maximum characters per line
