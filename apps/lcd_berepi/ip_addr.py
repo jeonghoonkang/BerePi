@@ -76,11 +76,11 @@ def main():
     red_backlight(False) #turn on, yellow
     #blue_backlight(False) #turn on, blue
     time.sleep(2.5) # 3 second delay
-    lcd_string('%s' % (ip_chk()),LCD_LINE_1,1)
+    lcd_string('ET %s' % (ip_chk()),LCD_LINE_1,1)
     lcd_string('%s' % (mac_chk()),LCD_LINE_2,1)
     time.sleep(5) # 3 second delay
     
-    lcd_string('%s' % (wip_chk()),LCD_LINE_1,1)
+    lcd_string('WL %s' % (wip_chk()),LCD_LINE_1,1)
     lcd_string('%s' % (wmac_chk()),LCD_LINE_2,1)
     time.sleep(5) # 5 second delay
 
