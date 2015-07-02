@@ -1,5 +1,6 @@
 #!/usr/bin/python
-# Author : ipmstyle, https://github.com/ipmstyle
+# Author : Matt Hawkins
+#        : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
 
 # The wiring for the LCD is as follows:
