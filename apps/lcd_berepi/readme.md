@@ -1,0 +1,5 @@
+ - Introduciton
+   - Raspi LCD driver
+   - It shows IP address, stalk channel 
+ - How to run the code
+   - **sudo python OOO.py**
