@@ -4,4 +4,4 @@
  - How to run the code
    - **sudo python OOO.py**
  - Run result
-  - ![LCD running !](raspi_lcd.jpg)
+  - ![LCD running !](raspi_lcd_color.jpg)
