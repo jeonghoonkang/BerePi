@@ -3,3 +3,5 @@
    - It shows IP address, stalk channel 
  - How to run the code
    - **sudo python OOO.py**
+ - Run result
+  - ![LCD running !](raspi_lcd.jpg)
