@@ -5,7 +5,7 @@
 # The wiring for the LCD is as follows:
 # 1 : GND
 # 2 : 5V
-# 3 : Contrast (0-5V)*
+# 3 : Contrast (0-5V)* - GND connect
 # 4 : RS (Register Select)
 # 5 : R/W (Read Write)       - GROUND THIS PIN
 # 6 : Enable or Strobe
@@ -17,7 +17,7 @@
 # 12: Data Bit 5
 # 13: Data Bit 6
 # 14: Data Bit 7
-# 15: LCD Backlight +5V**
+# 15: LCD Backlight +5V** - 5V connect
 # 16: RED LCD Backlight (-)
 # 17: GREEN LCD Backlight (-)
 # 18: BLUE LCD Backlight (-)
