@@ -25,18 +25,7 @@
 import RPi.GPIO as GPIO
 import time, os
 from subprocess import *
-
-# Define GPIO to LCD mapping, Raspi pin mapping
-LCD_RS = 27 # LCD pin 4 : RS (Register Select)
-LCD_E  = 22 # LCD pin 6 : Enable or Strobe
-LCD_D4 = 25 # LCD pin 11: Data Bit 4
-LCD_D5 = 24 # LCD pin 12: Data Bit 5
-LCD_D6 = 23 # LCD pin 13: Data Bit 6
-LCD_D7 = 12 # LCD pin 14: Data Bit 7
-#LED_ON = 4
-LCD_RED = 4 # LCD pin 16: RED LCD Backlight (-)
-LCD_GREEN = 17 # LCD pin 17: GREEN LCD Backlight (-)
-LCD_BLUE = 7 # # LCD pin 18: BLUE LCD Backlight (-)
+from lcd_connect import * 
 
 # Define some device constants
 LCD_WIDTH = 16    # Maximum characters per line
@@ -73,16 +62,25 @@ def main():
     lcd_string('IP address ', LCD_LINE_1,1)
     lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
     #green_backlight(False) #turn on, green
-    red_backlight(False) #turn on, yellow
+    green_backlight(False) #turn on, yellow
     #blue_backlight(False) #turn on, blue
     time.sleep(2.5) # 3 second delay
+
     lcd_string('ET %s' % (ip_chk()),LCD_LINE_1,1)
     lcd_string('%s' % (mac_chk()),LCD_LINE_2,1)
-    time.sleep(5) # 3 second delay
+    red_backlight(False) #turn on, yellow
+    time.sleep(3.5) # 3 second delay
     
     lcd_string('WL %s' % (wip_chk()),LCD_LINE_1,1)
     lcd_string('%s' % (wmac_chk()),LCD_LINE_2,1)
-    time.sleep(5) # 5 second delay
+    green_backlight(False) #turn on, yellow
+    time.sleep(3.5) # 5 second delay
+        
+    lcd_string('sTalk Channel' ,LCD_LINE_1,1)
+    lcd_string('%s' % (stalk_chk()),LCD_LINE_2,1)
+    red_backlight(False) #turn on, yellow
+    time.sleep(3.5) # 5 second delay
+
 
 def lcd_init():
   # Initialise display
@@ -215,6 +213,10 @@ def wmac_chk():
     cmd = "ifconfig -a | grep ^wlan | awk '{print $5}'"
     wmacAddr = run_cmd(cmd)
     return wmacAddr
+
+def stalk_chk():
+    cmd = "hostname"
+    return run_cmd(cmd)
 
 if __name__ == '__main__':
 
