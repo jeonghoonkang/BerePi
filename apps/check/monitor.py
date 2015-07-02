@@ -10,6 +10,9 @@ import requests
 
 import RPi.GPIO as GPIO
 
+from socket import gethostname
+
+hostname =  gethostname()
 
 SERVER_ADDR = '211.184.76.80'
 
@@ -37,24 +40,23 @@ def query_last_data_point(bridge_id):
 
 
 # test
-bridge_id = 1001
+bridge_id = int(hostname[5:10])
+
 GPIO.output(26, True)
 
 while True:
-	ret = query_last_data_point(bridge_id)
-	if ret is not None:
-		t, v = ret
-		if t > time.time() - 30:
-			dt = time.time() - t 
-			GPIO.output(19, True)
-			GPIO.output(26, False)
+    ret = query_last_data_point(bridge_id)
+    if ret is not None:
+        t, v = ret
+        if t > time.time() - 30:
+            dt = time.time() - t 
+            GPIO.output(19, True)
+            GPIO.output(26, False)
+        else:
+            GPIO.output(19, True)
+            GPIO.output(26, True)
+    else:
+        GPIO.output(19, False)
+        GPIO.output(26, True)
+    time.sleep(5.0)
 
-		else:
-			GPIO.output(19, True)
-			GPIO.output(26, True)
-
-	else:
-		GPIO.output(19, False)
-		GPIO.output(26, True)
-
-	time.sleep(5.0)
