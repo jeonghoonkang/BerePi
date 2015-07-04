@@ -17,6 +17,9 @@ if [ "$_IP" ]; then
   printf "My IP address is %s\n" "$_IP"
 fi
 
+
+# modified : jeonghoonkang, https://github.com/jeonghoonkang
+
 #####################################################################
 # Using Dust Sensor, CO2 Sensor
 #####################################################################
