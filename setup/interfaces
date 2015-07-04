@@ -28,5 +28,8 @@ allow-hotplug eth0
 #auto wlan0
 #allow-hotplug wlan0
 #iface wlan0 inet dhcp
-#wpa-ssid "yebbi"
-#wpa-psk ""
+  #wpa-ssid "TYPE SSID"
+  #wpa-psk "TYPE KEY VALUE"
+  #wireless-essid TYPE SSID
+  #               without " symbol
+  #wireless-mode managed
