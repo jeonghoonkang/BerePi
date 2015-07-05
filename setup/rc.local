@@ -50,6 +50,14 @@ cd
 
 sudo python /home/pi/devel/BerePi/apps/check/monitor.py &
 
+# LCD display with IP address / sTalk channel
+#export tmppath=/home/pi/devel/BerePi/apps/lcd_berepi
+#cd $tmppath
+#sudo python ip_addr.py &
+#unset tmppath
+#cd
+
+
 #echo "make run ntpdate sw"
 #please do it last, sometimes ntp.ubuntu.com is down
 sudo ntpdate -u ntp.ubuntu.com
