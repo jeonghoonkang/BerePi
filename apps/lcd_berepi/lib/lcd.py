@@ -108,36 +108,36 @@ def lcd_string(message,line,style):
   for i in range(LCD_WIDTH):
     lcd_byte(ord(message[i]),LCD_CHR)
 
-def redLCDon()
+def redLCDon():
   red_backlight(False)
 
-def greenLCDon()
+def greenLCDon():
   green_backlight(False)
 
-def blueLCDon()
+def blueLCDon():
   blue_backlight(False)
 
-def LCDoff()
+def LCDoff():
   red_backlight(True)
   green_backlight(True)
   blue_backlight(True)
 
-def yellowLCDon()
+def yellowLCDon():
   GPIO.output(LCD_BLUE, True)
   GPIO.output(LCD_RED, False)
   GPIO.output(LCD_GREEN, False)
 
-def skyeLCDon()
+def skyeLCDon():
   GPIO.output(LCD_BLUE, True)
   GPIO.output(LCD_RED, False)
   GPIO.output(LCD_GREEN, False)
 
-def pinkLCDon()
+def pinkLCDon():
   GPIO.output(LCD_GREEN, True)
   GPIO.output(LCD_RED, False)
   GPIO.output(LCD_BLUE, False)
 
-def whiteLCDon()
+def whiteLCDon():
   GPIO.output(LCD_RED, False)
   GPIO.output(LCD_GREEN, False)
   GPIO.output(LCD_BLUE, False)
