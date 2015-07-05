@@ -7,21 +7,17 @@ import os
 import time
 import traceback
 import requests
-
 import RPi.GPIO as GPIO
-
 from socket import gethostname
 
 hostname =  gethostname()
-
 SERVER_ADDR = '211.184.76.80'
 
 GPIO.setwarnings(False)
 GPIO.cleanup()
 GPIO.setmode(GPIO.BCM)
-
-GPIO.setup(19,GPIO.OUT)
-GPIO.setup(26, GPIO.OUT)
+GPIO.setup(19,GPIO.OUT)  # for LED indicating
+GPIO.setup(26, GPIO.OUT) # for LED indicating
 
 def query_last_data_point(bridge_id):
 	url = 'http://%s/api/raw_bridge_last/?bridge_id=%d' % (SERVER_ADDR, bridge_id)
@@ -34,15 +30,12 @@ def query_last_data_point(bridge_id):
 				return ctx['result']['time'], ctx['result']['value']
 
 	except Exception:
+		#print Exception
 		pass
-
 	return None
-
-
-# test
+	
 bridge_id = int(hostname[5:10])
-
-GPIO.output(26, True)
+GPIO.output(26, True) # server connection is OK, showing through LED
 
 while True:
     ret = query_last_data_point(bridge_id)
