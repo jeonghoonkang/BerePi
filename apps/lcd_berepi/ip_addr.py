@@ -2,25 +2,7 @@
 # Author : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
 
-# The wiring for the LCD is as follows:
-# 1 : GND
-# 2 : 5V
-# 3 : Contrast (0-5V)*
-# 4 : RS (Register Select)
-# 5 : R/W (Read Write)       - GROUND THIS PIN
-# 6 : Enable or Strobe
-# 7 : Data Bit 0             - NOT USED
-# 8 : Data Bit 1             - NOT USED
-# 9 : Data Bit 2             - NOT USED
-# 10: Data Bit 3             - NOT USED
-# 11: Data Bit 4
-# 12: Data Bit 5
-# 13: Data Bit 6
-# 14: Data Bit 7
-# 15: LCD Backlight +5V**
-# 16: RED LCD Backlight (-)
-# 17: GREEN LCD Backlight (-)
-# 18: BLUE LCD Backlight (-)
+# for the detail of HW connection, see lcd_connect.py
 
 import RPi.GPIO as GPIO
 import time, os
@@ -56,28 +38,36 @@ def main():
 
   # Initialise display
   lcd_init()
-  print ip_chk(), wip_chk(), mac_chk(), wmac_chk()
+  print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk()
 
   while True:
     lcd_string('IP address ', LCD_LINE_1,1)
     lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
-    #green_backlight(False) #turn on, green
-    green_backlight(False) #turn on, yellow
-    #blue_backlight(False) #turn on, blue
+    blue_backlight(False) #turn on, yellow
     time.sleep(2.5) # 3 second delay
 
-    lcd_string('ET %s' % (ip_chk()),LCD_LINE_1,1)
-    lcd_string('%s' % (mac_chk()),LCD_LINE_2,1)
+    str = ip_chk()
+    str = str[:-1]
+    lcd_string('%s ET' %str,LCD_LINE_1,1)
+    str = mac_chk()
+    str = str[:-1]
+    lcd_string('%s' % (str),LCD_LINE_2,1)
     red_backlight(False) #turn on, yellow
     time.sleep(3.5) # 3 second delay
-    
-    lcd_string('WL %s' % (wip_chk()),LCD_LINE_1,1)
-    lcd_string('%s' % (wmac_chk()),LCD_LINE_2,1)
+
+    str = wip_chk()
+    str = str[:-1]
+    lcd_string('%s WL     ' % (str),LCD_LINE_1,1)
+    str = wmac_chk()
+    str = str[:-1]
+    lcd_string('%s' % (str),LCD_LINE_2,1)
     green_backlight(False) #turn on, yellow
     time.sleep(3.5) # 5 second delay
         
+    str = stalk_chk()
+    str = str[:-1]
     lcd_string('sTalk Channel' ,LCD_LINE_1,1)
-    lcd_string('%s' % (stalk_chk()),LCD_LINE_2,1)
+    lcd_string('%s           ' % (str),LCD_LINE_2,1)
     red_backlight(False) #turn on, yellow
     time.sleep(3.5) # 5 second delay
 
