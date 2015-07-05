@@ -41,25 +41,27 @@ fi
 # Using STALK : remote channel access 
 #####################################################################
 echo "make run STALK"
-
 /home/pi/start.sh
 cd
 #cd /home/pi/devel/danalytics/thingsweb/stalk/client/
 #screen -dmS volotestssh python /home/pi/devel/danalytics/thingsweb/stalk/client/app.py register $(hostname) localhost 22 &
 #####################################################################
 
+#####################################################################
+#  KEMCO GW driver
+#####################################################################
 sudo python /home/pi/devel/BerePi/apps/check/monitor.py &
 
-# LCD display with IP address / sTalk channel
+#####################################################################
+# LCD which shows IP address and sTalk channel 
+#####################################################################
 #export tmppath=/home/pi/devel/BerePi/apps/lcd_berepi
 #cd $tmppath
 #sudo python ip_addr.py &
 #unset tmppath
 #cd
 
-
 #echo "make run ntpdate sw"
 #please do it last, sometimes ntp.ubuntu.com is down
 sudo ntpdate -u ntp.ubuntu.com
-
 exit 0
