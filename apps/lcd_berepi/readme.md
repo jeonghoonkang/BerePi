@@ -1,7 +1,9 @@
  - Introduciton
    - Raspi LCD driver
    - It shows IP address, stalk channel 
-   - 
+   - sample application
+    - 16x2_LCD_RGB.py
+    - ip_addr.py
  - How to run the code
    - **sudo python OOO.py**
  - Run result
