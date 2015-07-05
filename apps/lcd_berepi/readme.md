@@ -8,7 +8,7 @@
   - ![LCD running !](raspi_lcd_color.jpg)
 
 
-#### Wiring info, please see the source code, ![ lcd_connect.py](https://github.com/jeonghoonkang/BerePi/blob/master/apps/lcd_berepi/lcd_connect.py)
+#### Wiring info, please see the source code, [ lcd_connect.py](https://github.com/jeonghoonkang/BerePi/blob/master/apps/lcd_berepi/lcd_connect.py)
 
 | LCD pin | Function | RPi GPIO |
 |---|---|---|
