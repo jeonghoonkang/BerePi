@@ -1,6 +1,6 @@
 #### Install Raspi OS
   - Please download below RasberryPi OS - Rapberrian based on 2015 05 05 version
-    - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_4G_2015_0626.zip
+    - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_4G_2015_0706.zip
      - it supports Korean Lang. with common US keyboard, timezone is SEOUL, I2C enabled  
     - Unzip it and write img file to SD card
     - if you using more size than 8 GB SD Card, run sudo raspi-config and expand SD memory size
