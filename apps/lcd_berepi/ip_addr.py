@@ -50,7 +50,7 @@ def run_cmd(cmd):
     return output
 
 def ip_chk():
-    cmd = "ip addr show eth0 | grep inet | awk '{print $2}' | cut -d/ -f1"
+    cmd = "ip addr show eth0 | grep inet | awk '$2 !~ /^169/ {print $2}' | cut -d/ -f1"
     ipAddr = run_cmd(cmd)
     return ipAddr
 
