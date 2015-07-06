@@ -56,7 +56,7 @@ sudo python /home/pi/devel/BerePi/apps/check/monitor.py &
 #####################################################################
 #export tmppath=/home/pi/devel/BerePi/apps/lcd_berepi
 #cd $tmppath
-#sudo python ip_addr.py &
+#screen -dmS disp sudo python ip_addr.py &
 #unset tmppath
 #cd
 
