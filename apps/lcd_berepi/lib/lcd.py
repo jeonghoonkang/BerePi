@@ -208,11 +208,6 @@ def main():
   print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk()
 
   while True:
-    lcd_string('IP address ', LCD_LINE_1,1)
-    lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
-    blue_backlight(False) #turn on, yellow
-    time.sleep(2.5) # 3 second delay
-
     str = ip_chk()
     str = str[:-1]
     lcd_string('%s ET' %str,LCD_LINE_1,1)
@@ -229,11 +224,4 @@ def main():
     str = str[:-1]
     lcd_string('%s' % (str),LCD_LINE_2,1)
     green_backlight(False) #turn on, yellow
-    time.sleep(3.5) # 5 second delay
-        
-    str = stalk_chk()
-    str = str[:-1]
-    lcd_string('sTalk Channel' ,LCD_LINE_1,1)
-    lcd_string('%s           ' % (str),LCD_LINE_2,1)
-    red_backlight(False) #turn on, yellow
     time.sleep(3.5) # 5 second delay
