@@ -3,10 +3,15 @@
 
 #### installation
   - git clone git://git.drogon.net/wiringPi
-  - and ./build
+  - and ./build 
   - compile option needs -lwiringPi
   - see in the ../wiringPi/Makefile
   
+#### check PINOUTs in BASH
+  - gpio -v
+  - gpio readall 
+    - it shows all the PINOUTs map table
+
 #### some reference from http://wiringpi.com/reference
 Note: Even if you are not using any of the input/output functions you still need to call one of the wiringPi setup functions – just use wiringPiSetupSys() if you don’t need root access in your program and remember to #include <wiringPi.h>
 
