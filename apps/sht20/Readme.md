@@ -45,7 +45,8 @@ like this
 - https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c
 
 #### Photos
-- ![SHT20 interface with Add-on Board](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/raspi_temp_humi_addon.jpg)
+- SHT20 interface with Add-on Board - Blue wire-SDA, Yellow wire-SCL, Red-3.3V, Black-GND
+ - ![SHT20 interface with Add-on Board](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/raspi_temp_humi_addon.jpg)
 - https://github.com/jeonghoonkang/BerePi/blob/master/files/Raspi_temp_humi_sht20_keti_motes_bd_00.jpg
 - https://github.com/jeonghoonkang/BerePi/blob/master/files/Raspi_temp_humi_sht20_keti_motes_bd_01.jpg
 
