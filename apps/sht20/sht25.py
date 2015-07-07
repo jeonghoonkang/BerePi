@@ -42,15 +42,17 @@ def calc(temp, humi):
 
 def getTemperature():
     ret = reading(1)
+    Temperature = calc(ret,ret)
     if not ret:
         print " communication error "
-    return ret
+    return Temperature[0]
 
 def getHumidity():
     ret = reading(2)
+    Humi = calc(ret,ret)
     if not ret:
         print " communication error "
-    return ret
+    return Humi[1]
 
 if __name__== "__main__" :
 
