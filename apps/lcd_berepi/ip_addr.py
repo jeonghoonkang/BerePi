@@ -17,7 +17,7 @@ def main():
   print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk()
 
   while True:
-    lcd_string('IP address and Temperature ', LCD_LINE_1,1)
+    lcd_string('Temperature & IP addr', LCD_LINE_1,1)
     lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
     blue_backlight(False) #turn on, yellow
     time.sleep(2.5) # 3 second delay
@@ -25,7 +25,7 @@ def main():
     str = temp_chk()
     #str = str[:-1]
     lcd_string('Temperature' ,LCD_LINE_1,1)
-    lcd_string('%s `C' % (str),LCD_LINE_2,1)
+    lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
     yellowLCDon()
     time.sleep(2) # 5 second delay
 
@@ -35,7 +35,7 @@ def main():
     str = mac_chk()
     str = str[:-1]
     lcd_string('%s' % (str),LCD_LINE_2,1)
-    red_backlight(False) #turn on, yellow
+    green_backlight(False) #turn on, yellow
     time.sleep(3.5) # 3 second delay
 
     str = wip_chk()
@@ -44,14 +44,13 @@ def main():
     str = wmac_chk()
     str = str[:-1]
     lcd_string('%s' % (str),LCD_LINE_2,1)
-    green_backlight(False) #turn on, yellow
+    yellowLCDon()
     time.sleep(3.5) # 5 second delay
         
     str = stalk_chk()
     str = str[:-1]
     lcd_string('sTalk Channel' ,LCD_LINE_1,1)
     lcd_string('%s           ' % (str),LCD_LINE_2,1)
-    red_backlight(False) #turn on, yellow
     time.sleep(3.5) # 5 second delay
 
 
