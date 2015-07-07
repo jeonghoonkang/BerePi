@@ -41,8 +41,12 @@ like this
 
 ![/etc/modules/](https://learn.adafruit.com/system/assets/assets/000/003/054/medium800/learn_raspberry_pi_editing_modules_file.png)
 
+#### Test
+  - sudo i2cdetect -y 1
+  - you should see i2c table (https://learn.adafruit.com/assets/3055)
+
 #### Links 
-- https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c
+- [adafruit link](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c)
 
 #### Photos
 - SHT20 interface with Add-on Board - Blue wire-SDA, Yellow wire-SCL, Red-3.3V, Black-GND
