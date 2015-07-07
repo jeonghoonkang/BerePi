@@ -7,6 +7,9 @@
 import sys
 sys.path.append("./lib")
 from lcd import *
+sys.path.append("../sht20")
+from sht25 import *
+
 
 def main():
   # Initialise display
@@ -14,10 +17,17 @@ def main():
   print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk()
 
   while True:
-    lcd_string('IP address ', LCD_LINE_1,1)
+    lcd_string('IP address and Temperature ', LCD_LINE_1,1)
     lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
     blue_backlight(False) #turn on, yellow
     time.sleep(2.5) # 3 second delay
+
+    str = temp_chk()
+    #str = str[:-1]
+    lcd_string('Temperature' ,LCD_LINE_1,1)
+    lcd_string('%s `C' % (str),LCD_LINE_2,1)
+    yellowLCDon()
+    time.sleep(2) # 5 second delay
 
     str = ip_chk()
     str = str[:-1]
@@ -44,10 +54,15 @@ def main():
     red_backlight(False) #turn on, yellow
     time.sleep(3.5) # 5 second delay
 
+
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
     return output
+
+def temp_chk():
+    temperature = getTemperature()
+    return temperature
 
 def ip_chk():
     cmd = "ip addr show eth0 | grep inet | awk '$2 !~ /^169/ {print $2}' | cut -d/ -f1"
