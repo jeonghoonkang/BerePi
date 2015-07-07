@@ -16,7 +16,10 @@ SHT20_CMD_RESET = 0xFE  # soft reset
 bus = smbus.SMBus(1)    # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
 
 def reading(v):
-    bus.write_quick(SHT20_ADDR)
+    try: 
+        bus.write_quick(SHT20_ADDR)
+    except:
+        return False
     if v == 1:
         bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
     elif v == 2:
@@ -45,6 +48,7 @@ def getTemperature():
     Temperature = calc(ret,ret)
     if not ret:
         print " communication error "
+        return -100
     return Temperature[0]
 
 def getHumidity():
@@ -52,6 +56,7 @@ def getHumidity():
     Humi = calc(ret,ret)
     if not ret:
         print " communication error "
+        return -100
     return Humi[1]
 
 if __name__== "__main__" :
