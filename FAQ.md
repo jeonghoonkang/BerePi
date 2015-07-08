@@ -44,3 +44,6 @@
 간략한 소스트리 설명
 
 현재 가장 시급한 액션아이템
+
+### 읽어봐야할 논문 리스트
+[논문](http://web.stanford.edu/class/cs344a/readings.html)
