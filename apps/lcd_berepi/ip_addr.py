@@ -19,15 +19,15 @@ def main():
   while True:
     lcd_string('Temperature & IP addr', LCD_LINE_1,1)
     lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
-    blue_backlight(False) #turn on, yellow
-    time.sleep(2.5) # 3 second delay
+    blue_backlight(False) #turn on, blue 
+    time.sleep(0.7) 
 
     str = temp_chk()
     #str = str[:-1]
     lcd_string('Temperature' ,LCD_LINE_1,1)
     lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
     yellowLCDon()
-    time.sleep(2) # 5 second delay
+    time.sleep(2) 
 
     str = ip_chk()
     str = str[:-1]
@@ -36,7 +36,7 @@ def main():
     str = str[:-1]
     lcd_string('%s' % (str),LCD_LINE_2,1)
     green_backlight(False) #turn on, yellow
-    time.sleep(3.5) # 3 second delay
+    time.sleep(1.5) 
 
     str = wip_chk()
     str = str[:-1]
@@ -45,13 +45,14 @@ def main():
     str = str[:-1]
     lcd_string('%s' % (str),LCD_LINE_2,1)
     yellowLCDon()
-    time.sleep(3.5) # 5 second delay
+    time.sleep(1.5)
         
     str = stalk_chk()
     str = str[:-1]
     lcd_string('sTalk Channel' ,LCD_LINE_1,1)
     lcd_string('%s           ' % (str),LCD_LINE_2,1)
-    time.sleep(3.5) # 5 second delay
+    whiteLCDon()
+    time.sleep(1.5) 
 
 
 def run_cmd(cmd):
