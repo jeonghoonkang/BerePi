@@ -47,4 +47,5 @@
 
 ### 읽어봐야할 논문 리스트
 [논문](http://web.stanford.edu/class/cs344a/readings.html)
-[Next Challenge] http://www.isi.edu/~johnh/PAPERS/Estrin99e.pdf
+[Next Century Challenges](http://www.isi.edu/~johnh/PAPERS/Estrin99e.pdf)
+[System direction TinyOS](http://tinyos.millennium.berkeley.edu/papers/tos.pdf)
