@@ -31,6 +31,6 @@ allow-hotplug eth0
 #in case of "OPEN SSID" just change *iptime* to your SSID
 #    wireless-essid iptime
 #    wireless-mode managed
-#in case of WPA, change your SSID, KEY in " "
+#in case of WPA, change your SSID, KEY in " ", keep remain " " symbol
 #   wpa-ssid "TYPE HERE"
 #   wpa-psk "TYPE HERE"
