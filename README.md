@@ -12,7 +12,7 @@ BerePi project opens software which using BerePi hardware modules.
     - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png), ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
   - BereCO2 update with enclosure
     - ![BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/raspi_berefp_officail_enclo.jpg)
-    - (https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
+    - [Previous Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
   - BereCO2 update with SHT20 (KETI motes sensor board)
    - SHT20 board photo and connection : (https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/Raspi_temp_humi_sht20_keti_motes_bd_00.jpg), (https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/Raspi_temp_humi_sht20_keti_motes_bd_01.jpg)
      
