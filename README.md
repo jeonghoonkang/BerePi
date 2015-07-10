@@ -1,4 +1,8 @@
 ## BerePi
+#### Wiki
+  - OS installation and setup to run the SDH sensors
+    - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
+
 ##### People
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (https://github.com/sukunkim), and YOU
 
