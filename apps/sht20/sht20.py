@@ -16,7 +16,7 @@ SHT20_CMD_RESET = 0xFE  # soft reset
 bus = smbus.SMBus(1)    # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
 
 def reading(v):
-    bus.write_quick(SHT20_ADDR)
+    #bus.write_quick(SHT20_ADDR)
     if v == 1:
         bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
     elif v == 2:
