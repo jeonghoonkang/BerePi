@@ -27,6 +27,7 @@ BerePi project opens software which using BerePi hardware modules.
 
 ## Links
 [BerePi at Slack](https://berepi.slack.com/messages/general/)
+
 [BerePi Coggle] (https://coggle.it/diagram/VaX9m3fEi7hr8oe4)
 
  - additional nice works :
