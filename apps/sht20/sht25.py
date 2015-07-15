@@ -13,7 +13,7 @@ SHT20_CMD_R_RH = 0xF5   # no hold Master Mode (Humidity)
 #SHT20_READ_REG = 0xE7  # read user register 
 SHT20_CMD_RESET = 0xFE  # soft reset
 
-bus = smbus.SMBus(1)    # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
+#bus = smbus.SMBus(1)    # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
 
 def reading(v):
     try: 
