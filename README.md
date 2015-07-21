@@ -14,7 +14,7 @@ BerePi project opens software which using BerePi hardware modules.
   - Simple LED video 01 ( YouTube : https://youtu.be/ygJ3qMiGQvw )
   - BereCO2 HW module 
   - BereCO2 update with enclosure
-    - ![BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/raspi_berefp_officail_enclo.jpg)
+    - ![BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/CO2/CO2_inside_01.JPG)
     - [Previous Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
   - BereCO2 update with SHT20 (KETI motes sensor board)
     - New version will be next week
