@@ -16,6 +16,10 @@ import fcntl, socket, struct
 sys.path.append("/home/pi/devel/BerePi/apps/BereCO2post/lib")
 from co2led import *
 
+from socket import gethostname
+hostname =  gethostname()
+
+
 DEBUG_PRINT = 0 
 SERIAL_READ_BYTE = 12
 FILEMAXBYTE = 1024 * 1024 * 100 #100MB
@@ -84,18 +88,13 @@ def init_process():
 
 def insertPost(t,ppm,macAddr, sensorname):
     data = {
-        "metric": "rc1.co2.ppm",
+        "metric": hostname,
         "timestamp": t,
         "value": ppm,
         "tags": {
             "eth0": macAddr,
             "hw": "raspberrypi2" ,
-            "sensor" : "co2.t110",
-            "name" : sensorname,
-            "floor_room": "5fl_512",
-            "building": "keti",
-            "owner": "kang",
-            "country": "kor"
+            "sensor" : "co2.t110"
         }
         #tags should be less than 9, 8 is alright, 9 returns http error
     }
