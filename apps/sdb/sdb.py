@@ -170,7 +170,6 @@ if __name__== "__main__" :
         value = calc(temp, humi)
         print ">>> SHT25"
         print "temp : %s\thumi : %s" % (value[0], value[1])
-        pirnt
         
         ppm = 0
         try:
