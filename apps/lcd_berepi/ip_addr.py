@@ -17,10 +17,10 @@ def main():
   print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk()
 
   while True:
-    lcd_string('Temperature & IP addr', LCD_LINE_1,1)
-    lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
-    blue_backlight(False) #turn on, blue 
-    time.sleep(0.7) 
+    #lcd_string('Temperature & IP addr', LCD_LINE_1,1)
+    #lcd_string('MAC eth0, wlan0',LCD_LINE_2,1)
+    #blue_backlight(False) #turn on, blue 
+    #time.sleep(0.7) 
 
     str = temp_chk()
     #str = str[:-1]
