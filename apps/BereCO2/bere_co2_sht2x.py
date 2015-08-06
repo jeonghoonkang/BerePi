@@ -98,13 +98,19 @@ def reading(v):
         return False
     '''
     if v == 1:
-        bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
+        try:
+            bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
+        except:
+            return False
     elif v == 2:
-        bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
+        try:
+            bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
+        except:
+            return False
     else:
         return False
         
-    time.sleep(.1)
+    time.sleep(0.3)
     
     b = (bus.read_byte(SHT20_ADDR)<<8)
     b += bus.read_byte(SHT20_ADDR)
