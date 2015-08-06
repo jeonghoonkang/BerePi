@@ -112,8 +112,14 @@ def reading(v):
         
     time.sleep(0.3)
     
-    b = (bus.read_byte(SHT20_ADDR)<<8)
-    b += bus.read_byte(SHT20_ADDR)
+    try:
+        b = (bus.read_byte(SHT20_ADDR)<<8)
+    except:
+        retrun False 
+    try:
+        b += bus.read_byte(SHT20_ADDR)
+    except:
+        return False
     return b
 
 # based on SHT25 Data sheet, Version 3 _ May 2014 
