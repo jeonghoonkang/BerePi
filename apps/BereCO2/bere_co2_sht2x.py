@@ -262,7 +262,7 @@ if __name__== "__main__" :
         humi = reading(2)
         if not temp or not humi:
             print "SHT2x I2C register reading error"
-            break
+            continue
         value = calc(temp, humi)
-        print "temp : %s\thumi : %s" % (value[0], value[1])
+        print "temperature : %.5s\thumidity : %.5s" % (value[0], value[1])
       
