@@ -16,6 +16,13 @@ import fcntl, socket, struct
 sys.path.append("./lib")
 from co2led import *
 
+import smbus
+
+SHT20_ADDR = 0x40       # SHT20 register address
+SHT20_CMD_R_T = 0xF3    # no hold Master Mode (Temperature)
+SHT20_CMD_R_RH = 0xF5   # no hold Master Mode (Humidity)
+SHT20_CMD_RESET = 0xFE  # soft reset
+
 DEBUG_PRINT = 1
 SERIAL_READ_BYTE = 12
 FILEMAXBYTE = 1024 * 1024 * 100 #100MB
@@ -26,7 +33,7 @@ CO2LED_GREEN_PIN = 22
 CO2LED_RED_PIN = 27
 
 # important, sensorname shuould be pre-defined, unique sensorname
-sensorname = "co2.test"
+sensorname = "t110.sht2x.test"
 
 #url = "http://127.0.0.1:4242/api/put"
 url = "http://125.7.xxx.xxx:4242/api/put"
@@ -80,6 +87,56 @@ def init_process():
     print "MSG - now starting to read SERIAL PORT"
     print " "
     ledall_off()
+
+
+bus = smbus.SMBus(1)    # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
+
+def reading(v):
+    '''try: 
+        bus.write_quick(SHT20_ADDR)
+    except:
+        return False
+    '''
+    if v == 1:
+        bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
+    elif v == 2:
+        bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
+    else:
+        return False
+        
+    time.sleep(.1)
+    
+    b = (bus.read_byte(SHT20_ADDR)<<8)
+    b += bus.read_byte(SHT20_ADDR)
+    return b
+
+# based on SHT25 Data sheet, Version 3 _ May 2014 
+# http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/Humidity/Sensirion_Humidity_SHT25_Datasheet_V3.pdf
+# http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/Humidity/Sensirion_Humidity_SHT20_Datasheet_V3.pdf
+
+def calc(temp, humi):
+    tmp_temp = 175.72 * float(temp) / pow(2,16) - 46.85
+    tmp_humi = 125 * float(humi) / pow(2,16) - 6
+
+    return tmp_temp, tmp_humi
+
+def getTemperature():
+    ret = reading(1)
+    Temperature = calc(ret,ret)
+    if not ret:
+        print " communication error "
+        return -100
+    return Temperature[0]
+
+def getHumidity():
+    ret = reading(2)
+    Humi = calc(ret,ret)
+    if not ret:
+        print " communication error "
+        return -100
+    return Humi[1]
+
+
 
 if __name__== "__main__" :
 
@@ -194,4 +251,12 @@ if __name__== "__main__" :
             ledyellow_on()
         elif ppm >= 1900 :  
             ledpurple_on()
+            
+        temp = reading(1)
+        humi = reading(2)
+        if not temp or not humi:
+            print "SHT2x I2C register reading error"
+            break
+        value = calc(temp, humi)
+        print "temp : %s\thumi : %s" % (value[0], value[1])
       
