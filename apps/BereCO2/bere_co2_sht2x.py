@@ -115,7 +115,7 @@ def reading(v):
     try:
         b = (bus.read_byte(SHT20_ADDR)<<8)
     except:
-        retrun False 
+        return False 
     try:
         b += bus.read_byte(SHT20_ADDR)
     except:
