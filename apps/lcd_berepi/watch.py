@@ -45,7 +45,7 @@ def main():
     str = str[:-1]
     lcd_string('%s' % (str),LCD_LINE_2,1)
     green_backlight(False) #turn on, yellow
-    time.sleep(1) 
+    time.sleep(0.5) 
 
     str = time_chk()
     lcd_string('Time' ,LCD_LINE_1,1)
