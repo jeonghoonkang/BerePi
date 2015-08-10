@@ -21,17 +21,22 @@ def reading(v):
     except:
         return False
     '''
-    if v == 1:
-        bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
-    elif v == 2:
-        bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
+    try:
+        if v == 1:
+            bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
+        elif v == 2:
+            bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
     else:
         return False
         
-    time.sleep(.1)
+    time.sleep(.2)
     
-    b = (bus.read_byte(SHT20_ADDR)<<8)
-    b += bus.read_byte(SHT20_ADDR)
+    try:
+        b = (bus.read_byte(SHT20_ADDR)<<8)
+        b += bus.read_byte(SHT20_ADDR)
+    except:
+        print "I2C read Exception"
+        return False
     return b
 
 # based on SHT25 Data sheet, Version 3 _ May 2014 
@@ -48,7 +53,7 @@ def getTemperature():
     ret = reading(1)
     Temperature = calc(ret,ret)
     if not ret:
-        print " communication error "
+        print "I2C problem report"
         return -100
     return Temperature[0]
 
@@ -56,7 +61,7 @@ def getHumidity():
     ret = reading(2)
     Humi = calc(ret,ret)
     if not ret:
-        print " communication error "
+        print "I2C problem report"
         return -100
     return Humi[1]
 
