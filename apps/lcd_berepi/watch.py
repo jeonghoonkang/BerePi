@@ -26,7 +26,7 @@ def main():
     time.sleep(2) 
 
     str = temp_chk()
-    #str = str[:-1]
+#   str = str[:-1]
     lcd_string('Temperature' ,LCD_LINE_1,1)
     lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
     yellowLCDon()

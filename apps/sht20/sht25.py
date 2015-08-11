@@ -25,8 +25,10 @@ def reading(v):
         if v == 1:
             bus.write_byte(SHT20_ADDR, SHT20_CMD_R_T)
         elif v == 2:
-            bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH)
-    else:
+            bus.write_byte(SHT20_ADDR, SHT20_CMD_R_RH) 
+        else:
+          return False
+    except:
         return False
         
     time.sleep(.2)
