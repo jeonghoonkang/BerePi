@@ -20,7 +20,7 @@ from socket import gethostname
 hostname =  gethostname()
 
 
-DEBUG_PRINT = 0 
+DEBUG_PRINT = 1 
 SERIAL_READ_BYTE = 12
 FILEMAXBYTE = 1024 * 1024 * 100 #100MB
 LOG_PATH = '/home/pi/log_tos.log'
@@ -33,7 +33,9 @@ CO2LED_RED_PIN = 27
 sensorname = "co2.test"
 
 #url = "http://127.0.0.1:4242/api/put"
-url = "http://125.7.128.53:4242/api/put"
+#url = "http://127.0.0.1:4242/api/put"
+url = "http://localhost:4242/api/put"
+url2 = "http://logger-001-4242.keti.stalk.megdatahub.com/api/put"
 
 def getHwAddr(ifname):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -94,7 +96,9 @@ def insertPost(t,ppm,macAddr, sensorname):
         "tags": {
             "eth0": macAddr,
             "hw": "raspberrypi2" ,
-            "sensor" : "co2.t110"
+            "sensor" : "co2.t110",
+            "building" : "keti",
+            "floor" : "5f"
         }
         #tags should be less than 9, 8 is alright, 9 returns http error
     }
@@ -107,6 +111,31 @@ def insertPost(t,ppm,macAddr, sensorname):
     time.sleep(1)
 
     return
+
+def insertPost_Sinbinet(t,ppm,macAddr, sensorname):
+    data = {
+        "metric": hostname,
+        "timestamp": t,
+        "value": ppm,
+        "tags": {
+            "eth0": macAddr,
+            "hw": "raspberrypi2" ,
+            "sensor" : "co2.t110",
+            "building" : "keti",
+            "floor" : "5f"
+        }
+        #tags should be less than 9, 8 is alright, 9 returns http error
+    }
+
+    try:
+        ret = requests.post(url22, data=json.dumps(data))
+    except :
+        pass
+
+    time.sleep(1)
+
+    return
+
 
 if __name__== "__main__" :
 
@@ -187,6 +216,7 @@ if __name__== "__main__" :
             #print "macAddr : " + macAddr
             t = time.time()
             insertPost(t, ppm, macAddr, sensorname)
+            insertPost_Sinbinet(t, ppm, macAddr, sensorname)
             
         # level = 1, 0~800 ppm,     blue- LED
         # level = 2, 800~1000 ppm,  blue green - LED
