@@ -106,6 +106,7 @@ def insertPost(t,ppm,macAddr, sensorname):
     try:
         ret = requests.post(url, data=json.dumps(data))
     except :
+        traceback.print_exc()
         pass
 
     time.sleep(1)
@@ -128,8 +129,9 @@ def insertPost_Sinbinet(t,ppm,macAddr, sensorname):
     }
 
     try:
-        ret = requests.post(url22, data=json.dumps(data))
+        ret = requests.post(url2, data=json.dumps(data))
     except :
+        traceback.print_exc()
         pass
 
     time.sleep(1)
