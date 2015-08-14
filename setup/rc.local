@@ -50,7 +50,7 @@ fi
 #####################################################################
 #echo "keti stalk"
 cd /home/pi/devel/danalytics/raspi/stalk-keti
-screen -dmS kangsu-desk python /home/pi/devel/danalytics/raspi/stalk-keti/talk.py server $(hostname) localhost 22 &
+screen -dmS stalkrun python /home/pi/devel/danalytics/raspi/stalk-keti/talk.py server $(hostname) localhost 22 &
 cd
 
 #####################################################################
