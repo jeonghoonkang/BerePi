@@ -10,9 +10,8 @@ Desc : Temperature & Humidity sensor
 
   - Datasheet : http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/Humidity/Sensirion_Humidity_SHT20_Datasheet_V3.pdf
 
-use with "RASPI HT-CO2 Sensor"
-
-#![RASPI-HTCO2-Sensor](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
+use with "RASPI HT-CO2 Sensor" (<-to be update)
+![RASPI-HTCO2-Sensor](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
 
 ###  I2C enable for raspberry pi 2 ###
 
