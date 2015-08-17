@@ -49,13 +49,15 @@ fi
 # Using STALK : remote channel access 
 #####################################################################
 #echo "keti stalk"
-cd /home/pi/devel/danalytics/raspi/stalk-keti
-screen -dmS stalkrun python /home/pi/devel/danalytics/raspi/stalk-keti/talk.py server $(hostname) localhost 22 &
-cd
+#cd /home/pi/devel/danalytics/raspi/stalk-keti
+#screen -dmS stalkrun python /home/pi/devel/danalytics/raspi/stalk-keti/talk.py server $(hostname) localhost 22 &
+#cd
 
 # cd /home/pi
 # screen -dmS stalksh sudo sh stalkstart.sh
 # cd
+
+# stalk server $(hostname) localhost 22
 
 #####################################################################
 #  KEMCO GW driver
