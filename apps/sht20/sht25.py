@@ -41,6 +41,7 @@ def reading(v):
         print "I2C read Exception"
         return False
     print " binary value : ", bin(b)
+    print " dec. value : ", int(b)
     return b
 
 # based on SHT25 Data sheet, Version 3 _ May 2014 
