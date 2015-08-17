@@ -36,6 +36,7 @@ def reading(v):
     try:
         b = (bus.read_byte(SHT20_ADDR)<<8)
         b += bus.read_byte(SHT20_ADDR)
+        b &= 0xFFFC
     except:
         print "I2C read Exception"
         return False
@@ -46,8 +47,8 @@ def reading(v):
 # http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/Humidity/Sensirion_Humidity_SHT20_Datasheet_V3.pdf
 
 def calc(temp, humi):
-    tmp_temp = 175.72 * float(temp) / pow(2,14) - 46.85
-    tmp_humi = 125 * float(humi) / pow(2,12) - 6
+    tmp_temp = 175.72 * float(temp) / pow(2,16) - 46.85
+    tmp_humi = 125 * float(humi) / pow(2,16) - 6
 
     return tmp_temp, tmp_humi
 
