@@ -91,10 +91,10 @@ class SHT25:
 if __name__ == "__main__":
     try:
         while True:
-        with SHT25(1) as sht25:
-            print "Temperature: %s" % sht25.read_temperature()
-            print "Humidity: %s" % sht25.read_humidity()
-        time.sleep(1)
+            with SHT25(1) as sht25:
+                print "Temperature: %s" % sht25.read_temperature()
+                print "Humidity: %s" % sht25.read_humidity()
+            time.sleep(1)
     except IOError, e:
         print e
         print "Error creating connection to i2c.  This must be run as root"
