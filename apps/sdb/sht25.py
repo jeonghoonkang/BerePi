@@ -93,7 +93,7 @@ if __name__ == "__main__":
         while True:
             with SHT25(1) as sht25:
                 print "Temperature: %s" % sht25.read_temperature()
-                print "Humidity: %s" % sht25.read_humidity()
+                print "Humidity   : %s" % sht25.read_humidity()
             time.sleep(1)
     except IOError, e:
         print e
