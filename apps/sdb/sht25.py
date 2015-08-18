@@ -72,7 +72,7 @@ class SHT25:
     @staticmethod
     def _get_temperature_from_buffer(data):
         unadjusted = (ord(data[0]) << 8) + ord(data[1])
-        unadjusted &= SHT21._STATUS_BITS_MASK  # zero the status bits
+        unadjusted &= SHT25._STATUS_BITS_MASK  # zero the status bits
         unadjusted *= 175.72
         unadjusted /= 1 << 16  # divide by 2^16
         unadjusted -= 46.85
@@ -81,7 +81,7 @@ class SHT25:
     @staticmethod
     def _get_humidity_from_buffer(data):
         unadjusted = (ord(data[0]) << 8) + ord(data[1])
-        unadjusted &= SHT21._STATUS_BITS_MASK  # zero the status bits
+        unadjusted &= SHT25._STATUS_BITS_MASK  # zero the status bits
         unadjusted *= 125.0
         unadjusted /= 1 << 16  # divide by 2^16
         unadjusted -= 6
