@@ -127,7 +127,7 @@ class SHT25:
         time.sleep(self._HUMIDITY_WAIT_TIME)
         data = self.i2c.read(3)
         if self._calculate_checksum(data, 2) == ord(data[2]):
-            return self._get.humidity_from_buffer(data)
+            return self._get_humidity_from_buffer(data)
 
     def testrun(self):
         try:
