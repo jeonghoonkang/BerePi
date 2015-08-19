@@ -45,22 +45,6 @@ import fcntl, socket, struct
 import unittest
 
 from twisted.internet import threads
-# control constants
-_SOFTRESET = 0xFE
-_I2C_ADDRESS = 0x40
-_TRIGGER_TEMPERATURE_NO_HOLD = 0xF3
-_TRIGGER_HUMIDITY_NO_HOLD = 0xF5
-_STATUS_BITS_MASK = 0xFFFC
-
-# From: /linux/i2c-dev.h
-I2C_SLAVE = 0x0703
-I2C_SLAVE_FORCE = 0x0706
-
-# datasheet (v4), page 9, table 7
-# for suggesting the use of these better values
-# code copied from https://github.com/mmilata/growd
-_TEMPERATURE_WAIT_TIME = 0.086  # (datasheet: typ=66, max=85)
-_HUMIDITY_WAIT_TIME = 0.030     # (datasheet: typ=22, max=29)
 
 #for CO2 sensor
 SERIAL_READ_BYTE = 12
@@ -69,6 +53,23 @@ sensorname = "co2.test"
 
 #written by Kang as class SHT25
 class SHT25:
+    # control constants
+    _SOFTRESET = 0xFE
+    _I2C_ADDRESS = 0x40
+    _TRIGGER_TEMPERATURE_NO_HOLD = 0xF3
+    _TRIGGER_HUMIDITY_NO_HOLD = 0xF5
+    _STATUS_BITS_MASK = 0xFFFC
+
+    # From: /linux/i2c-dev.h
+    I2C_SLAVE = 0x0703
+    I2C_SLAVE_FORCE = 0x0706
+
+    # datasheet (v4), page 9, table 7
+    # for suggesting the use of these better values
+    # code copied from https://github.com/mmilata/growd
+    _TEMPERATURE_WAIT_TIME = 0.086  # (datasheet: typ=66, max=85)
+    _HUMIDITY_WAIT_TIME = 0.030     # (datasheet: typ=22, max=29)
+
     def __init__(self, device_number=1):
         self.i2c = open('/dev/i2c-%s' % device_number, 'r+', 0)
         fcntl.ioctl(self.i2c, self.I2C_SLAVE, 0x40)
