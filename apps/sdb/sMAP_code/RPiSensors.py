@@ -81,14 +81,14 @@ class SHT25:
         time.sleep(self._TEMPERATURE_WAIT_TIME)
         data = self.i2c.read(3)
         if self._calculate_checksum(data,2) == ord(data[2]):
-            return self._get_temperature_from_buffer(data)
+            return _get_temperature_from_buffer(data)
 
     def read_humidity(self):
         self.i2c.write(chr(self._TRIGGER_HUMIDITY_NO_HOLD))
         time.sleep(self._HUMIDITY_WAIT_TIME)
         data = self.i2c.read(3)
         if self._calculate_checksum(data, 2) == ord(data[2]):
-            return self._get.humidity_from_buffer(data)
+            return _get.humidity_from_buffer(data)
 
     def close(self):
         self.i2c.close()
