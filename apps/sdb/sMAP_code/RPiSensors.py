@@ -68,67 +68,79 @@ FILEMAXBYTE = 1024 * 1024 * 100 #100MB
 sensorname = "co2.test"
 
 #written by Kang as class SHT25
-def __init__(self, device_number=1):
-    self.i2c = open('/dev/i2c-%s' % device_number, 'r+', 0)
-    fcntl.ioctl(self.i2c, self.I2C_SLAVE, 0x40)
-    self.i2c.write(chr(self._SOFTRESET))
-    time.sleep(0.050)
+Class SHT25:
+    def __init__(self, device_number=1):
+        self.i2c = open('/dev/i2c-%s' % device_number, 'r+', 0)
+        fcntl.ioctl(self.i2c, self.I2C_SLAVE, 0x40)
+        self.i2c.write(chr(self._SOFTRESET))
+        time.sleep(0.050)
 
-def read_temperature(self):    
-    self.i2c.write(chr(self._TRIGGER_TEMPERATURE_NO_HOLD))
-    time.sleep(self._TEMPERATURE_WAIT_TIME)
-    data = self.i2c.read(3)
-    if self._calculate_checksum(data,2) == ord(data[2]):
-        return self._get_temperature_from_buffer(data)
+    def read_temperature(self):    
+        self.i2c.write(chr(self._TRIGGER_TEMPERATURE_NO_HOLD))
+        time.sleep(self._TEMPERATURE_WAIT_TIME)
+        data = self.i2c.read(3)
+        if self._calculate_checksum(data,2) == ord(data[2]):
+            return self._get_temperature_from_buffer(data)
 
-def read_humidity(self):
-    self.i2c.write(chr(self._TRIGGER_HUMIDITY_NO_HOLD))
-    time.sleep(self._HUMIDITY_WAIT_TIME)
-    data = self.i2c.read(3)
-    if self._calculate_checksum(data, 2) == ord(data[2]):
-        return self._get.humidity_from_buffer(data)
+    def read_humidity(self):
+        self.i2c.write(chr(self._TRIGGER_HUMIDITY_NO_HOLD))
+        time.sleep(self._HUMIDITY_WAIT_TIME)
+        data = self.i2c.read(3)
+        if self._calculate_checksum(data, 2) == ord(data[2]):
+            return self._get.humidity_from_buffer(data)
 
-def close(self):
-    self.i2c.close()
+    def close(self):
+        self.i2c.close()
 
-def __enter__(self):
-    return self
+    def __enter__(self):
+        return self
 
-def __exit__(self, type, value, traceback):
-    self.close()
+    def __exit__(self, type, value, traceback):
+        self.close()
 
-@staticmethod
-def _calculate_checksum(data, number_of_bytes):
-    # CRC
-    POLYNOMIAL = 0x131  # //P(x)=x^8+x^5+x^4+1 = 100110001
-    crc = 0
-    # calculates 8-Bit checksum with given polynomial
-    for byteCtr in range(number_of_bytes):
-        crc ^= (ord(data[byteCtr]))
-        for bit in range(8, 0, -1):
-            if crc & 0x80:
-                crc = (crc << 1) ^ POLYNOMIAL
-            else:
-                crc = (crc << 1)
-    return crc
+    @staticmethod
+    def _calculate_checksum(data, number_of_bytes):
+        # CRC
+        POLYNOMIAL = 0x131  # //P(x)=x^8+x^5+x^4+1 = 100110001
+        crc = 0
+        # calculates 8-Bit checksum with given polynomial
+        for byteCtr in range(number_of_bytes):
+            crc ^= (ord(data[byteCtr]))
+            for bit in range(8, 0, -1):
+                if crc & 0x80:
+                    crc = (crc << 1) ^ POLYNOMIAL
+                else:
+                    crc = (crc << 1)
+        return crc
 
-@staticmethod
-def _get_temperature_from_buffer(data):
-    unadjusted = (ord(data[0]) << 8) + ord(data[1])
-    unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
-    unadjusted *= 175.72
-    unadjusted /= 1 << 16  # divide by 2^16
-    unadjusted -= 46.85
-    return unadjusted
+    @staticmethod
+    def _get_temperature_from_buffer(data):
+        unadjusted = (ord(data[0]) << 8) + ord(data[1])
+        unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
+        unadjusted *= 175.72
+        unadjusted /= 1 << 16  # divide by 2^16
+        unadjusted -= 46.85
+        return unadjusted
 
-@staticmethod
-def _get_humidity_from_buffer(data):
-    unadjusted = (ord(data[0]) << 8) + ord(data[1])
-    unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
-    unadjusted *= 125.0
-    unadjusted /= 1 << 16  # divide by 2^16
-    unadjusted -= 6
-    return unadjusted
+    @staticmethod
+    def _get_humidity_from_buffer(data):
+        unadjusted = (ord(data[0]) << 8) + ord(data[1])
+        unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
+        unadjusted *= 125.0
+        unadjusted /= 1 << 16  # divide by 2^16
+        unadjusted -= 6
+        return unadjusted
+
+    def testrun():
+        try:
+            while True:
+                with self(1) as sht25:
+                    print "Temp. : %s" % self.read_temperature()
+                    print "Humi. : %s" % self.read_humidity()
+                time.sleep(2)
+        except IOError, e:
+            print e
+            print "Error creating connection I2C, maybe run as Root"
 
                          
  #written by Kang
