@@ -8,7 +8,7 @@ import unittest
 
 class SHT25:
 
-    # control constants
+    # control constants on I2C bus
     _SOFTRESET = 0xFE
     _I2C_ADDRESS = 0x40
     _TRIGGER_TEMPERATURE_NO_HOLD = 0xF3
@@ -19,7 +19,7 @@ class SHT25:
     I2C_SLAVE = 0x0703
     I2C_SLAVE_FORCE = 0x0706
 
-    # datasheet (v4), page 9, table 7, thanks to Martin Milata
+    # datasheet (v4), page 9, table 7
     # for suggesting the use of these better values
     # code copied from https://github.com/mmilata/growd
     _TEMPERATURE_WAIT_TIME = 0.086  # (datasheet: typ=66, max=85)
