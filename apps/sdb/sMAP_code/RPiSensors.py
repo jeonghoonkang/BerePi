@@ -208,7 +208,7 @@ class RPiSensor(SmapDriver):
     def read(self):
 
         # for temperature and humidity
-        sht_instance = RpiSensors.SHT25()
+        sht_instance = SHT25()
 
         temp = sht_instance.read_temperature() #original was class sht25, call sht25.read_temperature()
         humidity = sht_instance.read_humidity()
