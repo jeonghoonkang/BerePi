@@ -86,7 +86,7 @@ class SHT25:
         self.close()
 
     @staticmethod
-    def _calculate_checksum(data, number_of_bytes):
+    def _calculate_checksum(self,data, number_of_bytes):
         # CRC
         POLYNOMIAL = 0x131  # //P(x)=x^8+x^5+x^4+1 = 100110001
         crc = 0
@@ -101,7 +101,7 @@ class SHT25:
         return crc
 
     @staticmethod
-    def _get_temperature_from_buffer(data):
+    def _get_temperature_from_buffer(self,data):
         unadjusted = (ord(data[0]) << 8) + ord(data[1])
         unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
         unadjusted *= 175.72
@@ -110,7 +110,7 @@ class SHT25:
         return unadjusted
 
     @staticmethod
-    def _get_humidity_from_buffer(data):
+    def _get_humidity_from_buffer(self,data):
         unadjusted = (ord(data[0]) << 8) + ord(data[1])
         unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
         unadjusted *= 125.0
@@ -133,7 +133,7 @@ class SHT25:
         if self._calculate_checksum(data, 2) == ord(data[2]):
             return self._get.humidity_from_buffer(data)
 
-    def testrun():
+    def testrun(self):
         try:
             while True:
                 with self(1) as sht25:
