@@ -27,7 +27,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 @author Therese Peffer
 <tpeffer@berkeley.edu> and Gabe Fierro, 
 RHT by http://www.emsystech.de/raspi-sht21 and Jeonghoon Kang
-CO2 by Kowonsik, github.com/kowonsik  & Jeonghoonkang, github.com/jeonghoonkang
+CO2 by Kowonsik, http://github.com/kowonsik  & Jeonghoonkang, http://github.com/jeonghoonkang
 """
 
 from smap.driver import SmapDriver
