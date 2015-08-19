@@ -25,8 +25,9 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 """
 @author Therese Peffer
-<tpeffer@berkeley.edu> and Gabe Fierro, RHT by
-http://www.emsystech.de/raspi-sht21 and Jeonghoon Kang, and CO2 by Kowonsik, github.com/kowonsik and Jeonghoonkang, github.com/jeonghoonkang
+<tpeffer@berkeley.edu> and Gabe Fierro, 
+RHT by http://www.emsystech.de/raspi-sht21 and Jeonghoon Kang
+CO2 by Kowonsik, github.com/kowonsik  & Jeonghoonkang, github.com/jeonghoonkang
 """
 
 from smap.driver import SmapDriver
@@ -53,6 +54,7 @@ sensorname = "co2.test"
 
 #written by Kang as class SHT25
 class SHT25:
+ 
     # control constants
     _SOFTRESET = 0xFE
     _I2C_ADDRESS = 0x40
@@ -65,7 +67,6 @@ class SHT25:
     I2C_SLAVE_FORCE = 0x0706
 
     # datasheet (v4), page 9, table 7
-    # for suggesting the use of these better values
     # code copied from https://github.com/mmilata/growd
     _TEMPERATURE_WAIT_TIME = 0.086  # (datasheet: typ=66, max=85)
     _HUMIDITY_WAIT_TIME = 0.030     # (datasheet: typ=22, max=29)
@@ -141,7 +142,7 @@ class SHT25:
             print "Error creating connection I2C, maybe run as Root"
 
                          
- #written by Kang
+#written by Kang
 def getHwAddr(ifname):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
@@ -188,6 +189,9 @@ def checkAlignment(incoming):
 
 serial_in_device = serial.Serial('/dev/ttyAMA0',38400)
 
+
+
+
 class RPiSensor(SmapDriver):
     def setup(self, opts): # set up configuration options
         self.tz = opts.get('Timezone', 'America/Los_Angeles')
@@ -208,7 +212,7 @@ class RPiSensor(SmapDriver):
         # for temperature and humidity
         sht_instance = SHT25()
 
-        temp = sht_instance.read_temperature() #original was class sht25, call sht25.read_temperature()
+        temp = sht_instance.read_temperature() 
         humidity = sht_instance.read_humidity()
         
         self.add('/temp', temp)
