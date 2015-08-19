@@ -68,7 +68,7 @@ FILEMAXBYTE = 1024 * 1024 * 100 #100MB
 sensorname = "co2.test"
 
 #written by Kang as class SHT25
-Class SHT25:
+class SHT25:
     def __init__(self, device_number=1):
         self.i2c = open('/dev/i2c-%s' % device_number, 'r+', 0)
         fcntl.ioctl(self.i2c, self.I2C_SLAVE, 0x40)
