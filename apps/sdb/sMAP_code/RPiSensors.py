@@ -85,7 +85,6 @@ class SHT25:
     def __exit__(self, type, value, traceback):
         self.close()
 
-    @staticmethod
     def _calculate_checksum(self,data, number_of_bytes):
         # CRC
         POLYNOMIAL = 0x131  # //P(x)=x^8+x^5+x^4+1 = 100110001
@@ -100,7 +99,6 @@ class SHT25:
                     crc = (crc << 1)
         return crc
 
-    @staticmethod
     def _get_temperature_from_buffer(self,data):
         unadjusted = (ord(data[0]) << 8) + ord(data[1])
         unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
@@ -109,7 +107,6 @@ class SHT25:
         unadjusted -= 46.85
         return unadjusted
 
-    @staticmethod
     def _get_humidity_from_buffer(self,data):
         unadjusted = (ord(data[0]) << 8) + ord(data[1])
         unadjusted &= self._STATUS_BITS_MASK  # zero the status bits
@@ -117,7 +114,6 @@ class SHT25:
         unadjusted /= 1 << 16  # divide by 2^16
         unadjusted -= 6
         return unadjusted
-
 
     def read_temperature(self):    
         self.i2c.write(chr(self._TRIGGER_TEMPERATURE_NO_HOLD))
