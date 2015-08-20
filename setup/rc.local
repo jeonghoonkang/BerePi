@@ -69,7 +69,7 @@ fi
 #####################################################################
 #export tmppath=/home/pi/devel/BerePi/apps/lcd_berepi
 #cd $tmppath
-#screen -dmS lcddisp sudo python ip_addr.py &
+#screen -dmS lcddisp sudo python watch.py &
 #unset tmppath
 #cd
 
