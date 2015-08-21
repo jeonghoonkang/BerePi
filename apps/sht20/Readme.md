@@ -1,6 +1,8 @@
 
 ## SHT2x driver for Raspi##
-Desc : Temperature & Humidity sensor
+Desc : Temperature & Humidity sensor, this driver using smbus
+       but it shows only ±0.7℃ scale. thus my team move to the  different API SW
+       Please consider this restrictions
 
  - Setup : install pythong smbus package (I2C lib, you can see below instruction in detail)
  - Check HW connection : ``sudo i2cdetect 1`` it will show something on the printout, commonly 0x40 is SHT2x
