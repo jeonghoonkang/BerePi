@@ -8,7 +8,7 @@ import unittest
 
 class SHT25:
 
-    # control constants on I2C bus
+    # control constants on I2C bus for SHT25
     _SOFTRESET = 0xFE
     _I2C_ADDRESS = 0x40
     _TRIGGER_TEMPERATURE_NO_HOLD = 0xF3
