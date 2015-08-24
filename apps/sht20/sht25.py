@@ -35,9 +35,8 @@ def reading(v):
     
     try:
         b1 = ""
-        b2 = ""
-        b1 = (bus.read_byte(SHT20_ADDR))
-        b2 = b1<<8 + bus.read_byte(SHT20_ADDR)
+        b1 = (bus.read_byte(SHT20_ADDR)) << 8
+        b  = b1 + bus.read_byte(SHT20_ADDR)
         b &= 0xFFFC
     except:
         print "I2C read Exception"
