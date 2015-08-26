@@ -1,7 +1,6 @@
 #!/usr/bin/python
 # Author : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
-
 # for the detail of HW connection, see lcd_connect.py
 
 import sys
@@ -19,65 +18,41 @@ def main():
 
   while True:
 
-    str = time_chk()
-    lcd_string('Time' ,LCD_LINE_1,1)
-    lcd_string('%s' % (str),LCD_LINE_2,1)
-    whiteLCDon()
-    time.sleep(2) 
-
+    tstr = time_chk()
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
     str = temp_chk()
-#   str = str[:-1]
-    lcd_string('Temperature' ,LCD_LINE_1,1)
     lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
-    yellowLCDon()
-    time.sleep(1) 
-
-    str = time_chk()
-    lcd_string('Time' ,LCD_LINE_1,1)
-    lcd_string('%s' % (str),LCD_LINE_2,1)
     whiteLCDon()
-    time.sleep(2) 
+    time.sleep(3) 
 
     str = ip_chk()
     str = str[:-1]
     lcd_string('%s ET' %str,LCD_LINE_1,1)
     str = mac_chk()
     str = str[:-1]
-    lcd_string('%s' % (str),LCD_LINE_2,1)
-    green_backlight(False) #turn on, yellow
-    time.sleep(0.5) 
-
-    str = time_chk()
-    lcd_string('Time' ,LCD_LINE_1,1)
-    lcd_string('%s' % (str),LCD_LINE_2,1)
-    whiteLCDon()
-    time.sleep(2) 
+    #lcd_string('%s' % (str),LCD_LINE_2,1)
+    #blueLCDon()
+    #time.sleep(0.5) 
 
     str = wip_chk()
     str = str[:-1]
-    lcd_string('%s WL     ' % (str),LCD_LINE_1,1)
-
+    lcd_string('%s WL     ' % (str),LCD_LINE_2,1)
     str = wmac_chk()
     str = str[:-1]
-    lcd_string('%s' % (str),LCD_LINE_2,1)
-    yellowLCDon()
-    time.sleep(1) 
+#   lcd_string('%s' % (str),LCD_LINE_2,1)
+    blueLCDon()
+    time.sleep(1.2) 
         
-    str = time_chk()
-    lcd_string('Time' ,LCD_LINE_1,1)
-    lcd_string('%s' % (str),LCD_LINE_2,1)
-    whiteLCDon()
-    time.sleep(2) 
-
     str = stalk_chk()
     str = str[:-1]
-    lcd_string('sTalk Channel' ,LCD_LINE_1,1)
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
     lcd_string('%s           ' % (str),LCD_LINE_2,1)
+    blueLCDon()
     time.sleep(1) 
 
-    str = time_chk()
-    lcd_string('Time' ,LCD_LINE_1,1)
-    lcd_string('%s' % (str),LCD_LINE_2,1)
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    str = humi_chk()
+    lcd_string('%.5s ' % (str),LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
@@ -90,6 +65,10 @@ def run_cmd(cmd):
 def temp_chk():
     temperature = getTemperature()
     return temperature
+
+def humi_chk():
+    humidity = getHumidity()
+    return humidity
 
 def time_chk():
     time = strftime("%Y-%m%d %H:%M", localtime())
