@@ -89,19 +89,19 @@ class SHT25:
 
 def getTemperature():
     with SHT25(1) as sht25:
-    ret = sht25.read_temperature()
+      ret = sht25.read_temperature()
     if not ret:
-        print "I2C problem report"
-        return -100
+      print "I2C problem report"
+      return -100
     print "Temperature: %s" % ret
     return ret
 
 def getHumidity():
     with SHT25(1) as sht25:
-    ret = sht25.read_humidity()
+      ret = sht25.read_humidity()
     if not ret:
-        print "I2C problem report"
-        return -100
+      print "I2C problem report"
+      return -100
     print "Humidity: %s" % ret
     return ret
 
