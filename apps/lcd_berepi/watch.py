@@ -9,7 +9,7 @@ from time import strftime, localtime
 sys.path.append("./lib")
 from lcd import *
 sys.path.append("../sht20")
-from sht25 import *
+from sht25class import *
 
 
 def main():
