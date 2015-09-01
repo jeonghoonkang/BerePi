@@ -1,6 +1,7 @@
 ## BerePi
 #### Wiki
   - OS installation and setup to run the SDH sensors
+  - It shows basic installation process for Raspi Sensor
     - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
 
 ##### People
