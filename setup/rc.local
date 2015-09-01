@@ -18,6 +18,7 @@ if [ "$_IP" ]; then
 fi
 
 # modified : jeonghoonkang, https://github.com/jeonghoonkang
+# sh /home/pi/startup_sw.sh
 
 #####################################################################
 # Using Dust Sensor, CO2 Sensor
