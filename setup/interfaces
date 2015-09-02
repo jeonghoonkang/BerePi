@@ -25,9 +25,9 @@ iface eth0 inet dhcp
 #broadcast 168.126.63.1
 #dns-nameservers 8.8.8.8
   
-#auto wlan0
-#allow-hotplug wlan0
-#iface wlan0 inet dhcp
+auto wlan0
+allow-hotplug wlan0
+iface wlan0 inet dhcp
 #in case of "OPEN SSID" just change *iptime* to your SSID
 #    wireless-essid iptime
 #    wireless-mode managed
