@@ -1,4 +1,6 @@
 # .bashrc
+# https://github.com/jeonghoonkang
+# bash configuration for MAC OSX
 
 # User specific aliases and functions
 C_DEFAULT="\[\033[m\]"
