@@ -8,9 +8,9 @@
 
 > lsusb
 
-> iwconfig
-
 <pre>
+iwconfig
+
 iwlist wlan0 scan
   Cell 01 - Address: 맥주소
     ESSID:"여기를 꼭 기억하세요"
