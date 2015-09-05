@@ -6,15 +6,15 @@
 
 ## COMMAND
 
-lsusb
+> lsusb
 
-iwconfig
+> iwconfig
 
+<pre>
 iwlist wlan0 scan
   Cell 01 - Address: 맥주소
     ESSID:"여기를 꼭 기억하세요"
     Protocol:IEEE 802.11bgn
-    
 wpa_passphrase SSID이름 암호 >> /etc/wpa_supplicant/wpa_supplicant.conf
 
 network={
@@ -22,5 +22,5 @@ network={
   #psk="원래암호가 그대로 써있다"
   psk=암호화된내용
 }
-
+</pre>
 
