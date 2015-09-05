@@ -1,4 +1,11 @@
 
+## LINKS 
+  - cygwin
+    -https://github.com/digitallamb/apt-cyg
+
+
+## COMMAND
+
 lsusb
 
 iwconfig
@@ -15,3 +22,5 @@ network={
   #psk="원래암호가 그대로 써있다"
   psk=암호화된내용
 }
+
+
