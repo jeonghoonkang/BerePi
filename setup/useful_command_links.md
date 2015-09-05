@@ -1,7 +1,7 @@
 
 ## LINKS 
   - cygwin
-    -https://github.com/digitallamb/apt-cyg
+    - https://github.com/digitallamb/apt-cyg
 
 
 ## COMMAND
