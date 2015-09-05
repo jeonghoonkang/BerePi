@@ -86,6 +86,7 @@ alias ll='ls -lha --color'
 alias la='ls -Ahp --color'
 alias ls='ls -p --color'
 alias l='ls -CF'
+#alias clear='printf "\033c"'
 
 # Alias definitions.
 # You may want to put all your additions into a separate file like
