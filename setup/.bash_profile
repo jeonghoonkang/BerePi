@@ -36,4 +36,6 @@ export TOSROOT=/opt/tinyos-2.x
 export TOSDIR=$TOSROOT/tos
 export MAKERULES=$TOSROOT/support/make/Makerules
 
+#alias clear='printf "\033c"'
+
 export PS1="$C_CYAN\h:$C_GREEN\W\$$C_DEFAULT"
