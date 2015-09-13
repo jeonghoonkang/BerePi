@@ -5,9 +5,8 @@
 
 
 ## COMMAND
-
 > lsusb
-
+> 타임존 설정 : sudo dpkg-reconfigure tzdata
 <pre>
 iwconfig
 
