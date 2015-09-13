@@ -86,6 +86,7 @@ alias ll='ls -lha --color'
 alias la='ls -Ahp --color'
 alias ls='ls -p --color'
 alias l='ls -CF'
+alias screenlist='screen -list'
 #alias clear='printf "\033c"'
 
 # Alias definitions.
