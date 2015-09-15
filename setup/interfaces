@@ -28,9 +28,26 @@ allow-hotplug eth0
 auto wlan0
 allow-hotplug wlan0
 iface wlan0 inet dhcp
+############################################################
+# if you want to use Hidden SSID, follow below until ### line
+############################################################
+wpa-scan-ssid 1
+wpa-ap-scan 1
+wpa-key-mgmt WPA-PSK
+wpa-proto RSN WPA 
+wpa-pairwise CCMP TKIP
+wpa-group CCMP TKIP
+############################################################
+
 #in case of "OPEN SSID" just change *iptime* to your SSID
 #    wireless-essid iptime
 #    wireless-mode managed
 #in case of WPA, change your SSID, KEY in " ", keep remain " " symbol
 #   wpa-ssid "TYPE HERE"
 #   wpa-psk "TYPE HERE"
+
+############################################################
+# if you want to use Hidden SSID, follow below until ### line
+############################################################
+iface default inet dhcp
+############################################################
