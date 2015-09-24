@@ -43,6 +43,7 @@
         * batman-adv는 커널에 포함되어 있음
         * Archlinux는 batman-adv, batctl 설치 시 packer 패치가 필요함
         * Alfred를 설치해야 batadv-vis 등의 추가 기능을 사용할 수 있고 Wheezy는 빌드 패치해야 함
+          * Alfred (http://www.open-mesh.org/projects/alfred/wiki) 
         * 3 hop 구성으로 정상 동작
         * Wheezy, Archlinux 조합으로 hop 연결도 문제 없음
         * Alfred의 경우 Wheezy에서는 IPV6 활성화해야 하고 master, slave 모두 오동작하는 경우가 있음
