@@ -38,7 +38,10 @@ bridge_id = int(hostname[5:10])
 GPIO.output(26, True) # server connection is OK, showing through LED
 
 while True:
-    ret = query_last_data_point(bridge_id)
+    try:
+      ret = query_last_data_point(bridge_id)
+    except:
+      pass
     if ret is not None:
         t, v = ret
         if t > time.time() - 30:
