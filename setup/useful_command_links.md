@@ -7,6 +7,7 @@
 ## COMMAND
 > lsusb
 > 타임존 설정 : sudo dpkg-reconfigure tzdata
+
 <pre>
 iwconfig
 
@@ -24,7 +25,7 @@ network={
 </pre>
 
 
-# How To Use
+# Stalk How To Use
 
   - after installation
     - ssh 22 port is automatically registered to Server
