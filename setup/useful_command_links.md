@@ -24,6 +24,8 @@ network={
 }
 </pre>
 
+# VNC client
+sudo apt-get install reminna
 
 # Stalk How To Use
 
