@@ -24,10 +24,10 @@ network={
 }
 </pre>
 
-# VNC client
+## VNC client
 sudo apt-get install reminna
 
-# Stalk How To Use
+## Stalk How To Use
 
   - after installation
     - ssh 22 port is automatically registered to Server
