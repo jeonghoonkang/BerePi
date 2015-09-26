@@ -23,3 +23,33 @@ network={
 }
 </pre>
 
+
+# How To Use
+
+  - after installation
+    - ssh 22 port is automatically registered to Server
+  
+  - list entries
+    ```
+    stalk status 
+    ```
+    
+  - register server entry
+    ```
+    stalk server CHANNEL_NAME HOST_ADDR HOST_PORT
+    (ex) stalk server my-resberry-web localhost 80
+    ```
+    
+  - register client entry
+    ```
+    stalk client CHANNEL_NAME LOCAL_PORT
+    (ex) stalk client my-rasberry-web 8000
+    ```
+  
+  - cancel entry
+    ```
+    stalk kill ENTRY_ID
+    (ex) stalk kill 17
+    * ENTRY_ID is available via "stalk status" command.
+    ```
+
