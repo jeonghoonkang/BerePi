@@ -31,7 +31,7 @@ def reading(v):
     except:
         return False
         
-    time.sleep(.2)
+    time.sleep(0.3)
     
     try:
         b1 = ""
@@ -42,9 +42,9 @@ def reading(v):
         print "I2C read Exception"
         return False
     if v == 1:
-        print " binary value : ", bin(b)
-        print " dec. value : ", int(b)
-    return b
+        print " binary value : ", bin(b2)
+        print " dec. value : ", int(b2)
+    return b2
 
 # based on SHT25 Data sheet, Version 3 _ May 2014 
 # http://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/Humidity/Sensirion_Humidity_SHT25_Datasheet_V3.pdf
@@ -82,5 +82,5 @@ if __name__== "__main__" :
             break
         value = calc(temp, humi)
         print "temp : %s\thumi : %s" % (value[0], value[1])
-        time.sleep(4)
+        time.sleep(1)
 

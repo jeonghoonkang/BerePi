@@ -88,20 +88,23 @@ class SHT25:
         return unadjusted
 
 def getTemperature():
-    with SHT25(1) as sht25:
-      ret = sht25.read_temperature()
-    if not ret:
-      print "I2C problem report"
-      return -100
+    try:
+        with SHT25(1) as sht25:
+            ret = sht25.read_temperature()
+    except:
+        print "Exception : SHT25 Instance init - I2C I/O"
+        return -100
+        pass
     print "Temperature: %s" % ret
     return ret
 
 def getHumidity():
-    with SHT25(1) as sht25:
-      ret = sht25.read_humidity()
-    if not ret:
-      print "I2C problem report"
-      return -100
+    try:
+        with SHT25(1) as sht25:
+          ret = sht25.read_humidity()
+    except:
+        print "Exception : SHT25 Instance init - I2C I/O"
+        return -100
     print "Humidity: %s" % ret
     return ret
 
