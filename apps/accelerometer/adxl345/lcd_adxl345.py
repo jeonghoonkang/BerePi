@@ -1,0 +1,1 @@
+#lcd display accel. data
