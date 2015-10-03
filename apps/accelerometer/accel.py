@@ -15,25 +15,15 @@ from sht25class import *
 def main():
   # Initialise display
   lcd_init()
-  print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk(), time_chk()
+  #print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk(), time_chk()
 
   while True:
-
-    tstr = time_chk()
-    lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    str = temp_chk()
-    lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
-    whiteLCDon()
-    time.sleep(3) 
 
     str = ip_chk()
     str = str[:-1]
     lcd_string('%s ET' %str,LCD_LINE_1,1)
     str = mac_chk()
     str = str[:-1]
-    #lcd_string('%s' % (str),LCD_LINE_2,1)
-    #blueLCDon()
-    #time.sleep(0.5) 
 
     str = wip_chk()
     str = str[:-1]
