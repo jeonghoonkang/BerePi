@@ -5,9 +5,10 @@
 
 import sys
 from time import strftime, localtime
+# beware the dir location, it should exist
 sys.path.append("../lcd_berepi/lib")
-from lcd import *
 sys.path.append("../sht20")
+from lcd import *
 from sht25class import *
 
 
