@@ -29,9 +29,6 @@ BerePi project opens software which using BerePi hardware modules.
     - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
 
 ## Links
-[BerePi at Slack](https://berepi.slack.com/messages/general/)
-
-[BerePi Coggle] (https://coggle.it/diagram/VaX9m3fEi7hr8oe4)
 
  - additional nice works :
   1. http://www.raspberrypi-spy.co.uk/
