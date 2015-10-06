@@ -6,6 +6,8 @@
 # This is a Raspberry Pi Python implementation to help you get started with
 # the Adafruit Triple Axis ADXL345 breakout board:
 # http://shop.pimoroni.com/products/adafruit-triple-axis-accelerometer
+#
+# modified by https://github.com/jeonghoonkang
 
 import smbus
 from time import sleep
@@ -107,8 +109,5 @@ if __name__ == "__main__":
     while True:
         axes = adxl345.getAxes(True)
         #print "ADXL345 on address 0x%x:" % (adxl345.address)
-        #print "   x = %.3fG" % ( axes['x'] )
-        #print "   y = %.3fG" % ( axes['y'] )
-        #print "   z = %.3fG" % ( axes['z'] )
 
         print " x= %.3fG\ty = %.3fG\tz = %.3fG" % (axes['x'], axes['y'], axes['z'])
