@@ -25,22 +25,6 @@ def main():
     str = mac_chk()
     str = str[:-1]
 
-    str = wip_chk()
-    str = str[:-1]
-    lcd_string('%s WL     ' % (str),LCD_LINE_2,1)
-    str = wmac_chk()
-    str = str[:-1]
-#   lcd_string('%s' % (str),LCD_LINE_2,1)
-    blueLCDon()
-    time.sleep(1.2) 
-        
-    str = stalk_chk()
-    str = str[:-1]
-    lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    lcd_string('%s           ' % (str),LCD_LINE_2,1)
-    blueLCDon()
-    time.sleep(1) 
-
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     str = humi_chk()
     lcd_string('%.5s ' % (str),LCD_LINE_2,1)
