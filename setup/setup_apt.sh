@@ -25,11 +25,17 @@ sudo apt-get install wicd wicd-curses
 #sudo pip install twisted --upgrade
 #sudo pip install networkx
 
+#########################################################################
 #### for the Cygwin, windows
+#gcc installation
+#apt-cyg install gcc-core
+
+
 #pip installation
 #wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
 
 #sudo pip install networkx
+#sudo pip install numpy
 
 
 
