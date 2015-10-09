@@ -2,7 +2,7 @@
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
 #sudo apt-get -y install lrzsz
-#sudo apt-get -y install htop
+sudo apt-get -y install htop
 #sudo apt-get -y install screen
 #sudo apt-get -y install lynx
 #sudo apt-get -y install subversion
@@ -23,5 +23,13 @@ sudo apt-get install wicd wicd-curses
 #sudo apt-get -y install rsync
 #sudo pip install requests --upgrade
 #sudo pip install twisted --upgrade
+#sudo pip install networkx
+
+#### for the Cygwin, windows
+#pip installation
+#wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
+
+#sudo pip install networkx
+
 
 
