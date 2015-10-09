@@ -28,7 +28,9 @@ sudo apt-get install wicd wicd-curses
 #########################################################################
 #### for the Cygwin, windows
 
+#apt-cyg download and run to install
 #wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
+
 #gcc installation
 #apt-cyg install gcc-core
 
