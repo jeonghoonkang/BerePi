@@ -34,10 +34,20 @@ sudo apt-get -y install htop
 
 #gcc installation
 #apt-cyg install gcc-core
+#apt-cyg install cygwin32-freetype2
+#apt-cyg install pkg-config
+#apt-cyg install libX11-devel
+#instead of pip install numpy
+#apt-cyg install python-numpy
+#apt-cyg install libfreetype-devel
+
+#apt-cyg install gcc-core
 
 #pip installation
 #wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
-#sudo pip install numpy
+# numpy installation takes a few minutes
+#sudo pip install matplotlib
+#sudo pip install scimath
 #sudo pip install networkx
 
 
@@ -46,6 +56,10 @@ sudo apt-get -y install htop
 
 # tasklist
 # ps -W
+
+# python pip in cygwin 
+#http://lelandbatey.com/posts/2014/08/installing-pip-in-cygwin
+
 
 
 
