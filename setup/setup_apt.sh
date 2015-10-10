@@ -24,6 +24,7 @@ sudo apt-get -y install htop
 #sudo apt-get -y install python-twisted
 #sudo pip install requests --upgrade
 #sudo pip install twisted --upgrade
+#sudo pip install numpy
 #sudo pip install networkx
 
 #########################################################################
