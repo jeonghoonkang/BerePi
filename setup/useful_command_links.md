@@ -57,3 +57,5 @@ sudo apt-get install reminna
     * ENTRY_ID is available via "stalk status" command.
     ```
 
+Cygwin 관련
+http://egloos.zum.com/chanik/v/3785205
