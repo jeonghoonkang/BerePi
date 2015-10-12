@@ -38,6 +38,7 @@ sudo apt-get -y install htop
 #apt-cyg install cygwin32-freetype2
 #apt-cyg install pkg-config
 #apt-cyg install libX11-devel
+#apt-cyg install make 
 #instead of pip install numpy
 #apt-cyg install python-numpy
 #apt-cyg install libfreetype-devel
