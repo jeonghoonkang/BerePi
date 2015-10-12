@@ -42,14 +42,14 @@ sudo apt-get -y install htop
 #apt-cyg install python-numpy
 #apt-cyg install libfreetype-devel
 
-#apt-cyg install gcc-core
-
 #pip installation
 #wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
+#python get-pip.py
+
 # numpy installation takes a few minutes
-#sudo pip install matplotlib
-#sudo pip install scimath
-#sudo pip install networkx
+#pip install matplotlib
+#pip install scimath
+#pip install networkx
 
 
 #########################################################################
