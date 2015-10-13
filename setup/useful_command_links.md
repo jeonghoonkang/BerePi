@@ -57,5 +57,15 @@ sudo apt-get install reminna
     * ENTRY_ID is available via "stalk status" command.
     ```
 
-Cygwin 관련
+## Cygwin 관련
 http://egloos.zum.com/chanik/v/3785205
+
+## Mint Linux
+sudo cp -v /etc/apt/sources.list.d/official-package-repositories.list /etc/apt/sources.list.d/official-package-repositories.list.bak
+
+sudo sed -i 's/rebecca/rafaela/g' /etc/apt/sources.list.d/official-package-repositories.list
+
+sudo apt-get update
+
+sudo apt-get dist-upgrade
+
