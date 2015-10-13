@@ -58,8 +58,8 @@ sudo apt-get install reminna
     ```
 
 ## Cygwin 관련
-http://egloos.zum.com/chanik/v/3785205
-http://madoxo.blogspot.kr/2013/03/cygwin-bash.html
+  - http://egloos.zum.com/chanik/v/3785205
+  - http://madoxo.blogspot.kr/2013/03/cygwin-bash.html
 
 ## Mint Linux
 sudo cp -v /etc/apt/sources.list.d/official-package-repositories.list /etc/apt/sources.list.d/official-package-repositories.list.bak
