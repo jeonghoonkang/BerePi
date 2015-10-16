@@ -50,4 +50,5 @@ wpa-group CCMP TKIP
 # if you want to use Hidden SSID, follow below until ### line
 ############################################################
 iface default inet dhcp
+
 ############################################################
