@@ -23,6 +23,7 @@
 # o Install where you want to run it from like /usr/local/bin
 # o chmod 0755 /usr/local/bin/WiFi_Check
 # o Add to crontab
+# o sudo added
 #
 # Run Every 5 mins - Seems like ever min is over kill unless
 # this is a very common problem.  If once a min change */5 to *
