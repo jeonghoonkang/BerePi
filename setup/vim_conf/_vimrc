@@ -37,6 +37,7 @@ syn on
 #########################################
 # vim config for python tab, indentation
 #########################################
+
 set textwidth=79
 set shiftwidth=4
 set tabstop=4
