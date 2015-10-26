@@ -4,7 +4,7 @@
 #### To use WiringPi
 #### update the GPIO
 
-'''
+```
 ==================================================
 gp2y1010au0f dust sensor lib
 ==================================================
@@ -27,4 +27,4 @@ This library was developed on Eclipse, built with avr-gcc on Atmega8 @ 8MHz.
 License
 -------
 Please refer to LICENSE file for licensing information.
-'''
+```
