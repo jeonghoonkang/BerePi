@@ -31,6 +31,7 @@
 #
 # */5 * * * * /usr/local/bin/WiFi_Check
 #
+# Cron on Raspi : https://www.raspberrypi.org/documentation/linux/usage/cron.md
 ##################################################################
 # Settings
 # Where and what you want to call the Lockfile
