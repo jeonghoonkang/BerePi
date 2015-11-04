@@ -17,3 +17,5 @@ ISO/IEC 14443A (106 kbps) target:
 nfc_initiator_target_is_present: Target Released
 
 Waiting for card removing...done.
+
+Should have reader functions
