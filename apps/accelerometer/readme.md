@@ -5,3 +5,5 @@
 
 ##### ADIS16226 - High Freq. sampling
 
+##### lsm303 - Ultra compact, e-compass
+
