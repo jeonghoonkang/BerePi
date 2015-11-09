@@ -31,6 +31,7 @@
 #
 # */5 * * * * /usr/local/bin/WiFi_Check
 #
+# try : crontab -e 
 ##################################################################
 # Settings
 # Where and what you want to call the Lockfile
