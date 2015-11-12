@@ -6,7 +6,9 @@
 
 ## COMMAND
 > lsusb
+
 > 타임존 설정 : sudo dpkg-reconfigure tzdata
+
 > IP 주소 중, gateway 주소확인 : ip route
 
 <pre>
