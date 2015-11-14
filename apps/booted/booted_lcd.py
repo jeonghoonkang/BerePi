@@ -34,7 +34,10 @@ if __name__== "__main__" :
   lcd_string('Booted %s ' % (str) ,LCD_LINE_1,1)
   
   str = wip_chk()
-  str = str[:-1]
-  lcd_string('%s WL     ' % (str),LCD_LINE_2,2)
+  if str:
+    lcd_string('%s WL     ' % (str),LCD_LINE_2,2)
+  else :
+    lcd_string('no Wi-Fi ',LCD_LINE_2,2)
+
   time.sleep(3.5)
 
