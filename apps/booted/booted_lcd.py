@@ -2,8 +2,8 @@
 
 import sys
 import subprocess
-berePi_dir="/home/pi/devel/BerePi/app"
-tmp_dir=berePi_dir + "../lcd_berepi/lib"
+berePi_dir="/home/pi/devel/BerePi"
+tmp_dir=berePi_dir + "/app/lcd_berepi/lib"
 sys.path.append(tmp_dir)
 from lcd import *
 
