@@ -31,7 +31,10 @@
 #
 # */5 * * * * /usr/local/bin/WiFi_Check
 #
+# add by https://github.com/jeonghoonkang
 # try : crontab -e 
+# */10 * * * * sudo sh /home/pi/devel/BerePi/setup/wifi_cron.sh
+
 ##################################################################
 # Settings
 # Where and what you want to call the Lockfile
