@@ -2,11 +2,15 @@
 
 import sys
 import subprocess
-
-sys.path.append("../lcd_berepi/lib")
+berePi_dir="/home/pi/devel/BerePi/app"
+tmp_dir=berePi_dir + "../lcd_berepi/lib"
+sys.path.append(tmp_dir)
 from lcd import *
 
 if __name__== "__main__" :
+  
+  print tmp_dir
+  
   lcd_init()
   LCDoff()
 
