@@ -1,4 +1,5 @@
 # Author : https://github.com/jeonghoonkang
+# this software needs library of lastvalue, which is in the commercial RaspberryPi (volovlu.com)
 
 import datetime
 import requests
@@ -14,4 +15,4 @@ from lastvalue import *
 if __name__ == '__main__':
     para1 = 'gyu_RC1_co2.ppm'
     para2 = {'nodeid':'920'}
-    print get_last_value('125.7.128.53:4242', str(para1), para2)
+    print get_last_value(arg1, str(para1), para2)
