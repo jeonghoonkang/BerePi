@@ -12,16 +12,24 @@ def shifthue() :
     global str
     global xhue
     xhue.insert(0,xhue[-1])
-    xhue = xhue[0:4] 
+    xhue = xhue[0:4]
     print xhue
-    for num in range(0,4) :
-        callurl = restcmd + "/%s/state"%(4-num)
+
+    callurl = restcmd + "/4/state"
+    conn.request("PUT",callurl ,'{"on":false}')
+    response = conn.getresponse()
+    data = response.read()
+    time.sleep(1)
+    for num in [3,2,1,4] :
+        callurl = restcmd + "/%s/state"%(num)
         print callurl
-        huenumber = (xhue[num])
+        huenumber = (xhue[4-num])
         conn.request("PUT",callurl ,'{"on":true, "sat":254, "bri":254, "hue":%s}'%huenumber)
         response = conn.getresponse()
         data = response.read()
         print data
+        time.sleep(1)
+
         
 if __name__ == "__main__": 
 #   print web()
