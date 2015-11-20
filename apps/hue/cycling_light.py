@@ -16,11 +16,13 @@ def shifthue() :
     print xhue
 
     callurl = restcmd + "/4/state"
+    
     try:
         conn.request("PUT",callurl ,'{"on":false}')
         response = conn.getresponse()
     except:
-        continue
+        print "keep going ..."
+        
     data = response.read()
     time.sleep(1)
     for num in [3,2,1,4] :
