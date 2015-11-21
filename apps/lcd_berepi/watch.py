@@ -117,7 +117,7 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'919'})
         except:
-            lcd_string('Restful API error %s',%sname LCD_LINE_2,1)
+            lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
         tmp = round(temperaturestr[0], 2)
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
@@ -143,7 +143,7 @@ def main():
             print "CO2 Level = ", tmp, "ppm"
             lcd_string('%s %s ppm' %(sname,tmp), LCD_LINE_2,1)
         except:
-            lcd_string('Restful API error', LCD_LINE_2,1)
+            lcd_string('Restful API error %s'%sname , LCD_LINE_2,1)
     color = int(tmp) 
     assert type(color) is IntType, "ppm variable is not an integer: %r" % id
     whiteLCDon()
