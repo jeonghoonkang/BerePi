@@ -31,6 +31,8 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
+
 def main():
   arg = parse_args()
 
@@ -48,34 +50,36 @@ def main():
 
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    str = temp_chk()
-    if str is "-100" :
-        lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
+    sht21_temp = temp_chk()
+    temp_v=str(sht21_temp)
+    assert type(temp_v) is StringType, "temp. variable is not an string: %s" %temp_v
+    if temp_v != "-100" :
+        lcd_string('%5.2s`C' % (temp_v),LCD_LINE_2,1)
         whiteLCDon()
         time.sleep(3) 
 
-    str = ip_chk()
-    str = str[:-1]
-    lcd_string('%s ET' %str,LCD_LINE_1,1)
-    str = mac_chk()
-    str = str[:-1]
-    #lcd_string('%s' % (str),LCD_LINE_2,1)
+    retstr = ip_chk()
+    retstr = retstr[:-1]
+    lcd_string('%s ET' %retstr,LCD_LINE_1,1)
+    retstr = mac_chk()
+    retstr = retstr[:-1]
+    #lcd_retstring('%s' % (retstr),LCD_LINE_2,1)
     #blueLCDon()
     #time.sleep(0.5) 
 
-    str = wip_chk()
-    str = str[:-1]
-    lcd_string('%s WL     ' % (str),LCD_LINE_2,1)
-    str = wmac_chk()
-    str = str[:-1]
-    #lcd_string('%s' % (str),LCD_LINE_2,1)
+    retstr = wip_chk()
+    retstr = retstr[:-1]
+    lcd_string('%s WL     ' % (retstr),LCD_LINE_2,1)
+    retstr = wmac_chk()
+    retstr = retstr[:-1]
+    #lcd_string('%s' % (retstr),LCD_LINE_2,1)
     blueLCDon()
     time.sleep(1.2) 
         
-    str = stalk_chk()
-    str = str[:-1]
+    retstr = stalk_chk()
+    retstr = retstr[:-1]
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    lcd_string('%s           ' % (str),LCD_LINE_2,1)
+    lcd_string('%s           ' % (retstr),LCD_LINE_2,1)
     blueLCDon()
     time.sleep(1) 
 
@@ -126,9 +130,9 @@ def main():
 
     # dispaly humidity
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    str = humi_chk()
-    if str is "-100" :
-        lcd_string('%.5s %%' % (str),LCD_LINE_2,1)
+    retstr = humi_chk()
+    if retstr != "-100" :
+        lcd_string('%.5s%%' % (retstr),LCD_LINE_2,1)
         whiteLCDon()
         time.sleep(2) 
 
@@ -152,8 +156,8 @@ def main():
     time.sleep(3) 
 
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    str = humi_chk()
-    lcd_string('%.5s %%' % (str),LCD_LINE_2,1)
+    retstr = humi_chk()
+    lcd_string('%.5s %%' % (retstr),LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
