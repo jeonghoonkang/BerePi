@@ -87,7 +87,7 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
         except:
-            lcd_string('Restful API error', LCD_LINE_2,1)
+            lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
         tmp = round(temperaturestr[0], 2)
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
@@ -102,7 +102,7 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
         except:
-            lcd_string('Restful API error', LCD_LINE_2,1)
+            lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
         tmp = round(temperaturestr[0], 2)
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
@@ -117,7 +117,7 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'919'})
         except:
-            lcd_string('Restful API error', LCD_LINE_2,1)
+            lcd_string('Restful API error %s',%sname LCD_LINE_2,1)
         tmp = round(temperaturestr[0], 2)
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
