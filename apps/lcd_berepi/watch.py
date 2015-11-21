@@ -125,7 +125,7 @@ def main():
             co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'920'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
-            lcd_string('%s %s ppm' %sname  %tmp, LCD_LINE_2,1)
+            lcd_string('%s %s ppm' %(sname,tmp), LCD_LINE_2,1)
         except:
             lcd_string('Restful API error', LCD_LINE_2,1)
     color = int(tmp) 
