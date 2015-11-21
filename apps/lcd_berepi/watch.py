@@ -82,6 +82,21 @@ def main():
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
+        sname="OUT"
+        try: 
+            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
+        except:
+            lcd_string('Restful API error', LCD_LINE_2,1)
+        tmp = round(temperaturestr[0], 2)
+        print "%s Temperature = " %sname, tmp, "'C"
+        lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
+    whiteLCDon()
+    time.sleep(1.5) 
+
+    # display time & Temperature
+    tstr = time_chk()
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    if dbip != "no_db":
         sname="MJrm"
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
@@ -182,8 +197,9 @@ def stalk_chk():
     cmd = "hostname"
     return run_cmd(cmd)
 
-if __name__ == '__main__':
 
+
+if __name__ == '__main__':
   try:
     main()
   except KeyboardInterrupt:
