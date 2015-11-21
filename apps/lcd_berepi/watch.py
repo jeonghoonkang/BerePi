@@ -6,6 +6,7 @@
 devel_dir="/home/pi/devel"
 tmp_dir=devel_dir+"/BerePi/apps"
 
+from types import *
 import sys
 from time import strftime, localtime
 sys.path.append(tmp_dir+"/lcd_berepi/lib")
@@ -47,9 +48,10 @@ def main():
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     str = temp_chk()
-    lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
-    whiteLCDon()
-    time.sleep(3) 
+    if str is "-100" :
+        lcd_string('%.5s `C' % (str),LCD_LINE_2,1)
+        whiteLCDon()
+        time.sleep(3) 
 
     str = ip_chk()
     str = str[:-1]
@@ -76,20 +78,58 @@ def main():
     blueLCDon()
     time.sleep(1) 
 
+    # display time & Temperature
+    tstr = time_chk()
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    if dbip != "no_db":
+        sname="MJrm"
+        try: 
+            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
+            tmp = round(temperaturestr[0], 2)
+            print "%s Temperature = " %sname, tmp, "'C"
+        except:
+            lcd_string('Restful API error', LCD_LINE_2,1)
+        lcd_string('%s %s`C' %sname  %tmp, LCD_LINE_2,1)
+    whiteLCDon()
+    time.sleep(1.5) 
+
+    # display time & Temperature
+    tstr = time_chk()
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    if dbip != "no_db":
+        sname="LVrm"
+        try: 
+            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'919'})
+            tmp = round(temperaturestr[0], 2)
+            print "%s Temperature = " %sname, tmp, "'C"
+        except:
+            lcd_string('Restful API error', LCD_LINE_2,1)
+        lcd_string('%s %s`C' %sname  %tmp, LCD_LINE_2,1)
+    whiteLCDon()
+    time.sleep(1.5) 
+
+    # dispaly humidity
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    str = humi_chk()
+    if str is "-100" :
+        lcd_string('%.5s %%' % (str),LCD_LINE_2,1)
+        whiteLCDon()
+        time.sleep(2) 
+
     # display time & CO2
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
+        sname="MJrm"
         try: 
             co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'920'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
-            lcd_string('%s ppm' %tmp, LCD_LINE_2,1)
+            lcd_string('%s %s ppm' %sname  %tmp, LCD_LINE_2,1)
         except:
             lcd_string('Restful API error', LCD_LINE_2,1)
     color = int(tmp) 
-    assert color is type(str)
-    assert color is type(int)
+    assert type(color) is IntType, "ppm variable is not an integer: %r" % id
     whiteLCDon()
     if (color > 1000) : 
         redLCDon()
