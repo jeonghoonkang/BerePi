@@ -3,11 +3,14 @@
 #        : jeonghoonkang, https://github.com/jeonghoonkang
 # for the detail of HW connection, see lcd_connect.py
 
+devel_dir="/home/pi/devel"
+tmp_dir=devel_dir+"/BerePi/apps"
+
 import sys
 from time import strftime, localtime
-sys.path.append("./lib")
+sys.path.append(tmp_dir+"/lcd_berepi/lib")
 from lcd import *
-sys.path.append("../sht20")
+sys.path.append(tmp_dir+"/sht20")
 from sht25class import *
 
 import datetime
@@ -16,7 +19,6 @@ import json
 import subprocess
 import argparse
 
-devel_dir="/home/pi/devel"
 tmp_dir=devel_dir+"/danalytics/thingsweb/weblib/recv"
 sys.path.append(tmp_dir)
 from lastvalue import *
@@ -85,8 +87,12 @@ def main():
             lcd_string('%s ppm' %tmp, LCD_LINE_2,1)
         except:
             lcd_string('Restful API error', LCD_LINE_2,1)
-          
+    color = int(tmp) 
+    assert color is type(str)
+    assert color is type(int)
     whiteLCDon()
+    if (color > 1000) : 
+        redLCDon()
     time.sleep(3) 
 
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
