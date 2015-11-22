@@ -146,11 +146,12 @@ def main():
             co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'920'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
+            color = int(tmp) 
+            assert type(color) is IntType, "ppm variable is not an integer: %r" % id
             lcd_string('%s %s ppm' %(sname,tmp), LCD_LINE_2,1)
         except:
             lcd_string('Restful API error %s'%sname , LCD_LINE_2,1)
-    color = int(tmp) 
-    assert type(color) is IntType, "ppm variable is not an integer: %r" % id
+            
     whiteLCDon()
     if (color > 1000) : 
         redLCDon()
