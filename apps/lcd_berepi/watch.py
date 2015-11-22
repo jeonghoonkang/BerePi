@@ -55,7 +55,7 @@ def main():
     temp_v=str(sht21_temp)
     #assert type(temp_v) is StringType, "temp. variable is not an string: %s" %temp_v
     if temp_v != "-100" :
-        lcd_string('Here %-5.2f`C' % (sht21_temp),LCD_LINE_2,1)
+        lcd_string('Here %-5.2f `C' % (sht21_temp),LCD_LINE_2,1)
         whiteLCDon()
         time.sleep(3) 
 
