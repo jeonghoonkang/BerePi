@@ -53,20 +53,27 @@ def main():
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     sht21_temp = temp_chk()
     temp_v=str(sht21_temp)
-    assert type(temp_v) is StringType, "temp. variable is not an string: %s" %temp_v
+    #assert type(temp_v) is StringType, "temp. variable is not an string: %s" %temp_v
     if temp_v != "-100" :
-        lcd_string('Here %5.2s`C' % (temp_v),LCD_LINE_2,1)
+        lcd_string('Here %-5.2f`C' % (sht21_temp),LCD_LINE_2,1)
         whiteLCDon()
         time.sleep(3) 
+
+    # display local sensor : humidity
+    lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    ret = humi_chk()
+    retstr = str(ret)
+    #assert type(retstr) is StringType, "humi. variable is not an string: %s" %retstr
+    if retstr != "-100" :
+        lcd_string('Here %-5.2f %%' % (ret),LCD_LINE_2,1)
+        whiteLCDon()
+        time.sleep(2) 
 
     retstr = ip_chk()
     retstr = retstr[:-1]
     lcd_string('%s ET' %retstr,LCD_LINE_1,1)
     retstr = mac_chk()
     retstr = retstr[:-1]
-    #lcd_retstring('%s' % (retstr),LCD_LINE_2,1)
-    #blueLCDon()
-    #time.sleep(0.5) 
 
     retstr = wip_chk()
     retstr = retstr[:-1]
@@ -75,14 +82,14 @@ def main():
     retstr = retstr[:-1]
     #lcd_string('%s' % (retstr),LCD_LINE_2,1)
     blueLCDon()
-    time.sleep(1.2) 
+    time.sleep(1) 
         
     retstr = stalk_chk()
     retstr = retstr[:-1]
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     lcd_string('%s           ' % (retstr),LCD_LINE_2,1)
     blueLCDon()
-    time.sleep(1) 
+    time.sleep(0.7) 
 
     # display time & Temperature
     tstr = time_chk()
@@ -97,7 +104,7 @@ def main():
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
     whiteLCDon()
-    time.sleep(1.5) 
+    time.sleep(2) 
 
     # display time & Temperature
     tstr = time_chk()
@@ -112,7 +119,7 @@ def main():
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
     whiteLCDon()
-    time.sleep(1.5) 
+    time.sleep(2) 
 
     # display time & Temperature
     tstr = time_chk()
@@ -127,17 +134,8 @@ def main():
         print "%s Temperature = " %sname, tmp, "'C"
         lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
     whiteLCDon()
-    time.sleep(1.5) 
+    time.sleep(2) 
 
-    # display local sensor : humidity
-    lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    ret = humi_chk()
-    retstr = str(ret)
-    assert type(retstr) is StringType, "humi. variable is not an string: %s" %retstr
-    if retstr != "-100" :
-        lcd_string('Here %5.2s%%' % (retstr),LCD_LINE_2,1)
-        whiteLCDon()
-        time.sleep(2) 
 
     # display time & CO2
     tstr = time_chk()
@@ -156,7 +154,7 @@ def main():
     whiteLCDon()
     if (color > 1000) : 
         redLCDon()
-    time.sleep(3) 
+    time.sleep(2) 
 
 
 def run_cmd(cmd):
