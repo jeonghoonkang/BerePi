@@ -48,13 +48,14 @@ def main():
 
   while True:
 
+    # display local sensor : temperature
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     sht21_temp = temp_chk()
     temp_v=str(sht21_temp)
     assert type(temp_v) is StringType, "temp. variable is not an string: %s" %temp_v
     if temp_v != "-100" :
-        lcd_string('%5.2s`C' % (temp_v),LCD_LINE_2,1)
+        lcd_string('Here %5.2s`C' % (temp_v),LCD_LINE_2,1)
         whiteLCDon()
         time.sleep(3) 
 
@@ -128,11 +129,13 @@ def main():
     whiteLCDon()
     time.sleep(1.5) 
 
-    # dispaly humidity
+    # display local sensor : humidity
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    retstr = humi_chk()
+    ret = humi_chk()
+    retstr = str(ret)
+    assert type(retstr) is StringType, "humi. variable is not an string: %s" %retstr
     if retstr != "-100" :
-        lcd_string('%.5s%%' % (retstr),LCD_LINE_2,1)
+        lcd_string('Here %5.2s%%' % (retstr),LCD_LINE_2,1)
         whiteLCDon()
         time.sleep(2) 
 
@@ -155,11 +158,6 @@ def main():
         redLCDon()
     time.sleep(3) 
 
-    lcd_string('%s' % (tstr),LCD_LINE_1,1)
-    retstr = humi_chk()
-    lcd_string('%.5s %%' % (retstr),LCD_LINE_2,1)
-    whiteLCDon()
-    time.sleep(2) 
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
