@@ -99,10 +99,10 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
             tmp = round(temperaturestr[0], 2)
+            print "%s Temperature = " %sname, tmp, "'C"
+            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
             lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
-        print "%s Temperature = " %sname, tmp, "'C"
-        lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
@@ -113,11 +113,11 @@ def main():
         sname="MJrm"
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
+            tmp = round(temperaturestr[0], 2)
+            print "%s Temperature = " %sname, tmp, "'C"
+            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
             lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
-        tmp = round(temperaturestr[0], 2)
-        print "%s Temperature = " %sname, tmp, "'C"
-        lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
@@ -128,11 +128,11 @@ def main():
         sname="LVrm"
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'919'})
+            tmp = round(temperaturestr[0], 2)
+            print "%s Temperature = " %sname, tmp, "'C"
+            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
             lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
-        tmp = round(temperaturestr[0], 2)
-        print "%s Temperature = " %sname, tmp, "'C"
-        lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
