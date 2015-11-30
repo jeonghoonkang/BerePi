@@ -116,6 +116,7 @@ def main():
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
+            # once this line is broken during infinite while loop (15.11.29)
         except:
             lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
     whiteLCDon()
