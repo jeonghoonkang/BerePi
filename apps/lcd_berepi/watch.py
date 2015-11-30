@@ -114,9 +114,11 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
             tmp = round(temperaturestr[0], 2)
+            # once this line is broken during infinite while loop (15.11.29)
+            
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
-            # once this line is broken during infinite while loop (15.11.29)
+
         except:
             lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
     whiteLCDon()
