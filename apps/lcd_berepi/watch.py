@@ -162,6 +162,10 @@ def main():
         redLCDon()
     time.sleep(2) 
 
+    lcd_string('', LCD_LINE_2,1)
+    lcd_string('', LCD_LINE_1,1)
+
+    time.sleep(1) 
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
@@ -215,5 +219,8 @@ if __name__ == '__main__':
   finally:
     lcd_init()
     lcd_byte(0x01, LCD_CMD)
+    retstr = ip_chk()
+    retstr = retstr[:-1]
+    lcd_string('%s ET' %retstr,LCD_LINE_1,1)
     lcd_string("Goodbye!",LCD_LINE_1,2)
     GPIO.cleanup()
