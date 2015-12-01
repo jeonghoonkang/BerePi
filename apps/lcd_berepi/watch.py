@@ -222,5 +222,5 @@ if __name__ == '__main__':
     retstr = ip_chk()
     retstr = retstr[:-1]
     lcd_string('%s ET' %retstr,LCD_LINE_1,1)
-    lcd_string("Goodbye!",LCD_LINE_1,2)
+    lcd_string("Goodbye!",LCD_LINE_2,1)
     GPIO.cleanup()
