@@ -144,9 +144,9 @@ def main():
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
-        sname="MJrm"
+        sname="ODsk"
         try: 
-            co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'920'})
+            co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'51201'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
             color = int(tmp) 
@@ -205,6 +205,7 @@ def stalk_chk():
 
 
 if __name__ == '__main__':
+
   try:
     main()
   except KeyboardInterrupt:
