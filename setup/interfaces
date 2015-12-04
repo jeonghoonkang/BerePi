@@ -22,7 +22,7 @@ allow-hotplug eth0
 #network 192.168.0.0
 #netmask 255.255.255.0
 #gateway 192.168.0.1
-#broadcast 168.126.63.1
+#dns-nameservers 168.126.63.1
 #dns-nameservers 8.8.8.8
   
 auto wlan0
