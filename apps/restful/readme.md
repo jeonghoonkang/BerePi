@@ -3,8 +3,11 @@
  - to do, get more scope of DB
 ##### functions
  - system integration
- - power meter
+ - Power Meter
+   - distribution
+   - plug
  - CO2
  - PIR
  - Temperature
+ 
  
