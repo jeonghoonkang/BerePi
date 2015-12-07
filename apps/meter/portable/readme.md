@@ -5,7 +5,7 @@
     - 에너지 진단 서비스를 위한 추가 부가 입력을 받을수 있도록 구성
 
   - 데이터 수집 API 
-    - http://125.7.128.53:4242/api/query?start=2015/06/26-00:00:00&end=2015/06/27-00:00:00&m=sum:gyu_RC1_etype.current{nodeid=911}
+    - http://xxx.xxx.xxx.xxx:4242/api/query?start=2015/06/26-00:00:00&end=2015/06/27-00:00:00&m=sum:gyu_RC1_etype.current{nodeid=911}
       - 시간 (Unix time) : 측정값 Watt 
         - 모두 string type
       - 검색 기준시간 - 검색 종료시간, &m=sum:메트릭 연산방식, 기본으로 사용함
@@ -16,9 +16,10 @@
     - IP 주소와 입력하려는 Data, tag로 구성됨
       - "value" 부분은 변수로 Watt 값을 입력함 
     - EMS 서버의 입장에서는 측정값 입력보다는, 서버에서 DSM으로 전송해야하는 정보를 정의 전송할때 사용함
-    - http://xxx.xxx.xxx.xxx/api/put/
+    - http://xxx.xxx.xxx.xxx:4242/api/put/
     - requests.post(url, data=json.dumps(data))
-    - data = {
+<pre>
+    data = {
 			"metric": "gyu_RC1_etype.current",
 			"timestamp": time.time(),
 			"value": watt,
@@ -31,3 +32,4 @@
 				"owner": "KETI",
 				"country": "kor"
 			}
+</pre>
