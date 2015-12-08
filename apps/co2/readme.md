@@ -1,6 +1,6 @@
 
 ##### Intro
-  - Author : jeonghoon.kang@gmail.com
+  - Author : https://github.com/jeonghoonkang
   - Please check source code : **co2_t110.py**, it is simple and easy code.
   - also read the log.file.txt and print_out_msg.txt which are output of code. 
   
@@ -24,4 +24,6 @@
      - http://eltsensor.co.kr/2012/eng/pdf/T-110/DS_T-110-3V_ver1.210.pdf
   1. RaspberryPi Pin out
      - http://www.raspberrypi-spy.co.uk/2012/06/simple-guide-to-the-rpi-gpio-header-and-pins
+
+##### network functions
      
