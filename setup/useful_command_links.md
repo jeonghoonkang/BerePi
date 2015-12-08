@@ -15,7 +15,6 @@
 > ps -eaf PROCESS_NAME | grep -v grep|awk '{print "kill -TERM "$2}' | sh -x
 <pre>
 #!/bin/bash
- 
 killtree() {
     local _pid=$1
     local _sig=${2:-TERM}
@@ -25,14 +24,13 @@ killtree() {
     done
     kill -${_sig} ${_pid}
 }
- 
 if [ $# -eq 0 -o $# -gt 2 ]; then
     echo "Usage: $(basename $0) <pid> [signal]"
     exit 1
 fi
- 
 killtree $@
 </pre>
+
 <pre>
 iwconfig
 
