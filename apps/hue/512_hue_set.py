@@ -20,7 +20,6 @@ def shifthue() :
     print xhue
 
     conn = httplib.HTTPConnection("10.255.255.65")
-
     callurl = restcmd + "/4/state"
     """
     try:
@@ -54,9 +53,11 @@ def shifthue() :
         except (httplib.HTTPException) as e :
             print latest_time, "HTTPException", e.args[0]
             time.sleep(4)
+            conn = httplib.HTTPConnection("10.255.255.65")
 
         finally :
             time.sleep(0.3)
+            conn = httplib.HTTPConnection("10.255.255.65")
 
 def time_chk():
     time = strftime("%Y-%m%d %H:%M",localtime())
