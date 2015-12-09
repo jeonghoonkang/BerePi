@@ -79,6 +79,10 @@ sudo apt-get install reminna
     * ENTRY_ID is available via "stalk status" command.
     ```
 
+channel server 는 kill 되면 다시 생성됨
+ps -ax | grep  [c]hannelserver.py | awk '{print $1}' | xargs kill -9
+
+
 ## Cygwin 관련
   - http://egloos.zum.com/chanik/v/3785205
   - http://madoxo.blogspot.kr/2013/03/cygwin-bash.html
