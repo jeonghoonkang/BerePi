@@ -3,23 +3,26 @@ import httplib
 import time
 from time import strftime, localtime
 
-conn = httplib.HTTPConnection("10.255.255.65")
 
 hue_uid = "c274b3c285d19cf3480c91439329147"
 restcmd = "/api"+hue_uid+"/lights"
 
 str = " "
 
+latest_time = "initial status"
 xhue = [10000,25000,46000,56280]
 def shifthue() :
     global str
     global xhue
+    global latest_time
     xhue.insert(0,xhue[-1])
     xhue = xhue[0:4] 
     print xhue
 
-    callurl = restcmd + "/4/state"
+    conn = httplib.HTTPConnection("10.255.255.65")
 
+    callurl = restcmd + "/4/state"
+    """
     try:
         conn.request("PUT",callurl ,'{"on":false}')
         response = conn.getresponse()
@@ -27,11 +30,9 @@ def shifthue() :
     except:
         print "keep goging...."
         time.sleep(4)
-
-    latest_time = "initial status"
     time.sleep(1)
-
-    for num in [3,2,1,4] :
+    """
+    for num in [4,3,2,1] :
         callurl = restcmd + "/%s/state"%(num)
         print callurl
         huenumber = (xhue[4-num])
@@ -50,9 +51,12 @@ def shifthue() :
         
             latest_time = time_chk()
 
-        except:
-            print latest_time, "exception conn.getresponse from Hue GW"
+        except (httplib.HTTPException) as e :
+            print latest_time, "HTTPException", e.args[0]
             time.sleep(4)
+
+        finally :
+            time.sleep(0.3)
 
 def time_chk():
     time = strftime("%Y-%m%d %H:%M",localtime())
@@ -136,7 +140,7 @@ def web():
 	str += ' <a href="http://iot.iptime.org:8000/thing/test/hue5off"> off </a>  또는'
 	str += '<a href="http://iot.iptime.org:8000/thing/test/hue5on">  on </a> <br> <br>'
 	str += '</font> <br> <br> <br>'
-        str += '<img src=" http://125.7.128.53:4242/q?start=36h-ago&m=sum:gyu_RC1_co2.ppm%7Bnodeid=920%7d&o=&m=sum:gyu_RC1_thl.temperature%7Bnodeid=915%7d&o=axis%20x1y2&wxh=400x300&key=out%20bottom%20center&autoreload=15&png&.png" width=800> '
+   # str += '<img src=" http://125.7.128.53:4242/q?start=36h-ago&m=sum:gyu_RC1_co2.ppm%7Bnodeid=920%7d&o=&m=sum:gyu_RC1_thl.temperature%7Bnodeid=915%7d&o=axis%20x1y2&wxh=400x300&key=out%20bottom%20center&autoreload=15&png&.png" width=800> '
 	rstr = str
 	str = ''
 	return rstr	
