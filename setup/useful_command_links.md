@@ -12,7 +12,7 @@
 > IP 주소 중, gateway 주소확인 : ip route
 
 > kill process
-> ps -eaf PROCESS_NAME | grep -v grep|awk '{print "kill -TERM "$2}' | sh -x
+> ps -eaf {PROCESS_NAME} | grep -v grep|awk '{print "kill -TERM "$2}' | sh -x
 <pre>
 #!/bin/bash
 killtree() {
