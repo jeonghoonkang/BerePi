@@ -47,6 +47,13 @@ network={
 }
 </pre>
 
+1. cmdline.txt
+  - /boot/cmdline.txt 에 고정 ip 를 쓰는 경우 dhcp 연결시 문제되는 경우가 있어 추천하지 않습니다.
+  - /boot/cmdline.txt 는 외장메모리에 인식 가능한 파일이라 노트북 리더기로 수정 후 사용합니다.
+2. 노트북 랜포트 다이렉트 연결
+  - cmd 창에서 "arp -a" 를 사용하면 ip 확인이 가능합니다.
+  - 맥/리눅스/PC 모두 같은 명령어를 사용합니다.
+
 ## VNC client
 sudo apt-get install reminna
 
