@@ -1,7 +1,7 @@
 
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
-sudo apt-get -y install htop
+#sudo apt-get -y install htop
 #sudo apt-get -y install screen
 #sudo apt-get -y install rsync
 #sudo apt-get -y install subversion
@@ -63,7 +63,7 @@ sudo apt-get -y install htop
 # tasklist
 # ps -W
 
-# python pip in cygwin 
+#### python pip in cygwin 
 #http://lelandbatey.com/posts/2014/08/installing-pip-in-cygwin
 
 
