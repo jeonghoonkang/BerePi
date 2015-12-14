@@ -34,6 +34,8 @@
 # add by https://github.com/jeonghoonkang
 # try : crontab -e 
 # */10 * * * * sudo sh /home/pi/devel/BerePi/setup/wifi_cron.sh
+#
+# crontab log check : sudo cat /var/log/syslog , find /crontab/
 
 ##################################################################
 # Settings
