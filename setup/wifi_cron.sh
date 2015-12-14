@@ -33,8 +33,8 @@
 # */5 * * * * /usr/local/bin/WiFi_Check
 #
 # add by https://github.com/jeonghoonkang
-# try : crontab -e 
-# */10 * * * * sh /home/pi/devel/BerePi/setup/wifi_cron.sh
+# try : sudo crontab -e 
+# */10 * * * * sudo sh /home/pi/devel/BerePi/setup/wifi_cron.sh
 #
 # crontab log check : sudo cat /var/log/syslog , find /crontab/
 # 
