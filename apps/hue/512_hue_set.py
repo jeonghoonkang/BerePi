@@ -8,7 +8,7 @@ hue_uid = "c274b3c285d19cf3480c91439329147"
 restcmd = "/api"+hue_uid+"/lights"
 
 str = " "
-
+ip='10.255.255.65'
 latest_time = "initial status"
 xhue = [10000,25000,46000,56280]
 def shifthue() :
@@ -17,9 +17,14 @@ def shifthue() :
     global latest_time
     xhue.insert(0,xhue[-1])
     xhue = xhue[0:4] 
-    print xhue
+    #print xhue
 
-    conn = httplib.HTTPConnection("10.255.255.65")
+    try :
+        conn = httplib.HTTPConnection(ip)
+    except :
+        print "fail to connect to Hue GW..."
+        return
+    
     callurl = restcmd + "/4/state"
     """
     try:
@@ -33,7 +38,7 @@ def shifthue() :
     """
     for num in [4,3,2,1] :
         callurl = restcmd + "/%s/state"%(num)
-        print callurl
+        #print callurl
         huenumber = (xhue[4-num])
 
         try :
@@ -45,7 +50,7 @@ def shifthue() :
             conn.request("PUT",callurl ,'{"on":true, "sat":254, "bri":254, "hue":%s}'%huenumber)
             response = conn.getresponse()
             data = response.read()
-            print data
+            #print data
             time.sleep(1)
         
             latest_time = time_chk()
@@ -53,11 +58,12 @@ def shifthue() :
         except (httplib.HTTPException) as e :
             print latest_time, "HTTPException", e.args[0]
             time.sleep(4)
-            conn = httplib.HTTPConnection("10.255.255.65")
+            conn = httplib.HTTPConnection(ip)
 
         finally :
+            #print latest_time, "Finally"
             time.sleep(0.3)
-            conn = httplib.HTTPConnection("10.255.255.65")
+            conn = httplib.HTTPConnection(ip)
 
 def time_chk():
     time = strftime("%Y-%m%d %H:%M",localtime())
