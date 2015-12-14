@@ -89,7 +89,10 @@ echo
 
 # Check is complete, Remove Lock file and exit
 #echo "process is complete, removing lockfile"
-rm $lockfile
+if [ -e $lockfile ]; then
+    rm $lockfile
+fi
+
 exit 0
 
 ##################################################################
