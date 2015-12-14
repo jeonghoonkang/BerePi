@@ -5,6 +5,7 @@
 # Title:     WiFi_Check
 # Author:    Kevin Reed (Dweeber)
 #            dweeber.dweebs@gmail.com
+# add some comments and usage : https://github.com/jeonghoonkang
 # Project:   Raspberry Pi Stuff
 #
 # Copyright: Copyright (c) 2012 Kevin Reed <kreed@tnet.com>
