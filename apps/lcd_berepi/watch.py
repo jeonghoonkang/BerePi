@@ -105,6 +105,7 @@ def main():
             lcd_string('Restful err ', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
+    clearLCD()
 
     # display time & Temperature
     tstr = time_chk()
@@ -123,6 +124,7 @@ def main():
             lcd_string('Restful err', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
+    clearLCD()
 
     # display time & Temperature
     tstr = time_chk()
@@ -139,6 +141,7 @@ def main():
             lcd_string('Restful err', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
+    clearLCD()
 
 
     # display time & CO2
@@ -157,15 +160,14 @@ def main():
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err', LCD_LINE_2,1)
-            
     whiteLCDon()
     if (color > 1000) : 
         redLCDon()
     time.sleep(2) 
 
+def clearLCD():
     lcd_string('', LCD_LINE_2,1)
     lcd_string('', LCD_LINE_1,1)
-
     time.sleep(1) 
 
 def run_cmd(cmd):
