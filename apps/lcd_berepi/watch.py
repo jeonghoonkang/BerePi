@@ -138,6 +138,7 @@ def main():
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
+            lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
