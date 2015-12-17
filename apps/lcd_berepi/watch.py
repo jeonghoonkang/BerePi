@@ -97,7 +97,8 @@ def main():
         sname="OUT"
         try: 
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
-            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
+            #temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
+            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'801'})
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
         except:
