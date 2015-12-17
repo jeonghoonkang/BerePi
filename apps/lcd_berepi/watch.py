@@ -32,14 +32,13 @@ def parse_args():
     return args
 
 
-
 def main():
   arg = parse_args()
 
   # Initialise display
   lcd_init()
   print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk(), time_chk()
-
+  dbip = "0.0.0.0:0000" 
   dbip = arg.ipaddress
   if dbip == "0.0.0.0:0000" :
       print "  please input ip address of iot DB"
@@ -97,12 +96,13 @@ def main():
     if dbip != "no_db":
         sname="OUT"
         try: 
+            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
-            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
-            lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
+            lcd_string('%s' %sname , LCD_LINE_1,1)
+            lcd_string('Restful err ', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
@@ -116,12 +116,11 @@ def main():
             # debug point : once this line is broken during infinite while loop (15.11.29)
             assert type(temperaturestr) is StringType, "not string"
             tmp = round(temperaturestr[0], 2)
-            
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
-
         except:
-            lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
+            lcd_string('%s' %sname , LCD_LINE_1,1)
+            lcd_string('Restful err', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
@@ -132,12 +131,12 @@ def main():
         sname="LVrm"
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'919'})
-            print "temperaturestr =", temperaturestr
+            print "rest, temperaturestr =", temperaturestr
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
-            lcd_string('Restful API error %s'%sname, LCD_LINE_2,1)
+            lcd_string('Restful err', LCD_LINE_2,1)
     whiteLCDon()
     time.sleep(2) 
 
@@ -145,17 +144,19 @@ def main():
     # display time & CO2
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
+    color = 500
     if dbip != "no_db":
-        sname="ODsk"
+        sname = "ODsk CO2"
         try: 
             co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'51201'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
             color = int(tmp) 
             assert type(color) is IntType, "ppm variable is not an integer: %r" % id
-            lcd_string('%s %s ppm' %(sname,tmp), LCD_LINE_2,1)
+            lcd_string('%s ppm %s ' %(tmp, sname), LCD_LINE_2,1)
         except:
-            lcd_string('Restful API error %s'%sname , LCD_LINE_2,1)
+            lcd_string('%s' %sname , LCD_LINE_1,1)
+            lcd_string('Restful err', LCD_LINE_2,1)
             
     whiteLCDon()
     if (color > 1000) : 
