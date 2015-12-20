@@ -116,7 +116,7 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
             # debug point : once this line is broken during infinite while loop (15.11.29)
-            print type(temperaturestr)
+            # print type(temperaturestr)
             #assert type(temperaturestr) is StringType, "not string"
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
