@@ -1,5 +1,5 @@
 import requests
-# Try running this locally.
+# Sending e-mail
 def send_email():
   return requests.post(
     "https://api.mailgun.net/v3/sandboxa4e92f05144a3973f6f8c031849e3.mailgun.org/messages",
