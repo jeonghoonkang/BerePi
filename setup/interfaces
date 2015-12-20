@@ -42,7 +42,7 @@ wpa-group CCMP TKIP
 #in case of "OPEN SSID" just change *iptime* to your SSID
 #    wireless-essid iptime
 #    wireless-mode managed
-#in case of WPA, change your SSID, KEY in " ", keep remain " " symbol
+#in case of WPA, change your SSID, KEY in " ", remain " " symbol
 #   wpa-ssid "TYPE HERE"
 #   wpa-psk "TYPE HERE"
 
