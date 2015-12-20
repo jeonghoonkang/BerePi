@@ -94,13 +94,13 @@ def main():
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
-        sname="OUT"
+        sname="Outside"
         try: 
-            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
-            #temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
-            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'801'})
+            temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
+            #temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'801'})
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
+            lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err ', LCD_LINE_2,1)
@@ -116,7 +116,8 @@ def main():
         try: 
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
             # debug point : once this line is broken during infinite while loop (15.11.29)
-            assert type(temperaturestr) is StringType, "not string"
+            print type(temperaturestr)
+            #assert type(temperaturestr) is StringType, "not string"
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
@@ -151,9 +152,9 @@ def main():
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     color = 500
     if dbip != "no_db":
-        sname = "ODsk CO2"
+        sname = "MJrm CO2"
         try: 
-            co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'51201'})
+            co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'920'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
             color = int(tmp) 
