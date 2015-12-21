@@ -26,7 +26,9 @@ if __name__== "__main__" :
   LCDoff()
 
   pinkLCDon()
+  time.sleep(0.5)
   yellowLCDon()
+  time.sleep(0.5)
   whiteLCDon()
 
   str = subprocess.check_output("hostname",shell=True)
