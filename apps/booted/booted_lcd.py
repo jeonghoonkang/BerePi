@@ -2,6 +2,7 @@
 
 import sys
 import subprocess
+
 berePi_dir="/home/pi/devel/BerePi"
 tmp_dir=berePi_dir + "/apps/lcd_berepi/lib"
 sys.path.append(tmp_dir)
