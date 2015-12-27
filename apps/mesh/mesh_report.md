@@ -52,7 +52,7 @@
          * 배트맨이 내장되어 있으나 패키지 형태가 아니기 때문에 향후 customize 등에 결정적인 제약이 생김
          * Arduino YUN 테스트 중 홀드
       + OSLR
-         * MANET를 위한 메쉬 솔루션의 standard이자 끝판왕이지만 Too much
+         * MANET를 위한 메쉬 솔루션의 standard임.. Too much
     - 외부 네트워크 연결
       + 마스터 노드에 이더넷을 이용해서 packet forwarding 및 NAT 설정
       + 슬레이브 노드에 route 설정 및 DNS 설정
