@@ -5,5 +5,8 @@ import requests
 def send_email():
   print "email sending"
 
+# temperature check
+# when out range of temp. send email
+
 if __name__ == "__main__" :
     send_email()
