@@ -3,7 +3,6 @@ import httplib
 import time
 from time import strftime, localtime
 
-
 hue_uid = "c274b3c285d19cf3480c91439329147"
 restcmd = "/api"+hue_uid+"/lights"
 
@@ -59,6 +58,7 @@ def shifthue() :
             print latest_time, "HTTPException", e.args[0]
             time.sleep(4)
             conn = httplib.HTTPConnection(ip)
+            #지속적으로 http exception 발생시 email 로 통보 
 
         finally :
             #print latest_time, "Finally"
