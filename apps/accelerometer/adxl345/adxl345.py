@@ -9,6 +9,7 @@
 #
 # modified by https://github.com/jeonghoonkang
 
+
 import smbus
 from time import sleep
 
@@ -102,8 +103,10 @@ class ADXL345:
         return {"x": x, "y": y, "z": z}
 
 if __name__ == "__main__":
+    
     # if run directly we'll just create an instance of the class and output 
     # the current readings
+    # use class 
     adxl345 = ADXL345()
     
     while True:
