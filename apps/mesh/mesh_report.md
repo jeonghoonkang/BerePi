@@ -89,8 +89,8 @@
     - 마스터 노드 패키지 개발
       + 옵션 1 : DHCP로 로컬네트워크 구성 가능한 AP 포함
       + 옵션 2 : Zero configuration 및 NAT traveral 적용
-      + 옵션 3 : Wheezy 뿐만 아니라 Archlinux 용 패키지
+      + 옵션 3 : Wheezy로 가능함
   1. 추가 검토 사항
     - Zero configuration 및 NAT traversal 검증
-    - 에디슨 등의 타 H/W 플랫폼 검증
-    - 핸디캡이 최소화된 cost efficient한 디바이스 수배
+    - Atheros (가장 좋음), Broadcom (조금 모자란 성능)
+    
