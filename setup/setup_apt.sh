@@ -15,7 +15,7 @@
 #sudo apt-get -y install vim-gnome
 #sudo apt-get -y install dos2unix
 #sudo apt-get -y install dosbox
-#sudo apt-get install wicd wicd-curses
+#sudo apt-get -y install wicd wicd-curses
 
 #sudo apt-get -y install python-pip
 #sudo apt-get -y install python-matplotlib
