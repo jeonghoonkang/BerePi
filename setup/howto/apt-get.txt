@@ -1,0 +1,28 @@
+1. 패키지 캐쉬 갱신 및 자동 업그레이드
+# apt-get update
+# apt-get upgrade
+
+2. 개별 패키지 설치 # apt-get install <패키지명>
+
+3. 원하는 패키지 찾기 # apt-cache  serach <패키지명>
+
+4. 원하는 패키지 찾은 다음 정보 출력 # apt-cache show <패키지명>
+
+5. 의존성 검사 수행하면서 업그레이드 # apt-get -s dist-upgrade
+
+6. 설치한 패키지에 이상이 있어 다시 설치시 # apt-get --reinstall install <패키지명>
+
+7. CD-ROM 목록 추가 # apt-cdrom add
+
+8. 패키지 삭제 # apt-get remove <패키지명>
+또는 # dpkg -P <패키지명>
+
+9. 삭제하는 패키지의 설정화일들가지 모두 삭제시 # apt-get --purge remove <패키지명>
+
+10. dselect에서 선택한 패키지의 설치 및 삭제 # apt-get dselect-upgrade
+
+11. 설치된 패키지를 볼때
+# dpkg -l
+
+참고)   apt-get install 명령어로 받은 deb 파일의 저장 위치           /var/cache/apt/archive/
+        위 폴더에 .deb 패키지파일로 저장됨
