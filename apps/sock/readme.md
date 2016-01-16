@@ -1,2 +1,2 @@
 #### Check sock connectivity 
-#### sending test packets to server
+#### Sending test packets to server
