@@ -9,7 +9,7 @@ import time
 ETYPE_VALUE_MAX = 8000
 
 def main():
-	SERVER_ADDR = "125.7.128.41"
+	SERVER_ADDR = "125.7.128.xx"
 	SERVER_PORT = 8283
 	print "   try connecting .... "
 	
