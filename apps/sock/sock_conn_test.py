@@ -1,3 +1,4 @@
+
 #!/usr/bin/python
  
 import socket
@@ -33,10 +34,8 @@ def main():
 		if ( len(l) < 2 ):
 			pass # nothing to do
 		else:
-			# dump
+			# dump, it appears in the tcollector screen
 			#print >> sys.stderr, "*readBuffer='" + readBuffer + "'"
-
-			#
 			readBuffer = ""
 	
 			# check last
@@ -44,19 +43,15 @@ def main():
 			l = l[:-1]
 			if e != "":
 				readBuffer = e
-				# dump
+				# dump,  it appears in the tcollector screen
 				#print >> sys.stderr, "+readBuffer='" + readBuffer + "'"
-	
 			# check first
 			s = l[0]
 			if s.startswith( "Welcome" ):
 				s = s[ len( "Welcome"): ]
 				l[0] = s
-	
-			#
 			receivedLines += l
 	
-			# 
 			#for s in l:
 			#	print >> sys.stderr, "+line='" + s + "'"
 	
@@ -152,5 +147,3 @@ def main():
 	
 if __name__ == "__main__":
 	main()
-	
-
