@@ -31,7 +31,7 @@ wget -N $rctest_file
 
 export vimjelly_file=$DNPATH/vim_conf/jellybeans.vim
 wget -N $vimjelly_file
-sudo mv jellybeans.vim /usr/share/vim/vim73/colors
+sudo mv jellybeans.vim /usr/share/vim/vim74/colors
 fi
 
 export rc_file=$DNPATH/rc.local
