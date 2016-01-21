@@ -2,6 +2,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang, https://github.com/jeonghoonkang 
+# Author : Kowonsik, https://github.com/kowonsik
 
 
 import socket
