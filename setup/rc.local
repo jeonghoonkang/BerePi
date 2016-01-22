@@ -76,5 +76,5 @@ fi
 
 #echo "make run ntpdate sw"
 #please do it last, sometimes ntp.ubuntu.com is down
-sudo ntpdate -u ntp.ubuntu.com
+#sudo ntpdate -u ntp.ubuntu.com
 exit 0
