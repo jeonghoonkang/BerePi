@@ -17,7 +17,11 @@
 #sudo apt-get -y install dosbox
 #sudo apt-get -y install wicd wicd-curses
 
-#sudo apt-get -y install python-pip
+#wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
+#unzip distribute-0.7.3.zip
+#sudo python setup.py install
+#sudo easy_install pip
+
 #sudo apt-get -y install python-matplotlib
 #sudo apt-get -y install python-mysqldb
 #sudo apt-get -y install python-smbus
