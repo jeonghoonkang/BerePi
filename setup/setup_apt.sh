@@ -8,6 +8,7 @@
 #sudo apt-get -y install vim
 #sudo apt-get -y install tree
 #sudo apt-get -y install nmap
+#sudo apt-get -y install dnsutils
 
 #sudo apt-get -y install lrzsz
 #sudo apt-get -y install lynx
