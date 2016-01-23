@@ -1,6 +1,8 @@
 
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
+sudo apt-get update && sudo apt-get install oracle-java7-jdk
+
 #sudo apt-get -y install htop
 #sudo apt-get -y install screen
 #sudo apt-get -y install rsync
