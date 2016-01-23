@@ -37,7 +37,7 @@ sudo apt-get update && sudo apt-get install oracle-java7-jdk
 #sudo pip install networkx
 #sudo pip install httplib
 #sudo pip install urllib3
-sudo pip install utils
+#sudo pip install utils
 
 #########################################################################
 #### for the Cygwin, windows
