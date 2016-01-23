@@ -18,63 +18,15 @@ if [ "$_IP" ]; then
 fi
 
 # modified : jeonghoonkang, https://github.com/jeonghoonkang
-# sh /home/pi/startup_sw.sh
+cd /home/pi/devel/BerePi/setup
+pwd
+sudo sh ./startup_sw.sh
+cd /home/pi
 
-#####################################################################
-# Using Dust Sensor, CO2 Sensor
-#####################################################################
-#cd /home/pi/devel/danalytics/raspi/hw_driver/sensor/dust/
-#screen -dms dust sudo python /home/pi/devel/danalytics/raspi/hw_driver/sensor/dust/dust_gp2y1010.py
-#screen -dms co2 sudo python /home/pi/devel/danalytics/raspi/hw_driver/sensor/co2/t110/co2_t110_3v.py
-
-#####################################################################
-# Using LED Booting : BerePi
-#####################################################################
-#cd /home/pi/devel/BerePi/apps/led_berepi
-#pwd
-#echo "make run start LED"
-#screen -dmS ledtest sudo python booted.py
-#cd
-
-
-#####################################################################
-# Using STALK : remote channel access 
-#####################################################################
-#echo "make run STALK"
-#/home/pi/start.sh
-#cd /home/pi/devel/danalytics/thingsweb/stalk/client/
-#screen -dmS volotestssh python /home/pi/devel/danalytics/thingsweb/stalk/client/app.py register $(hostname) localhost 22 &
-#cd
-
-######################################################################
-# Using STALK : remote channel access 
-#####################################################################
-#echo "keti stalk"
-#cd /home/pi/devel/danalytics/raspi/stalk-keti
-#screen -dmS stalkrun python /home/pi/devel/danalytics/raspi/stalk-keti/talk.py server $(hostname) localhost 22 &
-#cd
-
-# cd /home/pi
-# screen -dmS stalksh sudo sh stalkstart.sh
-# cd
-
-# stalk server $(hostname) localhost 22
-
-#####################################################################
-#  KEMCO GW driver
-#####################################################################
-#sudo python /home/pi/devel/BerePi/apps/check/monitor.py &
-
-#####################################################################
-# LCD which shows IP address and sTalk channel 
-#####################################################################
-#export tmppath=/home/pi/devel/BerePi/apps/lcd_berepi
-#cd $tmppath
-#screen -dmS lcddisp sudo python watch.py &
-#unset tmppath
-#cd
-
-#echo "make run ntpdate sw"
+#echo "make update system time"
 #please do it last, sometimes ntp.ubuntu.com is down
-#sudo ntpdate -u ntp.ubuntu.com
+sudo ntpdate -u ntp.ubuntu.com
+
 exit 0
+
+
