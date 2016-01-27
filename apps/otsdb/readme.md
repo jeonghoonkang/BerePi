@@ -6,5 +6,6 @@
    - check JAVA
 
 #### 센서 데이터 수집
+- data interpolation
 
    
