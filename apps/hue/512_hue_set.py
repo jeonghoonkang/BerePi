@@ -9,7 +9,7 @@ hue_uid = "c274b3c285d19cf3480c91439329147"
 restcmd = "/api"+hue_uid+"/lights"
 
 str = " "
-ip='10.255.255.65'
+ip='10.255.255.65x'
 latest_time = "initial status"
 xhue = [10000,25000,46000,56280]
 def shifthue() :
