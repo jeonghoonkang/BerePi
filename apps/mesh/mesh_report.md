@@ -93,4 +93,5 @@
   1. 추가 검토 사항
     - Zero configuration 및 NAT traversal 검증
     - Atheros (가장 좋음), Broadcom (조금 모자란 성능)
+    - https://www.thinkpenguin.com/
     
