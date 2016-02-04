@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Author : https://github.com/jeonghoonkang
 # this software needs library of lastvalue, which is in the commercial RaspberryPi (volovlu.com)
 
