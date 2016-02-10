@@ -6,6 +6,9 @@
   - get : read from DB
  - www.web2py.com
 
-##### Apache
+##### Apache2
  - /var/www/html
+ - sudo vim /etc/apache2/sites-available/000-default.conf
+ - sudo /etc/init.d/apache2 reload
+ 
  
