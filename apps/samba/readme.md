@@ -1,10 +1,8 @@
 #### file sharing via Samba
  - sudo service smbd restart
  - smbpasswd -a pi 
-
-'''
-# sudo vim /etc/samba/smb.conf
-
+ - sudo vim /etc/samba/smb.conf
+   ''' 
 	[global]
 
 	workgroup = WORKGROUP //네트워크 공유 그룹 설정
@@ -25,4 +23,4 @@
 	public = yes
 	browsable = yes
 	guest ok = no #게스트 계정 접근 허용 여부
-'''
+      '''
