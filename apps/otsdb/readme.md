@@ -7,7 +7,8 @@
    - installation
    - check JAVA
 
-#### 센서 데이터 수집
-- data interpolation
+#### Hbase 테이블 생성
+- env COMPRESSION=NONE HBASE_HOME=/usr/local/hadoop/hbase-1.0.1.1 ./src/create_table.sh
+  - HBASE_HOME, HBASE 설치된 dir
 
    
