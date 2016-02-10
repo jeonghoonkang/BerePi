@@ -19,9 +19,11 @@
 #sudo apt-get -y install dos2unix
 #sudo apt-get -y install dosbox
 #sudo apt-get -y install wicd wicd-curses
+#sudo apt-get -y install samba samba-common-bin
 
 #wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
 #unzip distribute-0.7.3.zip
+#cd distribute-0.7.3
 #sudo python setup.py install
 #sudo easy_install pip
 
