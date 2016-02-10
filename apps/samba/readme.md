@@ -2,10 +2,10 @@
  - sudo service smbd restart
  - smbpasswd -a pi 
  - sudo vim /etc/samba/smb.conf
+ - samba port is 139 
    
 ''' 
 	[global]
-
 	workgroup = WORKGROUP //네트워크 공유 그룹 설정
 	encrypt password = true // 암호 설정
 	unix charset = utf-8
@@ -24,4 +24,4 @@
 	public = yes
 	browsable = yes
 	guest ok = no #게스트 계정 접근 허용 여부
-      '''
+'''
