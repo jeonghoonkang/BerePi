@@ -2,7 +2,8 @@
  - sudo service smbd restart
  - smbpasswd -a pi 
  - sudo vim /etc/samba/smb.conf
-   ''' 
+   
+''' 
 	[global]
 
 	workgroup = WORKGROUP //네트워크 공유 그룹 설정
