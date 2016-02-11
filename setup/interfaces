@@ -45,6 +45,7 @@ wpa-group CCMP TKIP
 #in case of WPA, change your SSID, KEY in " ", remain " " symbol
 #   wpa-ssid "TYPE HERE"
 #   wpa-psk "TYPE HERE"
+#be careful, which should have tab space
 
 ############################################################
 # if you want to use Hidden SSID, follow below until ### line
