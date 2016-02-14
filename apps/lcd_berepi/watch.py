@@ -68,6 +68,8 @@ def main():
         whiteLCDon()
         time.sleep(2) 
 
+    #otsdb_restful_put()
+
     retstr = ip_chk()
     retstr = retstr[:-1]
     lcd_string('%s ET' %retstr,LCD_LINE_1,1)
