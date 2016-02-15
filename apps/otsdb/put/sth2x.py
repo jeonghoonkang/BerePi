@@ -70,6 +70,7 @@ def hostname_chk():
     cmd = "hostname"
     return run_cmd(cmd)
 
+# check it, which is not running , thus cancel calling it
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
