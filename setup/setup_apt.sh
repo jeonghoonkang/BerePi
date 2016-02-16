@@ -21,6 +21,7 @@
 #sudo apt-get -y install wicd wicd-curses
 #sudo apt-get -y install samba samba-common-bin
 
+# test cygwin
 #wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
 #unzip distribute-0.7.3.zip
 #cd distribute-0.7.3
