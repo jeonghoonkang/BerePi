@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import httplib
 import time
 conn = httplib.HTTPConnection("10.xxx.xxx.xxxx")
