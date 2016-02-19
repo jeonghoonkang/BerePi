@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import requests
 # Sending e-mail
 def send_email():
