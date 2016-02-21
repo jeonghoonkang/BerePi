@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "watch_sp.py", line 242, in <module>
+    main()
+  File "watch_sp.py", line 74, in main
+    otsdb_restful_put()
+  File "/home/pi/devel/BerePi/apps/otsdb/put/sth2x.py", line 57, in otsdb_restful_put
+    logger.error("http connection error, Too many requests %s")
+NameError: global name 'logger' is not defined
