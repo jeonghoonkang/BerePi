@@ -1,6 +1,8 @@
+
 #!/usr/bin/python
 # Author : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
+# -*- coding: utf-8 -*-
 
 # for the detail of HW connection, see lcd_connect.py
 
