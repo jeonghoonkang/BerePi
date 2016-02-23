@@ -1,4 +1,5 @@
 #Author : jeonghoonkang https://github.com/jeonghoonkang
+# -*- coding: utf-8 -*-
 
 import sys
 sys.path.append("./lib")
