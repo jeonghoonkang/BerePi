@@ -2,6 +2,7 @@
 # Author : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
 # for the detail of HW connection, see lcd_connect.py
+#-*- coding: utf-8 -*-
 
 devel_dir="/home/pi/devel"
 tmp_dir=devel_dir+"/BerePi/apps"
