@@ -1,6 +1,7 @@
 ## This code for HW init
 ## It will show LED Blue ON, 30secs after booting
 ## We can easily check the booting has problem
+#-*- coding: utf-8 -*-
 
 thispath='...BerePi/trunk/apps/led_berepi'
 
