@@ -1,3 +1,4 @@
+# Author : jeonghoonkang, https://github.com/jeonghoonkang
 # event email shot 
 # -*- coding: utf-8 -*-
 import requests
