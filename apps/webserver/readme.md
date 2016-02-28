@@ -39,6 +39,4 @@ pi@mins-gate /var/www/html/pibox $ cat /etc/apache2/apache2.conf
         AllowOverride AuthConfig
         Require all granted
 </Directory>
-
-
 ```
