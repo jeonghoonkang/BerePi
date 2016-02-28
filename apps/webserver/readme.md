@@ -8,7 +8,35 @@
 
 ##### Apache2
  - /var/www/html
- - sudo vim /etc/apache2/sites-available/000-default.conf
- - sudo /etc/init.d/apache2 reload
+ - sudo vim /etc/apache2/apache2.conf
+ - sudo service apache2 restart
  
- 
+```
+pi@mins-gate /var/www/html/pibox $ sudo vim /etc/apache2/apache2.conf
+pi@mins-gate /var/www/html/pibox $ sudo service apache2 restar
+
+pi@mins-gate /var/www/html/pibox $ cat .htaccess
+AuthUserFile /home/pibox/.htpasswd
+AuthType Basic
+AuthName "PiBox"
+Require valid-user
+
+pi@mins-gate /var/www/html/pibox $ cat .htpasswd
+tinyos:$apr1$GkRTSblj$4P5EScc1Ghfp91FM/nuuj0
+
+pi@mins-gate /var/www/html/pibox $ cat /etc/apache2/apache2.conf
+
+<Directory /var/www/>
+        Options Indexes FollowSymLinks
+        AllowOverride AuthConfig
+        Require all granted
+</Directory>
+
+<Directory /home/pibox/>
+        Options Indexes FollowSymLinks
+        AllowOverride AuthConfig
+        Require all granted
+</Directory>
+
+
+```
