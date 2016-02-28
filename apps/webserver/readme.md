@@ -12,7 +12,7 @@
  - sudo service apache2 restart
  - htpasswd -c /usr/uj/jurbanek/.htpasswd john
  - htpasswd /usr/uj/jurbanek/.htpasswd dave
- 
+ - 참고 : http://blog.yojm.net/?p=94
 ```
 pi@mins-gate /var/www/html/pibox $ sudo vim /etc/apache2/apache2.conf
 pi@mins-gate /var/www/html/pibox $ sudo service apache2 restar
