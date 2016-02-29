@@ -17,7 +17,7 @@
  - 참고 : http://blog.yojm.net/?p=94
 ```
 pi@mins-gate /var/www/html/pibox $ sudo vim /etc/apache2/apache2.conf
-pi@mins-gate /var/www/html/pibox $ sudo service apache2 restar
+pi@mins-gate /var/www/html/pibox $ sudo service apache2 restart
 
 pi@mins-gate /var/www/html/pibox $ cat .htaccess
 AuthUserFile /home/pibox/.htpasswd
