@@ -1,5 +1,7 @@
-#### web server 
+#### Web server, 웹기반 서비스 제공
+
 ##### Web2Py
+ - 다양한 Python code 를 실행시킬 수 있는 시스템
  - sensor LCD display
  - put / get interface 
   - put : input to DB
