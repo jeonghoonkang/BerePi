@@ -1,3 +1,6 @@
+#### apache2 web server log 파일 샘플
+
+'''
 59.9.146.51 - work [01/Mar/2016:18:09:11 +0900] "GET /pibox/workfile/d-day/%eb%94%a5%eb%9f%ac%eb%8b%9d_%ec%97%90%eb%84%88%ec%a7%80_100(%ec%82%ac%ec%97%85%ed%99%94)_v000.hwp HTTP/1.1" 200 2938670 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.36"
 59.9.146.51 - work [01/Mar/2016:18:10:16 +0900] "GET /pibox/workfile/d-day/%eb%94%a5%eb%9f%ac%eb%8b%9d_%ec%97%90%eb%84%88%ec%a7%80_100(%ec%82%ac%ec%97%85%ed%99%94)_v000.hwp HTTP/1.1" 404 563 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.36"
 59.9.146.51 - work [01/Mar/2016:18:10:35 +0900] "GET /pibox/workfile/d-day/ HTTP/1.1" 200 915 "http://iot.iptime.org/pibox/workfile/" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.36"
@@ -20,3 +23,4 @@
 60.23.67.41 - - [01/Mar/2016:19:25:42 +0900] "GET / HTTP/1.1" 200 11417 "-" "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)"
 60.23.67.41 - - [01/Mar/2016:19:25:42 +0900] "GET / HTTP/1.1" 200 11416 "http://59.9.146.51/" "Mozilla/4.0 (compatible; MSIE 9.0; Windows NT 6.1; 2Pac; .NET CLR 2.0.50727; .NET CLR 3.0.04506.648; .NET CLR 3.5.21022)"
 54.163.211.44 - - [01/Mar/2016:19:37:29 +0900] "GET / HTTP/1.1" 200 11380 "-" "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; InfoPath.2)"
+'''
