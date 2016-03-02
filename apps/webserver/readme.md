@@ -13,6 +13,7 @@
  - sudo vim /etc/apache2/apache2.conf
  - sudo service apache2 restart
  - htpasswd -c /usr/uj/jurbanek/.htpasswd john
+ - htpasswd -D /usr/uj/jurbanek/.htpasswd john
  - htpasswd /usr/uj/jurbanek/.htpasswd dave
  - 참고 : http://blog.yojm.net/?p=94
 ```
