@@ -7,7 +7,11 @@ def run_cmd(cmd):
     output = p.communicate()[0]
     return output
 
-def mac_chk():
-    cmd = "ifconfig -a | grep ^eth | awk '{print $5}'"
-    macAddr = run_cmd(cmd)
-    return macAddr
+def getip():
+    cmd = "curl http://checkip.amazonaws.com"
+    ip = run_cmd(cmd)
+    return ip
+
+if __name__ == '__main__':
+    ip = getip()
+    print "My Public IP is ", ip
