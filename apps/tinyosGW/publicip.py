@@ -18,13 +18,20 @@ def getip():
 if __name__ == '__main__':
     ip = getip()
     print "My Public IP is ", ip
-    cmd_100 = "ssh pi@.iptime.org "
-    cmd_010 = "echo %s is Lab Server Room IP " %ip[:-1]
+    cmd = "mkdir -p /home/tinyos/my_deamon/output"
+    print run_cmd(cmd)
+    cmd = "cd /home/tinyos/my_deamon/output"
+    print run_cmd(cmd)
+    #cmd = "touch /home/tinyos/my_deamon/output"
+    cmd_100 = "ssh pi@iot.iptime.org "
+    cmd_010 = "cd my_deamon/output && echo %s is Lab Server Room IP " %ip[:-1]
     cmd_001 = " | cat > ip.html" 
-    cmd = cmd_100 + cmd_010 + cmd_001  
+    cmd = cmd_010 + cmd_001  
+    print run_cmd(cmd)
+
+    cmd_200 = "scp pi@iot.iptime.org "
+    cmd = "scp" + " ip.html" + " pi@iot.iptime.org:" + "www/cog" 
     print cmd
     print run_cmd(cmd)
-    cmd = cmd_100 + "mv ip.html www/cog/"
-    print cmd
-    print run_cmd(cmd)
+
     
