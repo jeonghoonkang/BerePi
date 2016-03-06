@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# Author : jeonghoonkang, https://github.com/jeonghoonkang
+#-*- coding: utf-8 -*-
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
