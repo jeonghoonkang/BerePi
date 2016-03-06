@@ -2,6 +2,9 @@
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 #-*- coding: utf-8 -*-
 
+from subprocess import *
+from types import *
+
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
