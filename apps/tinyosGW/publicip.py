@@ -18,7 +18,7 @@ def getip():
 if __name__ == '__main__':
     ip = getip()
     print "My Public IP is ", ip
-    cmd_100 = "ssh pi@iot.iptime.org "
+    cmd_100 = "ssh pi@.iptime.org "
     cmd_010 = "echo %s is Lab Server Room IP " %ip[:-1]
     cmd_001 = " | cat > ip.html" 
     cmd = cmd_100 + cmd_010 + cmd_001  
