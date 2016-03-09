@@ -1,4 +1,5 @@
 ## This code for LED BD 00
+#-*- coding: utf-8 -*-
 
 import serial,os,time
 import sys
