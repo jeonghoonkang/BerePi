@@ -6,4 +6,6 @@
   - Monitoring
   - Remote control
   - Consumption Estimation
+  - Network repeater
+  - 
 
