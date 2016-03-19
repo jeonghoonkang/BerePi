@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 # code from http://www.emsystech.de/raspi-sht21
 # http://github.com/jeonghoonkang
 
