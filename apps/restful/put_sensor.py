@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import serial,os,time
 import sys
 import RPi.GPIO as GPIO
