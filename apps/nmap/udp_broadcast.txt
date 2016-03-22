@@ -1,0 +1,1 @@
+broadcastIp = ~WiFi.subnetMask() | WiFi.gatewayIP();
