@@ -1,6 +1,6 @@
 
 # -*- coding: utf-8 -*-
-## Author : github.com/jeonghoonkang
+# Author : Jeonghoonkang, github.com/jeonghoonkang
 
 import serial,os,time
 import sys
