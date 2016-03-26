@@ -25,6 +25,7 @@
 #sudo apt-get -y install php5 libapache2-mod-php5 
 #sudo apt-get -y install mysql-server php5-mysql
 #sudo apt-get -y install postfix
+#sudo apt-get -y install rrdtool
 
 # test cygwin
 #wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
