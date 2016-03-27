@@ -116,6 +116,12 @@ sudo apt-get dist-upgrade
   - git commit -m "Initial commit"
   - git push -u origin master
   
+
+### systemctl
+  - sudo systemctl status networking.service
+    - /lib/systemd/system/networking.service.d
+    - |- network-pre.conf
+    
   
   
 
