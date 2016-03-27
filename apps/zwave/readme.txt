@@ -11,3 +11,6 @@ https://www.domotiga.nl/projects/domotiga/wiki/Z-Wave_OpenZWave#Configuration
 
 https://www.domotiga.nl/projects/domotiga/wiki/DomotiGa_Installation
 static controller
+
+open-zwave-control-panel compile
+-Wno-deprecated-declarations
