@@ -18,7 +18,7 @@
   - 마우스로, 제어할 플러그를 선택하면 아래에 Current Values 들이 보여짐
     - Switch 항목을 off / on 을 토글하면 플러그가 원격 제어됨
     
-  - 스크린샷 : https://github.com/jeonghoonkang/BerePi/blob/master/apps/zwave/zwave-control-panel-run.png
+  - https://github.com/jeonghoonkang/BerePi/blob/master/apps/zwave/zwave-control-panel-run.png
       
 #### 설치참고
 
