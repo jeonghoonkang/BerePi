@@ -20,6 +20,10 @@
     
   - https://github.com/jeonghoonkang/BerePi/blob/master/apps/zwave/zwave-control-panel-run.png
       
+#### 개발관련
+  - /home/pi/install/openzwave-control-panel/ 안에 html 코드와 Ajax 코드들이 있음
+
+
 #### 설치참고
 
 https://www.domotiga.nl/projects/domotiga/wiki/Z-Wave_OpenZWave#Configuration
