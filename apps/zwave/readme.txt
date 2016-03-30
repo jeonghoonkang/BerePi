@@ -17,8 +17,8 @@
     
   - 마우스로, 제어할 플러그를 선택하면 아래에 Current Values 들이 보여짐
     - Switch 항목을 off / on 을 토글하면 플러그가 원격 제어됨
-    
-  - https://github.com/jeonghoonkang/BerePi/blob/master/apps/zwave/zwave-control-panel-run.png
+  - 화면 캡처  
+    - https://github.com/jeonghoonkang/BerePi/blob/master/apps/zwave/zwave-control-panel-run.png
       
 #### 개발관련
   - ozwcp 를 미들웨어로 사용하고, port 55555 를 통해서 post 명령(requests API)으로 제어와 데이터 수집을 할 수 있을것 같음
