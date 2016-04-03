@@ -2,5 +2,5 @@
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
 # using ozcp daemon for contorl and monitoring
-# ozwc
+# ozwc with Restful API, requests package
 
