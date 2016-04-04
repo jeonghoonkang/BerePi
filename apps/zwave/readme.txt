@@ -24,6 +24,7 @@
   - ozwcp 를 미들웨어로 사용하고, port 55555 를 통해서 post 명령(requests API)으로 제어와 데이터 수집을 할 수 있을것 같음
   - /home/pi/install/openzwave-control-panel/ 안에 html 코드와 Ajax 코드들이 있음
   - https://github.com/OpenZWave/open-zwave-control-panel/blob/master/cp.html
+  - CGI 등의 입력 방법 확인 필요
   - 시스템 통합 개발
 
 
