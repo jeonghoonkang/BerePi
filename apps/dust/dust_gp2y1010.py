@@ -1,3 +1,7 @@
+
+# -*- coding: utf-8 -*-
+# Author : Jeonghoonkang, github.com/jeonghoonkang
+
 import time
 import sys
 #import adc_mcp3008 
