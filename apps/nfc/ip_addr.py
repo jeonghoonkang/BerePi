@@ -1,7 +1,9 @@
 #!/usr/bin/python
+
+#-*- coding: utf-8 -*-
 # Author : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
-#-*- coding: utf-8 -*-
+
 
 import RPi.GPIO as GPIO
 import time, os
