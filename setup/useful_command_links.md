@@ -1,4 +1,7 @@
 
+## Xubuntu 한글 설정
+  - sudo apt install language-selector-gnome
+
 ## LINKS 
   - cygwin
     - https://github.com/digitallamb/apt-cyg
