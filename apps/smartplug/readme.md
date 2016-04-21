@@ -1,6 +1,7 @@
 #### Plug system
   - Measurements
   - Control
+  - Alarm
   
 #### Application
   - Monitoring
