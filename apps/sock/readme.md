@@ -1,5 +1,5 @@
 #### Check sock connectivity 
- - test
+ - check performance
 #### Sending test packets to server
  - test
 #### Packet Generator by JAVA
