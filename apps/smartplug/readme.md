@@ -8,4 +8,5 @@
   - Remote control
   - Consumption Estimation
   - Network repeater
+  - server to server API
   
