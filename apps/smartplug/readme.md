@@ -5,6 +5,7 @@
   
 #### Application
   - Monitoring
+  - Prediction
   - Remote control
   - Consumption Estimation
   - Network repeater
