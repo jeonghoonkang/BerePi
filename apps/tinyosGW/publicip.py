@@ -1,10 +1,9 @@
+
 #!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 #-*- coding: utf-8 -*-
 
 from subprocess import *
-# 입력
-
 from types import *
 
 def run_cmd(cmd):
