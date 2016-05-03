@@ -1,5 +1,5 @@
 ## BerePi
-now supports Raspbian Jessie (2016.04.30)
+now supports Raspbian Jessie (2016.04.30), with RaspBerryPi3
 
 #### Wiki
   - OS installation and setup to run fort the SDH sensors
