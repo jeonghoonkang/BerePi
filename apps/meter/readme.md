@@ -3,6 +3,7 @@
   - 전력측정 
     - JSON 인터페이스
     - 시스템 통합
+    - CT 센서
     
   - 미터기 API
     - http://125.7.128.53:4242/api/query?start=2015/06/26-00:00:00&m=sum:gyu_RC1_etype.t_current{nodeid=911}
