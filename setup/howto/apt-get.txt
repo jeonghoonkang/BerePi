@@ -27,3 +27,6 @@
 
 참고)   apt-get install 명령어로 받은 deb 파일의 저장 위치           /var/cache/apt/archive/
         위 폴더에 .deb 패키지파일로 저장됨
+
+
+
