@@ -1,6 +1,8 @@
-##
 ## This code for LEDs on T110 BereCO2
-## 
+
+# -*- coding: utf-8 -*-
+# Author : Kowonsik, github.com/kowonsik
+# Author : Jeonghoonkang, github.com/jeonghoonkang
 
 thispath='...BerePi/apps/BereCO2/lib/'
 
