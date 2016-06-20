@@ -1,6 +1,6 @@
 ## BerePi
 ##### 개발자
-  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (https://github.com/sukunkim), and YOU
+  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (https://github.com/sukunkim)
 
 ### Wireless Sensor Network (WSN) using RaspberryPi 
 
