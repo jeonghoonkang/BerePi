@@ -30,6 +30,8 @@ MAILTO=tinyos
 
 ### if you want to check last booting time
 ###
+# ls /var/log/dmesg
+# or
 # ll --time-style=long-iso /var/log/dmesg | awk '{print $6" "$7}'
 ###
 ###
