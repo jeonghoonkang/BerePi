@@ -1,5 +1,4 @@
 ## BerePi
-
 now supports Raspbian Jessie (2016.04.30), with RaspBerryPi3
 
 #### Wiki
