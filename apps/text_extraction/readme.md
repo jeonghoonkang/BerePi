@@ -12,4 +12,8 @@
 #### 저장
   - HADOOP
   - File System
+  - DB
+   
+  
+
   
