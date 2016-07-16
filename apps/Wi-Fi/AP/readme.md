@@ -1,5 +1,5 @@
 
-##### Wi-Fi AP / Raspi-WiAP-WSGW
+##### Raspi-WiAP-WSGW / Wi-Fi AP 
 
 - 라즈베리파이를 이용한 Wi-Fi AP 기능과 WSN GW 동시 실행
   - Wi-Fi, USB dongle 을 사용함
