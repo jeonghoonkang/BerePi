@@ -1,3 +1,7 @@
+
+# -*- coding: utf-8 -*-
+# Author : Jeonghoonkang, github.com/jeonghoonkang
+
 ## This code for LEDs on T110 BereCO2
 
 thispath='...BerePi/apps/BereCO2post/lib/'
