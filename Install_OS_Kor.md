@@ -1,7 +1,6 @@
 
 - Image 설치 : 2015년 6월 26일 버전, 최근 버전 설치 
   - <pre> <http://125.7.128.54:8070/wordpress/pub/devel/raspi> </pre>
-  - <pre> <http://125.7.128.54:8070/wordpress/pub/devel/raspi> </pre>
 
 - 설치후, sudo raspi-config 로 Hostname 을 PLUG-1001 등으로 설정해야 함
   - 1 : 1 차실증
