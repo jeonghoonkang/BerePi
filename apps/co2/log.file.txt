@@ -1,3 +1,5 @@
+
+
 2015-06-09 01:37:34,441 - co2.ws - INFO - http ret <Response [204]>
 2015-06-09 01:37:39,250 - co2.ws - INFO - co2.ws CO2 Level is 561 ppm
 2015-06-09 01:37:39,570 - co2.ws - INFO - http ret <Response [204]>
