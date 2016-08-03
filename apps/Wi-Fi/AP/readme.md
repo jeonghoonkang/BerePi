@@ -1,7 +1,7 @@
 
 ##### Raspi-WiAP-WSGW / Wi-Fi AP 
 
-- 라즈베리파이를 이용한 Wi-Fi AP 기능과 WSN GW 동시 실행
+- 라즈베리파이를 이용한 Wi-Fi AP 기능과 WSN, IoT GW 동시 실행
   - Wi-Fi, USB dongle 을 사용함
   - raspberryPi 3 의 경우는 내장형 
   - Kmote USB I/F 연결 
