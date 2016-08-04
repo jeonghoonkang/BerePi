@@ -14,7 +14,7 @@
   - staticroot 와 cachedir 의 퍼미션 확인해야 함
   
 #### OpenTSDB 2.1 이미지 파일
-- http://106.252.229.57:6500/fbsharing/Vyck0KF8
+- http://106.252.229.57:6500/fbsharing/Vyck0KF8 (링크 오류)
 
 
 
