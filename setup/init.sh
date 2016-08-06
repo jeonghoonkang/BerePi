@@ -5,6 +5,7 @@
 echo "Help: source init.sh co <-- checkout" 
 echo "      source init.sh up <-- update" 
 
+
 export gitdnpath='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup'
 
 if [ $1 = 'co' ]; 
