@@ -27,7 +27,7 @@ MAILTO=tinyos
 
 # m h  dom mon dow   command
 35 3 * * * sudo service stalk restart
-50 3 * * * sudo reboot
+40 3 * * * sudo reboot
 
 ### if you want to check last booting time of system
 ###
