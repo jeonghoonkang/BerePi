@@ -119,7 +119,7 @@ def lastMonthValue(nodeid) :
     print ', considering ' + _2month_before[:10]
     print
     
-    dbip="125.7.128.53:4242"
+    dbip="...53:4242"
    
     _2month_before_30 = _2month_before
 
@@ -250,7 +250,7 @@ dates = [[], [], [], [], [], [], []]
 x = [[], [], [], [], [], [], []]
 row, datetime_ = [], []
 # delete due to MySQL
-#db = MySQLdb.connect("125.7.128.51", "keti", "keti123!@#", "PEAKSAVE")
+#db = MySQLdb.connect("...51", "keti", "keti123!@#", "PEAKSAVE")
 #cursor = db.cursor()
 
 EtypeId = 911
@@ -262,9 +262,9 @@ ret = ret + "Pay check day is " + str(payCountDay) + " " + "<br>"
 nodeid = EtypeId 
 
 # important functions are here
-# (fun) lastMonthValue(nodeid)
-# (fun) calcPay(meterVal)
-# (fun) currentMonthValue(nodeid)
+# (func) lastMonthValue(nodeid)
+# (func) calcPay(meterVal)
+# (func) currentMonthValue(nodeid)
 
 # current_etype = get_last_value(dbip,'gyu_RC1_etype.current',{'nodeid':'911'})
 # current_tot_etype = get_last_value(dbip,'gyu_RC1_etype.t_current',{'nodeid':'911'})
