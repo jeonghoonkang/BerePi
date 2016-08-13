@@ -1,4 +1,7 @@
 
+- 911 meter 적용 방법
+    - 라즈베리파이 CGI 인터페이스로 데이터 처리, 표현
+    - RESTful API, MySQL API 지원 
 
   - 전력측정 방법
     - JSON 인터페이스
