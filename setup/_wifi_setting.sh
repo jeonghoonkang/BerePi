@@ -63,6 +63,7 @@ fi
 #echo "Setting Lockfile"
 echo $$ > $lockfile
 
+
 # We can perform check wifi
 echo "Performing Network check for $wlan"
 if sudo ifconfig $wlan | grep -q "inet addr:" ; then
