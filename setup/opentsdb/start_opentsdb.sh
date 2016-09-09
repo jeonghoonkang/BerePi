@@ -5,5 +5,3 @@
 # please check the path of openTSDB
 
 /usr./build/tsdb tsdb --port=4242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/data --auto-metric
-
-
