@@ -17,14 +17,13 @@
 	path = /home   #공유할 폴더 경로
 	valid user = pi  #smbpasswd 에서 설정한 유저
 	browseable = yes 
-	comment=max/samba
 	read only = no #읽기 전용 여부
 	writable = yes #쓰기 권한 여부
-	printable = no
 	public = yes
 	browsable = yes
 	guest ok = no #게스트 계정 접근 허용 여부
 </pre>
 
+  - sudo smbpasswd {user, tinyos} 
   - sudo service smbd restart
   
