@@ -25,3 +25,6 @@
 	browsable = yes
 	guest ok = no #게스트 계정 접근 허용 여부
 </pre>
+
+  - sudo service smbd restart
+  
