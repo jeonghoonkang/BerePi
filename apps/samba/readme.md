@@ -24,6 +24,7 @@
 	guest ok = no #게스트 계정 접근 허용 여부
 </pre>
 
-  - sudo smbpasswd {user, tinyos} 
+  - sudo smbpasswd {user, tinyos}
+    - check option of -a 
   - sudo service smbd restart
   
