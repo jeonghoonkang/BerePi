@@ -1,5 +1,5 @@
 
-##### Hint for setup
+##### Hint for setup, SSH
   - $(cat ~/.ssh/id_rsa.pub) >>/etc/dropbear/authorized_keys;chmod 0600 /etc/dropbear/authorized_keys
 
 ````sh
