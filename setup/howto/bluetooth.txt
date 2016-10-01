@@ -1,7 +1,5 @@
 
 
-sudo apt-get install --no-install-recommends bluetooth.
-
-sudo service bluetooth status.
-
-hcitool scan
+ - sudo apt-get install --no-install-recommends bluetooth.
+ - sudo service bluetooth status.
+ - hcitool scan
