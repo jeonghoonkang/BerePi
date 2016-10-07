@@ -8,3 +8,6 @@
     cgitb.enable()    print("Content-Type: text/html;charset=utf-8\r\n")
     print()    print("Hello World!")
 </pre>
+
+ - 설정이 잘못되면 http 1.1 500 에러 발생 
+ 
