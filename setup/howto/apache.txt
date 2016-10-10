@@ -1,6 +1,9 @@
 
  - tail -f /var/log/apache2/error.log
  
+ 
+ ### CGI configuration for Python
+ #### python code 
 <pre> 
     #!/usr/bin/env python
     # -*- coding: UTF-8 -*-# enable debugging
@@ -10,4 +13,6 @@
 </pre>
 
  - 설정이 잘못되면 http 1.1 500 에러 발생 
+ 
+ 
  
