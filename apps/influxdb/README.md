@@ -1,5 +1,5 @@
 # InfluxDB
 
-## 설
+## 설치
 
-* [참고자](https://docs.influxdata.com/influxdb/v1.0/introduction/installation/)
+* [참고자료]()
