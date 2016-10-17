@@ -1,8 +1,5 @@
 
-
-
   * github 
     * fork 사용법
       - https://dogfeet.github.io/articles/2012/how-to-github.html
-  
   
