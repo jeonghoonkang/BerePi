@@ -29,8 +29,8 @@ sudo vim /etc/modules
 i2c-bcm2708
 i2c-dev
 ```
-수정된 파일은 다음과 같음
-![edit modules](https://learn.adafruit.com/assets/3054)
+수정된 파일이 아래와 같은지 확인
+![edit modules](https://cdn-learn.adafruit.com/assets/assets/000/003/054/original/learn_raspberry_pi_editing_modules_file.png)
 
 ```
 sudo vim /etc/modprobe.d/raspi-blacklist.conf
@@ -40,6 +40,8 @@ sudo vim /etc/modprobe.d/raspi-blacklist.conf
 blacklist spi-bcm2708
 blacklist i2c-bcm2708
 ```
+수정된 파일이 아래와 같은지 확인
+![raspi-blacklist.conf](https://cdn-learn.adafruit.com/assets/assets/000/003/860/original/learn_raspberry_pi_blacklist.png)
 
 ## 실행
 
