@@ -43,10 +43,21 @@ blacklist i2c-bcm2708
 수정된 파일이 아래와 같은지 확인
 ![raspi-blacklist.conf](https://cdn-learn.adafruit.com/assets/assets/000/003/860/original/learn_raspberry_pi_blacklist.png)
 
+```
+sudo vim /boot/config.txt
+```
+
+## 파일
+
+- inBerePi.py : 실행파일
+- tsdb.py : influxdb 모듈
+- logger.py : python logging 모듈
+- /lib/sht25.py : sht25 온도/습도 모듈
+
 ## 실행
 
 ```
 sudo python inBerePi.py
 ```
 
-* [참고자료]()
+* [I2C 참고자료](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c)
