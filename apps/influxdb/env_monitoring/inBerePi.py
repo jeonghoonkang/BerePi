@@ -26,6 +26,19 @@ def influxdbwrite(obj=None):
 	tr.write(value=obj['value'], tag=obj['type'], meta=metadata, timestamp=ctx['time'])
 	tr.flush()
 
+def get_TH(sensor, t=None):
+	try:
+		if t is 1:
+			temp = sensor.read_temperature()
+			return temp
+		elif t is 2:
+			humi = sensor.read_humidity()
+			return humi
+		else:
+			return False
+	except:
+		return False
+
 def get_CO2(sensor):
 	try:
 		co2 = sensor.read_co2()
@@ -39,20 +52,25 @@ def readData():
 	cdo = t110.T110()
 
 	while True:
-		temp = th.read_temperature()
-		humi = th.read_humidity()
+		#temp = th.read_temperature()
+		#humi = th.read_humidity()
 		#co2 = cdo.read_co2()
 
 		data['hostname'] = socket.gethostname()
-		data['value'] = temp
-		data['type'] = 'temp'
-		influxdbwrite(data)
-		time.sleep(.1)
 
-		data['value'] = humi
-		data['type'] = 'humi'
-		influxdbwrite(data)
-		time.sleep(.1)
+		temp = get_TH(th, 1)
+		if temp:
+			data['value'] = temp
+			data['type'] = 'temp'
+			influxdbwrite(data)
+			time.sleep(.1)
+
+		humi = get_TH(th, 2)
+		if humi:
+			data['value'] = humi
+			data['type'] = 'humi'
+			influxdbwrite(data)
+			time.sleep(.1)
 
 		co2 = get_CO2(cdo)
 		if co2:

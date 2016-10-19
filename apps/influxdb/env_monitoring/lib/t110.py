@@ -80,7 +80,7 @@ class T110:
 		self.ppm = self._get_buffer(in_byte)
 	    else:
 		self.ppm = False
-	    print self.ppm
+	    #print self.ppm
 
 	    return self.ppm
 
@@ -94,7 +94,7 @@ class T110:
 		ppm += (int(_buffer[4])) * 10
 	    if not (_buffer[5] is ' '):
 		ppm += (int(_buffer[5]))  
-	    print ppm
+	    #print ppm
 	    return ppm
 
 
