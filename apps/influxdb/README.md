@@ -24,7 +24,7 @@ sudo service grafana-server start
 
 ## 정보
 
-grafana 접속 포트 : 3000
-계정 : admin / admin
+  grafana 접속 포트 : 3000
+  계정 : admin / admin
 
 * [참고자료]()
