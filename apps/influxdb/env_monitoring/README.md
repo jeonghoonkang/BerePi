@@ -8,7 +8,7 @@
 ### 1) I2C tools 설치
 
 ```
-sudo apt-get update && sudo apt-get instlal python-smbus i2c-tools
+sudo apt-get update && sudo apt-get install python-smbus i2c-tools
 ```
 
 ### 2) raspi-config 를 사용해서 I2C 사용하기
