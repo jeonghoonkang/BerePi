@@ -27,4 +27,4 @@ sudo service grafana-server start
 * grafana 접속 포트 : 3000
 * 계정 : admin / admin
 
-* [참고자료]()
+* [참고자료](github.com/fg2it/grafana-on-raspberry/)
