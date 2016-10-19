@@ -16,8 +16,8 @@ sudo apt-get update && sudo apt-get instlal python-smbus i2c-tools
 ```
 sudo raspi-config
 ```
-8.Advanced Options > A7.I2C > YES > YEs
-and reboot!
+`8.Advanced Options > A7.I2C > YES > YES`
+그리고 재시작한다.
 
 ### 3) 시스템에서 I2C 모듈을 사용할 수 있도록 설정을 수정
  
@@ -72,7 +72,7 @@ sudo i2cdetect -y 1
 - inBerePi.py : 실행파일
 - tsdb.py : influxdb 모듈
 - logger.py : python logging 모듈
-- lib/sht25.py : sht20/sht25 온도/습도 모듈
+- lib/sht25.py : sht20,sht25 온도,습도 모듈
 
 ## 실행
 
