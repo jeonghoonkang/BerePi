@@ -29,11 +29,10 @@ class Transaction(object):
         self.__measurement = measurement
         self.__points = []
 
-    def write(self, value=0, meta=None, tag={"tag":None}, timestamp=None):
+    def write(self, value=0, meta=None, tag=None, timestamp=None):
         assert isinstance(value, (int, long, float))
         assert meta is None or isinstance(meta, (str, unicode))
         assert timestamp is None or isinstance(timestamp, (int, long))
-        assert isinstance(tag, dict)
 
         if timestamp is None:
             t = int(time.time() * 1000000 * 1000)  # to microseconds
@@ -61,7 +60,11 @@ class Transaction(object):
                 data = [
                   {
                     "measurement": self.__measurement,
-                    "tags": self.__tag,
+                    "tags": {
+		        "tag": self.__tag,
+		        "device": 'rpi',
+		        "sensor": 'sht20'
+	  	    },
 	            "time": self.__time,
                     "fields": {
 		        "value": self.__value,

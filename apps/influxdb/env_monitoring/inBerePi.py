@@ -6,7 +6,6 @@ import socket
 import sys
 import tsdb
 sys.path.append('../../sdb/')
-#import lib.sht25 as sht25
 import sht25
 import lib.t110 as t110
 
@@ -18,15 +17,9 @@ def influxdbwrite(obj=None):
         ctx['id'] = str(1)
 
 	measurement = "%s.%s" % (obj['hostname'], obj['type'])
-	metadata = "\
-		device= rpi2,\
-		sensor= %s,\
-		user=   sinbinet\
-	" % (obj['type'])
-	metadata = metadata.replace(" ", "") 
 
 	tr = tsdb.Transaction(measurement)
-	tr.write(value=obj['value'], tag=obj['type'], meta=metadata, timestamp=ctx['time'])
+	tr.write(value=obj['value'], tag=obj['tag'], meta=obj['metadata'], timestamp=ctx['time'])
 	tr.flush()
 
 def get_TH(sensor, t=None):
@@ -55,16 +48,18 @@ def readData():
 	cdo = t110.T110()
 
 	while True:
-		#temp = th.read_temperature()
-		#humi = th.read_humidity()
-		#co2 = cdo.read_co2()
-
 		data['hostname'] = socket.gethostname()
+		data['tag'] = {
+			'device' : 'rpi2',
+			'user'   : 'sinbinet',
+		}
 
 		temp = get_TH(th, 1)
 		if temp:
 			data['value'] = temp
 			data['type'] = 'temp'
+			data['tag']['sensor'] = 'temp'
+			data['metadata'] = str(data['tag']).replace(':', '=')
 			influxdbwrite(data)
 			time.sleep(.1)
 
@@ -72,6 +67,8 @@ def readData():
 		if humi:
 			data['value'] = humi
 			data['type'] = 'humi'
+			data['tag']['sensor'] = 'humi'
+			data['metadata'] = str(data['tag']).replace(':', '=')
 			influxdbwrite(data)
 			time.sleep(.1)
 
@@ -79,6 +76,8 @@ def readData():
 		if co2:
 			data['value'] = co2
 			data['type'] = 'co2'
+			data['tag']['sensor'] = 'co2'
+			data['metadata'] = str(data['tag']).replace(':', '=')
 			influxdbwrite(data)
 
 		print temp, humi, co2
