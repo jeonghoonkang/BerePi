@@ -72,7 +72,6 @@ sudo i2cdetect -y 1
 - inBerePi.py : 실행파일
 - tsdb.py : influxdb 모듈
 - logger.py : python logging 모듈
-- lib/sht25.py : sht20,sht25 온도,습도 모듈
 - lib/t110.py : T110 이산화탄소 모듈
 
 ## 실행
