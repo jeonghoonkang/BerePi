@@ -33,10 +33,10 @@ tr = tsdb.Transaction(<measurement>)
 tr.write(value=<int, long, float>, meta=<str>, tag=<dict>, timestamp=<int, long>)
 tr.flush()
 ```
-1) tsdb.py 를 import 한다.
-2) tr.Transaction() 함수 : series 을 지정한다 (해당 series 가 없어도 됨)
-3) tr.write() 함수 : 저장할 값을 넘김, 저장하지 않을 값은 비워도 됨
-4) tr.flush() 함수 : influxdb 에 저장
+1. tsdb.py 를 import 한다.
+2. tr.Transaction() 함수 : series 을 지정한다 (해당 series 가 없어도 됨)
+3. tr.write() 함수 : 저장할 값을 넘김, 저장하지 않을 값은 비워도 됨
+4. tr.flush() 함수 : influxdb 에 저장
 
 
 # Grafana
