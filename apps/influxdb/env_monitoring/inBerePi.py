@@ -3,8 +3,11 @@
 
 import time, json, math
 import socket
+import sys
 import tsdb
-import lib.sht25 as sht25
+sys.path.append('../../sdb/')
+#import lib.sht25 as sht25
+import sht25
 import lib.t110 as t110
 
 def influxdbwrite(obj=None):
