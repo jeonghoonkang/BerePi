@@ -19,10 +19,10 @@ sudo service influxdb start
     - tag
 ```
 * database : DBMS 의 database 와  같음
-* measurement : table 과 같음 (이전 버전의 series)
-* time : timestamp (unixtime)
-* field : value, meta 로 구성
-* tags : 인덱스 값
+* measurement : DBMS 의 table 과 같음
+* time : timestamp (nano sec)
+* field : reading 로 구성
+* tags : 인덱스 값으로 검색에 사용됨
 
 ## 사용법
 

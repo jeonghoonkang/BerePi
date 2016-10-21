@@ -17,7 +17,7 @@ def influx_client():
     global __tsdb_client
     if not __tsdb_client:
         #__tsdb_client = influxdb.InfluxDBClient('localhost', 8086, 'pdmuser', 'pdmuser', 'pdm')
-        __tsdb_client = influxdb('localhost', 8086, 'root', 'root', 'pdm')
+        __tsdb_client = influxdb('localhost', 8086, 'root', 'root', 'sensing')
 
     return __tsdb_client
 
@@ -31,7 +31,7 @@ class Transaction(object):
 
     def write(self, value=0, meta=None, tag={"tag":None}, timestamp=None):
         assert isinstance(value, (int, long, float))
-        assert meta is None or isinstance(meta, (str, unicode))
+        #assert meta is None or isinstance(meta, (str, unicode))
         assert timestamp is None or isinstance(timestamp, (int, long))
         assert isinstance(tag, dict)
 
@@ -64,8 +64,7 @@ class Transaction(object):
                     "tags": self.__tag,
 	            "time": self.__time,
                     "fields": {
-		        "value": self.__value,
-		        "meta": self.__meta
+		        "reading": self.__value,
 	            },
                   }
 	        ]
