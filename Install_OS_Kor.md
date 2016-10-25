@@ -1,4 +1,3 @@
-
 - Image 설치 : 2015년 6월 26일 버전, 최근 버전 설치 
   - <pre> <http://125.7.128.54:8070/wordpress/pub/devel/raspi> </pre>
 
