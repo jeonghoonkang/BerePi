@@ -5,7 +5,7 @@
 import requests
 # Try running this locally.
 def send_email():
-  print "email sending..."
+  print "email sending....."
 
 # temperature check
 # when out range of temp. send email
