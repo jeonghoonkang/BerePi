@@ -1,4 +1,5 @@
 
+
 ## ADXL345 driver for Raspi##
 Description : Accel. / Vibration sensor
 
