@@ -1,9 +1,8 @@
 ### Check apache web server access history
  - tail -f /var/log/apache2/error.log
  
- 
- ### CGI configuration for Python
- #### python code 
+### CGI configuration for Python
+#### python code 
 <pre> 
     #!/usr/bin/env python
     # -*- coding: UTF-8 -*-# enable debugging
