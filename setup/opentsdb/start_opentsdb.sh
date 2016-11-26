@@ -1,4 +1,3 @@
-
 # author : https://github.com/jeonghoonkang
 # this shell file should run by root "sudo -s"
 # please check the path of openTSDB
