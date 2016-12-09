@@ -1,5 +1,4 @@
-# InfluxDB
-
+# InfluxDB 메뉴얼
 ## 동작확인 방법
 
 
