@@ -83,7 +83,6 @@
     - 멀티 링크
     - RF interference 혹은 broken link 관리 등
 
-
 ### 향후 계획
   1. 세부 목표
     - 슬레이브 노드 패키지 개발
