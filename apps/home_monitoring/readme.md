@@ -8,12 +8,8 @@
  - 909 : 
  
  - 911 : etype 미터
- 
  - 926 : CO2, 공부방
   
-
-
-
 #### warning CH 25, GID 0x14
 PFLAGS += -DCC2420_DEF_CHANNEL=25  #multi-hop
 PFLAGS += -DDEFAULT_LOCAL_GROUP=0x14
