@@ -1,4 +1,3 @@
-
 export tmppath=/home/pi/devel/BerePi/apps/lcd_berepi
 cd $tmppath
 
