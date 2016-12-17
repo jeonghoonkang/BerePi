@@ -1,4 +1,3 @@
-
 ##### apache2 web server log 파일 샘플
  - tail -fn 30 /var/log/apache2/access.log
  - 데이터 분석 
