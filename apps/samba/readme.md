@@ -28,3 +28,40 @@
     - check option of -a 
   - sudo service smbd restart
   
+
+
+
+
+smb.conf
+
+
+2
+ 
+yes, removing security = share and reinstalling fixed the problem. Many thanks. – TarekEldeeb Apr 26 at 23:14
+
+
+
+pi@mins-gate ~ $ sudo ufw allow 445
+Rule added
+Rule added (v6)
+pi@mins-gate ~ $ sudo ufw status
+Status: active
+To                         Action      From
+--                         ------      ----
+23                         ALLOW       Anywhere
+21                         ALLOW       Anywhere
+22                         ALLOW       Anywhere
+2181                       ALLOW       Anywhere
+4242                       ALLOW       Anywhere
+80                         ALLOW       Anywhere
+139                        ALLOW       Anywhere
+445                        ALLOW       Anywhere
+23                         ALLOW       Anywhere (v6)
+21                         ALLOW       Anywhere (v6)
+22                         ALLOW       Anywhere (v6)
+2181                       ALLOW       Anywhere (v6)
+4242                       ALLOW       Anywhere (v6)
+80                         ALLOW       Anywhere (v6)
+139                        ALLOW       Anywhere (v6)
+445                        ALLOW       Anywhere (v6)
+pi@mins-gate ~ $
