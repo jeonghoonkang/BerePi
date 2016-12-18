@@ -1,4 +1,3 @@
-
 #### Port forwarding by Raspi
   - sudo apt-get install rinetd
   - sudo vim /etc/rinetd.conf
