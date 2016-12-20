@@ -1,6 +1,4 @@
 
-
-
 #### To use WiringPi
 #### update the GPIO
 
