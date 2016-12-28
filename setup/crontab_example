@@ -36,3 +36,13 @@ MAILTO=tinyos
 # ll --time-style=long-iso /var/log/dmesg | awk '{print $6" "$7}'
 ###
 ###
+
+# for stalk
+# m h  dom mon dow   command
+#50 03 *   *   *     sudo service stalk-revproxy restart
+#40 03 *   *   *     sudo service stalk-binder restart
+#30 03 *   *   *     sudo service stalk restart
+# sudo ctlscript.sh 은 동작 안함.
+#05 03 * * * sudo sh /home/tinyos/wordpress-3.8.1-1/ctlscript.sh stop
+#10 03 * * * sudo sh /home/tinyos/wordpress-3.8.1-1/ctlscript.sh start
+
