@@ -1,5 +1,4 @@
 # Author : jeonghoon.kang@gmail.com
-
 export DNPATH='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup'
 
 # 잠시 코멘트 아웃 
