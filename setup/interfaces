@@ -13,7 +13,6 @@ allow-hotplug eth0
 ############################################################
 # please use below for static IP setting or Wi-Fi setting
 ############################################################
-
 #auto lo
 #auto etho0
 #iface eth0 inet static
