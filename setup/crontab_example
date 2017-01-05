@@ -29,6 +29,9 @@ MAILTO=tinyos
 35 3 * * * sudo service stalk restart
 40 3 * * * sudo reboot
 
+*/30 * * * * python /home/tinyos/my_deamon/publicip.py
+
+
 ### if you want to check last booting time of system
 ###
 # ls /var/log/dmesg
