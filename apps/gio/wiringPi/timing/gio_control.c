@@ -1,4 +1,3 @@
-
 // Author : jeonghoon.kang@gmail.com
 
 #include <wiringPi.h>
