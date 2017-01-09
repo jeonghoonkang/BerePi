@@ -1,4 +1,3 @@
-
 #### Installation, Raspi OS 
   - Please download below RasberryPi OS - Rapberrian based on 2015 05 05 version
     - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_4G_2015_0706.zip
