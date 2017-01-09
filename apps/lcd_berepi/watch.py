@@ -104,11 +104,13 @@ def main():
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
+            time.sleep(2)
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err ', LCD_LINE_2,1)
+            time.sleep(0.3)
     whiteLCDon()
-    time.sleep(2)
+
 
     # display time & Temperature
     tstr = time_chk()
@@ -123,11 +125,12 @@ def main():
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
+            time.sleep(2)            
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err', LCD_LINE_2,1)
+            time.sleep(0.3)
     whiteLCDon()
-    time.sleep(2) 
 
     # display time & Temperature
     tstr = time_chk()
@@ -140,11 +143,12 @@ def main():
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
+            time.sleep(2)
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err', LCD_LINE_2,1)
+            time.sleep(0.3)
     whiteLCDon()
-    time.sleep(2) 
 
 
     # display time & CO2
@@ -160,13 +164,14 @@ def main():
             color = int(tmp) 
             assert type(color) is IntType, "ppm variable is not an integer: %r" % id
             lcd_string('%s ppm %s ' %(tmp, sname), LCD_LINE_2,1)
+            time.sleep(2)
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err', LCD_LINE_2,1)
+            time.sleep(0.3)
     whiteLCDon()
     if (color > 1000) : 
         redLCDon()
-    time.sleep(2) 
 
 def clearLCD():
     lcd_string('', LCD_LINE_2,1)
