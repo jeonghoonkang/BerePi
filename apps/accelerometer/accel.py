@@ -1,4 +1,3 @@
-
 #!/usr/bin/python
 # Author : ipmstyle, https://github.com/ipmstyle
 #        : jeonghoonkang, https://github.com/jeonghoonkang
