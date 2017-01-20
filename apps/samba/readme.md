@@ -60,12 +60,12 @@ To                         Action      From
 
 
 - 서비스 시작
-# systemctl start [서비스명]
+  - systemctl start [서비스명]
 
 - 서비스 종료
-# systemctl stop [서비스명]
+  - systemctl stop [서비스명]
 
 - 서비스 재시작
-# systemctl restart [서비스명]
+  - systemctl restart [서비스명]
 
 
