@@ -29,7 +29,7 @@
   - sudo service smbd restart
   
 
--- smb.conf
+smb.conf
 yes, removing security = share and reinstalling fixed the problem
 
 pi@mins-gate ~ $ sudo ufw allow 445
