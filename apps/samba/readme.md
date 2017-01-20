@@ -29,21 +29,13 @@
   - sudo service smbd restart
   
 
-
-
-
-smb.conf
-
-
-2
- 
-yes, removing security = share and reinstalling fixed the problem. Many thanks. – TarekEldeeb Apr 26 at 23:14
-
-
+-- smb.conf
+yes, removing security = share and reinstalling fixed the problem
 
 pi@mins-gate ~ $ sudo ufw allow 445
 Rule added
 Rule added (v6)
+
 pi@mins-gate ~ $ sudo ufw status
 Status: active
 To                         Action      From
@@ -64,4 +56,16 @@ To                         Action      From
 80                         ALLOW       Anywhere (v6)
 139                        ALLOW       Anywhere (v6)
 445                        ALLOW       Anywhere (v6)
-pi@mins-gate ~ $
+
+
+
+- 서비스 시작
+# systemctl start [서비스명]
+
+- 서비스 종료
+# systemctl stop [서비스명]
+
+- 서비스 재시작
+# systemctl restart [서비스명]
+
+
