@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang
+# -*- coding: utf-8 -*-
 
 import serial,os,time
 import sys
