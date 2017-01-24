@@ -1,5 +1,6 @@
 #### Installation, Raspi OS 
-  - Please download below RasberryPi OS - Rapberrian based on 2015 05 05 version
+  - Please download below RasberryPi OS - Rapberrian based on 2016 01 Jessie version
+    - http://cogcom.asuscomm.com:6080/open/raspi_4G_2016_0112.zip
     - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_4G_2015_0706.zip
     - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_4G_2016_0430.zip
     - http://125.7.128.54:8070/wordpress/pub/devel/raspi/raspi_4G_2016_0430.zip
