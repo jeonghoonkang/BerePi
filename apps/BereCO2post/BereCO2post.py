@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Author : Kowonsik, github.com/kowonsik
 # Author : Jeonghoonkang, github.com/jeonghoonkang
+# Author : Kowonsik, github.com/kowonsik
 
 ## This code for T100, ELT CO2 sensor
 
