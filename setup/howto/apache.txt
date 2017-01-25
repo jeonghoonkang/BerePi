@@ -1,3 +1,4 @@
+
 ### Check apache web server access history
  - tail -f /var/log/apache2/error.log
  
@@ -12,6 +13,4 @@
 </pre>
 
  - 설정이 잘못되면 http 1.1 500 에러 발생 
- 
- 
  
