@@ -45,5 +45,5 @@ if __name__== "__main__" :
   else :
     lcd_string('no Wi-Fi IP ',LCD_LINE_2,2)
 
+    
   time.sleep(3.5)
-
