@@ -13,6 +13,7 @@ sudo apt-get -y install htop
 #sudo apt-get -y install unzip
 #sudo apt-get -y install dnsutils
 #sudo apt-get -y install curl
+#sudo apt-get -y install dcfldd pv
 
 #sudo apt-get -y install lrzsz
 #sudo apt-get -y install lynx
