@@ -63,4 +63,3 @@ if __name__ == '__main__':
     print('-' * 80)
     if sys.version_info >= (3,2,0):
         print(get_dir_size.cache_info())
-
