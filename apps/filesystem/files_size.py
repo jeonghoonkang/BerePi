@@ -1,9 +1,8 @@
 
 # -*- coding: utf-8 -*-
-# python for raspberrypi
 # Author : jeonghoonkang https://github.com/jeonghoonkang
 
-# Directory change example
+# file list and size 
 
 from __future__ import print_function
 import os
@@ -51,6 +50,14 @@ if __name__ == '__main__':
     #get_size = get_dir_size_walk
     ### this recursive version can benefit from caching the function calls (functools.lru_cache)
     get_size = get_dir_size
+
+    filenames = os.listdir(start_dir)
+    for filename in filenames:
+        #print ("last -> " + filename[-1:] )
+        #print ("first -> " + filename[:1] )
+        full_filename = os.path.join(start_dir, filename)
+        print (full_filename)
+        break
 
     for root, dirs, files in os.walk(start_dir):
         for d in dirs:
