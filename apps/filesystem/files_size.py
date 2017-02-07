@@ -60,7 +60,9 @@ if __name__ == '__main__':
             continue
         else :
             full_filename = os.path.join(start_dir, filename)
-            print ("#####      ", full_filename)
+            fpath = os.path.abspath(os.path.join("."))
+            fsize = os.path.getsize(full_filename)
+            print ("#####      ", full_filename, '       size = %d' %fsize) 
 
     for root, dirs, files in os.walk(start_dir):
         for d in dirs:
@@ -72,8 +74,7 @@ if __name__ == '__main__':
 
 #    for d, size in sorted(dir_tree.items(), key=operator.itemgetter(1), reverse=True):
 #        print('%s\t%s' %(bytes2human(size, format='%(value).2f%(symbol)s'), d))
-    print( dir_tree.items()) 
-    print( 'size = %d' dir_tree) 
+    #print( dir_tree.items()) 
     print('-' * 80)
     if sys.version_info >= (3,2,0):
         print(get_dir_size.cache_info())
