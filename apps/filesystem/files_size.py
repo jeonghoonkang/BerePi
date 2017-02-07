@@ -55,11 +55,12 @@ if __name__ == '__main__':
     for filename in filenames:
         #print ("last -> " + filename[-1:] )
         #print ("first -> " + filename[:1] )
-        if ( '.' == filename[-1:] or '~' == filename[:1] ) :
+        # check it is hidden file or backup file
+        if ( ('~' == filename[-1:]) or ('.' == filename[:1]) ) :
             continue
-        full_filename = os.path.join(start_dir, filename)
-        print (">>" full_filename)
-        break
+        else :
+            full_filename = os.path.join(start_dir, filename)
+            print ("#####      ", full_filename)
 
     for root, dirs, files in os.walk(start_dir):
         for d in dirs:
