@@ -58,7 +58,7 @@ if __name__ == '__main__':
         if ( '.' == filename[-1:] or '~' == filename[:1] ) :
             continue
         full_filename = os.path.join(start_dir, filename)
-        print (full_filename)
+        print (">>" full_filename)
         break
 
     for root, dirs, files in os.walk(start_dir):
