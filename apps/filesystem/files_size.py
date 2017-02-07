@@ -72,8 +72,8 @@ if __name__ == '__main__':
 
 #    for d, size in sorted(dir_tree.items(), key=operator.itemgetter(1), reverse=True):
 #        print('%s\t%s' %(bytes2human(size, format='%(value).2f%(symbol)s'), d))
-    #print( dir_tree.items()) 
-    #print( 'size = %d' dir_tree) 
+    print( dir_tree.items()) 
+    print( 'size = %d' dir_tree) 
     print('-' * 80)
     if sys.version_info >= (3,2,0):
         print(get_dir_size.cache_info())
