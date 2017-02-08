@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang https://github.com/jeonghoonkang
 
-# file list and size 
+# current directory check file list and size, print out 
 
 from __future__ import print_function
 import os
