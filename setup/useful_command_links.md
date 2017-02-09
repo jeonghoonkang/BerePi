@@ -126,5 +126,6 @@ sudo apt-get dist-upgrade
     - |- network-pre.conf
     
   
-  
+### crontab reboot warning
+  - 0 7  *   *   *    /sbin/shutdown -r +5
 
