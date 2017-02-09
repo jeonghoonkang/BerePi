@@ -1,8 +1,6 @@
 # Author : jeonghoon.kang@gmail.com
 export DNPATH='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup'
 
-# 잠시 코멘트 아웃 
-if [ 1 -eq 0 ]; then 
 export bashrc_file=$DNPATH/.bashrc
 wget -N $bashrc_file
 sudo scp .bashrc /root
@@ -10,6 +8,13 @@ sudo scp .bashrc /root
 export vimrc_file=$DNPATH/.vimrc
 wget -N $vimrc_file
 sudo scp .vimrc /root
+
+export vimjelly_file=$DNPATH/vim_conf/jellybeans.vim
+wget -N $vimjelly_file
+sudo mv jellybeans.vim /usr/share/vim/vim74/colors
+
+# 잠시 코멘트 아웃 
+if [ 1 -eq 0 ]; then 
 
 export net_file=$DNPATH/interfaces
 wget -N $net_file
@@ -28,15 +33,7 @@ sudo chmod 775 /etc/rc.local
 export rctest_file=$DNPATH/rc.local.test
 wget -N $rctest_file
 
-export vimjelly_file=$DNPATH/vim_conf/jellybeans.vim
-wget -N $vimjelly_file
-sudo mv jellybeans.vim /usr/share/vim/vim74/colors
 fi
-
-export rc_file=$DNPATH/rc.local
-wget -N $rc_file
-sudo mv rc.local /etc
-sudo chmod 775 /etc/rc.local
 
 unset DNPATH
 unset bashrc_file
