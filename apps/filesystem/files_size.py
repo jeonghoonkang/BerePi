@@ -72,6 +72,7 @@ if __name__ == '__main__':
             if os.path.isdir(dir_path):
                 dir_tree[dir_path] = get_size(dir_path)
 
+                
 #    for d, size in sorted(dir_tree.items(), key=operator.itemgetter(1), reverse=True):
 #        print('%s\t%s' %(bytes2human(size, format='%(value).2f%(symbol)s'), d))
     #print( dir_tree.items()) 
