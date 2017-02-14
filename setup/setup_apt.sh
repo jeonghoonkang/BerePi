@@ -54,8 +54,10 @@ sudo pip install utils
 
 #########################################################################
 #### for the Cygwin, windows
+####  
 
 #apt-cyg download and run to install
+
 #wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
 
 #gcc installation
@@ -93,5 +95,9 @@ sudo pip install utils
 
 
 
-
+### FYI, Serial and pip in Cygwin
+# apt-cyg install python-setuptools
+# easy_install-2.7 pip
+# pip install pyserial
+# ( https://github.com/pyserial/pyserial/ )
 
