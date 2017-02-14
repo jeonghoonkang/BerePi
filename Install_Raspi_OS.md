@@ -22,3 +22,16 @@
     - Be carefull that init.sh will change your /etc/rc.local, /etc/resolv, /etc/network/interfaces
     - If you just want update SW package installation, look into the file init.sh, which has setup_apt.sh process, you will be able to easily catch the path
   
+과제 아이디어
+
+HTTP/2
+
+- 새로운 HTTP, 경량/다중화 기능
+- 서버에서 클라이언트 Push 가능 
+
+WoT
+
+- 
+- 
+
+
