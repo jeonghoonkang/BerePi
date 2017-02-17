@@ -3,7 +3,6 @@
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (https://github.com/sukunkim)
 
 ### Wireless Sensor Network (WSN) using RaspberryPi 
-
  - 무선센서 네트워크를 라즈베리파이와 BerePi 센서 모듈로 구축할 수 있습니다. BerePi 센서 모듈은 온습도, CO2, CO, DUST 등의 센서 뿐아니라 LED, LCD 등의 주변기기 들도 지원할 예정입니다. 
 
  - 라즈베리파이2가 출시된 시점에서 라즈베리 하드웨어는 500만개 이상이 판매되었으나, 일반적으로 교육용 컴퓨터로만 인식되고 있습니다만, 향후 컴퓨팅 분야 전반에 영향을 줄것으로 기대됩니다.
