@@ -10,6 +10,7 @@ tmp_dir=berePi_dir + "/apps/lcd_berepi/lib"
 sys.path.append(tmp_dir)
 from lcd import *
 
+
 def wip_chk():
     cmd = "ip addr show wlan0 | grep inet | awk '{print $2}' | cut -d/ -f1"
     wipAddr = run_cmd(cmd)
@@ -22,9 +23,9 @@ def run_cmd(cmd):
     return output
 
 if __name__== "__main__" :
-  
+
   print tmp_dir
-  
+
   lcd_init()
   LCDoff()
 
@@ -37,12 +38,12 @@ if __name__== "__main__" :
   str = subprocess.check_output("hostname",shell=True)
   str = str[:-1]
   lcd_string('Booted %s ' % (str) ,LCD_LINE_1,1)
-  
+
   str = wip_chk()
   if str:
     lcd_string('%s WL     ' % (str),LCD_LINE_2,2)
   else :
     lcd_string('no Wi-Fi IP ',LCD_LINE_2,2)
 
-    
+
   time.sleep(3.5)
