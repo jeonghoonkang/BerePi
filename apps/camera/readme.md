@@ -8,3 +8,8 @@
 ##### https://github.com/pageauc/pi-timolo
 #### Raspi NoIR Camera (with LED)
 ##### https://www.raspberrypi.org/learning/infrared-bird-box/worksheet/
+
+#### Machine Vision info.
+##### ImageNet You Tube
+  - It gives outline understanding of Vision Intelligence
+  - https://youtu.be/40riCqvRoMs
