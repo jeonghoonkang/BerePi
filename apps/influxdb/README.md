@@ -37,10 +37,13 @@ tr.flush()
 3. tr.write() 함수 : 저장할 값을 넘김, 저장하지 않을 값은 비워도 됨
 4. tr.flush() 함수 : influxdb 에 저장
 
+### 포트번호
+  - 8086 (API 포트, SQL 제공)
+  - 8083 (Admin 포트, 이제부터는 Grafana admin 연결 사용하여 더 이상 사용안함)
 
 # Grafana
 
-## 설치
+## 설치방법
 
 ```
 wget https://github.com/fg2it/grafana-on-raspberry/raw/master/jessie/v3.1.1/grafana_3.1.1-1470786449_armhf.deb
