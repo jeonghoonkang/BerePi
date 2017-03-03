@@ -16,7 +16,6 @@ __tsdb_client = None
 def influx_client():
     global __tsdb_client
     if not __tsdb_client:
-        #__tsdb_client = influxdb.InfluxDBClient('localhost', 8086, 'pdmuser', 'pdmuser', 'pdm')
         __tsdb_client = influxdb('localhost', 8086, 'root', 'root', 'sensing')
 
     return __tsdb_client
