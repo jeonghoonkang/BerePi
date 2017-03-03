@@ -57,3 +57,6 @@ sudo service grafana-server start
 * 계정 : admin / admin
 
 * [참고자료](https://github.com/fg2it/grafana-on-raspberry)
+
+### influxDB 
+  - https://docs.influxdata.com/influxdb/v0.9/query_language/schema_exploration/
