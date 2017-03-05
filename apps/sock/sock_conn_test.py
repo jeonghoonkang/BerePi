@@ -16,7 +16,7 @@ ETYPE_VALUE_MAX = 8000
 def main():
 	SERVER_ADDR = "125.xx.xx.41"
 	SERVER_PORT = 8283
-	print "   try connecting .... "
+	print " "*10, "try connecting .... "
 	
 	sock = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 	ret_conn = sock.connect( ( SERVER_ADDR, SERVER_PORT ) )
