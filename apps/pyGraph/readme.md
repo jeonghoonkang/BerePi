@@ -1,1 +1,4 @@
-#### Files for python graphic display
+#### Python graphic display
+  - charting
+  - operations
+
