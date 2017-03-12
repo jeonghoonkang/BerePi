@@ -1,4 +1,3 @@
-
 ##### Raspi-WiAP-WSGW / Wi-Fi AP 
 - 라즈베리파이를 이용한 Wi-Fi AP 기능과 WSN, IoT GW 동시 실행
   - Wi-Fi, USB dongle 을 사용함
@@ -9,4 +8,3 @@
   - Raspi3 부터는 Wi-Fi, BLE 동시 지원
   - https://learn.adafruit.com/setting-up-a-raspberry-pi-as-a-wifi-access-point/install-software
   - https://learn.adafruit.com/downloads/pdf/setting-up-a-raspberry-pi-as-a-wifi-access-point.pdf
-
