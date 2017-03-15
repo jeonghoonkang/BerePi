@@ -19,7 +19,7 @@
 # sudo apt-get -y install ntpdate
 # sudo apt-get -y install vim-gnome
 # sudo apt-get -y install dos2unix
-#sudo apt-get -y install dosbox
+# sudo apt-get -y install dosbox
 # sudo apt-get -y install wicd wicd-curses
 # sudo apt-get -y install samba samba-common-bin
 # sudo apt-get -y install php5 libapache2-mod-php5
@@ -27,9 +27,6 @@
 # sudo apt-get -y install postfix
 # sudo apt-get -y install rrdtool
 
-
-
-# test cygwin
 # wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
 # unzip distribute-0.7.3.zip
 # cd distribute-0.7.3
@@ -57,6 +54,8 @@
 #apt-cyg download and run to install
 
 #wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
+# cp apt-cyg /usr/bin
+# chmod 777 /usr/bin/apt-cyg
 
 #gcc installation, try
 apt-cyg install gcc-core
@@ -72,16 +71,18 @@ apt-cyg install python-devel
 apt-cyg install python-numpy
 apt-cyg install libfreetype-devel
 
-pip installation
-wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
-python get-pip.py
+#pip installation
+# wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
+# python get-pip.py
+
+apt-cyg install gcc-g++ libzmq-devel libzmq5 
 
 # numpy installation takes a few minutes
 pip install matplotlib
 pip install scimath
 pip install networkx
 
-
+apt-cyg install python-matplotlib
 #########################################################################
 #### some commands
 
