@@ -2,12 +2,7 @@
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
 #sudo apt-get -y install subversion
-#sudo apt-get -y install dosbox
-#sudo apt-get update && sudo apt-get upgrade -y
-#sudo apt-get update && sudo apt-get dist-upgrade
-#sudo apt-get install apt-transport-https -y --force-yes
-#sudo apt-get update && sudo apt-get install oracle-java7-jdk
-#sudo apt-get -y install wicd wicd-curses
+
 
 # sudo apt-get -y install htop
 # sudo apt-get -y install screen
@@ -103,3 +98,12 @@ pip install networkx
 #easy_install-2.7 pip
 # pip install pyserial
 # ( https://github.com/pyserial/pyserial/ )
+
+
+
+#sudo apt-get -y install dosbox
+#sudo apt-get update && sudo apt-get upgrade -y
+#sudo apt-get update && sudo apt-get dist-upgrade
+#sudo apt-get install apt-transport-https -y --force-yes
+#sudo apt-get update && sudo apt-get install oracle-java7-jdk
+#sudo apt-get -y install wicd wicd-curses
