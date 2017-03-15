@@ -58,7 +58,7 @@
 
 #wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
 
-#gcc installation
+#gcc installation, try
 apt-cyg install gcc-core
 apt-cyg install cygwin32-freetype2
 apt-cyg install pkg-config
