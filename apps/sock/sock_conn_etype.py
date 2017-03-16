@@ -20,13 +20,13 @@ def main():
 
     #SERVER_ADDR = "222.239.78.8"
     #SERVER_PORT = 8283   # 40001 samho  9293 hana
-    HOST='0.0.0.0'
+    HOST=''
     LOCAL_PORT = 4000
+    con_add = (HOST,LOCAL_PORT)
 
     sock = socket(AF_INET,SOCK_STREAM )
-    ##for client
-    #sock.connect( ( SERVER_ADDR, SERVER_PORT ) )
-    ret = sock.bind((HOST,LOCAL_PORT))
+    print sock
+    ret = sock.bind(con_add)
     print ret
 
     sock.listen(100)
