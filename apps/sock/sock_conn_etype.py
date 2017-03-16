@@ -3,9 +3,8 @@
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 
-# 동작 안함 확인 필요 
 
-from socket import *
+import socket 
 import os
 import sys
 import struct
@@ -25,14 +24,14 @@ def main():
     LOCAL_PORT = 4000
     con_add = (HOST,LOCAL_PORT)
 
-    sock = socket(AF_INET,SOCK_STREAM )
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM )
     print sock
     ret = sock.bind(con_add)
     print ret
 
-    sock.listen(100)
+    sock.listen(3)
 
-    conn, addr = sock.accpet()
+    conn, addr = sock.accept()
 
 
     print " "*10, "connected by sock client", addr
