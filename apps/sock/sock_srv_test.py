@@ -24,7 +24,6 @@ def gettingMsg():
 			break
 		else:
 			# data = str(data).split("b'", 1)[1].rsplit("'",1)[0]
-            data = data[:5]
 			print(data)
 	conn.close()
 
