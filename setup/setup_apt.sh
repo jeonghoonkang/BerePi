@@ -3,7 +3,6 @@
 
 #sudo apt-get -y install subversion
 
-
 # sudo apt-get -y install htop
 # sudo apt-get -y install screen
 # sudo apt-get -y install rsync
@@ -92,15 +91,11 @@ apt-cyg install python-matplotlib
 #### python pip in cygwin
 #http://lelandbatey.com/posts/2014/08/installing-pip-in-cygwin
 
-
-
 ### FYI, Serial and pip in Cygwin
 # apt-cyg install python-setuptools
 #easy_install-2.7 pip
 # pip install pyserial
 # ( https://github.com/pyserial/pyserial/ )
-
-
 
 #sudo apt-get -y install dosbox
 #sudo apt-get update && sudo apt-get upgrade -y
