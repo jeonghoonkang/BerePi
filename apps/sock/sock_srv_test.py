@@ -1,3 +1,8 @@
+
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+# Author : jeonghoonkang, https://github.com/jeonghoonkang
+
 #server program
 import socket
 import threading
