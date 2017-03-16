@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 
+# 동작 안함 확인 필요 
 
 from socket import *
 import os
