@@ -23,14 +23,14 @@ print(' '*10, 'Connected by', addr)
 # 	conn.close()
 
 def gettingMsg():
-	while True:
-		data = conn.recv(1024)
-		if not data:
-			break
-		else:
-			# data = str(data).split("b'", 1)[1].rsplit("'",1)[0]
-			print(data)
-	conn.close()
+    while True:
+        data = conn.recv(1024)
+        if not data:
+            break
+        else:
+            # data = str(data).split("b'", 1)[1].rsplit("'",1)[0]
+            print(data)
+    conn.close()
 
 # threading._start_new_thread(sendingMsg,())
 threading._start_new_thread(gettingMsg,())
