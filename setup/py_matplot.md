@@ -13,4 +13,6 @@ windowing: no  [Microsoft Windows only]
 </pre>
 
 pip install pygi
+apt-cyg install tcl-tk-devel
+
 
