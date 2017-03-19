@@ -32,7 +32,6 @@ def gettingMsg():
             print(data)
     conn.close()
 
-# threading._start_new_thread(sendingMsg,())
 threading._start_new_thread(gettingMsg,())
 
 while True:
