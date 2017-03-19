@@ -14,5 +14,7 @@ windowing: no  [Microsoft Windows only]
 
   - pip install pygi
   - apt-cyg install tcl-tk-devel
+  - apt-cyg install python-tkinter
+
 
 
