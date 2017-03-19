@@ -12,7 +12,7 @@ cairo: no  [cairocffi or pycairo not found]
 windowing: no  [Microsoft Windows only]
 </pre>
 
-pip install pygi
-apt-cyg install tcl-tk-devel
+  - pip install pygi
+  - apt-cyg install tcl-tk-devel
 
 
