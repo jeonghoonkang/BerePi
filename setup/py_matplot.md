@@ -11,3 +11,6 @@ agg: yes [installing]
 cairo: no  [cairocffi or pycairo not found]
 windowing: no  [Microsoft Windows only]
 </pre>
+
+pip install pygi
+
