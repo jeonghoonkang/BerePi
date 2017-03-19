@@ -15,8 +15,11 @@ windowing: no  [Microsoft Windows only]
   - pip install pygi
   - apt-cyg install tcl-tk-devel
   - apt-cyg install python-tkinter
-  - pip install python-qt5
   
+  
+  
+  - pip install python-qt5
+  - pip install pyside
   - apt-cyg install libxml2-devel
   - apt-cyg install libxslt-devel
 
