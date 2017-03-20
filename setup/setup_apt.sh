@@ -65,6 +65,8 @@ apt-cyg install make
 apt-cyg install cmake
 apt-cyg install libQt5Core-devel
 apt-cyg install python-devel
+apt-cyg install gcc-g++ libzmq-devel libzmq5
+
 
 #instead of pip install numpy
 apt-cyg install python-numpy
@@ -74,14 +76,11 @@ apt-cyg install libfreetype-devel
 # wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
 # python get-pip.py
 
-apt-cyg install gcc-g++ libzmq-devel libzmq5 
-
 # numpy installation takes a few minutes
-pip install matplotlib
-pip install scimath
-pip install networkx
+# pip install matplotlib
+# pip install scimath
+# pip install networkx
 
-apt-cyg install python-matplotlib
 #########################################################################
 #### some commands
 
