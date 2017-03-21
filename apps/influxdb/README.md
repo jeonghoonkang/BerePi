@@ -4,9 +4,29 @@
 ## 설치
 
 ```
-wget https://dl.influxdata.com/influxdb/releases/influxdb_1.0.0_armhf.deb
-sudo dpkg -i influxdb_1.0.0_armhf.deb
-sudo service influxdb start
+sudo apt-get install apt-transport-https
+curl -sL https://repos.influxdata.com/influxdb.key | sudo apt-key add -
+source /etc/os-release
+echo "deb https://repos.influxdata.com/debian jessie stable" | sudo tee /etc/apt/sources.list.d/influxdb.list
+sudo apt-get update && sudo apt-get install influxdb
+
+sudo vi /etc/influxdb/influxdb.conf
+Edit configure file like the below.
+-----------------------------------------------------
+[admin]                                                
+  # Determines whether the admin service is enabled.   
+  enabled = true                               
+
+  # The default bind address used by the admin service.
+  bind-address = ":8083"
+-----------------------------------------------------
+
+sudo service influxdb restart
+
+Connet http://localhost:8083
+If you can see the web page, the installation is finished
+
+
 ```
 
 ## 구조
@@ -46,9 +66,17 @@ tr.flush()
 ## 설치방법
 
 ```
-wget https://github.com/fg2it/grafana-on-raspberry/raw/master/jessie/v3.1.1/grafana_3.1.1-1470786449_armhf.deb
-sudo dpkg -i grafana_3.1.1-1470786449_armhf.deb
+wget https://bintray.com/fg2it/deb/download_file?file_path=testing%2Fg%2Fgrafana_4.1.0-1482275966beta1_armhf.deb
+sudo apt-get install -y adduser libfontconfig
+sudo dpkg -i grafana_4.1.0-1482275966beta1_armhf.deb
 sudo service grafana-server start
+sudo update-rc.d grafana-server defaults
+
+Connet http://localhost:3000
+If you can see the web page, the installation is finished.
+
+Reference a link page to connect grafana and InfluxDB.
+http://okky.kr/article/322237
 ```
 
 ## 정보
