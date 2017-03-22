@@ -63,6 +63,7 @@ apt-cyg install pkg-config
 apt-cyg install libX11-devel
 apt-cyg install make
 apt-cyg install cmake
+apt-cyg install xinit
 apt-cyg install libQt5Core-devel
 apt-cyg install python-devel
 apt-cyg install gcc-g++ libzmq-devel libzmq5
