@@ -1,5 +1,3 @@
-
-
 #!/bin/bash
 # Author: jeonghoon.kang@gmail.com
 
