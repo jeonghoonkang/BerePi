@@ -1,4 +1,6 @@
 
+#Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
+
 #gcc installation, try
 apt-cyg install gcc-core
 apt-cyg install cygwin32-freetype2
