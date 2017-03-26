@@ -1,0 +1,4 @@
+
+ wget --http-user=tos --http-password=0 -c {URL}
+ 
+ 
