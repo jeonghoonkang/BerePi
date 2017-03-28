@@ -46,16 +46,6 @@
 # sudo pip install urllib3
 # sudo pip install utils
 
-#########################################################################
-#### for the Cygwin, windows
-####
-
-#apt-cyg download and run to install
-
-#wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
-# cp apt-cyg /usr/bin
-# chmod 777 /usr/bin/apt-cyg
-
 
 #########################################################################
 #### some commands
