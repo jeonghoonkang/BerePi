@@ -1,6 +1,18 @@
 
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
+
+#########################################################################
+#### for the Cygwin, windows
+####
+
+#apt-cyg download and run to install
+
+#wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
+# cp apt-cyg /usr/bin
+# chmod 777 /usr/bin/apt-cyg
+
+
 #gcc installation, try
 apt-cyg install gcc-core
 apt-cyg install cygwin32-freetype2
