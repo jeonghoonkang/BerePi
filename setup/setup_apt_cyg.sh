@@ -1,7 +1,6 @@
 
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
-
 #########################################################################
 #### for the Cygwin, windows
 ####
