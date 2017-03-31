@@ -1,4 +1,3 @@
-
 #Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
 
 #########################################################################
@@ -10,7 +9,6 @@
 #wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
 # cp apt-cyg /usr/bin
 # chmod 777 /usr/bin/apt-cyg
-
 
 #gcc installation, try
 apt-cyg install gcc-core
