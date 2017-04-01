@@ -5,7 +5,6 @@
 ####
 
 #apt-cyg download and run to install
-
 #wget https://raw.githubusercontent.com/digitallamb/apt-cyg/master/apt-cyg
 # cp apt-cyg /usr/bin
 # chmod 777 /usr/bin/apt-cyg
