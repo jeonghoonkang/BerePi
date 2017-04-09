@@ -28,5 +28,3 @@ cd /home/pi
 sudo ntpdate -u ntp.ubuntu.com
 
 exit 0
-
-
