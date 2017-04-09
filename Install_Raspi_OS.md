@@ -1,4 +1,4 @@
-#### Installation, Raspi OS 
+#### Installation, RaspberryPi OS for BerePi
   - Please download below RasberryPi OS - Rapberrian based on 2016 01 Jessie version
     - http://cogcom.asuscomm.com:6080/open/raspi_4G_2016_0112.zip
     - old versions
@@ -22,4 +22,3 @@
     - Be carefull that init.sh will change your /etc/rc.local, /etc/resolv, /etc/network/interfaces
     - If you just want update SW package installation, look into the file init.sh, which has setup_apt.sh process, you will be able to easily catch the path
   
-
