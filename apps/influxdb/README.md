@@ -86,5 +86,6 @@ http://okky.kr/article/322237
 
 * [참고자료](https://github.com/fg2it/grafana-on-raspberry)
 
-### influxDB 
+### influxDB 데이터 검색
+  - show databases, use {DB명}
   - https://docs.influxdata.com/influxdb/v0.9/query_language/schema_exploration/
