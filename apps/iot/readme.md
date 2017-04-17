@@ -6,8 +6,8 @@
  - (설계)수집데이터의 정리와 정규화를 통한, 데이터세트 구축
  - (설계)데이터세트를 이용한 지능형 SW 구현 방법론 정의
 
-# SDH status check
+# SDH (Berkeley) status check
  - http://new.openbms.org/status/
 
-# SDH work note
+# SDH (Berkeley) work note
  - https://www.evernote.com/l/ABOG7nmP2SlMe4-1C7lB3FlskQ0Dk79-iUI
