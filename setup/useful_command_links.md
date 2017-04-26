@@ -127,5 +127,6 @@ sudo apt-get dist-upgrade
     
   
 ### crontab reboot warning
-  - 0 7  *   *   *    /sbin/shutdown -r +5
+  -  0   7  *   *   *    /sbin/shutdown -r +5
+  - */7  *  *   *   *
 
