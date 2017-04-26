@@ -47,6 +47,7 @@
 
 현재 가장 시급한 액션아이템
 
+
 ### 읽어봐야할 논문 리스트
 - [논문리스트](http://web.stanford.edu/class/cs344a/readings.html)
 - [Next Century Challenges](http://www.isi.edu/~johnh/PAPERS/Estrin99e.pdf)
