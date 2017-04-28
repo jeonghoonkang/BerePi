@@ -1,5 +1,5 @@
 
-#### To use WiringPi
+### To use WiringPi
 #### update the GPIO
 
 ```
