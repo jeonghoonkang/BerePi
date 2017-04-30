@@ -12,7 +12,9 @@
 
 #### step-3) When you use open-mesh routers for local private network without internet connection, one of o-m router should to be connected to any-AP via ethernet cable
 
-# Factory Default firmware
-
+## Factory Default firmware
   - https://help.cloudtrax.com/hc/en-us/articles/202210960-How-to-manually-flash-firmware-on-a-CloudTrax-enabled-access-point
 
+
+### 제품 규격 정보
+  - https://www.open-mesh.com/skin/frontend/rwd/default/media/OM-2016-06.pdf
