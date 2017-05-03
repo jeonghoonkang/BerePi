@@ -1,15 +1,15 @@
 ## BerePi
+
 ##### 개발자
-  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), SeongTaek Kim (), Sukun Kim (https://github.com/sukunkim)
+  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeongh (), Sukun Kim (https://github.com/sukunkim)
 
-### Wireless Sensor Network (WSN) using RaspberryPi 
- - 무선센서 네트워크를 라즈베리파이와 BerePi 센서 모듈로 구축할 수 있습니다. BerePi 센서 모듈은 온습도, CO2, CO, DUST 등의 센서 뿐아니라 LED, LCD 등의 주변기기 들도 지원할 예정입니다. 
-
- - 라즈베리파이2가 출시된 시점에서 라즈베리 하드웨어는 500만개 이상이 판매되었으나, 일반적으로 교육용 컴퓨터로만 인식되고 있습니다만, 향후 컴퓨팅 분야 전반에 영향을 줄것으로 기대됩니다.
-
- - 라즈베리파이 소프트웨어의 확대 가능성은 운영체제의 안정성 확보, 다양한 HW 지원 라이브러리 부터 서버급의 서비스 SW를 지원하는 등 광범위한 범위의 컴퓨팅 분야로 적용되고 있습니다. 확산이 빠르게 진행되기 위해서는 다양한 주변기기가 제공되어서 여러분야에 할용되어야 할 것입니다. 
- 
- - BerePi 는 향후 확대될 라즈베리파이 레벨의 컴퓨팅에 사용되는 다양한 주변기기 하드웨어와 분산된 라즈베리 그룹의 컴퓨팅 리소스를 통합하여 제공하는 소프트웨어 개발이 목표입니다.
+### Wireless Sensor Network (WSN) using RaspberryPi
+   - 무선센서 네트워크 시스템을 라즈베리파이와 BerePi 센서 모듈로 구축할 수 있습니다
+   - BerePi 센서 모듈은 온/습도, CO2, CO, DUST 등의 센서 뿐아니라 LED, LCD 등의 주변기기 들도 지원합니다
+   - 라즈베리파이2가 출시된 시점에서 라즈베리 하드웨어는 500만개 이상이 판매되었으나, 일반적으로 교육용 컴퓨터로만 인식되고 있었습니다
+   - 그러나, HW 인터페이스의 직접프로그래밍, 저전력, 저렴한 가격으로 인해, 향후 컴퓨팅 분야 전반에 영향을 줄것으로 기대됩니다
+   - 라즈베리파이 소프트웨어의 확대 가능성은 운영체제의 안정성 확보, 다양한 HW 지원 라이브러리 부터 서버급의 서비스 SW를 지원하는 등 광범위한 범위의 컴퓨팅 분야로 적용되고 있습니다. 확산이 빠르게 진행되기 위해서는 다양한 주변기기가 제공되어서 여러분야에 할용되어야 할 것입니다
+  - BerePi 는 향후 확대될 라즈베리파이 레벨의 컴퓨팅에 사용되는 다양한 주변기기 하드웨어와 분산된 라즈베리 그룹의 컴퓨팅 리소스를 통합하여 제공하는 소프트웨어 개발이 목표입니다
 
 ### BerePi Application
   - 온습도 모니터링 및 서버 저장
@@ -20,7 +20,7 @@
     - Dust 센서
     - NFC, T-money 연동
     - 진동센서
-    
+
 
 -----
 
@@ -39,8 +39,8 @@
 
 
 
-  
-     
+
+
 
 ## 목표 서비스 시나리오
 
@@ -52,4 +52,3 @@
 ## 구현된 기능
 
 ## 향후 필요 기능
-
