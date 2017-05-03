@@ -16,11 +16,11 @@
   - CO2 모니터링 및 서버 저장
   - GPIO를 이용한 LED 제어
   - 캐릭터 LCD
+  - NFC, T-money 연동
+  - 진동센서
   - 진행중
     - Dust 센서
-    - NFC, T-money 연동
-    - 진동센서
-
+    
 
 -----
 
