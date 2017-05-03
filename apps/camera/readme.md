@@ -6,15 +6,15 @@
   - 웹으로 촬영 하거나, 자동 촬영되어 있는 파일을 브라우징 할 수 있는 갤러리
 
 #### timelaps, motion detection, low light
-##### https://github.com/pageauc/pi-timolo
+  - https://github.com/pageauc/pi-timolo
 
 #### Raspi NoIR Camera (with LED)
-##### https://www.raspberrypi.org/learning/infrared-bird-box/worksheet/
+  - https://www.raspberrypi.org/learning/infrared-bird-box/worksheet/
 
 #### Machine Vision info.
-##### ImageNet You Tube
-  - It gives outline understanding of Vision Intelligence
-  - https://youtu.be/40riCqvRoMs
+  - ImageNet You Tube
+    - It gives outline understanding of Vision Intelligence
+    - https://youtu.be/40riCqvRoMs
 
 
 ### camera module 설정
