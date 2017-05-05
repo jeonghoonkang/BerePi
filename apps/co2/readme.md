@@ -6,13 +6,13 @@
   
 ##### CO2 sensor reading on RaspberryPi2
   1. CO2 sensor reading
-    - HW : Serial interface 
-    - SW : Python 
-  2. Local log file
-    - Python logging module
+     - HW : Serial interface 
+     - SW : Python 
+  1. Local log file
+     - Python logging module
   1. Remote DB insert support via webservice
-    - RESTful API, using PUT
-    - Python "requests" module
+     - RESTful API, using PUT
+     - Python "requests" module
 
 ##### Hardware
   - (HW ver.01) Photo, CO2 sensor and 3 LEDs - **https://goo.gl/NhEfXZ**
