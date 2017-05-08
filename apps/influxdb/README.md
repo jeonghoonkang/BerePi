@@ -37,7 +37,6 @@ If you can see the web page, the installation is finished
 ```
 
 
-
 ## 구조
 
 ```
@@ -97,9 +96,10 @@ http://okky.kr/article/322237
 
 ## 정보
 
-* grafana 접속 포트 : 3000
-* 계정 : admin / admin
-
+ * 초기설정 정보
+  * grafana 접속 포트 : 3000
+  * 계정 : admin / admin
+  
 * [참고자료](https://github.com/fg2it/grafana-on-raspberry)
 
 ### influxDB 데이터 검색
