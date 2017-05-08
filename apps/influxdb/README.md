@@ -1,7 +1,15 @@
 # InfluxDB 메뉴얼
+
 ## 동작확인 방법
 
-## 설치 (old version)
+## 설치 (influxdb 1.2.0)
+```
+$ wget https://dl.influxdata.com/influxdb/releases/influxdb_1.2.0_armhf.deb
+$ sudo dpkg -i influxdb_1.2.0_armhf.deb
+$ sudo service influxd start
+```
+
+#### 설치 (old version)
 
 ```
 sudo apt-get install apt-transport-https
@@ -28,12 +36,7 @@ If you can see the web page, the installation is finished
 
 ```
 
-## 설치 (influxdb 1.2.0)
-```
-$ wget https://dl.influxdata.com/influxdb/releases/influxdb_1.2.0_armhf.deb
-$ sudo dpkg -i influxdb_1.2.0_armhf.deb
-$ sudo service influxd start
-```
+
 
 ## 구조
 
