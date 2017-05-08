@@ -51,6 +51,7 @@ $ sudo service influxd start
 
 ## 사용법
 
+### Python
 ```python
 import tsdb
 
@@ -62,6 +63,12 @@ tr.flush()
 2. tr.Transaction() 함수 : series 을 지정한다 (해당 series 가 없어도 됨)
 3. tr.write() 함수 : 저장할 값을 넘김, 저장하지 않을 값은 비워도 됨
 4. tr.flush() 함수 : influxdb 에 저장
+
+### Java
+#### 참고자료
+* [API Client Libraries](https://docs.influxdata.com/influxdb/v1.2/tools/api_client_libraries/)
+* [Java client for InfluxDB](https://github.com/influxdata/influxdb-java)
+* [JAR 다운로드](https://mvnrepository.com/artifact/org.influxdb/influxdb-java)
 
 ### HTTP 포트번호
   - 8086 (API 포트, SQL 제공)
