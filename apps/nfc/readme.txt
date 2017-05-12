@@ -2,7 +2,6 @@
 
 https://learn.adafruit.com/adafruit-nfc-rfid-on-raspberry-pi/building-libnfc
 
-
 pi@ECG-01 ~/devel/danalytics/hwlink/nfc/trunk/examples $ ./nfc-poll 
 
 /home/pi/devel/danalytics/hwlink/nfc/trunk/examples/.libs/lt-nfc-poll uses libnfc 1.7.1
