@@ -11,11 +11,10 @@
 
 ### 컨테이너 삭제
   - 컨테이너 : 도커 이미지가 실행되어 관리 중인 (실행중인) 이미지
-  -
 
 ### Docker 네트워크
   - docker network ls
-  - docker run -it --name
+  - docker run -it --net=bridge --name {내가 정하는 실행이름} {실행할 이미지 이름} /bin/bash
 
 ### Docker 관련 명령어 (참고)
   - docker run 컨테이너를 생성
@@ -26,3 +25,9 @@
   - docker kill 컨테이너에게 SIGKILL을 보낸다. 이에 관련된 이슈가 있음
   - docker attach 실행중인 컨테이너에 접속
   - docker wait 컨테이너가 멈출 때까지 블럭
+
+#### 도거 장단점 내용
+  - 도커로 서버를 운영하면 현재 서비스중인 환경을, 신속하게 복사해서 업그레이드 하고,
+    업그레이드가 끝났을때 바로 새로운 서비스 환경(컨테이너)로 전환이 가능함
+    - https://subicura.com/2016/06/07/zero-downtime-docker-deployment.html
+    
