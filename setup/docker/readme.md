@@ -4,7 +4,8 @@
   
 ### 실행
   - docker run -it --name {내가 정하는 실행이름} {실행할 이미지 이름} /bin/bash
-  - docker ps -a
+  - docker images : 이미지 리스트 보여줌
+  - docker ps -a : 컨테이너 리스트 보여줌
   - docker start {내가 정한 실행이름 }
   - docker attach {내가 정한 실행이름 }
 
@@ -13,7 +14,8 @@
   -
 
 ### Docker 네트워크
-  - docker run
+  - docker network ls
+  - docker run -it --name
 
 ### Docker 관련 명령어 (참고)
   - docker run 컨테이너를 생성
