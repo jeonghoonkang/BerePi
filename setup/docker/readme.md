@@ -20,11 +20,12 @@
   - docker network inspect
 
 ### Docker 관련 명령어 (참고)
-  - docker run 컨테이너를 생성
-  - docker stop 컨테이너를 정지
-  - docker start 컨테이너를 다시 실행
-  - docker restart 컨테이너를 재가동
-  - docker rm 컨테이너를 삭제
+  - docker run 컨테이너 생성
+  - docker stop 컨테이너 정지
+  - docker start 컨테이너 다시 실행
+  - docker restart 컨테이너 재가동
+  - docker rm 컨테이너 삭제
+  - docker rmi 이미지 삭제
   - docker kill 컨테이너에게 SIGKILL을 보낸다. 이에 관련된 이슈가 있음
   - docker attach 실행중인 컨테이너에 접속
   - docker wait 컨테이너가 멈출 때까지 블럭
