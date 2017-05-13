@@ -35,6 +35,7 @@
 # sudo python setup.py install
 # sudo easy_install pip
 
+# sudo apt-get -y install python-tk
 # sudo apt-get -y install python-matplotlib
 # sudo apt-get -y install python-mysqldb
 # sudo apt-get -y install python-smbus
