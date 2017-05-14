@@ -68,7 +68,6 @@
       - update-locale LANG=ko_KR.UTF-8
       - dpkg-reconfigure locales
         - 선택. 286 ko_KR.UTF-8
-        
   - Xmanager 설정
-    - xfce4-terminal
+    - xfce4-terminal
     
