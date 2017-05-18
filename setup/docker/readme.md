@@ -72,4 +72,3 @@
     - xfce4-terminal
     - gnome-terminal --geometry=80x48
     
-    
