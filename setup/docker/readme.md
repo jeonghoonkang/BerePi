@@ -71,5 +71,5 @@
   - Xmanager 설정
     - xfce4-terminal
     - gnome-terminal --geometry=80x48
-     - child 창 생성실패로 matplotlib 사용에 적합하지 않음
+      - child 창 생성실패로 matplotlib 사용에 적합하지 않음
     
