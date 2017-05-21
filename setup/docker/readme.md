@@ -51,7 +51,7 @@
   - C:\> docker run -it -p 8082:80 windowsservercore cmd
 
 ##### Docker 세부 설정 내용
-  - 준비
+  - BASH 사용 준비
     - apt-get update
 
   - SSH 서버
