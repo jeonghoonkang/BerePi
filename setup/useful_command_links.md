@@ -130,3 +130,6 @@ sudo apt-get dist-upgrade
   -  0   7  *   *   *    /sbin/shutdown -r +5
   - */7  *  *   *   *
 
+### tabnanny python
+  - python -m tabnanny -v 
+  
