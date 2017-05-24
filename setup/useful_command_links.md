@@ -133,3 +133,9 @@ sudo apt-get dist-upgrade
 ### tabnanny python
   - python -m tabnanny -v 
   
+  
+### oracle jdk 7 installation error
+  - sudo apt-get purge oracle-java7-installer
+  - sudo apt-get autoremove
+  - sudo apt-get install -f
+  
