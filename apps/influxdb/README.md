@@ -68,9 +68,24 @@ tr.flush()
 
 ### [Java](java.md)
 
+
 ### HTTP 포트번호
   - 8086 (API 포트, SQL 제공)
   - 8083 (Admin 포트, 이제부터는 Grafana admin 연결 사용하여 더 이상 사용안함)
+
+### Shell 명령
+
+<pre>
+tinyos@PaaS:~$ influx -database 'kwangmyung' -execute "SELECT Power FROM slave1_ctn_02 WHERE time >= '2017-04-26 00:00:00' limit 50" -format csv
+   name,time,Power
+   slave1_ctn_02,1493164818000000000,-1
+   slave1_ctn_02,1493164861000000000,-1
+   slave1_ctn_02,1493164902000000000,-3
+   slave1_ctn_02,1493164945000000000,-3
+   slave1_ctn_02,1493164988000000000,-1
+   slave1_ctn_02,1493165029000000000,-3
+
+</pre>
 
 # Grafana
 
