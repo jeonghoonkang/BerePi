@@ -139,3 +139,6 @@ sudo apt-get dist-upgrade
   - sudo apt-get autoremove
   - sudo apt-get install -f
   
+### openTSDB  
+  - https://github.com/zerover0/projects/blob/master/opentsdb/standalone_opentsdb_install_on_rpi.md
+  
