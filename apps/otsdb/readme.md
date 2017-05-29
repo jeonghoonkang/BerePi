@@ -1,4 +1,4 @@
-#### OpenTSDB 2.1 적용 필요
+#### OpenTSDB 2.3 까지 테스트 완료 (ubuntu)
 
 #### 시스템 구성
 - https://github.com/kowonsik/RPiLogger/blob/master/README.md
@@ -14,3 +14,6 @@
   
 #### OpenTSDB 2.1 이미지 파일
 - http://106.252.229.57:6500/fbsharing/Vyck0KF8 (링크 오류)
+
+#### CLI
+  - sudo ./build/tsdb scan --import 2017/05/29-00:00:00 sum rc01.temp.degree id=917
