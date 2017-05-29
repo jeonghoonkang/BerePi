@@ -142,3 +142,6 @@ sudo apt-get dist-upgrade
 ### openTSDB  
   - https://github.com/zerover0/projects/blob/master/opentsdb/standalone_opentsdb_install_on_rpi.md
   
+
+### 
+ '2>&1'과 같이 주면 표준 에러를 표준 출력과 같은 곳으로 보내라는 뜻이며, '1>&2'의 경우는 표준 출력을 표준 에러와 같은 곳으로 보내라는 뜻이다.
