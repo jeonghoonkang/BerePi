@@ -141,6 +141,8 @@ sudo apt-get dist-upgrade
   
 ### openTSDB  
   - https://github.com/zerover0/projects/blob/master/opentsdb/standalone_opentsdb_install_on_rpi.md
+    - config tsd.storage
+  - sudo ./build/tsdb fsck --fix --resolve-duplicates 2016/01/00 2017/05/01 sum test_daily_led
   
 
 ### 표준입출력 리디렉션
