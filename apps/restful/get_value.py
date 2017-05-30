@@ -18,3 +18,5 @@ if __name__ == '__main__':
     para1 = 'gyu_RC1_co2.ppm'
     para2 = {'nodeid':arg2}
     print get_last_value(arg1, str(para1), para2)
+
+    
