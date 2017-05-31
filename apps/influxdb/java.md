@@ -21,19 +21,21 @@
 ## [예제](TestInfluxDB.java)
 ### connect
 * InfluxDBFactory.connect()를 호출
-  * InfluxDB가 return됨
-  * 연결이 안 되면 exception이 발생
+* 호스트, 포트, 아이디, 암호 정보 입력
+* InfluxDB가 return됨
+* 연결이 안 되면 exception이 발생
 ### write
 * 먼저 Point라는 구조체에 내용을 입력
   * Tag는 tag()로 입력
   * Field는 addField()로 입력
 * InfluxDB.write()로 Point를 write
+* BatchPoints에 Point를 모아서, BatchPoints를 InfluxDB.write()로 write도 가능
 ### query
 * 먼저 Query라는 구조체에 InfluxQL 구문을 입력
 * InfluxDB.query()를 호출
 * QueryResult라는 구조체에 결과가 담겨 return됨
 ### close
-* InfluxDB.close()
+* InfluxDB.close()로 종료
 
 ## 참고자료
 * [API Client Libraries](https://docs.influxdata.com/influxdb/v1.2/tools/api_client_libraries/)
