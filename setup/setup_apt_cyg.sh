@@ -21,6 +21,7 @@ apt-cyg install libQt5Core-devel
 apt-cyg install python-devel
 apt-cyg install gcc-g++ libzmq-devel libzmq5
 
+
 #instead of pip install numpy
 apt-cyg install python-numpy
 apt-cyg install libfreetype-devel
@@ -33,6 +34,7 @@ apt-cyg install libfreetype-devel
 # pip install matplotlib
 # pip install scimath
 # pip install networkx
+# pip install pandas
 
 #########################################################################
 #### some commands
