@@ -104,7 +104,6 @@ print('그래프 그리는 중입니다')
 
 cmaps = [('UCB_Metadata',  note )]
 
-
 nrows = max(len(cmap_list) for cmap_category, cmap_list in cmaps)
 #print gradient
 #print len(note)
@@ -131,6 +130,5 @@ for cmap_category, cmap_list in cmaps:
     for ax in axes:
         ax.set_axis_off()
     print '현재 들어 오고 있는 uuid의 수 : %s개 입니다. 각 uuid당 데이터 값의 수 : %s개 입니다.' %(n,len(gradient[0]))
-
 
 plt.show()
