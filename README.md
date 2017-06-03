@@ -25,7 +25,7 @@ BerePi project opens software which using BerePi hardware modules.
    - SHT20 board photo and connection : (https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/Raspi_temp_humi_sht20_keti_motes_bd_00.jpg), (https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/Raspi_temp_humi_sht20_keti_motes_bd_01.jpg)
      
 ## Installation
-  - Please follow Wiki(https://github.com/jeonghoonkang/BerePi/wiki) to install pre-configured SD image 
+  - Please follow Wiki(https://github.com/jeonghoonkang/BerePi/wiki) to download and install pre-configured SD image 
   - Old Installation note
     - Download OS image and set up scripts and environemnt, automatically
     - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
