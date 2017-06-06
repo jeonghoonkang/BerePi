@@ -1,5 +1,5 @@
 
-Clonepi is the default backup SW of RaspberryPi
+Clonepi is the default backup SW of RaspberryPi, which run in the X-windows system
 
 It is running on the local system.
 When you using through the SSH conneciton on network, It fails to detect SD card on USB.
