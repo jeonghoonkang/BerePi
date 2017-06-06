@@ -1,9 +1,12 @@
 
-
 Clonepi is the default backup SW of RaspberryPi
 
 It is running on the local system.
 When you using through the SSH conneciton on network, It fails to detect SD card on USB.
 But you can easily detect SD card by the RaspberryPi which connected to Monitor display and keyboard
 
-
+Just type piclone to run the SW.
+  * have to have run
+    - sudo apt-get update
+    - sudo apt-get dist-upgrade
+    - sudo apt-get install piclone geany usb-modeswitch
