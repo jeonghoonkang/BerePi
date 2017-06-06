@@ -19,3 +19,6 @@ echo "[BerePi] last step of run openTSDB, tcollector by BerePi start-up script"
 echo "------------------------------------------------------------------------"
 echo " "
 
+# 변경사항. 2017-05-29
+#     cd tcollector
+#     sudo python tcollector.py -H <TSDB Host IP> -p <TSDB port> -D
