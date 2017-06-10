@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang
-# monitor.py
-
 
 import platform
 import sys
