@@ -9,16 +9,11 @@
 
 import datetime
 import openpyxl
-import XlsxWriter
+#import XlsxWriter
 import sys
 # sys.path.insert(0, '../doc_design')
 # (to do) have to find how to add different location directory path and file
 # now just using same dir location file
-
-# from openpyxl.workbook import Workbook
-# from openpyxl.writer.excel import ExcelWriter
-# (error) from openpyxl.cell import get_column_letter
-# from openpyxl import load_workbook
 
 class excell_class :
     __ofile = None
@@ -47,16 +42,16 @@ class excell_class :
     # Save to Excel file
     def save_exc (self, __vdata):
         __t = str(datetime.datetime.now())
-        workbook = XlsxWriter.Workbook('takeout_id_result'+__t+'.xlsx')
-        worksheet = workbook.add_worksheet()
+
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.create_sheet(title='id_result')
 
         row = 0
         col = 0
 
         for item in (__vdata):
-            worksheet.write(row, col, item)
-            row += 1
-        workbook.close()
+            worksheet.cell(column=col, row=row, value=item)
+        workbook.save(filename = 'takeout_id_result'+__t+'.xlsx')
 
     # Save to .py file
     # You can read data by * import test.py *
@@ -82,6 +77,6 @@ if __name__ == "__main__":
     sh1 = op.get_sheet_by_name(sheets[0])
     buf = eclass.read_vertical(sh1,'a4','a101')
 
-    save_vdata(err_buf)
+    eclass.save_vdata()
 
     exit (" ...congrats, finish")
