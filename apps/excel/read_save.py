@@ -9,7 +9,6 @@
 
 import datetime
 import openpyxl
-#import XlsxWriter
 import sys
 # sys.path.insert(0, '../doc_design')
 # (to do) have to find how to add different location directory path and file
@@ -40,7 +39,7 @@ class excell_class :
         return __vertical #
 
     # Save to Excel file
-    def save_exc (self, __vdata):
+    def save_exc(self, __vdata):
         __t = str(datetime.datetime.now())
 
         workbook = openpyxl.Workbook()
@@ -77,6 +76,7 @@ if __name__ == "__main__":
     sh1 = op.get_sheet_by_name(sheets[0])
     buf = eclass.read_vertical(sh1,'a4','a101')
 
+    #eclass.save_exc(buf)
     eclass.save_vdata()
 
     exit (" ...congrats, finish")
