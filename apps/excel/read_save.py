@@ -74,7 +74,7 @@ def save_vdata(__vdata):
 
     
     
-    def diff_site_number(__class, target, inv_led):
+def diff_site_number(__class, target, inv_led):
     inv_led_sheets = inv_led.get_sheet_names()
 
     # 인버터 사업장 번호 추출
