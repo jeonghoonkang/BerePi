@@ -106,7 +106,7 @@ def diff_site_number(__class, target, inv_led):
     target = [unicode(i) for i in target_company_nums]
 
     # 두개 파일에 존재하는 사업장 번호 검색
-    # KEA 파일에 있는 아이디가 누리텔레콤 파일에 없는 경우 찾음
+    # EA 파일에 있는 아이디가 EE 파일에 없는 경우 찾음
     # 리스트의 count 함수 이용. 일치하는 멤버없으면 0 리턴, 존재 갯수 리턴
     for idx in range(0, tbn):
         dtect_id = (target[idx])
