@@ -5,8 +5,8 @@
   * [Raspbian](https://www.raspberrypi.org/downloads/raspbian/)
     * download: 2017-04-10
   * [TinyOS](http://tinyos.net/)
-    * apt: 2.1.2
-    * download: apt와 동일
+    * apt: 지원되지 않음
+    * download: 2.1.2
   * [InfluxDB](https://www.influxdata.com/)
     * apt: ?
     * download: ?
