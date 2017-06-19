@@ -1,5 +1,7 @@
+
 #!/usr/bin/python
 #-*-coding:utf8-*-
+# Author : Jeonghoonkang, github.com/jeonghoonkang
 
 import sys, os
 sys.path.insert(0, '/var/www/camera')
