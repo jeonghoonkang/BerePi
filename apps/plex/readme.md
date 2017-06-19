@@ -2,7 +2,7 @@
 #### Plex media server installation
 ##### How to
 
-1) SingUp Plex : https://www.plex.tv 
+1) SignUp Plex : https://www.plex.tv 
 2) Plex Media Server Download & Install : https://www.plex.tv/downloads/
 3) RasPlex Download & Install for Raspberry pi : https://github.com/RasPlex/RasPlex/releases
 4) Link with Plex : https://www.plex.tv/link/
