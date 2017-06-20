@@ -3,7 +3,6 @@
   - https://www.sparkfun.com/datasheets/Sensors/gp2y1010au_e.pdf
   - http://www.sharp-world.com/products/device-china/lineup/data/pdf/datasheet/gp2y1010au_appl_e.pdf
 
-
 ### To use WiringPi
 #### update the GPIO
 
