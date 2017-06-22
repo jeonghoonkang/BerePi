@@ -16,3 +16,9 @@
 
 #### CLI
   - sudo ./build/tsdb scan --import 2017/05/29-00:00:00 sum rc01.temp.degree id=917
+  
+#### 필요 API
+  - Open TSDB 연결설정 , URL / Start time / End time
+  - Open TSDB 읽기
+  - Open TSDB 쓰기
+  
