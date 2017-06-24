@@ -2,7 +2,7 @@
   - Class TSDB
     - init
       - time period
-      - metric
+      - metric name
     - read
       - just read
       - read specific metric
