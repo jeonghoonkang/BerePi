@@ -3,7 +3,7 @@
  - 데이터 분석 
  - 로그 분석
  - 자연어처리 + 통계
-
+ - 서버사용에 대한 시스템 정보 수집 
 
 ```
 59.9.146.51 - work [01/Mar/2016:18:09:11 +0900] "GET /pibox/workfile/d-day/%eb%94%a5%eb%9f%ac%eb%8b%9d_%ec%97%90%eb%84%88%ec%a7%80_100(%ec%82%ac%ec%97%85%ed%99%94)_v000.hwp HTTP/1.1" 200 2938670 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.36"
