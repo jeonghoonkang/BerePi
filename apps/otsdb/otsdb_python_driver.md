@@ -6,10 +6,9 @@
     - read
       - just read
       - read specific metric
-      - return metric name which has been read by funcion
+      - return metric name which has been read by funcion (dictionary)
     - write
       - jsut write
       - write specific metric
-      - return metric name which has been written by funcion
-      
+      - return metric name which has been written by funcion (dictionary)
       
