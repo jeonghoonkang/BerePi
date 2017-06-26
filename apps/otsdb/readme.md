@@ -23,3 +23,16 @@
    - import re 를 이용하여 string -> dictionary 변환 필요
  - Open TSDB 쓰기
   
+  
+<pre>
+        _recom = re.compile('dps')
+        _mobj = _recom.search(_read_buf)
+        _sp = _mobj.end()+3
+        _split = _read_buf[_sp:-3]
+        _split = _split.split(",")
+        _buf_dic = {}
+        
+        for k in _split :
+            _sp_time, _sp_value = k.split(":")
+            _buf_dic[_sp_time] = _sp_value
+</pre>
