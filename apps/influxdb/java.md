@@ -18,7 +18,7 @@
 * [Java client for InfluxDB](https://github.com/influxdata/influxdb-java)
   * [JAR 다운로드](https://mvnrepository.com/artifact/org.influxdb/influxdb-java)
 
-## [예제](TestInfluxDB.java)
+## [예제](java/TestInfluxDB.java)
 ### connect
 * InfluxDBFactory.connect()를 호출
 * 호스트, 포트, 아이디, 암호 정보 입력
