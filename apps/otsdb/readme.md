@@ -25,14 +25,18 @@
   
   
 <pre>
-        _recom = re.compile('dps')
-        _mobj = _recom.search(_read_buf)
-        _sp = _mobj.end()+3
-        _split = _read_buf[_sp:-3]
-        _split = _split.split(",")
-        _buf_dic = {}
-        
-        for k in _split :
-            _sp_time, _sp_value = k.split(":")
-            _buf_dic[_sp_time] = _sp_value
+    _recom = re.compile('dps')
+    _mobj = _recom.search(_read_buf)
+    _sp = _mobj.end()+3
+    _split = _read_buf[_sp:-3]
+    _split = _split.split(",")
+    _buf_dic = {}    
+    for k in _split :
+        _sp_time, _sp_value = k.split(":")
+        _buf_dic[_sp_time] = _sp_value
+                    
+    >>> import ast
+    >>> ast.literal_eval("{'muffin' : 'lolz', 'foo' : 'kitty'}")
+    {'muffin': 'lolz', 'foo': 'kitty'}
+    
 </pre>
