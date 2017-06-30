@@ -9,5 +9,8 @@
       - sys.setdefaultencoding("utf-8")
     - or just add in the __main__
 
+### excel file handling
+  - extract, compare, search
+  
 
 
