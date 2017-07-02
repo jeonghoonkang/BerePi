@@ -1,14 +1,14 @@
 ##### OpenTSDB driver functions
   - Class TSDB
     - init
-      - time period
-      - metric name
+      - Time period
+      - Metric name
     - read
-      - just read
-      - read specific metric
-      - return metric name which has been read by funcion (dictionary)
+      - Just read of TSDB
+      - It returns String but we have to change it to dictionary format
+      - Read specific metric
+      - Return metric name which has been read by funcion (dictionary)
     - write
-      - jsut write
-      - write specific metric
-      - return metric name which has been written by funcion (dictionary)
-      
+      - Jsut write
+      - Write specific metric
+      - Return metric name which has been written by funcion (dictionary)
