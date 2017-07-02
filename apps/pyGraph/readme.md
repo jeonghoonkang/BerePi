@@ -1,4 +1,4 @@
 #### Python graphic display
-  - charting
-  - operations
+  - IoT measurement data charting
+  - Data operations
 
