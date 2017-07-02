@@ -328,8 +328,7 @@ def parse_args():
     #print args
     return url, port, start, end, recent, m
 
-def test(__url, __st, __et, __m):
-
+def ptest(__url, __st, __et, __m):
     tsdbclass = u_ee_tsdb(__url, __st, __et)
     tag = __m
     if (tag == None) : return
@@ -337,6 +336,8 @@ def test(__url, __st, __et, __m):
     tsdbclass.readTSD()
 
 # main function
+# python useTSDB.py -url www.url.address.number -port 4242 -start 20161101 -end 2016110207 -m origin_data
 if __name__ == "__main__":
     u, p, stime, etime, recent, metric = parse_args()
-    test(u, stime, etime, metric)
+    #ptest(u, stime, etime, metric)
+    rtest(u, stime, etime, metric)
