@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang , https://github.com/jeonghoonkang
 
-# openTSDB class 정의
-
 import time
 import datetime
 import os
@@ -12,13 +10,12 @@ import json
 import argparse
 import calendar
 import urllib2
-#import ledinfotest
 from operator import itemgetter, attrgetter
 import datetime
 import xlsxwriter
-import re
 import ast
 
+# openTSDB class 정의
 # OpenTSDB 클래스
 # EE db 는 15분 단위의 데이터를 저장하고 있음
 # OpenTSDB read, and write
@@ -56,43 +53,6 @@ class u_ee_tsdb :
 
     def set_metric(self,__m) : #TSDB는 metric 이름을 기준으로 읽고/저장
         self.__cin_metric_name = __m
-
-    '''
-    ## 함수 : readTSDB
-    특정 시간의 TSDB값 반환
-    parameter1 (in_st) : 시작 시각
-    parameter2 (in_et) : 종료 시각
-    parameter3 (mid) : 미터기 아이디
-    반환 (packetlist_filter) : database 값 리스트(list)
-    '''
-    def read_otsdb(self, __in_st, __in_et, __mid):
-        packetlist = []  # split :
-        packetlist_filter = []  # integer
-
-        # YYYY/MM/DD-HH:00:00
-        starttime = "%s/%s/%s-%s:00:00" % (__in_st[0:4], __in_st[4:6], __in_st[6:8], __in_st[8:10])
-        endtime = "%s/%s/%s-%s:00:00" % (__in_et[0:4], __in_et[4:6], __in_et[6:8], __in_et[8:10])
-        tsdb_url = t_url + starttime + "&end=" + endtime + "&m=avg:test_daily_led" + "%7BMDS_ID=" + str(mid) + "%7D&o=&yrange=%5B0:%5D&wxh=1024x768"
-
-        tsdbdata = urllib2.urlopen(url_tsdb)
-        read_query = tsdbdata.read()
-
-        print read_query
-        exit(-1)
-
-        packets = dataParser(read_query)
-        packet = packets.split(',')
-
-        for k in range(len(packet)):
-            packetlist.append(packet[k].split(":"))
-            tmp = packetlist[k][0]
-            packetlist_filter.append([int(tmp[1:len(tmp) - 1]), float(packetlist[k][1])])
-
-        #mid 추가
-        for k in range(len(packetlist_filter)):
-            packetlist_filter[k].append(mid)
-
-        return packetlist_filter
 
     '''
     ## 함수 : calDate
@@ -247,8 +207,6 @@ class u_ee_tsdb :
         retList = {} #dctionary
 
         _existence, _val = self.get_tsdb_value(_tag)
-        print _val
-
         return _val
 
 ########## end of class u_tsdb
