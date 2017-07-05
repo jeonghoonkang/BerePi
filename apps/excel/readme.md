@@ -11,6 +11,6 @@
 
 ### excel file handling
   - extract, compare, search
-  - edit special cells and boxes
+  - edit special cells and boxes
 
 
