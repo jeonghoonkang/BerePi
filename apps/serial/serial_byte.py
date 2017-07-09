@@ -33,9 +33,11 @@ if __name__== "__main__" :
         # open RASPI serial device, 38400
         # Check speed 38400 or 115200, 9800
         serial_in_device = serial.Serial('/dev/ttyAMA0', rate)
+
     except serial.SerialException, e:
         print " << Serial open error"
         exit(1)
+    
     print " >> Serial Open Complete "
 
     while True:
@@ -47,4 +49,3 @@ if __name__== "__main__" :
             print e
             print " [cnt: %3d]" %lineCnt, " << Serial read error"
             exit(0)
-
