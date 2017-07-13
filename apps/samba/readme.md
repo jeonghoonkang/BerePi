@@ -28,7 +28,7 @@
     - check option of -a 
   - sudo service smbd restart
   
-
+<pre>
 smb.conf
 yes, removing security = share and reinstalling fixed the problem
 
@@ -56,8 +56,7 @@ To                         Action      From
 80                         ALLOW       Anywhere (v6)
 139                        ALLOW       Anywhere (v6)
 445                        ALLOW       Anywhere (v6)
-
-
+</pre>
 
 - 서비스 시작
   - systemctl start [서비스명]
