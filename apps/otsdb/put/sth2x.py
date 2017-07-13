@@ -82,15 +82,14 @@ def otsdb_restful_put_sht2x(_ip = None):
         print ret
         ret = requests.post(url, data=json.dumps(data_humi))
         print ret
-    except requests.exceptions.Timeout :
+    except requests.exceptions.Timeout as e:
         #logger.error("http connection error, Timeout  %s", ret)
-        print("http connection error, Timeout  %s", ret)
+        print("http connection error, Timeout  %s", e.read())
         pass 
-    except requests.exceptions.ConnectionError :
-        print("http connection error, Timeout  %s", ret)
+    except requests.exceptions.ConnectionError as e :
+        print("http connection error, Timeout  %s", e.read())
         #logger.error("http connection error, Too many requests %s")
         pass
-
     return
 
 def temp_chk():
