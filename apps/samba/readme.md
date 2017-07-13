@@ -1,4 +1,5 @@
-#### file sharing via Samba
+#### File sharing via Samba
+ - sudo apt-get install samba samba-common-bin
  - sudo service smbd restart
  - smbpasswd -a pi 
  - sudo vim /etc/samba/smb.conf
@@ -20,7 +21,6 @@
 	read only = no #읽기 전용 여부
 	writable = yes #쓰기 권한 여부
 	public = yes
-	browsable = yes
 	guest ok = no #게스트 계정 접근 허용 여부
 </pre>
 
