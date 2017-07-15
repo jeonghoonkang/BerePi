@@ -47,7 +47,6 @@ colo torte
 set ruler
 syn on
 
-
 set encoding=utf-8
 "set fileencodings=utf-8,euckr
 set fileencodings=utf-8,cp94
