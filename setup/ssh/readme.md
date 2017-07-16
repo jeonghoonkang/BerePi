@@ -2,7 +2,7 @@
 #### 키 관리 방법, 자동 로그인
 
 1. ssh-keygen
-1. cat ~/.ssh/id_rsa.pub | ssh <USERNAME>@<IP-ADDRESS> 'cat >> .ssh/authorized_keys'
+1. cat ~/.ssh/id_rsa.pub | ssh USERNAME>@<IP-ADDRESS 'cat >> .ssh/authorized_keys'
    
 
 <pre>
