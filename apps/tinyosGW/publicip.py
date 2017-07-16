@@ -16,6 +16,11 @@ def getip():
     ip = run_cmd(cmd)
     return ip
 
+def getiip():
+    cmd = "ifconfig"
+    ip = run_cmd(cmd)
+    return ip
+
 if __name__ == '__main__':
     p_ip = getip()
     i_ip = getiip()
