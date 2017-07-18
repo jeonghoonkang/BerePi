@@ -10,7 +10,7 @@ import datetime
 from openpyxl import Workbook
 import openpyxl
 import time
-# import XlsxWriter
+import XlsxWriter
 import sys
 import importlib
 # sys.path.insert(0, '../doc_design')
