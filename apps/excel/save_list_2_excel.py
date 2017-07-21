@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Author : Jeonghoon Kang, https://github.com/jeonghoonkang
+# Author: Jeonghoon Kang, https://github.com/jeonghoonkang
 
 import openpyxl
 import argparse
