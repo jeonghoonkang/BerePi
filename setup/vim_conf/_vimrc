@@ -48,7 +48,6 @@ set shiftround
 set autoindent
 
 set encoding=utf-8
-"set fileencodings=utf-8,euckr
 set fileencodings=utf-8,cp94
 
 set guifont=Consolas:h10:cANSI
