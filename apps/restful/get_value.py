@@ -19,4 +19,5 @@ if __name__ == '__main__':
     para2 = {'nodeid':arg2}
     print get_last_value(arg1, str(para1), para2)
 
-    
+#print "\n Receive OK from server.... " + str(ret) + "\n"
+#if ret.status_code > 200 : print "\n " + str(ret.text) + "\n"
