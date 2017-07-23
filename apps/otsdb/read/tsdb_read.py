@@ -300,3 +300,8 @@ if __name__ == "__main__":
     u, p, stime, etime, recent, metric = parse_args()
     #ptest(u, stime, etime, metric)
     rtest(u, stime, etime, metric)
+    
+    
+# print "\n Receive OK from server.... " + str(ret) + "\n"
+# print if have not proper return  
+# if ret.status_code > 200 : print "\n " + str(ret.text) + "\n
