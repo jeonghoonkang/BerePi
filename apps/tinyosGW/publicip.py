@@ -38,6 +38,7 @@ if __name__ == '__main__':
     writeFile (info, fname)
     
     cmd = "scp" + " %s" %fname + " pi@.iptime.org:" + "/var/www/html/server/" 
+    # should have permission and rsa_key authorization
     ret = run_cmd(cmd)
     print (" ")
     print (ret)
