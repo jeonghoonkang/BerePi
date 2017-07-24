@@ -4,3 +4,5 @@ LANG="ko_KR.UTF-8"
 
 # .bashrc
 export LANGUAGE=ko_KR.UTF-8
+
+dpkg-reconfigure locales
