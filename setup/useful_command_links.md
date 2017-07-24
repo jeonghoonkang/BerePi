@@ -1,7 +1,7 @@
 
 ## Xubuntu 한글 설정
-  - sudo apt install language-selector-gnome
-  - sudo gnome-language-selector
+- sudo apt install language-selector-gnome
+- sudo gnome-language-selector
 
 ## LINKS 
   - cygwin
