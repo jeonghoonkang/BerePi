@@ -3,11 +3,9 @@
 # Author : Jeonghoonkang, github.com/jeonghoonkang 
 
 from matplotlib.dates import HourLocator, MinuteLocator, DateFormatter, date2num
-#import MySQLdb
 import datetime
 import pylab
 import time, sys, os
-#from datetime import timedelta
 
 devel_dir = "/home/pi/devel"
 tmp_dir = devel_dir+"/danalytics/thingsweb/weblib/recv"
@@ -150,40 +148,23 @@ def lastMonthValue(nodeid) :
     else :
         passed_day = 30 + day_delta 
 
-    #print "delta", day_delta
-    #print "passed day", passed_day
-    #print "current wattH", current_wattH
-
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day)) 
 
     print "current watt : %d Wh" %(current_wattH/1000.0)
-    #calcPay(current_wattH/1000.0)
-    
-    print "expected watt on next day of 26, is %d Wh" %est_watt
-    #print "Money %d Won" %calcPay(est_watt)
-    #calcPay(est_watt)
-    
+    print "expected watt on next day of 26, is %d Wh" %est_watt  
     print
     print "previous Month watt : %d Wh" %(lastmonth_wattH/1000.0)
-    #calcPay(lastmonth_wattH/1000.0)
-
     print
     print "30,000 won, 233 Wh"
-    #calcPay(233.0)
-
+    
     exit ("under develplemnt now")
 
     ## Accumulated Watt Hour
 
-    ## excute Query 
     ## if Watth is lack of data, it means DB server does not have data
     ### should check DB schema in order to use exact order of WattH[x]
     preVal = current_tot_etype[0]
     print ' 2 Month ago Meter Valud : %d ' % preVal
-
-    #preMonMeter = ((curVal-preVal)/1000.0)
-    #print ' Previous Month Usage : %f kWh ' % preMonMeter 
-
     return preMonMeter
 
 def keepSearch(st, et, limit=48 ) :
@@ -245,10 +226,6 @@ def calcPay(meterVal):
          for loop in range(6, last_loop-1) : # 6 ~ something payIndex
             onCalc += (payTable_multiplier[5] * 100)
          lastCalc = onCalc + payTable_base[5] + ( payTable_multiplier[5] * (meterVal%100) )
-
-    #print onCalc
-    #print lastCalc
-
     korwon = lastCalc + (lastCalc*0.137)
     print ' Pay KOR_WON = %d ' % korwon
     print
@@ -281,18 +258,6 @@ if __name__== "__main__" :
     ret = ret + "Pay check day is " + str(payCountDay) + " " + "<br>"
 
     nodeid = EtypeId 
-
-    # important functions are here
-    # (fun) lastMonthValue(nodeid)
-    # (fun) calcPay(meterVal)
-    # (fun) currentMonthValue(nodeid)
-
-    # current_etype = get_last_value(dbip,'gyu_RC1_etype.current',{'nodeid':'911'})
-    # current_tot_etype = get_last_value(dbip,'gyu_RC1_etype.t_current',{'nodeid':'911'})
-
-    #print "<Content-Type: text/html;charset=utf-8>"
-    #print '<font size="20">'
-
     meterVal = lastMonthValue(nodeid)
     ret = ret + " Previous month payment = " + str (calcPay(meterVal)) + " KOR WON" + "<br><br> "
 
