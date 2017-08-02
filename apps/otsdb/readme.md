@@ -40,3 +40,7 @@
     {'muffin': 'lolz', 'foo': 'kitty'}
     
 </pre>
+
+### 참고
+- http://www.erol.si/2014/06/opentsdb-the-perfect-database-for-your-internet-of-things-projects/
+- http://www.erol.si/2015/01/why-i-switched-from-opentsdb-to-kairosdb/
