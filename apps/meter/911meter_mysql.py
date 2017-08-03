@@ -176,7 +176,7 @@ dates = [[], [], [], [], [], [], []]
 x = [[], [], [], [], [], [], []]
 row, datetime_ = [], []
 
-db = MySQLdb.connect("...", "keti", "keti123!@#", "PEAKSAVE")
+db = MySQLdb.connect("...", "~~~~", "~~~~", "~~~~")
 cursor = db.cursor()
 
 EtypeId = 911
