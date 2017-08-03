@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang 
 
-
 from matplotlib.dates import HourLocator, MinuteLocator, DateFormatter, date2num
 import MySQLdb
 import datetime
 import pylab
 import time, sys, os
-
-
 
 def currentMonthValue(nodeid) :
     ## collect DB data from MySQL DB to row
@@ -167,7 +164,6 @@ def calcPay(meterVal):
     print ' Pay KOR_WON = %d ' % korwon
     print
     return korwon
-
 
     cursor.close()
     db.close()
