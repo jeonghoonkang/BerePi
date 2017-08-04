@@ -4,10 +4,12 @@ export DNPATH='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/set
 export bashrc_file=$DNPATH/.bashrc
 wget -N $bashrc_file
 sudo scp .bashrc /root
+scp .bashrc ~
 
 export vimrc_file=$DNPATH/.vimrc
 wget -N $vimrc_file
 sudo scp .vimrc /root
+scp .vimrc ~
 
 export vimjelly_file=$DNPATH/vim_conf/jellybeans.vim
 wget -N $vimjelly_file
