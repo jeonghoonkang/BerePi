@@ -10,7 +10,6 @@ import time, sys, os
 devel_dir = "/home/pi/devel"
 tmp_dir = devel_dir+"/danalytics/thingsweb/weblib/recv"
 sys.path.append(tmp_dir)
-
 from lastvalue import *
 
 day_delta = 0
