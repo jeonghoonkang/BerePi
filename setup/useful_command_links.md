@@ -149,3 +149,7 @@ sudo apt-get dist-upgrade
 ### 표준입출력 리디렉션
  - '2>&1'과 같이 주면 표준 에러를 표준 출력과 같은 곳으로 보내라는 뜻이며, '1>&2'의 경우는 표준 출력을 표준 에러와 같은 곳으로 보내라는 뜻이다.
  - https://wiki.kldp.org/HOWTO/html/Bash-Prog-Intro-HOWTO/x55.html
+
+### sed , awk
+- ls | sed -n '3p' >> out.txt
+- awk '{print $3}'
