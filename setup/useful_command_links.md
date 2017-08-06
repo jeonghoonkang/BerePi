@@ -154,4 +154,7 @@ sudo apt-get dist-upgrade
 - 쉘에서 원하는 부분 출력
 - ls | sed -n '3p' >> out.txt
 - awk '{print $3}'
+- ls | sed -n '3p' | xargs -I{} rm {} -rf
+  - xargs 로 전달받은 입력은 제일 뒤에 위치하는데, -I{}를 이용하여, 중간에 위치시킬 수 있다
+
 
