@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# boot : python for raspberrypi
+# booting : python for raspberrypi
 # Author : jeonghoonkang https://github.com/jeonghoonkang
 
 import sys
