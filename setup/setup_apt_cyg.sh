@@ -31,6 +31,8 @@ apt-cyg install libfreetype-devel
 # python get-pip.py
 
 # numpy installation takes a few minutes
+# pip install requests
+# pip install twisted
 # pip install matplotlib
 # pip install scimath
 # pip install networkx
