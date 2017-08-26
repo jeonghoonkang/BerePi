@@ -30,7 +30,6 @@ class excell_class :
 
     def __init__(self):
         pass
-
     #@staticmethod
     def open_exc_doc(self,__file):
         # using unicode file name with u syntax
