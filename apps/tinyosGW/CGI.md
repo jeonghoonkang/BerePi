@@ -3,7 +3,7 @@
   - http://www.evernote.com/l/ABOLKkis29BDVYfV5b_HnJRsG_l3mthRQyA/
   
 - requirements
-  - should have 
+  - should have below in the .py file
     - #!/usr/bin/python
     - unix file type, if you have dos file type, try to use dos2unix command
     
