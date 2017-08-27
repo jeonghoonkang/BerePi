@@ -5,5 +5,6 @@
 - requirements
   - should have below in the .py file
     - #!/usr/bin/python
-    - unix file type, if you have dos file type, try to use dos2unix command
+    - unix file type, if you have dos file type, should change dos2unix command
+      - /r/n issue
     
