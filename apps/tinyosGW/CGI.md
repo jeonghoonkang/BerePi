@@ -7,4 +7,4 @@
     - #!/usr/bin/python
     - unix file type, if you have dos file type, should change dos2unix command
       - /r/n issue
-    
+    - check chmod for +x, eg) chmod 777 {filename}
