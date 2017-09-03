@@ -39,4 +39,3 @@ if __name__== "__main__" :
             print e
             print "[cnt: %3d]" %lineCnt, " << serial read error"
             exit(0)
-
