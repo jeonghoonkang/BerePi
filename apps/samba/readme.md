@@ -66,5 +66,3 @@ To                         Action      From
 
 - 서비스 재시작
   - systemctl restart [서비스명]
-
-
