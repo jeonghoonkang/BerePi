@@ -68,10 +68,9 @@ tr.flush()
 
 ### [Java](java.md)
 
-
 ### HTTP 포트번호
   - 8086 (API 포트, SQL 제공)
-  - 8083 (Admin 포트, 이제부터는 Grafana admin 연결 사용하여 더 이상 사용안함)
+  - 8083 (Admin 포트, 최신버전부터는 Grafana admin 연결 사용하여 더 이상 사용안함)
 
 ### Shell 명령
 
