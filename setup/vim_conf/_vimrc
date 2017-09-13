@@ -50,5 +50,5 @@ set autoindent
 set encoding=utf-8
 set fileencodings=utf-8,cp94
 
-set guifont=Consolas:h10:cANSI
-set guifontwide=Dotumche:h10:cDEFAULT
+set guifont=Consolas:h12:cANSI
+set guifontwide=Dotumche:h12:cDEFAULT
