@@ -1,4 +1,3 @@
-
 #!/usr/bin/python
 #-*-coding:utf8-*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang
