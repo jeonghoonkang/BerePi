@@ -2,5 +2,3 @@
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
 import serial,os,time
-
-
