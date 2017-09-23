@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
@@ -56,4 +55,3 @@ while True:
         GPIO.output(19, False)
         GPIO.output(26, True)
     time.sleep(5.0)
-
