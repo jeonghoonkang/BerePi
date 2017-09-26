@@ -1,4 +1,5 @@
-# coding=utf-8
+
+# -*-coding:utf8-*-
 # Author : Jeonghoon Kang, https://github.com/jeonghoonkang
 
 from __future__ import print_function
