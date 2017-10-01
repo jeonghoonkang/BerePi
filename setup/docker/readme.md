@@ -74,3 +74,25 @@
     - gnome-terminal --geometry=80x48
       - child 창 생성실패로 matplotlib 사용에 적합하지 않음
     
+#### docker 경로 설정
+
+- /usr/lib/systemd/system/docker.servic
+
+'''
+[Unit]
+Description=Docker Application Container Engine
+Documentation=https://docs.docker.com
+After=network.target docker.socket
+Requires=docker.socket
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/docker daemon -g /home/docker -H fd://
+MountFlags=slave
+LimitNOFILE=1048576
+LimitNPROC=1048576
+LimitCORE=infinity
+
+[Install]
+WantedBy=multi-user.target
+'''
