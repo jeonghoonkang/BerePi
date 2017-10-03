@@ -78,6 +78,10 @@
 
 - /usr/lib/systemd/system/docker.servic
 
+#### 대용량 docker 실행시간
+- 4시간 이상 소요
+- 
+
 '''
 [Unit]
 Description=Docker Application Container Engine
