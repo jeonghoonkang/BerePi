@@ -75,12 +75,11 @@
       - child 창 생성실패로 matplotlib 사용에 적합하지 않음
     
 #### docker 경로 설정
-
 - /usr/lib/systemd/system/docker.servic
 
 #### 대용량 docker 실행시간
 - 4시간 이상 소요
-- 
+- https://github.com/jeonghoonkang/BerePi/blob/master/setup/docker/docker_load_ex.png
 
 '''
 [Unit]
