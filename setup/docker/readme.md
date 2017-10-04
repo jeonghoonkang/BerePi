@@ -12,6 +12,7 @@
   - docker exec -it {내가 정한 컨테이너 실행 이름} bash
   - To detach from the container1 container and leave it running, use the keyboard sequence CTRL-p CTRL-q
 
+
 ### 컨테이너 저장 및 백업, 배포
   - 컨테이너 : 도커 이미지가 실행되어 관리 중인 (실행중인) 이미지
   - 컨테이터 커밋
