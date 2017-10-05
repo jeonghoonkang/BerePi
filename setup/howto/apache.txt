@@ -17,7 +17,7 @@
 #### Webdav
 - /etc/apache2/sites-enabled/000-default.conf
  
-```
+<pre>
        Alias /webdav4 /var/www/webdav4
        <Location /webdav4>
            DAV On
@@ -26,6 +26,7 @@
            AuthUserFile /etc/apache2/.webdav.pwd
            Require valid-user
        </Location>
+
        <Directory /var/www/webdav4>
            Options Indexes FollowSymLinks MultiViews
            AllowOverride None
@@ -41,10 +42,11 @@
            AuthUserFile /etc/apache2/.webdav_family.pwd
            Require valid-user
        </Location>
+
        <Directory /var/www/family>
            Options Indexes FollowSymLinks MultiViews
            AllowOverride None
            Order allow,deny
            allow from all
        </Directory>
-```
+</pre>
