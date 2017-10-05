@@ -14,3 +14,37 @@
 
  - 설정이 잘못되면 http 1.1 500 에러 발생 
  
+#### Webdav
+- /etc/apache2/sites-enabled/000-default.conf
+ 
+```
+       Alias /webdav4 /var/www/webdav4
+       <Location /webdav4>
+           DAV On
+           AuthType Basic
+           AuthName "= Webdav4 User"
+           AuthUserFile /etc/apache2/.webdav.pwd
+           Require valid-user
+       </Location>
+       <Directory /var/www/webdav4>
+           Options Indexes FollowSymLinks MultiViews
+           AllowOverride None
+           Order allow,deny
+           allow from all
+       </Directory>
+ 
+       Alias /family /var/www/family
+       <Location /family>
+           DAV On
+           AuthType Basic
+           AuthName "= family User"
+           AuthUserFile /etc/apache2/.webdav_family.pwd
+           Require valid-user
+       </Location>
+       <Directory /var/www/family>
+           Options Indexes FollowSymLinks MultiViews
+           AllowOverride None
+           Order allow,deny
+           allow from all
+       </Directory>
+```
