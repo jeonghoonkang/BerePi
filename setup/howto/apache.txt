@@ -14,7 +14,7 @@
 
  - 설정이 잘못되면 http 1.1 500 에러 발생 
  
-#### Webdav
+#### Webdav 설정 방법
 - /etc/apache2/sites-enabled/000-default.conf
 - apachectl -D DUMP_MODULES | grep dav
 - a2enmod dav_fs
