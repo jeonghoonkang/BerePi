@@ -16,7 +16,12 @@
  
 #### Webdav
 - /etc/apache2/sites-enabled/000-default.conf
- 
+- apachectl -D DUMP_MODULES | grep dav
+- a2enmod dav_fs
+- sudo apt-get install apache2-utils
+- htpasswd -c {filename} {ID}
+- https://zetawiki.com/wiki/%EC%9A%B0%EB%B6%84%ED%88%AC_%EC%95%84%ED%8C%8C%EC%B9%98_WebDAV_%EC%84%A4%EC%A0%95
+
 <pre>
        Alias /webdav4 /var/www/webdav4
        <Location /webdav4>
