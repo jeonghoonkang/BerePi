@@ -23,6 +23,8 @@
                   {이미지이름}
   - 복원
     - docker load < /backup/oracle_xx.tar 
+    - docker load --input {백업파일이름}
+    
 
 ### Docker 네트워크
   - docker network ls
