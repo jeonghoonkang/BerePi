@@ -20,7 +20,6 @@
   - 백업
     - docker save oracle_backup > /backup/oracle_xx.tar
                   {이미지이름}
-
   - 복원
     - docker load < /backup/oracle_xx.tar 
     - docker load --input {백업파일이름}
