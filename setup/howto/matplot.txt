@@ -1,0 +1,4 @@
+
+mpl.use('Agg')
+plot
+bbox_extra_artists=[]
