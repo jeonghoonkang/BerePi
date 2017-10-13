@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Author : jeonghoonkang, https://github.com/jeonghoonkang
+#Author : jeonghoonkang, https://github.com/jeonghoonkang
 
 devel_dir="/home/pi/devel"
 tmp_dir=devel_dir+"/BerePi/apps"
