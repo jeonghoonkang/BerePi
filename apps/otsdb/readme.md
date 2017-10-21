@@ -1,4 +1,4 @@
-#### OpenTSDB 2.3 까지 테스트 완료 (ubuntu)
+##### OpenTSDB 2.3 까지 테스트 완료 (ubuntu)
 
 #### 시스템 구성
 - https://github.com/kowonsik/RPiLogger/blob/master/README.md
@@ -41,7 +41,7 @@
     
 </pre>
 
-### 참고
+#### 참고
 - http://www.erol.si/2014/06/opentsdb-the-perfect-database-for-your-internet-of-things-projects/
 - http://www.erol.si/2015/01/why-i-switched-from-opentsdb-to-kairosdb/
 - openTSDB API 작업중
