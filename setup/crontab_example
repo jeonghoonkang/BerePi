@@ -26,7 +26,7 @@ tinyos@hoth-office ~ $ sudo crontab -l
 MAILTO=tinyos
 
 # m h  dom mon dow   command
-35 3 * * * sudo service stalk restart
+35 3 * * * sudo service stalk restart > /dev/null 2>&1
 40 3 * * * sudo reboot
 
 */30 * * * * python /home/tinyos/my_deamon/publicip.py
