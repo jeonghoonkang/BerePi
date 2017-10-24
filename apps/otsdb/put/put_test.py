@@ -15,7 +15,7 @@ import subprocess
 
 ################
 # example : url = "http://10.0.0.43:4242/api/put"
-
+#
 
 def otsdb_restful_put(url):
     sname = "kang-tinyos-test-000"
