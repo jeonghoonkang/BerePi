@@ -1,5 +1,6 @@
 
 tinyos@hoth-office ~ $ sudo crontab -l
+sudo crontab -e
 
 # Edit this file to introduce tasks to be run by cron.
 #
