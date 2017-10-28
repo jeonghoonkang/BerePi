@@ -2,6 +2,7 @@
 #!/bin/bash
 # Author: jeonghoon.kang@gmail.com
 
+
 echo "Help: source init.sh co <-- checkout" 
 echo "      source init.sh up <-- update" 
 
