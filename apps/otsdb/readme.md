@@ -23,6 +23,7 @@
  - Open TSDB 읽기
    - import re 를 이용하여 string -> dictionary 변환 필요
  - Open TSDB 쓰기
+   - post, socket put
  - 데이터변환, String / Dictionary
   
 <pre>
