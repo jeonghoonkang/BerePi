@@ -28,7 +28,6 @@ def query_last_data_point(bridge_id):
 			ctx = ret.json()
 			if ctx['code'] == 0:
 				return ctx['result']['time'], ctx['result']['value']
-
 	except Exception:
 		#print Exception
 		pass
