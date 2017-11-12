@@ -1,6 +1,8 @@
 #!/usr/bin/python
 #Author : jeonghoonkang, https://github.com/jeonghoonkang
 
+# TO DO : add socket CLI commend
+
 devel_dir="/home/pi/devel"
 tmp_dir=devel_dir+"/BerePi/apps"
 
