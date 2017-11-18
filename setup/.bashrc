@@ -88,6 +88,9 @@ alias l='ls -CF'
 alias screenlist='screen -list'
 #alias clear='printf "\033c"'
 
+LANG="ko_KR.utf8"
+LC_CTYPE="ko_KR.utf8"
+
 # Alias definitions.
 # You may want to put all your additions into a separate file like
 # ~/.bash_aliases, instead of adding them here directly.
