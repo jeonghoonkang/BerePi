@@ -10,22 +10,25 @@
 # chmod 777 /usr/bin/apt-cyg
 
 #gcc installation, try
-apt-cyg install gcc-core
-apt-cyg install cygwin32-freetype2
-apt-cyg install pkg-config
-apt-cyg install libX11-devel
-apt-cyg install make
-apt-cyg install cmake
-apt-cyg install xinit
-apt-cyg install libQt5Core-devel
-apt-cyg install python-devel
-apt-cyg install gcc-g++ libzmq-devel libzmq5
+#apt-cyg install gcc-core
+#apt-cyg install cygwin32-freetype2
+#apt-cyg install pkg-config
+#apt-cyg install libX11-devel
+#apt-cyg install make
+#apt-cyg install cmake
+#apt-cyg install xinit
+#apt-cyg install libQt5Core-devel
+#apt-cyg install python-devel
+#apt-cyg install gcc-g++ libzmq-devel libzmq5
 
 
 #instead of pip install numpy
-apt-cyg install python-numpy
-apt-cyg install libfreetype-devel
+#apt-cyg install python-numpy
+#apt-cyg install libfreetype-devel
 
+
+pip install requests --upgrade
+pip install twisted --upgrade
 #pip installation
 # wget https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py
 # python get-pip.py
@@ -44,8 +47,6 @@ apt-cyg install libfreetype-devel
 # tasklist
 # ps -W
 
-#### python pip in cygwin
-#http://lelandbatey.com/posts/2014/08/installing-pip-in-cygwin
 
 ### FYI, Serial and pip in Cygwin
 # apt-cyg install python-setuptools

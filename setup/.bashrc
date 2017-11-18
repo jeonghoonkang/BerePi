@@ -86,6 +86,10 @@ alias la='ls -Ahp --color'
 alias ls='ls -p --color'
 alias l='ls -CF'
 alias screenlist='screen -list'
+
+export LANG="ko_KR.utf8"
+export LC_CTYPE="ko_KR.utf8"
+
 #alias clear='printf "\033c"'
 
 LANG="ko_KR.utf8"
