@@ -65,7 +65,7 @@ def main():
     retstr = str(ret)
     #assert type(retstr) is StringType, "humi. variable is not an string: %s" %retstr
     if retstr != "-100" :
-        lcd_string('Here %-5.2f %%' % (ret),LCD_LINE_2,1)
+        lcd_string('Here %-5.2f %%' % (ret),LCD_LINE_2,1) # 5 space and 2 under . 
         whiteLCDon()
         time.sleep(2) 
 
