@@ -1,0 +1,1 @@
+atom --clear-window-state
