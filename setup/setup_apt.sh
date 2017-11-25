@@ -49,6 +49,9 @@
 # sudo pip install httplib
 # sudo pip install urllib3
 # sudo pip install utils
+# (for PIP)
+# python -m ensurepip --default-pip
+
 
 
 #########################################################################
