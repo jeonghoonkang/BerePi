@@ -44,6 +44,7 @@ if __name__ == '__main__':
     print (ret)
 
 # cat ~/.ssh/id_rsa.pub | ssh -p OOO tinyos@name.dot.com 'cat >> .ssh/authorized_keys'
+# */30 * * * * python /home/tinyos/my_daemon/publicip.py
 
     
     
