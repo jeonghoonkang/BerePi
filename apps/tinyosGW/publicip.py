@@ -30,10 +30,19 @@ def writeFile(_in, fn = 'ip.txt'):
     return
 
 if __name__ == '__main__':
-    p_ip = getip()
-    i_ip = getiip()
-    info = i_ip + p_ip 
-    fname = '/home/tinyos/my_daemon/output/2T_.txt'
+    dirs = "/home/pi/my_daemon/output"
+    ip = getip()
+    print "My Public IP is ", ip
+    cmd = "mkdir -p %s" %dirs
+    print run_cmd(cmd)
+    cmd = "cd %s" %dirs
+    print run_cmd(cmd)
+    #cmd = "touch /home/tinyos/my_deamon/output"
+    cmd_100 = "ssh pi@iptime.org "
+    cmd_010 = "cd my_daemon/output && echo %s is Lab Server Room IP " %ip[:-1]
+    cmd_001 = " | cat > ip.html" 
+    cmd = cmd_010 + cmd_001  
+    print run_cmd(cmd)
 
     writeFile (info, fname)
     
@@ -43,8 +52,8 @@ if __name__ == '__main__':
     print (" ")
     print (ret)
 
-# cat ~/.ssh/id_rsa.pub | ssh -p OOO tinyos@name.dot.com 'cat >> .ssh/authorized_keys'
-# */30 * * * * python /home/tinyos/my_daemon/publicip.py
-
+# ssh-keygen
+# cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@tinyos.xxx.xxx 'cat >>
+# .ssh/authorized_keys'
     
     
