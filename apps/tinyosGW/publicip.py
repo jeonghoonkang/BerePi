@@ -1,11 +1,9 @@
-#-*- coding: utf-8 -*-
 #!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
+#-*- coding: utf-8 -*-
 
-from __future__ import print_function
 from subprocess import *
 from types import *
-import sys
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
@@ -17,43 +15,28 @@ def getip():
     ip = run_cmd(cmd)
     return ip
 
-def getiip():
-    cmd = "/sbin/ifconfig"
-    iip = run_cmd(cmd)
-    return iip
-
-def writeFile(_in, fn = 'ip.txt'):
-    f = open(fn, 'w')
-    f.write(_in)
-    f.flush()
-    f.close()
-    return
-
 if __name__ == '__main__':
     dirs = "/home/pi/my_daemon/output"
     ip = getip()
-    print "My Public IP is ", ip
+    print "My Public IP is ",  ip
     cmd = "mkdir -p %s" %dirs
     print run_cmd(cmd)
     cmd = "cd %s" %dirs
+    print cmd
     print run_cmd(cmd)
     #cmd = "touch /home/tinyos/my_deamon/output"
     cmd_100 = "ssh pi@iptime.org "
-    cmd_010 = "cd my_daemon/output && echo %s is Lab Server Room IP " %ip[:-1]
+    cmd_010 = "cd /home/pi/my_daemon/output && echo %s is Lab Server Room IP " %ip[:-1]
     cmd_001 = " | cat > ip.html" 
     cmd = cmd_010 + cmd_001  
     print run_cmd(cmd)
 
-    writeFile (info, fname)
-    
-    cmd = "scp" + " %s" %fname + " pi@.iptime.org:" + "/var/www/html/server/" 
-    # should have permission and rsa_key authorization
-    ret = run_cmd(cmd)
-    print (" ")
-    print (ret)
+    cmd_200 = "scp pi@iptime.org "
+    cmd = "scp" + " ip.html" + " pi@iptime.org:" + "www/cog" 
+    print cmd
+    print run_cmd(cmd)
 
 # ssh-keygen
 # cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@tinyos.xxx.xxx 'cat >>
 # .ssh/authorized_keys'
-    
     
