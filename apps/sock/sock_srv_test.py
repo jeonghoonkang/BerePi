@@ -33,10 +33,10 @@ def gettingMsg():
     global cnt
     rcount = 0
     rcvbuf=''
+    writing=''
     outfile = "receive_data.txt"
     while True:
         data = conn.recv(1000*1024)
-        of = open (outfile, 'w+')
         #print data[:100]
         rcount += 1
         if not data:
@@ -48,12 +48,11 @@ def gettingMsg():
             #print 'pos=', pos
             if pos != -1:
                 print rcvbuf
-                of.write(rcvbuf)
+                writing = rcvbuf
                 cnt = 0
                 rcvbuf = ''
             rcvbuf += data
-        of.close()
-        
+       #insertdb(writing) 
     conn.close()
 
 
