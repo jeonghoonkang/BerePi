@@ -22,6 +22,7 @@ if __name__ == '__main__':
     cmd = "mkdir -p %s" %dirs
     print run_cmd(cmd)
     cmd = "cd %s" %dirs
+    
     print cmd
     print run_cmd(cmd)
     #cmd = "touch /home/tinyos/my_deamon/output"
