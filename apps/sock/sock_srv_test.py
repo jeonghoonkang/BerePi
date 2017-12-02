@@ -6,6 +6,10 @@
 #server program
 import socket
 import threading
+import time
+import sys
+
+cnt = 0
 
 HOST = ''
 PORT = 8086
@@ -14,6 +18,7 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind((HOST, PORT))
 s.listen(3)
 conn, addr = s.accept()
+
 print(' '*10, 'Connected by', addr)
 
 # def sendingMsg():
@@ -25,10 +30,13 @@ print(' '*10, 'Connected by', addr)
 
 
 def gettingMsg():
+    global cnt
     rcount = 0
     rcvbuf=''
+    outfile = "receive_data.txt"
     while True:
         data = conn.recv(1000*1024)
+        of = open (outfile, 'w+')
         #print data[:100]
         rcount += 1
         if not data:
@@ -40,18 +48,23 @@ def gettingMsg():
             #print 'pos=', pos
             if pos != -1:
                 print rcvbuf
+                of.write(rcvbuf)
+                cnt = 0
                 rcvbuf = ''
             rcvbuf += data
-
-        outfile = "receive_data"
-        of = open (outfile, 'w+')
-        of.write(metric+'=')
-        of.write(rcvbuf))
         of.close()
-
+        
     conn.close()
+
 
 threading._start_new_thread(gettingMsg,())
 
+
 while True:
-	pass
+    
+    cnt += 1
+    time.sleep(1)
+    pout = "... dummy loop, %s \r" %cnt
+    sys.stdout.write(pout)
+    sys.stdout.flush()
+    pass
