@@ -1,5 +1,6 @@
-#!/usr/bin/python
 #-*-coding:utf8-*-
+
+#!/usr/bin/python
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
 import sys, os
