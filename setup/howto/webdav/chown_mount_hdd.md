@@ -1,10 +1,13 @@
-심볼릭링크 권한 변경
+### 심볼릭링크 권한 변경
 chown -h myuser:mygroup mysymbolic
 
 
-Ubuntu 14.04에 새로운 하드디스크 추가 및 포맷후 자동 마운트 설정
+### Ubuntu 14.04에 새로운 하드디스크 추가 및 포맷후 자동 마운트 설정
 Oct 3, 2015
+
 우분투 머신에 하드디스크 추가 및 포맷 후 자동 마운트 설정하기
+
+```
 1. 하드디스크 설치2. 부팅 후 하드디스크 확인
 > sudo fdisk -l
 ...
@@ -17,7 +20,10 @@ Disk identifier: 0x88f488f4
 
 Disk /dev/sdb doesn't contain a valid partition table
 ...
-3. 파티션 생성
+```
+
+```
+2. 파티션 생성
 > sudo fdisk /dev/sdb
 ...
 Command (m for help): n
@@ -46,7 +52,10 @@ Device Boot Start End Blocks Id System
 
 Command (m for help): w
 The partition table has been altered!
-4. 포맷
+```
+
+```
+3. 포맷
 > sudo mkfs.ext4 /dev/sdb1
 mke2fs 1.42.9 (4-Feb-2014)
 Discarding device blocks: done
@@ -64,8 +73,10 @@ Writing superblocks and filesystem accounting information: done
 UUID=4ed753bb-b5db-f244-8931-154a91fe653e /hdd1 ext4 defaults 0 0
 UUID=4f23c9a4-79e6-420b-a3a5-2ddd7f2e8554 /hdd2 ext4 defaults 0 0
 UUID=66ab73cb-aba8-4747-b302-3980df0461dd /hdd3 ext4 defaults 0 0
+```
 
-5. 마운트
+```
+4. 마운트
 uuid 확인
 > sudo blkid
 ...
@@ -81,4 +92,4 @@ UUID=d2eac947-9407-40bb-96cb-acd22e9a57c3 /ssd2 ext4 defaults 0 0
 Filesystem Size Used Avail Use% Mounted on
 ...
 /dev/sdb1 470G 70M 446G 1% /ssd2
-
+```
