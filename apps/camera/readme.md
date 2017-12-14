@@ -18,7 +18,17 @@
 
 
 
+
+참고 내용
+
+- 라즈베리파이 카메라 원격 제어, 웹캠  <http://jamiej7.wixsite.com/anpr-on-raspberry-pi
+- 구글 API 사용 NODE JS http://bcho.tistory.com/1075
+- 구글 API 사용 Python http://www.hardcopyworld.com/ngine/aduino/index.php/archives/2736
+
+
+
 #### 카메라 동작  
+
 - 기본 동작 완료    
 - 움직임(모션)이 발생한 경우만 촬영하도록 기능 추가 진행   
 - 웹  기반으로 동작하도록  진행  
