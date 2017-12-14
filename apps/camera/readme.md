@@ -1,5 +1,26 @@
 
 
+#### 데모 SW 개발 목표
+
+- 라즈베리파이 카메라로 촬영한 사진들을 
+- Google Vision API 를 통해 JSON 으로 회신 받고
+- 그 중, 숫자를 뽑아내어, TSDB에 입력한다
+- 데모용 사진 : https://github.com/jeonghoonkang/BerePi/tree/master/apps/camera/dataset
+
+
+
+참고 내용
+
+- 라즈베리파이 카메라 원격 제어, 웹캠  <http://jamiej7.wixsite.com/anpr-on-raspberry-pi
+- 구글 API 사용 NODE JS http://bcho.tistory.com/1075
+- 구글 API 사용 Python http://www.hardcopyworld.com/ngine/aduino/index.php/archives/2736
+
+
+
+
+
+
+
 #### 시각지능 분야 IoT 시스템 기술 접목 방법
   - 스마트미터 적용하여 문자를 인식함
   - 시각 지능 성능을 높이기위해 여러대의 카메라를  동기화하여 데이터를 수집함
@@ -10,20 +31,6 @@
       - 아직 안정적인 데이터가 확보되지 않은 대부분의 중소기업은 인공지능 서비스를 시작하기 위해서는 자체적으로 데이터를 확보해야 함
       - 그러면, 데이터 보유기관이 없는 중소기업은 자신들이 데이터를 수집해서 확보해야 한다. 이를 기반으로 신규서비스 구현 가능성을 증명해야 함
 
-#### 데모 SW 개발 목표 
-
-- 라즈베리파이 카메라로 촬영한 사진들을 
-- Google Vision API 를 통해 JSON 으로 회신 받고
-- 그 중, 숫자를 뽑아내어, TSDB에 입력한다
-
-
-
-
-참고 내용
-
-- 라즈베리파이 카메라 원격 제어, 웹캠  <http://jamiej7.wixsite.com/anpr-on-raspberry-pi
-- 구글 API 사용 NODE JS http://bcho.tistory.com/1075
-- 구글 API 사용 Python http://www.hardcopyworld.com/ngine/aduino/index.php/archives/2736
 
 
 
