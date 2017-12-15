@@ -3,7 +3,7 @@
 https://github.com/jeonghoonkang/BerePi/blob/master/apps/camera/LS%EC%82%B0%EC%A0%84_%EC%B9%B4%EB%8B%AC%EB%A1%9C%EA%B7%B8.png
 
 
-### Google Vision API 회신 JSON
+### API 회신 JSON
 ```
  {
   "labelAnnotations": [
