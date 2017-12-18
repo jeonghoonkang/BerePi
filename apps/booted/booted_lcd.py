@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # booting sw for raspberrypi
 # Author : jeonghoonkang https://github.com/jeonghoonkang
-#
 
 import sys
 import subprocess
