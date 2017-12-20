@@ -6,6 +6,7 @@
 import sys, os
 sys.path.insert(0, '/var/www/camera')
 #import textindex
+
 from time import strftime, localtime, sleep
 import picamera
 import datetime
@@ -30,7 +31,7 @@ foto_cnt = 0
 
 camera =  picamera.PiCamera() 
 camera.resolution = (1024, 768)
-camera.rotation = -180
+camera.rotation = 180
 
 while True:
 
