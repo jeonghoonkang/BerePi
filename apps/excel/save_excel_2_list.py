@@ -10,7 +10,6 @@ import argparse
 import sys
 import pickle
 
-
 class excell_class :
     __ofile = None
 
