@@ -1,5 +1,5 @@
 
-### in case of below error
+### In case of below error
   - UnicodeDecodeError: 'ascii' codec can't decode byte 0xec in position 6: ordinal not in range(128)
 
 ### include utf-8 encoding
