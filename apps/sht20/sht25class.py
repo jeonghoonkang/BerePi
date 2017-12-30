@@ -1,6 +1,5 @@
-#!/usr/bin/python
 # code from http://www.emsystech.de/raspi-sht21
-# http://github.com/jeonghoonkang
+# Author http://github.com/jeonghoonkang
 
 import fcntl
 import time
