@@ -16,8 +16,7 @@
   
 #### OpenTSDB 2.1 이미지 파일 (예정)
 
-#### CLI
-  - sudo ./build/tsdb scan --import 2017/05/29-00:00:00 sum rc01.temp.degree id=917
+#### 실행방법
   
 #### 필요 API
  - Open TSDB 연결설정 , URL / Start time / End time
