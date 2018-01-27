@@ -1,7 +1,5 @@
-
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang , https://github.com/jeonghoonkang
-
 
 import time
 import datetime
