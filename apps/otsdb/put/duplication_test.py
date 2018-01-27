@@ -23,22 +23,30 @@ sock.connect((HOST, PORT))
 def parse_args():
 
     story = 'OpenTSDB needs many arguments URL, start time, end time, port '
-    usg = '\n python tsdb_read.py  -url x.x.x.x
-        -port 4242 -start 2016110100 -end 2016110222
+    usg = '\n python tsdb_read.py  -url x.x.x.x \
+        -port 4242 -start 2016110100 -end 2016110222 \
         -rdm metric_name, -wm write_metric_name --help for more info'
 
     parser=argparse.ArgumentParser(description=story,
-        usage=usg, 
+        usage=usg,
         formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument("-url",    default="125.140.110.217", help="URL input, or run fails")
-    parser.add_argument("-start",  default='2016070100', help="start time input, like 2016110100")
-    parser.add_argument("-end",    default='2017070100', help="end time input, like 2016110223")
-    parser.add_argument("-port",   default=4242, help="port input, like 4242")
-    parser.add_argument("-recent", default=None, help="Time input for recent value")
-    parser.add_argument("-rdm", default=None, help="metric ")
-    parser.add_argument("-val", default=None, help="value ")
-    parser.add_argument("-wtm", default='___d_tag_test_load_rate_6', help="write-metric ")
+    parser.add_argument("-url",    default="125.140.110.217",
+        help="URL input, or run fails")
+    parser.add_argument("-start",  default='2016070100',
+        help="start time input, like 2016110100")
+    parser.add_argument("-end",    default='2017070100',
+        help="end time input, like 2016110223")
+    parser.add_argument("-port",   default=4242,
+        help="port input, like 4242")
+    parser.add_argument("-recent", default=None,
+        help="Time input for recent value")
+    parser.add_argument("-rdm", default=None,
+        help="metric ")
+    parser.add_argument("-val", default=None,
+        help="value which will be inserted to OpenTSDB")
+    parser.add_argument("-wtm", default='___d_tag_test_load_rate_6',
+        help="write-metric ")
     args = parser.parse_args()
 
     #check args if valid
@@ -67,7 +75,7 @@ def parse_args():
         exit("... I can not do anything without metric")
 
 
-    return url, port, start, end, recent, m, wm, args.va
+    return url, port, start, end, recent, m, wm, args.val
 
 
 def sockWriteTSD(__wmetric, __utime, __value, __tags = None):
@@ -82,7 +90,7 @@ def sockWriteTSD(__wmetric, __utime, __value, __tags = None):
 
     return
 
- if __name__ == "__main__":
+if __name__ == "__main__":
     u, p, stime, etime, recent, metric, write_metric, val = parse_args()
 
     #insert_load_rate(u, metric, write_metric, inlist, maxdict, stime, etime)
