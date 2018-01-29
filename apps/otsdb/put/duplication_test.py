@@ -102,4 +102,4 @@ if __name__ == "__main__":
 
     #cpmetric(u, metric, stime, etime, write_metric )
 
-    ret = countall(u, metric, stime, etime, inlist)
+    #ret = countall(u, metric, stime, etime, inlist)
