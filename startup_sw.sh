@@ -7,3 +7,12 @@ alias sr='screen'
 sudo screen -dmS startup sudo sh /home/pi/devel/BerePi/apps/otsdb/start_tsdb.sh
 #sudo screen -dmS lcd sudo python /home/pi/devel/BerePi/apps/lcd_berepi/watch.py -ip xxxxx
 
+
+####
+# in /etc/rc.local
+####
+# startup software by BerePi
+#sudo sh /home/pi/devel/BerePi/startup_sw.sh
+#exit0
+####
+
