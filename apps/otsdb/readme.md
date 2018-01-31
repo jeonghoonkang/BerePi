@@ -1,9 +1,9 @@
 ##### OpenTSDB 2.3 까지 테스트 완료 (ubuntu)
 
-#### 시스템 구성
+#### 시스템 설치방법
 - https://github.com/kowonsik/RPiLogger/blob/master/README.md
 - JAVA 설치 : 라즈베리파이 기본 JDK 설치를 따르며, 정확한 경로로 설정해야 함
-- 테스트 시스템 통합 필요
+- 단계별 테스트를 
 
 #### Hbase 테이블 생성
 - env COMPRESSION=NONE HBASE_HOME=/usr/local/hadoop/hbase-1.0.1.1 ./src/create_table.sh
