@@ -1,0 +1,4 @@
+
+groupadd {group_name}
+
+sudo gpasswd -a {user} {group_name}
