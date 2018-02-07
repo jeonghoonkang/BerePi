@@ -17,7 +17,7 @@ def getip():
     return ip
 
 if __name__ == '__main__':
-    dirs = "/home/pi/my_daemon/output"
+    dirs = "./output"
     ip = getip()
     print "My Public IP is ",  ip
     cmd = "mkdir -p %s" %dirs
