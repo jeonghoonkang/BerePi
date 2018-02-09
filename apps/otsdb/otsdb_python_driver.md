@@ -21,7 +21,7 @@
       - Jsut write
       - Write specific metric
       - Return metric name which has been written by funcion (dictionary)
-    
-    - Copy
+
+    - Copy
       - read and write to different metric
  
