@@ -55,14 +55,14 @@ class u_ee_tsdb :
     def set_metric(self,__m) : #TSDB는 metric 이름을 기준으로 읽고/저장
         self.__cin_metric_name = __m
 
-    '''
+    """
     ## 함수 : calDate
     특정 시간 사이에 날짜들을 연월일시간(YYMMDDhh)을 반환
     open TSDB는 이런형식으로 날짜입력이 된다
     parameter1 (sttime) : 시작 시각
     parameter2 (ettime) : 종료 시각
     반환 (re_datelist) : 날짜 리스트
-    '''
+    """
     def makeDateList(self):
         w_sttime = self.__cin_stime #start unixtime
         w_ettime = self.__cin_etime #end unixtime
