@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+
+#-*- coding: utf-8 -*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
 import platform
@@ -8,6 +9,7 @@ import time
 import traceback
 import requests
 import RPi.GPIO as GPIO
+
 from socket import gethostname
 
 hostname =  gethostname()
