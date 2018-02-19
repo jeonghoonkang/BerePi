@@ -1,7 +1,6 @@
-
+#-*- coding: utf-8 -*-
 #!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
-#-*- coding: utf-8 -*-
 
 from subprocess import *
 from types import *
