@@ -1,5 +1,4 @@
 
-
 #### 데모 SW 개발 목표
 
 - 라즈베리파이 카메라로 촬영한 사진들을 
@@ -14,11 +13,6 @@
 - 라즈베리파이 카메라 원격 제어, 웹캠  <http://jamiej7.wixsite.com/anpr-on-raspberry-pi
 - 구글 API 사용 NODE JS http://bcho.tistory.com/1075
 - 구글 API 사용 Python http://www.hardcopyworld.com/ngine/aduino/index.php/archives/2736
-
-
-
-
-
 
 
 #### 시각지능 분야 IoT 시스템 기술 접목 방법
