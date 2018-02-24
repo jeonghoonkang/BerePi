@@ -1,6 +1,4 @@
-
 # -*- coding: utf-8 -*-
-
 # booting sw for raspberrypi
 # Author : jeonghoonkang https://github.com/jeonghoonkang
 
@@ -46,6 +44,5 @@ if __name__== "__main__" :
     lcd_string('%s WL     ' % (str),LCD_LINE_2,2)
   else :
     lcd_string('no Wi-Fi IP ',LCD_LINE_2,2)
-
 
   time.sleep(3.5)
