@@ -1,7 +1,6 @@
 #!/usr/bin/python
 #Author : jeonghoonkang, https://github.com/jeonghoonkang
 
-
 # TO DO : add socket CLI commend
 
 devel_dir="/home/pi/devel"
@@ -92,5 +91,5 @@ if __name__== "__main__" :
         url = 'http://' + url + '/api/put'
         print url
     otsdb_restful_put(url)
-    time.sleep(1)
+    time.sleep(0.1)
     print "\n ...ending..."
