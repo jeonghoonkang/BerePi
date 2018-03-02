@@ -2,6 +2,8 @@
 # https://github.com/jeonghoonkang
 # bash configuration for MAC OSX
 # User specific aliases and functions
+### important : this file name should be .bash_profile
+
 C_DEFAULT="\[\033[m\]"
 C_CYAN="\[\033[36m\]"
 C_GREEN="\[\033[32m\]"
