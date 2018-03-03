@@ -1,43 +1,60 @@
-#-*- coding: utf-8 -*-
+
 #!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
+#-*- coding: utf-8 -*-
 
+from __future__ import print_function
 from subprocess import *
 from types import *
+import sys
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
     return output
 
+def hostname():
+    cmd = "hostname"
+    ret = run_cmd(cmd)
+    return ret
+
 def getip():
     cmd = "curl http://checkip.amazonaws.com"
     ip = run_cmd(cmd)
     return ip
 
-if __name__ == '__main__':
-    dirs = "./output"
-    ip = getip()
-    print "My Public IP is ",  ip
-    cmd = "mkdir -p %s" %dirs
-    print run_cmd(cmd)
-    cmd = "cd %s" %dirs
-    
-    print cmd
-    print run_cmd(cmd)
-    #cmd = "touch /home/tinyos/my_deamon/output"
-    cmd_100 = "ssh pi@iptime.org "
-    cmd_010 = "cd /home/pi/my_daemon/output && echo %s is Lab Server Room IP " %ip[:-1]
-    cmd_001 = " | cat > ip.html" 
-    cmd = cmd_010 + cmd_001  
-    print run_cmd(cmd)
+def getiip():
+    cmd="/sbin/ifconfig"
+    iip = run_cmd(cmd)
+    return iip
 
-    cmd_200 = "scp pi@iptime.org "
-    cmd = "scp" + " ip.html" + " pi@iptime.org:" + "www/cog" 
-    print cmd
-    print run_cmd(cmd)
+def checkifexist(fname):
+    cmd='ls ' + fname
+    print (run_cmd(cmd))
+
+def writefile(_in, fn="ip.txt"):
+    f = open(fn, 'w')
+    f.write(_in)
+    f.flush()
+    f.close()
+    return
+
+if __name__ == '__main__':
+    dirs = "./out"
+    p_ip = getip()
+    i_ip = getiip()
+    info = i_ip + p_ip
+    hostn = hostname()
+    fname = '/home/tinyos/devel/BerePi/apps/tinyosGW/out/%s.txt' %hostn[:-1]
+
+    writefile (info, fname)
+    checkifexist(fname)
+
+    cmd = "scp" + " %s " %fname + 'pi@dns.iptime.org:' + '/var/www/html/server/'
+    ret = run_cmd(cmd)
+    print (" ")
+    print (ret)
 
 # ssh-keygen
 # cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@tinyos.xxx.xxx 'cat >>
 # .ssh/authorized_keys'
-    
