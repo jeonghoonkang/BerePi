@@ -56,5 +56,5 @@ if __name__ == '__main__':
     print (ret)
 
 # ssh-keygen
-# cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@tinyos.xxx.xxx 'cat >>
+# cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@xxx.xxx.xxx 'cat >>
 # .ssh/authorized_keys'
