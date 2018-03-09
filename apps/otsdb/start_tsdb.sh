@@ -3,6 +3,7 @@
 echo " "
 echo "----------------------------------------------------"
 echo "[BerePi] starting openTSDB by BerePi start-up script"
+echo "----------------------------------------------------"
 
 cd /usr/local/hadoop/hbase-1.0.1.1/
 #sudo sh ./bin/stop-hbase.sh
