@@ -10,7 +10,6 @@ tmp_dir=berePi_dir + "/apps/lcd_berepi/lib"
 sys.path.append(tmp_dir)
 from lcd import *
 
-
 def wip_chk():
     cmd = "ip addr show wlan0 | grep inet | awk '{print $2}' | cut -d/ -f1"
     wipAddr = run_cmd(cmd)
