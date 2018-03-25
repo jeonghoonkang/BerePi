@@ -39,7 +39,7 @@ def otsdb_restful_put_sht2x(_ip = None):
     else: ip_add = 'unkown'
     _time = time.time() 
 
-    metric = "jkraspi.rc01.temp.degree"
+    metric = "__raspi.rc01.temp.degree"
     print "   ", url, metric, "IPadd=",ip_add
 
     data_temp = {
