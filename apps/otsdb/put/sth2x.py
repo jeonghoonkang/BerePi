@@ -17,6 +17,7 @@ from sht25class import *
 
 ################
 
+'''url을 반드시 넣어줘야 합니다'''
 #url = "http://10.0.0.43:4242/api/put"
 
 def otsdb_restful_put_sht2x(_ip = None):
