@@ -1,6 +1,6 @@
 
-  * github
-    * fork 사용법
+  * github 사용법
+    * fork 사용법
       - https://dogfeet.github.io/articles/2012/how-to-github.html
 
   * Cygwin에서 Github 에 Git으로 CO, Commit, UP 방법
@@ -9,3 +9,5 @@
     * git config --global user.email "email address" (commit 했더니 필요하다고 함)
     * git commit -m "change"
     * git push origin master
+    
+    Cygwin 설명 - https://ko.wikipedia.org/wiki/%EC%8B%9C%EA%B7%B8%EC%9C%88
