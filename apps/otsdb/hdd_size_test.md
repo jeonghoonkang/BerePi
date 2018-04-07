@@ -15,6 +15,7 @@ tmpfs           218M     0  218M   0% /sys/fs/cgroup
 
 ```
 2017 / 10 / 28
+
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root        29G   15G   13G  55% /
 devtmpfs        214M     0  214M   0% /dev
