@@ -74,7 +74,6 @@ def parse_args():
         print usg
         exit("... I can not do anything without metric")
 
-
     return url, port, start, end, recent, m, wm, args.val
 
 
