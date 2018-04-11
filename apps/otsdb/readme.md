@@ -17,7 +17,8 @@
 #### OpenTSDB 2.3 이미지 파일 (예정)
 
 #### 실행방법
-  
+실행설정방법
+  
 #### 필요 API
  - Open TSDB 연결설정 , URL / Start time / End time
  - Open TSDB 읽기
