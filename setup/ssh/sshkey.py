@@ -20,8 +20,8 @@ if __name__ == '__main__':
     ip = arg1
     port = arg2
     id = arg3
-    print ("...running",ip, port, id)
-    
+    print ("...running", " inputs are ", ip, port, id)
+
 
 
 '''
