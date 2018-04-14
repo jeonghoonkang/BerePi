@@ -25,7 +25,7 @@ if __name__ == '__main__':
     print ("... key generating")
     os.system('ssh-keygen')
 
-    run_cmd = "cat '/home/tinyos/.ssh/id_rsa.pub'"
+    run_cmd = "cat ~/.ssh/id_rsa.pub"
     run_cmd += " | ssh -p %s %s@%s" %(port, id, ip)
     run_cmd += " 'cat>>/home/%s/.ssh/authorized_keys'" %id
     print (run_cmd)
