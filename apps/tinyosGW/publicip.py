@@ -49,7 +49,7 @@ if __name__ == '__main__':
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = "scp" + " %s " %fname + 'pi@tinyos.iptime.org:' + '/var/www/html/server/'
+    cmd = "scp" + " %s " %fname + 'pi@dns.iptime.org:' + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
     print (ret)
