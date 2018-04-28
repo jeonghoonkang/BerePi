@@ -8,11 +8,11 @@ import sys
 
 if __name__ == '__main__':
 
-    print ("usage : python %s {IP_ADD} {PORT}, {} : user should input" %__file__)
+    print ("usage : python %s {IP_ADD} {PORT} {id}, {} : user should input" %__file__)
     exit()
 
     if len(sys.argv) < 2:
-        exit("[bye] you need to input args")
+        exit("[bye] you need to input args, ip / port / id")
 
     arg1 = sys.argv[1]
     arg2 = sys.argv[2]
