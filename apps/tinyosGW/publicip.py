@@ -1,11 +1,13 @@
+#-*- coding: utf-8 -*-
 #!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
-#-*- coding: utf-8 -*-
 
 from __future__ import print_function
 from subprocess import *
 from types import *
+import platform
 import sys
+import os
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
@@ -20,10 +22,15 @@ def hostname():
 def getip():
     cmd = "curl http://checkip.amazonaws.com"
     ip = run_cmd(cmd)
+    print (ip)
     return ip
 
 def getiip():
+
     cmd="/sbin/ifconfig"
+    _str = platform.system()
+    if _str.find('Cygwin'):
+        cmd = "ipconfig"
     iip = run_cmd(cmd)
     return iip
 
@@ -38,18 +45,41 @@ def writefile(_in, fn="ip.txt"):
     f.close()
     return
 
+def args_proc():
+
+    msg = "usage : python %s {server_IP_ADD} {server_PORT} {server_id}  " %__file__
+    msg += " => user should input arguments {} "
+    print (msg)
+
+    if len(sys.argv) < 2:
+        exit("[bye] you need to input args, ip / port / id")
+
+    arg1 = sys.argv[1]
+    arg2 = sys.argv[2]
+    arg3 = sys.argv[3]
+
+    ip = arg1
+    port = arg2
+    id = arg3
+    print ("... start running, inputs are ", ip, port, id)
+
+    return ip, port, id
+
 if __name__ == '__main__':
+
     dirs = "./out"
+    ip, port, id = args_proc()
+
     p_ip = getip()
     i_ip = getiip()
     info = i_ip + p_ip
     hostn = hostname()
-    fname = '/home/tinyos/devel/BerePi/apps/tinyosGW/out/%s.txt' %hostn[:-1]
+    fname = './out/%s.txt' %hostn[:-1]
 
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = "scp" + " %s " %fname + 'pi@dns.iptime.org:' + '/var/www/html/server/'
+    cmd = "scp" + " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
     print (ret)
