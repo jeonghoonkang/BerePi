@@ -8,15 +8,14 @@ import sys
 
 if __name__ == '__main__':
 
-    print ("usage : python sshkey.py {ID@IP_ADD} {PORT}, {} : user should input")
+    print ("usage : python %s {ID@IP_ADD} {PORT}, {} : user should input" %__file__)
 
     if len(sys.argv) < 2:
         exit("[bye] you need to input args")
 
     arg1 = sys.argv[1]
     arg2 = sys.argv[2]
-    arg3 = sys.argv[3]
-
+    
     ip = arg1
     port = arg2
     id = arg3
