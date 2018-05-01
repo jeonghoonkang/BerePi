@@ -29,7 +29,8 @@ JAVA_HOME=/usr/lib/jvm/java-8-oracle sudo sh start-hbase.sh
 sleep 5
 
 cd /hdd1/hadoop/opentsdb/build
-JAVA_HOME=/usr/lib/jvm/java-8-oracle /hdd1/hadoop/opentsdb/build/tsdb tsd --port=4242 --staticroot=staticroot --cachedir=/hdd1/hadoop/opentsdb/cache_tmp --auto-metric
+JAVA_HOME=/usr/lib/jvm/java-8-oracle /hdd1/hadoop/opentsdb/build/tsdb tsd --port=4242 
+  --staticroot=staticroot --cachedir=/hdd1/hadoop/opentsdb/cache_tmp --auto-metric
 </pre>
 
 <pre>
