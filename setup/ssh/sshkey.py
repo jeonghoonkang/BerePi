@@ -18,16 +18,15 @@ if __name__ == '__main__':
     
     ip = arg1
     port = arg2
-    id = arg3
-    print ("... start running", " inputs are ", ip, port, id)
+    print ("... start running", " inputs are ", ip, port)
 
     print ("... key generating")
     os.system('ssh-keygen')
 
     print ("... entering copying security file")
     run_cmd = "cat ~/.ssh/id_rsa.pub"
-    run_cmd += " | ssh -p %s %s@%s" %(port, id, ip)
-    run_cmd += " 'cat>>/home/%s/.ssh/authorized_keys'" %id
+    run_cmd += " | ssh -p %s %s" %(port, ip)
+    run_cmd += " 'cat>>/home/%s/.ssh/authorized_keys'" %ip[:ip.index('@')]
     print (run_cmd)
     os.system(run_cmd)
 
