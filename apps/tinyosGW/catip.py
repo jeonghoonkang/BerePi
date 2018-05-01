@@ -47,12 +47,12 @@ if __name__ == '__main__':
     i_ip = getiip()
     info = i_ip + p_ip
     hostn = hostname()
-    fname = '/home/tinyos/devel/BerePi/apps/tinyosGW/out/%s.txt' %hostn[:-1]
+    fname = '/home/%s/devel/BerePi/apps/tinyosGW/out/%s.txt' %(id, hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = "scp" + " %s " %fname + 'pi@dns.iptime.org:' + '/var/www/html/server/'
+    cmd = "scp" + " %s " %fname + '%s@%s:'%(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
     print (ret)
