@@ -22,6 +22,8 @@
  - (예) ./start_sw.sh 과 /etc/rc.local
 <pre>
 #!/bin/sh -e
+#
+# ./start_sw.sh
 
 cd /usr/local/hadoop/hbase-1.1.13/bin
 JAVA_HOME=/usr/lib/jvm/java-8-oracle sudo sh start-hbase.sh
