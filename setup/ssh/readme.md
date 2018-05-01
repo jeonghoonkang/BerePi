@@ -15,7 +15,18 @@ Your identification has been saved in /home/tinyos/.ssh/id_rsa.
 Your public key has been saved in /home/tinyos/.ssh/id_rsa.pub.
 The key fingerprint is:
 SHA256:~~H2h/~~~~~~~~~~~~ tinyos@NUC
-The key's randomart image is:+---[RSA 2048]----+|     o+.oo oo..  ||     o .E..+oo . ||    o + . o.o o  ||     * . = . +   ||      ~~~~~~~~.  ||     . * O + o . ||      . o = . o .||           ... = ||            o*B..|+----[SHA256]-----+
+The key's randomart image is:
++---[RSA 2048]----+|
+      o+.oo oo..  ||
+      o .E..+oo . ||
+     o + . o.o o  ||
+      * . = . +   ||
+       ~~~~~~~~.  ||
+      . * O + o . ||
+         o = . o .||
+            ... = ||
+              o*B..|
++----[SHA256]-----+
 </pre>
 
 
