@@ -16,9 +16,34 @@
   
 #### OpenTSDB 2.3 이미지 파일 (예정)
 
-#### 실행방법
-실행설정방법
-  
+#### 실행 방법
+ - 실행 설정 방법
+ - 부팅할때 시작하려면, /etc/rc.local 에서 /home/{ID}/start_sw.sh 을 실행하면 됨
+ - (예) ./start_sw.sh 과 /etc/rc.local
+<pre>
+#!/bin/sh -e
+
+cd /usr/local/hadoop/hbase-1.1.13/bin
+JAVA_HOME=/usr/lib/jvm/java-8-oracle sudo sh start-hbase.sh
+
+sleep 5
+
+cd /hdd1/hadoop/opentsdb/build
+JAVA_HOME=/usr/lib/jvm/java-8-oracle /hdd1/hadoop/opentsdb/build/tsdb tsd --port=4242 --staticroot=staticroot --cachedir=/hdd1/hadoop/opentsdb/cache_tmp --auto-metric
+</pre>
+
+<pre>
+#!/bin/sh -e
+#
+# rc.local
+
+cd /home/opentsdb
+sh /home/opentsdb/start_sw.sh
+
+exit 0 
+</pre>
+
+
 #### 필요 API
  - Open TSDB 연결설정 , URL / Start time / End time
  - Open TSDB 읽기
