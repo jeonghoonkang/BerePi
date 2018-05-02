@@ -38,9 +38,6 @@ if __name__ == '__main__':
     #print (ret)
 
     
-    
-    
-    
     if __name__ == '__main__':
     dirs = "./out"
     p_ip = getip()
