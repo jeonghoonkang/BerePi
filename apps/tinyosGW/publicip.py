@@ -29,7 +29,8 @@ def getiip():
 
     cmd="/sbin/ifconfig"
     _str = platform.system()
-    if _str.find('Cygwin'):
+    print (_str)
+    if _str.find('Cygwin') > 0:
         cmd = "ipconfig"
     iip = run_cmd(cmd)
     return iip
