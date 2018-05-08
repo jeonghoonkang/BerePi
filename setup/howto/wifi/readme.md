@@ -15,14 +15,14 @@ country=GB
 network={
         ssid="wall"
     scan_ssid=1
-        psk=4548ff5e3723dc010afed1e0dc771a54e8a212c7c683845ed9a8e588100ebdd5
+        psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
 #    priority=1
 #    id_str="office"
 }
 
 #network={
 #       ssid="yebbi Secure"
-#       psk=91188c0ea11c534843f8826e4db4f73c22d7122024c9badf98dc0b31d55a1365
+#       psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
 #    priority=2
 #    id_str="home"
 #}
@@ -38,14 +38,14 @@ country=GB
 network={
         ssid="wall"
     scan_ssid=1
-        psk=4548ff5e3723dc010afed1e0dc771a54e8a212c7c683845ed9a8e588100ebdd5
+        psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
 #    priority=1
     id_str="office"
 }
 
 #network={
 #       ssid="yebbi Secure"
-#       psk=91188c0ea11c534843f8826e4db4f73c22d7122024c9badf98dc0b31d55a1365
+#       psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
 #    priority=2
 #    id_str="home"
 #}
@@ -61,14 +61,14 @@ country=GB
 network={
     ssid="wall"
     scan_ssid=1
-    psk=4548ff5e3723dc010afed1e0dc771a54e8a212c7c683845ed9a8e588100ebdd5
+    psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
     priority=1
     id_str="office"
 }
 
 #network={
 #   ssid="yebbi Secure"
-#   psk=91188c0ea11c534843f8826e4db4f73c22d7122024c9badf98dc0b31d55a1365
+#   psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
 #    priority=2
 #    id_str="home"
 #}
@@ -85,7 +85,7 @@ update_config=1
 network={
         ssid="wall"
         scan_ssid=1
-        psk=4548ff5e3723dc010afed1e0dc771a54e8a212c7c683845ed9a8e588100ebdd5
+        psk=4548ff5e3723dc010afed8a212c7c683845ed9a8e588100ebdd5
 #        priority=1
 #        id_str="office"
 }
