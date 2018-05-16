@@ -4,7 +4,8 @@
 #### 시스템 설치방법
 - https://github.com/kowonsik/RPiLogger/blob/master/README.md
 - JAVA 설치 : 라즈베리파이 기본 JDK 설치를 따르며, 정확한 경로로 설정해야 함
-- 단계별 테스트 샘플코드 작성 예정 
+- 단계별 테스트 샘플코드 작성 예정
+- 윈도우에서 실행 여부 확인 
 
 #### Hbase 테이블 생성
 - env COMPRESSION=NONE HBASE_HOME=/usr/local/hadoop/hbase-1.0.1.1 ./src/create_table.sh
