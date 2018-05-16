@@ -1,5 +1,8 @@
 
-#Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
+# Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
+
+# This script for Ubuntu (in the Windows10)
+# python lib requred for matplot & scikit-learn  
 
 #sudo apt-get -y install subversion
 
