@@ -11,6 +11,7 @@ sudo sh ./bin/start-hbase.sh && sleep 90 # raspberryPi zero 에서는 90초 정�
 cd /usr/local/opentsdb
 sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=4242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/opentsdb/tmp --auto-metric
 
+
 # 변경사항. 2018-05-8
 #sleep 10
 
