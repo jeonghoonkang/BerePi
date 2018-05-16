@@ -4,6 +4,13 @@
 # This script for Ubuntu (in the Windows10)
 # python lib requred for matplot & scikit-learn  
 
+# windows10 should have X-Server SW
+# visit https://sourceforge.net/projects/vcxsrv/ and install
+
+# For BASH : export DISPLAY=localhost:0.0
+# sudo apt-get install x11-apps
+# X-server run check : xeyes
+
 #sudo apt-get -y install subversion
 
 wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
