@@ -95,9 +95,7 @@ if __name__ == "__main__":
     #insert_load_rate(u, metric, write_metric, inlist, maxdict, stime, etime)
     #insertValue_periodically(u, write_metric, val, stime, etime, 60)
     #print getdict
-
     #print " Help message"
 
     #cpmetric(u, metric, stime, etime, write_metric )
-
     #ret = countall(u, metric, stime, etime, inlist)
