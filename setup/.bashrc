@@ -111,4 +111,6 @@ if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
 fi
 
 export DISPLAY=:0
+export LS_COLORS="di=00;36:fi=00;37"
+
 
