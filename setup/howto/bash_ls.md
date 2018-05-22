@@ -1,4 +1,4 @@
-## BASH 에서 ls 출력의 문자색깔 변경하는 방법 (.bashrc)
+## BASH 에서 ls 출력의 문자색깔 변경 방법 (.bashrc)
 
 <pre>
 
