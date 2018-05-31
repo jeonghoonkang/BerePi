@@ -1,6 +1,7 @@
-#-*- coding: utf-8 -*-
+
 #!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
+#-*- coding: utf-8 -*-
 
 from __future__ import print_function
 from subprocess import *
@@ -80,7 +81,8 @@ if __name__ == '__main__':
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = "scp" + " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+    cmd = 'sshpass -p' + 'password' + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
+    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
     print (ret)
