@@ -1,3 +1,19 @@
+#!/bin/bash 
+# filename _start_up_sw.sh
+
+pushd /usr/local/hadoop
+JAVA_HOME=/usr/lib/jvm/java-8-oracle/jre ./hbase-1.1.13/bin/start-hbase.sh
+sleep 7
+
+pushd /usr/local/opentsdb
+JAVA_HOME=/usr/lib/jvm/java-8-oracle/jre ./build/tsdb tsd --port=4242 --staticroot=build/staticroot --cachedir=/usr/local/opentsdb/cache_tmp --auto-metric
+
+popd
+popd
+
+#(/etc/rc.local 파일에 아래 내용 추가 필요)
+# sudo /home/tinyos/devel/_start_up_sw.sh
+
 #/bin/bash
 echo " "
 echo "----------------------------------------------------"
@@ -23,3 +39,5 @@ sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=424
 #echo " "
 #     cd tcollector
 #     sudo python tcollector.py -H <TSDB Host IP> -p <TSDB port> -D
+
+
