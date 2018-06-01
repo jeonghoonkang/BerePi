@@ -59,29 +59,32 @@ def args_proc():
     arg1 = sys.argv[1]
     arg2 = sys.argv[2]
     arg3 = sys.argv[3]
+    arg4 = sys.argv[4]
 
-    ip = arg1
+    ip   = arg1
     port = arg2
-    id = arg3
-    print ("... start running, inputs are ", ip, port, id)
+    id   = arg3
+    passwd = arg4
 
-    return ip, port, id
+    print ("... start running, inputs are ", ip, port, id, passwd)
+
+    return ip, port, id, passwd
 
 if __name__ == '__main__':
 
-    dirs = "./out"
-    ip, port, id = args_proc()
+    ip, port, id, passwd = args_proc()
 
     p_ip = getip()
     i_ip = getiip()
     info = i_ip + p_ip
     hostn = hostname()
-    fname = './out/%s.txt' %hostn[:-1]
+    name = os.getlogin()
+    fname = '/home/%s/devel/BerePi/apps/tinyosGW/out/%s.txt' %(name, hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = 'sshpass -p' + 'password' + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
+    cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
     cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
