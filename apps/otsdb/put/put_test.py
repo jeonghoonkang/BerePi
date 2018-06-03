@@ -59,7 +59,7 @@ def helpmsg():
     _stringargv = " ".join(sys.argv)
 
     print "\n  ********************************************** "
-    print   "  *** TEST OpenTSDB insert                   *** "
+    print   "  *** TEST OpenTSDB put                      *** "
     print   "  ***                             By 3POKang *** "
     print   "  ********************************************** "
 
