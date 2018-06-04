@@ -1,11 +1,14 @@
 #!/bin/bash 
 # filename _start_up_sw.sh
 
-pushd /usr/local/hadoop
-JAVA_HOME=/usr/lib/jvm/java-8-oracle/jre ./hbase-1.1.13/bin/start-hbase.sh
+export hadoopdir=/usr/local/hadoop
+export javadir=/usr/lib/jvm/java-8-oracle/jre
+export otsdbdir=/usr/local/opentsdb'
+pushd $hadoopdir
+JAVA_HOME=$javadir ./hbase-1.1.13/bin/start-hbase.sh
 sleep 7
 
-pushd /usr/local/opentsdb
+pushd $ostdbdir
 JAVA_HOME=/usr/lib/jvm/java-8-oracle/jre ./build/tsdb tsd --port=4242 --staticroot=build/staticroot --cachedir=/usr/local/opentsdb/cache_tmp --auto-metric
 
 popd
@@ -26,7 +29,7 @@ cd /usr/local/hadoop/hbase-1.0.1.1/
 #sudo sh ./bin/stop-hbase.sh
 sudo sh ./bin/start-hbase.sh && sleep 90 # raspberryPi zero 에서는 90초 정도 후 Hbase 시작
 
-cd /usr/local/opentsdb
+cd $otsdbdir 
 sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=4242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/opentsdb/tmp --auto-metric
 
 
@@ -42,4 +45,6 @@ sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=424
 #     cd tcollector
 #     sudo python tcollector.py -H <TSDB Host IP> -p <TSDB port> -D
 
-
+unset hadoopdir
+unset javadir
+unset otsdbdir
