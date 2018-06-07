@@ -1,5 +1,5 @@
 
-### OpenTSDB 2.3 까지 테스트 완료(ubuntu)
+### OpenTSDB 2.3 까지 테스트 완료 (ubuntu)
 
 #### 시스템 설치방법
 - https://github.com/kowonsik/RPiLogger/blob/master/README.md
