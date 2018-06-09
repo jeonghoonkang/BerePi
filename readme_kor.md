@@ -19,14 +19,14 @@
   - NFC, T-money 연동
   - 진동센서
   - 진행중
-    - Dust 센서
+    - Dust
     
 
 -----
 
 #### 참고 사진, 동영상
 - Simple LED video 01 ( YouTube : https://youtu.be/ygJ3qMiGQvw )
-    - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png), ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
+  - ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2-back.png), ![BereCO2 module](https://raw.githubusercontent.com/kowonsik/RPiLogger/master/th-co2.png)
   - BereCO2 update with enclosure
     - ![BereCO2 Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_co2.png)
     - (https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
