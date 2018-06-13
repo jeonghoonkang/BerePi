@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import json
 
 FILE_PATH = "./server"
 
@@ -23,10 +24,7 @@ def isIP(line):
     return True
 
 def splitIP(line):
-    #print 'splitIP : %s' % line
     dev_ip = line.split('inet addr:')[1].split(' ')[0]
-    #dev_ip = line.split('inet addr:')
-    #print 'dev : %s' % dev_ip
     return dev_ip
 
 def readFile(file_name):
@@ -40,14 +38,11 @@ def readFile(file_name):
         if not line[0] == " " and not isInt(line[0]) and len(line) > 1:
           ifdes = splitEth(line)
           d_res.append(ifdes)
-          #print ">> %s\t\t%s" % (ifdes, line)
         elif line[0] == " " and not isInt(line[0]) and len(line) > 1 and isIP(line):
           d_res.append(splitIP(line))
-          #print splitIP(line)
         elif isInt(line[0]):
           d_res.append("IP")
           d_res.append(line.replace('\n',''))
-          #print ">> %s" % (line)
         else:
           pass
     f.close()
@@ -61,6 +56,6 @@ def getFile():
     for file_list in file_lists:
         res = readFile(file_list)
         file_res.append(res)
-    return file_res
+    return json.dumps(file_res)
 
 print getFile()
