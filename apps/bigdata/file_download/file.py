@@ -48,3 +48,13 @@ def inputfile_chck(fname):
 if __name__ == "__main__":
 
     _internet_file_name_ = "_input_json.json"
+
+    try :
+        with open('./2014_06_01_filtered_data.json') as data_file:
+            data = json.load(data_file)
+    except :
+        data = inputfile_chck(_internet_file_name_)
+        
+        
+        
+    
