@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
+# Author : https://github.com/jeonghoonkang
+
 import numpy as np
 import json
 import time
