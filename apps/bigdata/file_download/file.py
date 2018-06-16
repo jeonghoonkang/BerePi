@@ -11,7 +11,7 @@ import os.path
 import sys
 
 
-def inputfile_chck(fname):
+def inputfile_chck(fname="_input_json.json"):
     if os.path.isfile('./'+_internet_file_name_):
         with open("./"+_internet_file_name_) as data_file:
             data = json.load(data_file)
