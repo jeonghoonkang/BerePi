@@ -17,12 +17,5 @@ publicip.py 로 생성된 tinyosGW `.txt` 파일을 정리한다.
     `python index.py`
 
 3) 접속
-    코드가 위치한 서버로 접속한다. (옵션 없이 실행한 경우 `:5000` 가 사용된다)
+    서버IP:5000 으로 접속
 
-## readfiles.py 사용
-
-> 단독으로 사용할 경우 `./server` 아래 위치한 tinyosGW `.txt` 파일을 파싱한다.
-
- 1) 실행
-
-    `python readfiles.py`
