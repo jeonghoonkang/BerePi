@@ -49,7 +49,7 @@ def writefile(_in, fn="ip.txt"):
 
 def args_proc():
 
-    msg = "usage : python %s {server_IP_ADD} {server_PORT} {server_id}  " %__file__
+    msg = "usage : python %s {server_IP_ADD} {server_PORT} {server_id} {passwd_for_server}" %__file__
     msg += " => user should input arguments {} "
     print (msg)
 

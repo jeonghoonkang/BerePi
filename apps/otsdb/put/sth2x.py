@@ -37,7 +37,7 @@ def otsdb_restful_put_sht2x(_ip = None):
     sname = "kang-odesk-03"
     if _ip != None : ip_add = _ip
     else: ip_add = 'unkown'
-    _time = time.time() 
+    _time = time.time()
 
     metric = "__raspi.rc01.temp.degree"
     print "   ", url, metric, "IPadd=",ip_add
@@ -59,7 +59,7 @@ def otsdb_restful_put_sht2x(_ip = None):
 	#tags should be less than 9, 8 is alright, 9 returns http error
     }
 
-    metric = "jkraspi.rc01.humi"
+    metric = "__raspi.rc01.humi"
     print "   ", url, metric, "IPadd=",ip_add
     data_humi = {
         "metric": metric,
@@ -86,7 +86,7 @@ def otsdb_restful_put_sht2x(_ip = None):
     except requests.exceptions.Timeout as e:
         #logger.error("http connection error, Timeout  %s", ret)
         print("http connection error, Timeout  %s", e)
-        pass 
+        pass
     except requests.exceptions.ConnectionError as e :
         print("http connection error, Timeout  %s", e)
         #logger.error("http connection error, Too many requests %s")
@@ -109,5 +109,3 @@ def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
     return output
-
-

@@ -37,15 +37,46 @@ class excell_class :
                 __vertical.append(v)
         return __vertical  # __cnt, __cnt_n # 세로 셀 데이터, 데이터 갯수, None 갯수
 
-    def save_list_2_exl(self, _fn, _list):
+    def save_list_2_exl(self, _fn, _list1=None, _list2=None, _list3=None, _list4=None, _list5=None):
         workbook = xlsxwriter.Workbook(_fn+'.xlsx')
         worksheet = workbook.add_worksheet()
-        row = 0
-        col = 0
-        for item in (_list):
-            worksheet.write(row, col, item)
-            row += 1
+        if _list1 == None:
+            print ("no list to save excel")
+            return
+        if _list1 != None:
+            row = 0
+            col = 1
+            for item in (_list1):
+                worksheet.write(row, col, item)
+                row += 1
+        if _list2 != None:
+            row = 0
+            col = 2
+            for item in (_list2):
+                worksheet.write(row, col, item)
+                row += 1
+        if _list3 != None:
+            row = 0
+            col = 3
+            for item in (_list3):
+                worksheet.write(row, col, item)
+                row += 1
+        if _list4 != None:
+            row = 0
+            col = 4
+            for item in (_list4):
+                worksheet.write(row, col, item)
+                row += 1
+        if _list5 != None:
+            row = 0
+            col = 5
+            for item in (_list5):
+                worksheet.write(row, col, item)
+                row += 1
         workbook.close()
+
+
+
 
 def parse_args():
     story = u"파일명, 데이터 시작셀과 마지막셀 입력"
