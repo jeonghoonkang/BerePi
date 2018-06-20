@@ -39,7 +39,7 @@ def main():
   # Initialise display
   lcd_init()
   print ip_chk(), wip_chk(), mac_chk(), wmac_chk(), stalk_chk(), time_chk()
-  dbip = "0.0.0.0:0000" 
+  dbip = "0.0.0.0:0000"
   dbip = arg.ipaddress
   if dbip == "0.0.0.0:0000" :
       print "  please input ip address of iot DB"
@@ -57,7 +57,7 @@ def main():
     if temp_v != "-100" :
         lcd_string('Here %-5.2f `C' % (sht21_temp),LCD_LINE_2,1)
         whiteLCDon()
-        time.sleep(3) 
+        time.sleep(3)
 
     # display local sensor : humidity
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
@@ -65,9 +65,9 @@ def main():
     retstr = str(humi_v)
     #assert type(retstr) is StringType, "humi. variable is not an string: %s" %retstr
     if retstr != "-100" :
-        lcd_string('Here %-5.2f %%' % (humi_v),LCD_LINE_2,1) # 5 space and 2 under . 
+        lcd_string('Here %-5.2f %%' % (humi_v),LCD_LINE_2,1) # 5 space and 2 under .
         whiteLCDon()
-        time.sleep(2) 
+        time.sleep(2)
 
     #otsdb_restful_put()
 
@@ -84,21 +84,21 @@ def main():
     retstr = retstr[:-1]
     #lcd_string('%s' % (retstr),LCD_LINE_2,1)
     blueLCDon()
-    time.sleep(1) 
-        
+    time.sleep(1)
+
     retstr = stalk_chk()
     retstr = retstr[:-1]
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     lcd_string('%s           ' % (retstr),LCD_LINE_2,1)
     blueLCDon()
-    time.sleep(0.7) 
+    time.sleep(0.7)
 
     # display time & Temperature
     tstr = time_chk()
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
         sname="Outside"
-        try: 
+        try:
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'918'})
             #temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'801'})
             tmp = round(temperaturestr[0], 2)
@@ -117,7 +117,7 @@ def main():
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
         sname="MJrm"
-        try: 
+        try:
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'915'})
             # debug point : once this line is broken during infinite while loop (15.11.29)
             # print type(temperaturestr)
@@ -125,7 +125,7 @@ def main():
             tmp = round(temperaturestr[0], 2)
             print "%s Temperature = " %sname, tmp, "'C"
             lcd_string('%s %s `C' %(sname,tmp), LCD_LINE_2,1)
-            time.sleep(2)            
+            time.sleep(2)
         except:
             lcd_string('%s' %sname , LCD_LINE_1,1)
             lcd_string('Restful err', LCD_LINE_2,1)
@@ -137,7 +137,7 @@ def main():
     lcd_string('%s' % (tstr),LCD_LINE_1,1)
     if dbip != "no_db":
         sname="LVrm"
-        try: 
+        try:
             temperaturestr = get_last_value(dbip,'gyu_RC1_thl.temperature',{'nodeid':'919'})
             print "rest, temperaturestr =", temperaturestr
             tmp = round(temperaturestr[0], 2)
@@ -157,11 +157,11 @@ def main():
     color = 500
     if dbip != "no_db":
         sname = "MJrm CO2"
-        try: 
+        try:
             co2str = get_last_value(dbip,'gyu_RC1_co2.ppm',{'nodeid':'920'})
             tmp = round(co2str[0], 2)
             print "CO2 Level = ", tmp, "ppm"
-            color = int(tmp) 
+            color = int(tmp)
             assert type(color) is IntType, "ppm variable is not an integer: %r" % id
             lcd_string('%s ppm %s ' %(tmp, sname), LCD_LINE_2,1)
             time.sleep(2)
@@ -170,7 +170,7 @@ def main():
             lcd_string('Restful err', LCD_LINE_2,1)
             time.sleep(0.3)
     whiteLCDon()
-    if (color > 1000) : 
+    if (color > 1000) :
         redLCDon()
 
     return temp_v, humi_v
@@ -178,7 +178,7 @@ def main():
 def clearLCD():
     lcd_string('', LCD_LINE_2,1)
     lcd_string('', LCD_LINE_1,1)
-    time.sleep(1) 
+    time.sleep(1)
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
@@ -221,21 +221,39 @@ def stalk_chk():
     cmd = "hostname"
     return run_cmd(cmd)
 
-def insertTSDB(data=None, metric='__raspi__log__data__test__'):
+def insertTSDB(putdata=None):
+
+    if putdata == None :
+        print " need result, please check other line "
+        return None
+
+    if pudata['metric'] == None:
+         pudata['metric'] = '__raspi__log__data__test__'
+
     data['metric'] = metric
     print data
+
     return None
 
 if __name__ == '__main__':
-  
-  retData={}
+
+  putData={}
   try:
     while (True):
-        #temperature, humidity 
+        #temperature, humidity
         t, h = main()
-        retData['temperature'] = t
-        retData['humidity'] = h
-        insertTSDB(retData)
+        # send metric, value, tag1, tag2
+        # putData['metric'] = '__metric__name__'
+        # putData['value'] = t
+        # putData['tags'] = {'network':ipaddress, 'info':macaddress}
+
+        putData['metric'] = '__raspi__temp__sensor__'
+        putData['timestamp'] = keytime
+        putData['value'] = t
+        #retData['humidity'] = h
+        putData['tags'] = {'info':'iot sensor', 'sensor':'sht20', 'info':'server temperature'}
+        setTSDB(ipadress, port)
+        insertTSDB(puData)
 
   except KeyboardInterrupt:
     pass
