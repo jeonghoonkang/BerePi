@@ -49,7 +49,7 @@ def plot_on_map(data, _index):
     lat, lon = (sangil_gwangju_lat_limit[0]/2 + sangil_gwangju_lat_limit[1]/2 ,
         sangil_gwangju_lon_limit[0]/2 + sangil_gwangju_lon_limit[1]/2)
 
-    map = folium.Map(location=[lat, lon], zoom_start=10)
+    map = folium.Map(location=[lat, lon], zoom_start=12)
     Color = mcolors.CSS4_COLORS.values()
     countcar = 0
 
@@ -78,6 +78,9 @@ def plot_on_map(data, _index):
                           line_color='black', fill_color='black', fill_opacity=1)
 
     map.save('result.html')
+
+    os.system('explorer.exe result.html')
+
     print "총 지나간 차량 : %.3s 대" % countcar
 
 def openjson(_date):
