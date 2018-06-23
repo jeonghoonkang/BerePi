@@ -84,6 +84,7 @@ alias ll='ls -lha --color'
 alias la='ls -Ahp --color'
 alias ls='ls -p --color'
 alias l='ls -CF'
+alias lsd='ls -d */ -l'
 alias screenlist='screen -list'
 
 export LANG="ko_KR.utf8"
