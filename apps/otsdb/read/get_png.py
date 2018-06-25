@@ -7,8 +7,11 @@ import urllib
 # main function
 if __name__ == "__main__":
     print "...starting..."
-    ip_port =  'www.abc.com:4242'
+
+    ip_port =  'aaa.bbb.com:4242'
     url = 'http://' + ip_port + '/q?start=2018/06/25-13:55:00&end=2018/06/25-14:16:34&m=none:keti.tinyos.packet.test&o=&wxh=800x600&style=linespoint&png'
     print url
-    urllib.urlretrieve(url, unicode('download.png', "949") )
+
+    urllib.urlretrieve(url, unicode('download.png' ))
+
     print "\n ...ending..."
