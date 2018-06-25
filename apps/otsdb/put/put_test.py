@@ -12,20 +12,20 @@ import requests
 import json
 import subprocess
 
-'''  example : url = "http://10.0.0.43:4242/api/put" 
-     warning : we have to 50 JSON pack to put in OpenTSDB, on first stage. 
+'''  example : url = "http://10.0.0.43:4242/api/put"
+     warning : we have to 50 JSON pack to put in OpenTSDB, on first stage.
                if you add more, you shoud test amount of TX packets '''
-           
+
 def otsdb_restful_put(url):
-    sname = "kang-tinyos-test-000"
+    sname = "kang.tinyos.test.000"
     toend = 101
-    mname = "keti.tinyos.berepi.test"
+    mname = "keti.tinyos.packet.test"
     print "  metric name = ", mname
     for i in range(1,toend):
         val= i
         data = {
             "metric": mname,#alphabet and number . _ /
-            "timestamp": time.time(),
+            "timestamp": str(int(time.time())),
             "value": val, #integer
             "tags": {
                 #"eth0": macAddr,
@@ -35,13 +35,19 @@ def otsdb_restful_put(url):
             }
     	#tags should be less than 9, 8 is alright, 9 returns http error
         }
+        ''' if you want to check inserted POINT on TSDB server,
+            use below URL to check, you should modify URL PORT to proper IP address
+            http://URL:PORT/api/query?start=2018/06/25-00:00:00&end=2018/06/26-00:00:00&m=none:keti.tinyos.packet.test
+        '''
 
         try :
             ret = requests.post(url, data=json.dumps(data))
-            # print "\n retrun is ", ret
+            print "\n retrun is ", ret
             time.sleep (0.1)
 
-            outstring = "  try %d / %d " % (i, toend-1) + "\r"
+            outstring = "\n  now trying to put below data to TSDB, url %s " %(url)
+            outstring += str(data)
+            outstring += " try %d / %d " % (i, toend-1)
             sys.stdout.write(outstring)
             sys.stdout.flush()
 
