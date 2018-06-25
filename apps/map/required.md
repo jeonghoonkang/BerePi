@@ -1,18 +1,24 @@
 # Required library
 
-1) Folium
+1. Folium
 
-  sudo pip folium
+    ```
+    sudo pip folium
+    ```
 
-2) Pandas
+2. Pandas
 
-  apt update
-  apt install python-pandas
+    ```
+    apt update
+    apt install python-pandas
+    ```
 
-3) If matplotlib version is low
+3. If matplotlib version is low
 
-  > see the following msg
+    > see the following msg
   
-  `AttributeError: 'module' object has no attribute 'CSS4_COLORS'`
+    AttributeError: 'module' object has no attribute 'CSS4_COLORS'
 
-  pip install matplotlib —upgrade
+    ```
+    pip install matplotlib —upgrade
+    ```
