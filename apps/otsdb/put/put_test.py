@@ -25,7 +25,7 @@ def otsdb_restful_put(url):
         val= i
         data = {
             "metric": mname,#alphabet and number . _ /
-            "timestamp": str(int(time.time())),
+            "timestamp": int(time.time()),
             "value": val, #integer
             "tags": {
                 #"eth0": macAddr,
