@@ -82,7 +82,6 @@ def helpmsg():
 
     return argv1
 
-
 if __name__== "__main__" :
     print "...starting..."
     url = ''
