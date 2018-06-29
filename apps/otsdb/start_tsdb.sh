@@ -6,6 +6,7 @@ export javadir=/usr/lib/jvm/java-8-oracle/jre
 export otsdbdir=/usr/local/opentsdb'
 pushd $hadoopdir
 JAVA_HOME=$javadir ./hbase-1.1.13/bin/start-hbase.sh
+
 sleep 7
 
 pushd $ostdbdir
