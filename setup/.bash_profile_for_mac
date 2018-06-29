@@ -4,6 +4,9 @@
 # User specific aliases and functions
 ### important : this file name should be .bash_profile
 
+export CLICOLOR=1
+export LSCOLORS=fxFxCxDxBxegedabagacad
+
 C_DEFAULT="\[\033[m\]"
 C_CYAN="\[\033[36m\]"
 C_GREEN="\[\033[32m\]"
@@ -16,7 +19,7 @@ alias rm='rm -i'
 alias cp='cp -i'
 alias mv='mv -i'
 alias ll='ls -FGlh'
-alias ls='ls -FG'
+alias ls='ls -FG '
 alias la='ls -Galh'
 alias envtos='env | grep TOS; env | grep MAKERULES;'
 alias envtosclass='env | grep CLASSPATH;'

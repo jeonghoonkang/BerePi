@@ -79,12 +79,14 @@ if __name__ == '__main__':
     info = i_ip + p_ip
     hostn = hostname()
     name = os.getlogin()
-    fname = '/home/%s/devel/BerePi/apps/tinyosGW/out/%s.txt' %(name, hostn[:-1])
+    fname = '/Users/%s/devel/BerePi/apps/tinyosGW/out/%s.txt' %(name, hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
+#    cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
+#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+    cmd = 'scp'  
     cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
