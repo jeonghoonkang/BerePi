@@ -29,12 +29,12 @@ def getip():
 def getiip():
 
     cmd="/sbin/ifconfig"
-    _str = platform.system()
-    print (_str)
-    if _str.find('Cygwin') > 0:
+    _os_type = platform.system()
+    print (_os_type)
+    if _os_type.find('Cygwin') > 0:
         cmd = "ipconfig"
     iip = run_cmd(cmd)
-    return iip
+    return iip, _os_type
 
 def checkifexist(fname):
     cmd='ls ' + fname
@@ -75,19 +75,25 @@ if __name__ == '__main__':
     ip, port, id, passwd = args_proc()
 
     p_ip = getip()
-    i_ip = getiip()
+    i_ip, os_type = getiip()
     info = i_ip + p_ip
     hostn = hostname()
     name = os.getlogin()
-    fname = '/Users/%s/devel/BerePi/apps/tinyosGW/out/%s.txt' %(name, hostn[:-1])
+
+    if os_type == "Linux":
+        fname = '/home/%s/' %name
+    elif os_type == "Mac OS": 
+        fname = '/Users/%s/' %name
+
+    fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
-#    cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
-#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-    cmd = 'scp'  
+    cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
     cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+#    cmd = 'scp'  
+#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
     print (" ")
     print (ret)
