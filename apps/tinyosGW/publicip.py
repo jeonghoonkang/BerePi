@@ -82,7 +82,7 @@ if __name__ == '__main__':
 
     if os_type == "Linux":
         fname = '/home/%s/' %name
-    elif os_type == "Mac OS": 
+    elif os_type == "Darwin": 
         fname = '/Users/%s/' %name
 
     fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
