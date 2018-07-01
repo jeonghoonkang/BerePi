@@ -95,6 +95,7 @@ if __name__ == '__main__':
 #    cmd = 'scp'  
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     ret = run_cmd(cmd)
+    print (cmd)
     print (" ")
     print (ret)
 
