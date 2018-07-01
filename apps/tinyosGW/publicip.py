@@ -93,10 +93,13 @@ if __name__ == '__main__':
     cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
 #    cmd = 'scp'  
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-    ret = run_cmd(cmd)
+    print (cmd)
+    print ( os.system(cmd) )
+
+    #ret = run_cmd(cmd)
     print (cmd)
     print (" ")
-    print (ret)
+    #print (ret)
 
 # ssh-keygen
 # cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@xxx.xxx.xxx 'cat >>
