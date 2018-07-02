@@ -3,6 +3,7 @@
 ## 소개
 
 publicip.py 로 생성된 tinyosGW `.txt` 파일을 정리한다.
+Apache 웹서버 대신 사용할 수 있는 
 
 ## 웹 실행 방법
 
