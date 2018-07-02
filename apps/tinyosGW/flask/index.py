@@ -19,9 +19,11 @@ def listToHref(fromList):
 def getPublicIP(GWname):
     res = ''
     filepath = "%s/%s" % (FILE_PATH, GWname)
-    f = open(filepath, "r")
-    lines = f.readlines()
-    return '<br />'.join(lines)
+    #f = open(filepath, "r")
+    #lines = f.readlines()
+    with open(filepath, 'r') as file:
+        gwfile = file.readlines()
+    return '<br />'.join(gwfile)
 
 @app.route("/")
 def index():
