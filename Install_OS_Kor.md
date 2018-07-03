@@ -5,9 +5,7 @@
     - 2018년 4월 RaspberryPi 3 B+ 발표로 새롭게 적용
 
 - Image 설치 : 2016년 1월 버전, 최근 버전 설치 
-
-<pre> http://cogcom.asuscomm.com:6080/open/raspi_4G_2016_0112.zip </pre>
-<pre> http://125.7.128.54:8070/wordpress/pub/devel/raspi </pre>
+<pre> http://125.140.110.217/open/2018-05-BerePi-stretch-4G-001.img </pre>
 
 - 설치후, sudo raspi-config 로 Hostname 을 PLUG-1001 등으로 설정해야 함
   - 1 : 1 차실증
