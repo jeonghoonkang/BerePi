@@ -35,7 +35,7 @@ sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=424
 
 
 # 변경사항. 2018-05-8
-#sleep 10
+# sleep 10
 
 #cd /usr/local/tcollector
 #sudo ./startstop start
