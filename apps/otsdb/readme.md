@@ -23,6 +23,7 @@
  - 부팅할때 시작하려면, /etc/rc.local 에서 /home/{ID}/start_sw.sh 을 실행하면 됨
  - (예) ./start_sw.sh 과 /etc/rc.local
 
+
 <pre>
 #!/bin/sh -e
 #
@@ -80,3 +81,4 @@ exit 0
 - http://www.erol.si/2014/06/opentsdb-the-perfect-database-for-your-internet-of-things-projects/
 - http://www.erol.si/2015/01/why-i-switched-from-opentsdb-to-kairosdb/
 - openTSDB API 작업중
+
