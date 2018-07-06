@@ -49,3 +49,4 @@ sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=424
 unset hadoopdir
 unset javadir
 unset otsdbdir
+
