@@ -76,7 +76,6 @@ def parse_args():
 
     return url, port, start, end, recent, m, wm, args.val
 
-
 def sockWriteTSD(__wmetric, __utime, __value, __tags = None):
 
     if __tags == None: __tags = 'duptest=true'
