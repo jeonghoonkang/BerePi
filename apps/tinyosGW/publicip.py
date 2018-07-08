@@ -79,7 +79,7 @@ if __name__ == '__main__':
     hostn = hostname()
     try : name = os.getlogin()
     except :
-        print ('exception')
+        print ('exception get log-in user name')
         name = 'tinyos'
 
     if os_type == "Linux":
