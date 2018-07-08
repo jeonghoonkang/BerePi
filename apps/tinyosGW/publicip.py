@@ -77,11 +77,14 @@ if __name__ == '__main__':
     i_ip, os_type = getiip()
     info = i_ip + p_ip
     hostn = hostname()
-    name = os.getlogin()
+    try : name = os.getlogin()
+    except :
+        print ('exception')
+        name = 'tinyos'
 
     if os_type == "Linux":
         fname = '/home/%s/' %name
-    elif os_type == "Darwin": 
+    elif os_type == "Darwin":
         fname = '/Users/%s/' %name
 
     fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
@@ -91,7 +94,7 @@ if __name__ == '__main__':
 
     cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
     cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-#    cmd = 'scp'  
+#    cmd = 'scp'
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     print (cmd)
     print ( os.system(cmd) )
