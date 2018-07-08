@@ -97,8 +97,7 @@ if __name__ == '__main__':
     print ( os.system(cmd) )
 
     #ret = run_cmd(cmd)
-    print (cmd)
-    print (" ")
+    print ("finish ")
     #print (ret)
 
 # ssh-keygen
