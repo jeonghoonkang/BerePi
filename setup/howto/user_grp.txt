@@ -1,4 +1,4 @@
-사용자 그룹 변경
+Ubuntu 사용자 그룹 변경
 
 groupadd {group_name}
 
