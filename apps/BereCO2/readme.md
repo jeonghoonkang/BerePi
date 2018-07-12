@@ -1,6 +1,6 @@
 This BereCO2 Sensor board based on CO2 and Temperature/Hunidity sensors.
 
-- How to run
+- How to run, use BASH script like below
   - sudo python BereCO2.py
   - sudo python bere_co2_sht2x.py
 
