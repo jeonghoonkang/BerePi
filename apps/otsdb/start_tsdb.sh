@@ -1,6 +1,3 @@
-#!/bin/bash 
-# filename _start_up_sw.sh
-
 export hadoopdir=/usr/local/hadoop
 export javadir=/usr/lib/jvm/java-8-oracle/jre
 export otsdbdir=/usr/local/opentsdb'
@@ -26,27 +23,32 @@ echo "----------------------------------------------------"
 echo "[BerePi] starting openTSDB by BerePi start-up script"
 echo "----------------------------------------------------"
 
-cd /usr/local/hadoop/hbase-1.0.1.1/
+#user should input correct PATH of hbase, opentsdb
+export hpath=/usr/local/hadoop/hbase-1.0.1.1
+export tsdbpath=/usr/local/opentsdb
+
+cd $hpath
+export hrunpath=$hpath'/bin/start-hbase.sh'
 #sudo sh ./bin/stop-hbase.sh
-sudo sh ./bin/start-hbase.sh && sleep 90 # raspberryPi zero 에서는 90초 정도 후 Hbase 시작
+sudo sh $hrunpath
 
-cd $otsdbdir 
-sudo screen -dmS tsd_start sudo sh /usr/local/opentsdb/build/tsdb tsd --port=4242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/opentsdb/tmp --auto-metric
+sleep 90 # raspberryPi zero 에서는 90초 정도 후 Hbase 시작
 
+cd $tsdbpath
+export tsdbrunpath=$tsdbpath'/build/tsdb'
+export srpath=$tsdbpath'/build/staticroot'
+export cachepath=$tsdbpath'/tmp'
 
-# 변경사항. 2018-05-8
-# sleep 10
+sudo screen -dmS tsd_start sudo sh $tsdbrunpath tsd --port=4242 --staticroot=$srpath --cachedir=$cachepath --auto-metric
 
-#cd /usr/local/tcollector
-#sudo ./startstop start
+sleep 2
 
-#echo "[BerePi] last step of run openTSDB, tcollector by BerePi start-up script"
-#echo "------------------------------------------------------------------------"
-#echo " "
+echo "[BerePi] last step of run openTSDB, tcollector by BerePi start-up script"
+echo "------------------------------------------------------------------------"
+echo " "
+
+# 변경사항. 2018-07-14
 #     cd tcollector
 #     sudo python tcollector.py -H <TSDB Host IP> -p <TSDB port> -D
-
-unset hadoopdir
-unset javadir
-unset otsdbdir
-
+#     cd /usr/local/tcollector
+#     sudo ./startstop start
