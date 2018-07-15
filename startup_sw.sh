@@ -16,3 +16,6 @@ sudo screen -dmS startup sudo sh /home/pi/devel/BerePi/apps/otsdb/start_tsdb.sh
 #exit0
 ####
 
+#### Please add below line on /etc/rc.local
+# sudo sh /home/pi/devel/BerePi/this_startup_sw.sh
+
