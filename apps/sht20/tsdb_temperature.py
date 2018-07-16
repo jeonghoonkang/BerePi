@@ -25,6 +25,7 @@ tmp_dir=devel_dir+"/danalytics/thingsweb/weblib/recv"
 sys.path.append(tmp_dir)
 from lastvalue import *
 
+
 def parse_args():
     parser=argparse.ArgumentParser(description="how to run, watch.py", usage='use "%(prog)s --help" for more information', formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("-ip", "--ipaddress", default="0.0.0.0:0000", help="input ip address of iot db")
