@@ -18,5 +18,5 @@
       - Write specific metric
       - Return metric name which has been written by funcion (dictionary)
     - Copy
-      - read and write to different metric
+      - read and write specific metric to other metric
  
