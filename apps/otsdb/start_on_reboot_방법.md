@@ -6,3 +6,11 @@
 - sleep 5 
 - sudo /usr/local/opentsdb/build/tsdb tsd --port=54242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/data --auto-metric
 
+
+# 샘플
+- /etc/rc.local
+<pre>  sudo bash /home/pi/devel/BerePi/this_startup_sw.sh </pre>
+
+- /home/pi/devel/BerePi/this_startup_sw.sh
+<pre> sudo screen -dmS startup sudo bash /home/pi/devel/BerePi/apps/otsdb/start_tsdb.sh </pre>
+
