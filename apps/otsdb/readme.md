@@ -23,7 +23,6 @@
  - 부팅할때 시작하려면, /etc/rc.local 에서 /home/{ID}/start_sw.sh 을 실행하면 됨
  - (예) ./start_sw.sh 과 /etc/rc.local
 
-
 <pre>
 #!/bin/sh -e
 #
