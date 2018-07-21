@@ -1,5 +1,5 @@
 
-#### Port forwarding by RaspberryPi
+#### Port forwarding of RaspberryPi
 
   - sudo apt-get install rinetd 
   - sudo vim /etc/rinetd.conf
