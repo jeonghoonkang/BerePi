@@ -277,6 +277,7 @@ def closingTask():
 if __name__== "__main__" :
 
     dbip="127.0.0.1:4242"
+    #dbip="input your IP or URL"
     metric = 'rc01.t_power.WH'
     result = [[], [], [], [], [], [], []]
     dates = [[], [], [], [], [], [], []]
