@@ -8,3 +8,6 @@
     - unix file type, if you have dos file type, should change dos2unix linux command
       - /r/n issue
     - check chmod for +x, eg) chmod 777 {filename}
+    
+#### CGI 설정 추가 정보
+- https://github.com/jeonghoonkang/keti/blob/master/BootCamp/cschae/CGI/readme.md
