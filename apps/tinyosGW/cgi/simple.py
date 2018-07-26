@@ -13,8 +13,7 @@ sys.path.append("/home/tinyos/devel/BerePi/apps/tinyosGW/cgi")
 if __name__ == "__main__":
 
     cgitb.enable()
-    args = cgi.FieldStorage()
-  
+    args = cgi.FieldStorage()  
     #print os.environ.items()
 
     print "Content-type: text/html\n"
