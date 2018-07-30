@@ -70,7 +70,7 @@ def lastMonthValue(nodeid) :
     _today_start = _today_start[:10]+'-00:00:00'
     _today_end = str(nowDate)
     _today_end = _today_start.replace('-','/')
-    _today_end = _today_end[:10]+'-00:01:00'
+    _today_end = _today_end[:10]+'-00:30:00'
 
     tmp_val0 = get_value(dbip, metric, {'id':'911'}, _s2 , _e2)
     tmp_val1 = get_value(dbip, metric, {'id':'911'}, _s1, _e1)
@@ -92,6 +92,7 @@ def lastMonthValue(nodeid) :
 
     current_wattH = int(tmp_val2[0])-int(tmp_val1[0])
     lastmonth_wattH = int(tmp_val1[0])-int(tmp_val0[0])
+    today_wattH = int(tmp_val2[0])-int(tmp_val3[0])
 
     global day_delta
     day_delta = nowDate.day - payCountDay
@@ -109,8 +110,8 @@ def lastMonthValue(nodeid) :
 
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day))
 
-    print "오늘 사용량 : %d kWh" %( (int(tmp_val2[0]) - int(tmp_val3[0]))/1000 )
-    print "많이쓴날 20kWh, 아주많이 쓴날 30kWh"
+    print "오늘 현재까지 사용량 0시~현재 : %d kWh" %( today_wattH/1000 )
+    print "(참고) 많이쓴날 20kWh, 아주 더 많이 쓴날 30kWh"
 
     print "current watt : %d kWh" %(current_wattH/1000.0)
     #calcPay(current_wattH/1000.0)
