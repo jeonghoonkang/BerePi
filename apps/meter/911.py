@@ -112,7 +112,7 @@ def lastMonthValue(nodeid) :
 
     print "**********************************************"
     print "Electric Use today 0:00 ~ now: %d kWh" %( today_wattH/1000 )
-    print "expected Use on next month, day of 26, is %d kWh" %est_watt
+    print "expected Use next month, day of 26, is %d kWh" %est_watt
     print "**********************************************"
 
     print
