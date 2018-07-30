@@ -66,11 +66,13 @@ def lastMonthValue(nodeid) :
     _e1 = _1month_before+'30'
 
     _today_start = str(nowDate)
+    _today_start = _today_start.replace('-','/')
     print _today_start
-    _today_start = _today_start.replace('-','/')+'-00:00:00'
+    _today_start = _today_start[:10]++'-00:00:00'
     print _today_start
     _today_end = str(nowDate)
-    _today_end = _today_start.replace('-','/')+'-00:00:00'
+    _today_end = _today_start.replace('-','/')
+    _today_end = _today_end[:10]++'-00:00:00'
 
     tmp_val0 = get_value(dbip, metric, {'id':'911'}, _s2 , _e2)
     tmp_val1 = get_value(dbip, metric, {'id':'911'}, _s1, _e1)
