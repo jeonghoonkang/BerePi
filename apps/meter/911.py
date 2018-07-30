@@ -109,7 +109,7 @@ def lastMonthValue(nodeid) :
 
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day))
 
-    print "오늘 사용량 : %d kWh" %( (int(tmp_val2[0]) - int)(tmp_val3[0]))/1000 )
+    print "오늘 사용량 : %d kWh" %( (int(tmp_val2[0]) - int(tmp_val3[0]))/1000 )
     print "많이쓴날 20kWh, 아주많이 쓴날 30kWh"
 
     print "current watt : %d kWh" %(current_wattH/1000.0)
