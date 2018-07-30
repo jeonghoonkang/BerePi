@@ -1,4 +1,4 @@
-#!/usr/bin/python
+# -*- coding: utf-8 -*-
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 
 devel_dir="/home/pi/devel"

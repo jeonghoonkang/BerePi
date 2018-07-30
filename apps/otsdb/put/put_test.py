@@ -1,4 +1,4 @@
-#!/usr/bin/python
+# -*- coding: utf-8 -*-
 #Author : jeonghoonkang, https://github.com/jeonghoonkang
 
 devel_dir="/home/pi/devel"
@@ -11,43 +11,68 @@ import datetime
 import requests
 import json
 import subprocess
+import ketidatetime
+import time
+
 
 '''  example : url = "http://10.0.0.43:4242/api/put"
      warning : we have to 50 JSON pack to put in OpenTSDB, on first stage.
                if you add more, you shoud test amount of TX packets '''
 
-def otsdb_restful_put(url):
-    sname = "kang.tinyos.test.000"
-    toend = 101
-    mname = "keti.tinyos.packet.test"
+def otsdb_restful_put(url, metric=None, ts=None, val=None, tags=None, iter_n=1 ):
+
+    if  tags == None :
+        sname = "kang.tinyos.test.000"
+        sensor = "keti.put.test"
+        tags = {
+            "sensor" : "keti.put_test",
+    	    "name" : sname
+        } #tags should be less than 9, 8 is alright, 9 returns http error
+
+    mname = metric
+    if metric == None :
+        mname = "__keti.tinyos.test.0001__"
+
+    print ts
+    if ts == None or ts == 'now' : uts = int(time.time())
+    else :
+        ts = ketidatetime._check_time_len(ts)
+        print ts
+        uts = ketidatetime.datetime2ts(ts)
+        print uts
+
     print "  metric name = ", mname
-    for i in range(1,toend):
-        val= i
+
+    print tags
+    tags = eval(tags)
+    print type(tags)
+
+
+    ''' if you want to add iteration, use iter_n valiable '''
+    for i in range(0,iter_n):
+        if val == None : exit('can not make forward val = None')
         data = {
-            "metric": mname,#alphabet and number . _ /
-            "timestamp": int(time.time()),
+            "metric": mname, #alphabet and number . _ /
+            "timestamp": int(uts),
             "value": val, #integer
-            "tags": {
-                #"eth0": macAddr,
-                #"stalk": "VOLOSSH" ,
-                "sensor" : "keti.put_test",
-    	        "name" : sname,
-            }
-    	#tags should be less than 9, 8 is alright, 9 returns http error
+            "tags": tags
         }
+
+        print data
+
         ''' if you want to check inserted POINT on TSDB server,
             use below URL to check, you should modify URL PORT to proper IP address
             http://URL:PORT/api/query?start=2018/06/25-00:00:00&end=2018/06/26-00:00:00&m=none:keti.tinyos.packet.test
         '''
 
         try :
+            #s = requests.Session()
             ret = requests.post(url, data=json.dumps(data))
             print "\n retrun is ", ret
-            time.sleep (0.1)
 
             outstring = "\n  now trying to put below data to TSDB, url %s " %(url)
             outstring += str(data)
-            outstring += " try %d / %d " % (i, toend-1)
+            outstring += "\n try %d / %d " % (i, iter_n-1)
             sys.stdout.write(outstring)
             sys.stdout.flush()
 
@@ -82,16 +107,57 @@ def helpmsg():
 
     return argv1
 
+import argparse
+def parse_args():
+
+    story = 'OpenTSDB needs many arguments URL, start time, end time, port '
+    usg = '\n python tsdb_read.py  -url x.x.x.x \
+        -port 4242 -start 2016110100 -end 2016110222 \
+        -rdm metric_name, -wm write_metric_name --help for more info'
+
+    parser=argparse.ArgumentParser(description=story,
+        usage=usg,
+        formatter_class=argparse.RawTextHelpFormatter)
+
+    parser.add_argument("-url",    default="127.0.0.1",
+        help="URL input, or run fails")
+    parser.add_argument("-start",  default='2016070100',
+        help="start time input, like 2016110100")
+    parser.add_argument("-port",   default=4242,
+        help="port input, like 4242")
+    parser.add_argument("-val", default=802,
+        help="value which will be inserted to OpenTSDB")
+    parser.add_argument("-wtm", default='__keti_test__',
+        help="write-metric ")
+    parser.add_argument("-tags", default="{'sensor':'_test_sensor_', 'desc':'_test_'}",
+        help="tags ")
+    args = parser.parse_args()
+
+    #check args if valid
+    url = args.url
+    _ht = 'http://'
+    if ( url[:7] != _ht ) : url = _ht + url
+    port = args.port
+    if  port == 80 : port = ''
+    else : port = ":"+ str(port)
+    url = url + port +'/api/put'
+
+    start = args.start
+    if start != None : start = args.start
+
+    wm = args.wtm
+    if wm == None :
+        print usg
+        exit("... I can not do anything without metric")
+
+    return url, wm, start, args.val, args.tags
+
 if __name__== "__main__" :
     print "...starting..."
-    url = ''
-    url = helpmsg()
-    if len(url) < 5:
-        exit ("   you should input the IP address of openTSDB server \
-        like 10.0.0.1:4242")
-    else:
-        url = 'http://' + url + '/api/put'
-        print url
-    otsdb_restful_put(url)
+
+    args = parse_args()
+    print args
+    otsdb_restful_put(args[0], args[1], args[2], args[3], args[4])
+
     time.sleep(0.1)
     print "\n ...ending..."
