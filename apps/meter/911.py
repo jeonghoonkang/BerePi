@@ -8,6 +8,9 @@ from matplotlib.dates import HourLocator, MinuteLocator, DateFormatter, date2num
 import datetime
 import pylab
 import time, sys, os
+import cgi
+import cgitb
+
 #from datetime import timedelta
 
 devel_dir = "/home/pi/devel"
@@ -277,6 +280,8 @@ def closingTask():
 
 
 if __name__== "__main__" :
+
+    cgitb.enable()
 
     dbip="127.0.0.1:4242"
     #dbip="input your IP or URL"
