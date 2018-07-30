@@ -65,10 +65,14 @@ def lastMonthValue(nodeid) :
     _s1 = _1month_before+'00'
     _e1 = _1month_before+'30'
 
+    _today_start = nowData+'-00:00:00'
+    _today_end = nowData+'-00:00:30'
+
     tmp_val0 = get_value(dbip, metric, {'id':'911'}, _s2 , _e2)
     tmp_val1 = get_value(dbip, metric, {'id':'911'}, _s1, _e1)
     tmp_val2 = get_last_value(dbip, metric, {'id':'911'})
-
+    #today 0:0:0
+    tmp_val3 = get_value(dbip, metric, {'id':'911'}, _today_start, _today_end)
 
     if tmp_val0 == None:
         tmp_val0 = keepSearch(findingDateM2ago, _e2)
@@ -100,6 +104,9 @@ def lastMonthValue(nodeid) :
     #print "current wattH", current_wattH
 
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day))
+
+    print "오늘 사용량 : %d kWh" %( (tmp_val2 - tmp_val3)/1000 )
+    print "많이쓴날 20kWh, 아주많이 쓴날 30kWh"
 
     print "current watt : %d kWh" %(current_wattH/1000.0)
     #calcPay(current_wattH/1000.0)
