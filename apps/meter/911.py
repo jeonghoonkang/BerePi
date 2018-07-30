@@ -67,9 +67,7 @@ def lastMonthValue(nodeid) :
 
     _today_start = str(nowDate)
     _today_start = _today_start.replace('-','/')
-    print _today_start
     _today_start = _today_start[:10]+'-00:00:00'
-    print _today_start
     _today_end = str(nowDate)
     _today_end = _today_start.replace('-','/')
     _today_end = _today_end[:10]+'-00:01:00'
@@ -111,7 +109,7 @@ def lastMonthValue(nodeid) :
 
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day))
 
-    print "오늘 사용량 : %d kWh" %( (tmp_val2 - tmp_val3)/1000 )
+    print "오늘 사용량 : %d kWh" %( (int(tmp_val2[0]) - int)(tmp_val3[0]))/1000 )
     print "많이쓴날 20kWh, 아주많이 쓴날 30kWh"
 
     print "current watt : %d kWh" %(current_wattH/1000.0)
