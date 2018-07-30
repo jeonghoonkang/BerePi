@@ -70,7 +70,7 @@ def lastMonthValue(nodeid) :
     _today_start = _today_start[:10]+'-00:00:00'
     _today_end = str(nowDate)
     _today_end = _today_start.replace('-','/')
-    _today_end = _today_end[:10]+'-00:30:00'
+    _today_end = _today_end[:10]+'-00:10:00'
 
     tmp_val0 = get_value(dbip, metric, {'id':'911'}, _s2 , _e2)
     tmp_val1 = get_value(dbip, metric, {'id':'911'}, _s1, _e1)
@@ -110,13 +110,14 @@ def lastMonthValue(nodeid) :
 
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day))
 
-    print "오늘 현재까지 사용량 0시~현재 : %d kWh" %( today_wattH/1000 )
-    print "(참고) 많이쓴날 20kWh, 아주 더 많이 쓴날 30kWh"
+    print "*************************************************"
+    print "Electric Use today 0:00 ~ now: %d kWh" %( today_wattH/1000 )
+    print "expected Use on next month, day of 26, is %d kWh" %est_watt
+    print "*************************************************"
 
+    print
+    print "(info) big use 20 kWh, huge use 30kWh for a day"
     print "current watt : %d kWh" %(current_wattH/1000.0)
-    #calcPay(current_wattH/1000.0)
-
-    print "expected watt on next month, day of 26, is %d kWh" %est_watt
     #print "Money %d Won" %calcPay(est_watt)
     #calcPay(est_watt)
 
@@ -242,8 +243,10 @@ if __name__== "__main__" :
 
     EtypeId = 911
     payCountDay = 25
-
-    ret = "Meter ID = " + str(EtypeId)+",  "
+    ret = ''
+    #ret = '<meta charset="utf-8"> \n'
+    #print ret
+    ret = ret + "Meter ID = " + str(EtypeId)+",  "
     ret = ret + "Pay check day is " + str(payCountDay) + " " + "<br>"
 
     nodeid = EtypeId
