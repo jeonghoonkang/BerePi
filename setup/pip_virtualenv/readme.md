@@ -1,6 +1,4 @@
 
-# Linux에서 설치
-
 ## pip
 - easy_install은 Python Setuptools에 포함되어 있기 때문에 이를 설치하면 사용할 수 있다. 다음과 같은 명령을 실행하여 easy_install을 설치하자.
 
@@ -38,3 +36,6 @@
   - python3 -m virtualenv venv 
   - virtualenv venv --python=python3 
   - virtualenv venv --python=python3.5
+
+- source venv/bin/activate , deactivate
+
