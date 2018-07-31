@@ -139,7 +139,7 @@ def lastMonthValue(nodeid) :
     print "**********************************************"
 
     print
-    print "(info) big use 20 kWh, huge use 30kWh for a day"
+    print "(info) big use 20kWh, huge 30kWh for a day"
     print "previous 25 ~ now kWh : %5.2f kWh" %(current_wattH/1000.0)
     #print "Money %d Won" %calcPay(est_watt)
     #calcPay(est_watt)
