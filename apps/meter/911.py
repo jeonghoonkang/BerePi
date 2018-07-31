@@ -72,11 +72,32 @@ def lastMonthValue(nodeid) :
     _today_end = _today_start.replace('-','/')
     _today_end = _today_end[:10]+'-00:10:00'
 
+
+    _yester_start = str(nowDate + datetime.timedelta(days=-1))
+    _yester_end = str(nowDate + datetime.timedelta(days=-1))
+    _yester_start = _yester_start.replace('-','/')
+    _yester_start = _yester_start[:10]+'-00:00:00'
+    _yester_end = _yester_start.replace('-','/')
+    _yester_end = _yester_start[:10]+'-00:10:00'
+
+    _byester_start = str(nowDate + datetime.timedelta(days=-2))
+    _byester_end = str(nowDate + datetime.timedelta(days=-2))
+    _byester_start = _byester_start.replace('-','/')
+    _byester_start = _byester_start[:10]+'-00:00:00'
+    _byester_end = _byester_start.replace('-','/')
+    _byester_end = _byester_start[:10]+'-00:10:00'
+    
     tmp_val0 = get_value(dbip, metric, {'id':'911'}, _s2 , _e2)
     tmp_val1 = get_value(dbip, metric, {'id':'911'}, _s1, _e1)
     tmp_val2 = get_last_value(dbip, metric, {'id':'911'})
     #today 0:0:0
     tmp_val3 = get_value(dbip, metric, {'id':'911'}, _today_start, _today_end)
+
+    #yesterday
+    tmp_val4 = get_value(dbip, metric, {'id':'911'}, _yester_start, _yester_end)
+
+    #before yesterday
+    tmp_val5 = get_value(dbip, metric, {'id':'911'}, _byester_start, _byester_end)
 
     if tmp_val0 == None:
         tmp_val0 = keepSearch(findingDateM2ago, _e2)
@@ -93,6 +114,8 @@ def lastMonthValue(nodeid) :
     current_wattH = int(tmp_val2[0])-int(tmp_val1[0])
     lastmonth_wattH = int(tmp_val1[0])-int(tmp_val0[0])
     today_wattH = int(tmp_val2[0])-int(tmp_val3[0])
+    y1 = int(tmp_val3[0])-int(tmp_val4[0])
+    y2 = int(tmp_val4[0])-int(tmp_val5[0])
 
     global day_delta
     day_delta = nowDate.day - payCountDay
@@ -111,17 +134,19 @@ def lastMonthValue(nodeid) :
     est_watt = (current_wattH/1000.0 * (30.0 / passed_day))
 
     print "**********************************************"
-    print "Electric Use today 0:00 ~ now : %d kWh" %( today_wattH/1000 )
+    print "Electric Use today 0:00 ~ now : %5.2f kWh" %( today_wattH/1000.0 )
     print "expected Use next month, day of 26, is %d kWh" %est_watt
     print "**********************************************"
 
     print
     print "(info) big use 20 kWh, huge use 30kWh for a day"
-    print "current watt : %d kWh" %(current_wattH/1000.0)
+    print "previous 25 ~ now kWh : %5.2f kWh" %(current_wattH/1000.0)
     #print "Money %d Won" %calcPay(est_watt)
     #calcPay(est_watt)
 
     print
+    print "yesterday watt : %5.2f kWh" %(y1/1000.0)
+    print "before yesterday watt : %5.2f kWh" %(y2/1000.0)
     print "previous Month watt : %d kWh" %(lastmonth_wattH/1000.0)
     #calcPay(lastmonth_wattH/1000.0)
 
