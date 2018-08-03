@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-Return disk usage, in bytes
+disk_usage : Return disk usage, in bytes
 """
 
 import os
@@ -24,4 +24,20 @@ def disk_usage(path, diskUsage='all'):
 
     return diskUsage
 
+def getdf():
+    p = os.popen("df -h")
+    return p.read()
+
+def getfree():
+    p = os.popen("free")
+    return p.read()
+
+def getuptime():
+    p = os.popen("uptime")
+    return p.read()
+
+
 print disk_usage('/', 'free')
+print getdf()
+print getfree()
+print getuptime()
