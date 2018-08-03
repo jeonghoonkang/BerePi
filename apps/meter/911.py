@@ -86,19 +86,27 @@ def lastMonthValue(nodeid) :
     _byester_start = _byester_start[:10]+'-00:00:00'
     _byester_end = _byester_start.replace('-','/')
     _byester_end = _byester_start[:10]+'-00:10:00'
-    
+
     tmp_val0 = get_value(dbip, metric, {'id':'911'}, _s2 , _e2)
     tmp_val1 = get_value(dbip, metric, {'id':'911'}, _s1, _e1)
     tmp_val2 = get_last_value(dbip, metric, {'id':'911'})
+    #print tmp_val2
+    if tmp_val2 == None: print "No current Data"
+
     #today 0:0:0
     tmp_val3 = get_value(dbip, metric, {'id':'911'}, _today_start, _today_end)
+    if tmp_val3 == None: print "No Today Data"
 
     #yesterday
     tmp_val4 = get_value(dbip, metric, {'id':'911'}, _yester_start, _yester_end)
+    if tmp_val4 == None: print "No Yesterday Data"
 
+    #print "OK" 
+    #print _byester_start, _byester_end
     #before yesterday
     tmp_val5 = get_value(dbip, metric, {'id':'911'}, _byester_start, _byester_end)
 
+    #print tmp_val0, tmp_val1, tmp_val2, tmp_val3, tmp_val4, tmp_val5,"\n"
     if tmp_val0 == None:
         tmp_val0 = keepSearch(findingDateM2ago, _e2)
 
@@ -108,8 +116,8 @@ def lastMonthValue(nodeid) :
     if tmp_val2 == None :
         tmp_val2 = keepSearch(findingDateM1ago, _e2)
 
-    print " check values"
-    print tmp_val0, tmp_val1, tmp_val2, "\n"
+    #print " check values"
+    #print tmp_val0, tmp_val1, tmp_val2, "\n"
 
     current_wattH = int(tmp_val2[0])-int(tmp_val1[0])
     lastmonth_wattH = int(tmp_val1[0])-int(tmp_val0[0])
