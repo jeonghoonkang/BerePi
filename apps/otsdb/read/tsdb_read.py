@@ -167,12 +167,12 @@ class u_ee_tsdb :
     반환 (empty_flag) : 비어있을 경우 1 / 비어있지 않을 경우 0
     '''
     def get_tsdb_value(self, _tag = None):
-        _st = self.__cin_stime
-        _et = self.__cin_etime
+        _st = self.__cin_stime 
+        _et = self.__cin_etime 
         _m  = self.__cin_metric_name
         # 형식 YYYY/MM/DD-HH:00:00
         starttime = "%s/%s/%s-%s:00:00" % (_st[0:4], _st[4:6], _st[6:8], _st[8:10])
-        endtime   = "%s/%s/%s-%s:00:00" % (_et[0:4], _et[4:6], _et[6:8], _et[8:10])
+        endtime   = "%s/%s/%s-%s:00:05" % (_et[0:4], _et[4:6], _et[6:8], _et[8:10])
 
         # 참고 : "{"는 URL창에 %7B 로 표현됨
         url_tsdb = self.__cin_url + "start=" + starttime + "&end=" + endtime + "&m=sum:" + _m
@@ -221,28 +221,31 @@ parameter2 (mdh) : 연, 월, 일, 시간의 분류 (y, m, d, h)
 반환 (re_mdh) : 변환 된 정수
 '''
 def dateInt(in_time, mdh):
-    # year
+    # year len: 4
     if mdh == 'y':
         re_mdh = int(in_time[0:4])
 
-    # month
+    # month len : 2
     if mdh == 'm':
         if in_time[4] == '0':
             re_mdh = int(in_time[5])
         else:
             re_mdh = int(in_time[4:6])
-    # day
+    # day len : 2
     elif mdh == 'd':
         if in_time[6] == '0':
             re_mdh = int(in_time[7])
         else:
             re_mdh = int(in_time[6:8])
-    # hour
+    # hour len: 2
     elif mdh == 'h':
         if in_time[8] == '0':
             re_mdh = int(in_time[9])
         else:
             re_mdh = int(in_time[8:10])
+
+    if len(in_time) < 12:
+        None
 
     return re_mdh
 
@@ -263,10 +266,10 @@ def parse_args():
     story = 'OpenTSDB needs many arguments URL, start time, end time, port '
     usg = '\n python tsdb_read.py  -url x.x.x.x -port 4242 -start 2016110100 -end 2016110222, --help for more info'
     parser=argparse.ArgumentParser(description=story, usage=usg, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("-url",    default=None, help="URL input, or run fails")
+    parser.add_argument("-url",    default='localhost', help="URL input, or run fails")
     parser.add_argument("-start",  default=None, help="start time input, like 2016110100")
     parser.add_argument("-end",    default=None, help="end time input, like 2016110223")
-    parser.add_argument("-port",   default=None, help="port input, like 4242")
+    parser.add_argument("-port",   default='4242', help="port input, like 4242")
     parser.add_argument("-recent", default=None, help="Time input for recent value")
     parser.add_argument("-m", default=None, help="metric ")
     args = parser.parse_args()
@@ -293,15 +296,15 @@ def ptest(__url, __st, __et, __m):
     tag = __m
     if (tag == None) : return
     tsdbclass.set_metric(tag)
-    tsdbclass.readTSD()
+    return tsdbclass.readTSD()
 
     
 # main function
 # python useTSDB.py -url www.url.address.number -port 4242 -start 20161101 -end 2016110207 -m origin_data
 if __name__ == "__main__":
     u, p, stime, etime, recent, metric = parse_args()
-    #ptest(u, stime, etime, metric)
-    rtest(u, stime, etime, metric)
+    print ptest(u, stime, etime, metric)
+    #rtest(u, stime, etime, metric)
     
 # print if have not proper return  
 # if ret.status_code > 200 : print "\n " + str(ret.text) + "\n
