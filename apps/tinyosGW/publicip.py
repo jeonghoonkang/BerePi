@@ -80,7 +80,7 @@ if __name__ == '__main__':
     try : name = os.getlogin()
     except :
         print ('exception get log-in user name')
-        name = 'tinyos'
+        name = 'pi' #라즈베리파이 경우. ubuntu는 사용자 
 
     if os_type == "Linux":
         fname = '/home/%s/' %name
