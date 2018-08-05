@@ -1,0 +1,3 @@
+# Crontab debugging 방법
+# */1 * * * * sh /home/pi/devel/BerePi/apps/tinyosGW/this_run_public_ip.sh > /home/pi/devel/BerePi/apps/tinyosGW/debug/debug.log 2>&1
+
