@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-disk_usage : Return disk usage, in bytes
+rpiMonitor.py : monitoring on raspberry pi
 """
 
 import os
@@ -24,6 +24,10 @@ def disk_usage(path, diskUsage='all'):
 
     return diskUsage
 
+def gethostname():
+    p = os.popen("hostname")
+    return p.read()
+
 def getdf():
     p = os.popen("df -h")
     return p.read()
@@ -36,8 +40,30 @@ def getuptime():
     p = os.popen("uptime")
     return p.read()
 
+def getstalkstatus():
+    p = os.popen("stalk status")
+    return p.read()
+
+def getprocCpu(proc):
+    str_proc ="ps -e -o pcpu,cmd --no-headers|grep %s|grep -v grep|awk '{sum += $1} END {print sum}'" % proc
+    p = os.popen(str_proc)
+    try:
+        return float(p.read())
+    except ValueError:
+        return None
+
+def getprocMem(proc):
+    str_proc ="ps -e -o pmem,cmd --no-headers|grep %s|grep -v grep|awk '{sum += $1} END {print sum}'" % proc
+    p = os.popen(str_proc)
+    try:
+        return float(p.read())
+    except ValueError:
+        return None
 
 print disk_usage('/', 'free')
 print getdf()
 print getfree()
 print getuptime()
+print gethostname()
+print getprocCpu("python")
+print getprocMem("python")
