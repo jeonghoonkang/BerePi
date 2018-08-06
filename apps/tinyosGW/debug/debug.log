@@ -1,16 +1,0 @@
-python /Users/tinyos/devel/BerePi/apps/tinyosGW/publicip.py tinyos.iptime.org 22 pi tinyos0
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0100    15  100    15    0     0      3      0  0:00:05  0:00:04  0:00:01     3
-sh: sshpass: command not found
-usage : python /Users/tinyos/devel/BerePi/apps/tinyosGW/publicip.py {server_IP_ADD} {server_PORT} {server_id} {passwd_for_server} => user should input arguments {}  
-
-... start running, inputs are  tinyos.iptime.org 22 pi tinyos0
-[get-public-ip] 106.252.229.57
-
-os-type Darwin
-/Users/tinyos/devel/BerePi/apps/tinyosGW/out/JKangui-iMac.txt
-
-sshpass -ptinyos0 scp -o StrictHostKeyChecking=no /Users/tinyos/devel/BerePi/apps/tinyosGW/out/JKangui-iMac.txt pi@tinyos.iptime.org:/var/www/html/server/
-return of os.system =  32512
-finish 
