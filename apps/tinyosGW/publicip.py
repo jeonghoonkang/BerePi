@@ -8,6 +8,7 @@ from types import *
 import platform
 import sys
 import os
+import datetime
 
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
@@ -71,6 +72,7 @@ def args_proc():
 
 if __name__ == '__main__':
 
+    print ('\n', datetime.datetime.now(), '\n')
     ip, port, id, passwd = args_proc()
 
     p_ip = getip()
