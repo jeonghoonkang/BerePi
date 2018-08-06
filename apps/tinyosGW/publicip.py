@@ -84,18 +84,20 @@ if __name__ == '__main__':
         # crontab 으로 실행할때는. getloin()에서 예외 발생하여, 이부분에 정학한 아이디를 넣어줘야함
         # 아이디가 정확하지 않으면 실행 에러로 종료됨
         # 확인필수  : https://github.com/jeonghoonkang/BerePi/blob/master/apps/tinyosGW/debug/debug.log
-
+    print ("using local id : ", name)
+    sshpass = ''
     if os_type == "Linux":
         fname = '/home/%s/' %name
     elif os_type == "Darwin":
         fname = '/Users/%s/' %name
+        sshpass = '/usr/local/bin/'
 
     fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
+    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
     cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
 #    cmd = 'scp'
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
