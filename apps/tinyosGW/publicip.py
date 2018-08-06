@@ -22,14 +22,14 @@ def hostname():
 def getip():
     cmd = "curl http://checkip.amazonaws.com"
     ip = run_cmd(cmd)
-    print (ip)
+    print ('[get-public-ip]', ip)
     return ip
 
 def getiip():
 
     cmd="/sbin/ifconfig"
     _os_type = platform.system()
-    print (_os_type)
+    print ('os-type', _os_type)
     if _os_type.find('Cygwin') > 0:
         cmd = "ipconfig"
     iip = run_cmd(cmd)
@@ -50,7 +50,7 @@ def args_proc():
 
     msg = "usage : python %s {server_IP_ADD} {server_PORT} {server_id} {passwd_for_server}" %__file__
     msg += " => user should input arguments {} "
-    print (msg)
+    print (msg, '\n')
 
     if len(sys.argv) < 2:
         exit("[bye] you need to input args, ip / port / id")
@@ -80,9 +80,9 @@ if __name__ == '__main__':
     try : name = os.getlogin()
     except :
         print ('exception get log-in user name')
-        name = 'pi' #라즈베리파이 경우. ubuntu는 사용자 
+        name = 'pi' #라즈베리파이 경우. ubuntu는 사용자
         # crontab 으로 실행할때는. getloin()에서 예외 발생하여, 이부분에 정학한 아이디를 넣어줘야함
-        # 아이디가 정확하지 않으면 실행 에러로 종료됨 
+        # 아이디가 정확하지 않으면 실행 에러로 종료됨
         # 확인필수  : https://github.com/jeonghoonkang/BerePi/blob/master/apps/tinyosGW/debug/debug.log
 
     if os_type == "Linux":
@@ -100,7 +100,7 @@ if __name__ == '__main__':
 #    cmd = 'scp'
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     print (cmd)
-    print ( os.system(cmd) )
+    print ( 'return of os.system = ', os.system(cmd) )
 
     #ret = run_cmd(cmd)
     print ("finish ")
