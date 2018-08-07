@@ -24,27 +24,27 @@ def disk_usage(path, diskUsage='all'):
 
     return diskUsage
 
-def gethostname():
+def get_hostname():
     p = os.popen("hostname")
     return p.read()
 
-def getdf():
+def get_df():
     p = os.popen("df -h")
     return p.read()
 
-def getfree():
+def get_free():
     p = os.popen("free")
     return p.read()
 
-def getuptime():
+def get_uptime():
     p = os.popen("uptime")
     return p.read()
 
-def getstalkstatus():
+def get_stalk_status():
     p = os.popen("stalk status")
     return p.read()
 
-def getprocCpu(proc):
+def get_proc_cpu(proc):
     str_proc ="ps -e -o pcpu,cmd --no-headers|grep %s|grep -v grep|awk '{sum += $1} END {print sum}'" % proc
     p = os.popen(str_proc)
     try:
@@ -52,7 +52,7 @@ def getprocCpu(proc):
     except ValueError:
         return None
 
-def getprocMem(proc):
+def get_proc_mem(proc):
     str_proc ="ps -e -o pmem,cmd --no-headers|grep %s|grep -v grep|awk '{sum += $1} END {print sum}'" % proc
     p = os.popen(str_proc)
     try:
@@ -61,9 +61,9 @@ def getprocMem(proc):
         return None
 
 print disk_usage('/', 'free')
-print getdf()
-print getfree()
-print getuptime()
-print gethostname()
-print getprocCpu("python")
-print getprocMem("python")
+print get_df()
+print get_free()
+print get_uptime()
+print get_hostname()
+print get_proc_cpu("python")
+print get_proc_mem("python")
