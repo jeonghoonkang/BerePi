@@ -40,6 +40,10 @@ def get_uptime():
     p = os.popen("uptime")
     return p.read()
 
+def get_ifconfig():
+    p = os.popen("ifconfig")
+    return p.read()
+
 def get_stalk_status():
     p = os.popen("stalk status")
     return p.read()
@@ -60,10 +64,10 @@ def get_proc_mem(proc):
     except ValueError:
         return None
 
-print disk_usage('/', 'free')
-print get_df()
-print get_free()
-print get_uptime()
-print get_hostname()
-print get_proc_cpu("python")
-print get_proc_mem("python")
+#print disk_usage('/', 'free')
+#print get_df()
+#print get_free()
+#print get_uptime()
+#print get_hostname()
+#print get_proc_cpu("python")
+#print get_proc_mem("python")
