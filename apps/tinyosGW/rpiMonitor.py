@@ -28,19 +28,22 @@ def get_hostname():
     p = os.popen("hostname")
     return p.read()
 
-def get_df():
+def get_df(valueflag=False):
     p = os.popen("df -h")
     return p.read()
 
-def get_free():
-    p = os.popen("free")
+def get_free(valueflag=False):
+    if not  valueflag:
+        p = os.popen("free")
+    else:
+        p = os.popen("free|grep Mem|grep -v grep|awk '{ print $4 }'")
     return p.read()
 
 def get_uptime():
     p = os.popen("uptime")
     return p.read()
 
-def get_ifconfig():
+def get_ifconfig(valueflag=False):
     p = os.popen("ifconfig")
     return p.read()
 
