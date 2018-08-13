@@ -5,6 +5,10 @@ rpiMonitor.py : monitoring on raspberry pi
 
 import os
 
+## function disk_usage : return disk usage info at numbers
+# all : total disk usage at list
+# free : free disk usage at int
+# used : used disk usage at int
 def disk_usage(path, diskUsage='all'):
     st = os.statvfs(path)
     free = st.f_bavail * st.f_frsize
@@ -24,14 +28,17 @@ def disk_usage(path, diskUsage='all'):
 
     return diskUsage
 
+## funtion get_hostname : return raspberry pi hostname info 
 def get_hostname():
     p = os.popen("hostname")
     return p.read()
 
+## function get_df : return disk usage info
 def get_df(valueflag=False):
     p = os.popen("df -h")
     return p.read()
 
+## funtion get_free : return memory usage info
 def get_free(valueflag=False):
     if not  valueflag:
         p = os.popen("free")
@@ -39,14 +46,17 @@ def get_free(valueflag=False):
         p = os.popen("free|grep Mem|grep -v grep|awk '{ print $4 }'")
     return p.read()
 
+## function get_uptime : return working time of raspberry pi
 def get_uptime():
     p = os.popen("uptime")
     return p.read()
 
+## function get_ifconfig : return network interfaces info
 def get_ifconfig(valueflag=False):
     p = os.popen("ifconfig")
     return p.read()
 
+## function get_stalk_status : return stalk service info
 def get_stalk_status():
     p = os.popen("stalk status")
     return p.read()
