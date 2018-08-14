@@ -49,5 +49,5 @@ MAILTO=tinyos
 # sudo ctlscript.sh 은 동작 안함.
 #05 03 * * * sudo sh /home/tinyos/wordpress-3.8.1-1/ctlscript.sh stop
 #10 03 * * * sudo sh /home/tinyos/wordpress-3.8.1-1/ctlscript.sh start > /home/pi/devel/BerePi/apps/tinyosGW/debug/debug.log 2>&1 
-## > 로 디버깅을 안하면 오류 수정하기가 어려움, 반드시 log 
+## > 로 디버깅을 안하면 오류 수정하기가 어려움, 반드시 log 작성할것...
 
