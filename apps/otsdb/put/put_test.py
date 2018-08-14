@@ -15,7 +15,7 @@ import ketidatetime
 import time
 
 
-'''  example : url = "http://10.0.0.43:4242/api/put"
+'''  example : url = "http://10.0.0.43:4242/api/put
      warning : we have to 50 JSON pack to put in OpenTSDB, on first stage.
                if you add more, you shoud test amount of TX packets '''
 
