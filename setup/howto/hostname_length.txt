@@ -1,2 +1,7 @@
-시스템의 호스트 이름 길이가 너무 길면, sudo 명령에 지연이 발생 
+(문제점)
+시스템의 호스트 이름 문제로, sudo 명령에 지연이 발생 
 getconf HOST_NAME_MAX
+
+(해결방법)
+sudo raspi-config , 네트워크 설정에서 호스트이름을 변경해야 함
+직접 /etc/hosts /etc/hostname 변경은 하지 않는게 좋음
