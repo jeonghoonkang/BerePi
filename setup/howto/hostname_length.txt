@@ -1,0 +1,2 @@
+시스템의 호스트 이름 길이가 너무 길면, sudo 명령에 지연이 발생 
+getconf HOST_NAME_MAX
