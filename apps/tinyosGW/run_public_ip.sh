@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bash
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 
 export ip=''
