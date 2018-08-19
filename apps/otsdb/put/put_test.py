@@ -113,7 +113,7 @@ def parse_args():
     story = 'OpenTSDB needs many arguments URL, start time, end time, port '
     usg = '\n python tsdb_read.py  -url x.x.x.x \
         -port 4242 -start 2016110100 -end 2016110222 \
-        -rdm metric_name, -wm write_metric_name --help for more info'
+        -rdm metric_name, -wm write_metric_name -tags="{id:911}" --help for more info'
 
     parser=argparse.ArgumentParser(description=story,
         usage=usg,
@@ -142,15 +142,13 @@ def parse_args():
     else : port = ":"+ str(port)
     url = url + port +'/api/put'
 
-    start = args.start
-    if start != None : start = args.start
 
     wm = args.wtm
     if wm == None :
         print usg
         exit("... I can not do anything without metric")
 
-    return url, wm, start, args.val, args.tags
+    return url, wm, args.start, args.val, args.tags
 
 if __name__== "__main__" :
     print "...starting..."
@@ -161,5 +159,3 @@ if __name__== "__main__" :
 
     time.sleep(0.1)
     print "\n ...ending..."
-
-     
