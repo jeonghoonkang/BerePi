@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+# Author : jeonghoonkang, https://github.com/jeonghoonkang
 
 from __future__ import print_function
 import datetime
