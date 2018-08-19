@@ -10,6 +10,11 @@
   - Teglos rev.B family
   - Kmote is best for this system
   
+# crontab 디버깅 방법
+  - */45 * * * * sh /home/pi/devel/BerePi/apps/tinyosGW/this_run_public_ip.sh > /home/pi/logs/crontab_debug.log 2>&1
+  - 위의 예처럼 실행을 시키면, 로그파일로 저장이 되어, crontab 실행이 정상적으로 진행되고 있는지 확인할 수 있음
+  
+  
 # Mac OSX issue
 - name is Darwin
     - name = platform.system()
