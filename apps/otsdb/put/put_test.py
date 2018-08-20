@@ -68,7 +68,9 @@ def otsdb_restful_put(url, metric=None, ts=None, val=None, tags=None, iter_n=1 )
         try :
             #s = requests.Session()
             ret = requests.post(url, data=json.dumps(data))
-            print "\n retrun is ", ret
+            print ret.content
+            print "\n return is ", ret
+
 
             outstring = "\n  now trying to put below data to TSDB, url %s " %(url)
             outstring += str(data)
@@ -149,6 +151,13 @@ def parse_args():
         exit("... I can not do anything without metric")
 
     return url, wm, args.start, args.val, args.tags
+
+def put_tsdb(url, write_metric, time, val, tags):
+    otsdb_restful_put(url, write_metric, time, val, tags)
+    #python put_test.py -url 192.168.0.200 -start 2018081800 -val 21766000 -wtm rc01.t_power.WH -tags "{'id':'911'}"
+
+def put_now_tsdb(url, write_metric, time, val, tags):
+    otsdb_restful_put(url, write_metric, 'now', val, tags)
 
 if __name__== "__main__" :
     print "...starting..."
