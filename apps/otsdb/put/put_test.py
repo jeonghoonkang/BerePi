@@ -153,10 +153,14 @@ def parse_args():
     return url, wm, args.start, args.val, args.tags
 
 def put_tsdb(url, write_metric, time, val, tags):
+    if url.find('http') == -1 :
+        url = 'http://' + url
     otsdb_restful_put(url, write_metric, time, val, tags)
     #python put_test.py -url 192.168.0.200 -start 2018081800 -val 21766000 -wtm rc01.t_power.WH -tags "{'id':'911'}"
 
 def put_now_tsdb(url, write_metric, time, val, tags):
+    if url.find('http') == -1 :
+        url = 'http://' + url
     otsdb_restful_put(url, write_metric, 'now', val, tags)
 
 if __name__== "__main__" :
