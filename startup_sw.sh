@@ -4,7 +4,7 @@
 
 alias sr='screen'
 
-sudo screen -dmS startup sudo sh /home/pi/devel/BerePi/apps/otsdb/start_tsdb.sh
+#sudo screen -dmS startup sudo sh /home/pi/devel/BerePi/apps/otsdb/start_tsdb.sh
 #sudo screen -dmS lcd sudo python /home/pi/devel/BerePi/apps/lcd_berepi/watch.py -ip xxxxx
 
 
@@ -19,3 +19,5 @@ sudo screen -dmS startup sudo sh /home/pi/devel/BerePi/apps/otsdb/start_tsdb.sh
 #### Please add below line on /etc/rc.local
 # sudo sh /home/pi/devel/BerePi/this_startup_sw.sh
 
+
+#/home/pi/devel/BerePi/apps/tinyosGW/run_pubic_ip.sh {ip/url} {port} {login id} {pw}

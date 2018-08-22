@@ -13,7 +13,7 @@ scp .vimrc ~
 
 export vimjelly_file=$DNPATH/vim_conf/jellybeans.vim
 wget -N $vimjelly_file
-sudo mv jellybeans.vim /usr/share/vim/vim74/colors
+sudo mv jellybeans.vim /usr/share/vim/vim80/colors
 
 
 # 잠시 코멘트 아웃, 아래 내용들은 시스템 설정을 변경하니, 적용은 신중히.
