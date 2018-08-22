@@ -40,7 +40,8 @@ set mouse=n
 
 set nu
 "set lines=40 columns=100
-colo jellybeans
+colo blue
+"colo jellybeans
 "colo torte 
 set ruler
 syn on
