@@ -276,7 +276,14 @@ if __name__== "__main__" :
 
     EtypeId = 911
     payCountDay = 25
+
     ret = ''
+    ret += '<head> <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> \
+            <title> Python CGI for RaspberryPi</title> <style type="text/css"> \
+            #wrapper { max-width: 600px; } </style> \
+            <meta name="viewport" content="width=device-width; initial-scale=1.0; \
+            maximum-scale=1.0; user-scalable=0;"> \
+            <meta name="apple-mobile-web-app-capable" content="yes" /> </head>'
     #ret = '<meta charset="utf-8"> \n'
     #print ret
     ret = ret + "Meter ID = " + str(EtypeId)+",  "
