@@ -3,3 +3,5 @@ Ubuntu 사용자 그룹 변경
 groupadd {group_name}
 
 sudo gpasswd -a {user} {group_name}
+
+usermod -a -G crontab {username} # ubuntu user group change 변경, crontab 유저 
