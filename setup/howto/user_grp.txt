@@ -1,4 +1,4 @@
-Ubuntu 사용자 그룹 변경
+Ubuntu 사용자 그룹 변경 group chgrp
 
 groupadd {group_name}
 
