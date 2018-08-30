@@ -25,6 +25,8 @@
 # sudo apt-get -y install mysql-server php5-mysql
  #sudo apt-get -y install postfix
  #sudo apt-get -y install rrdtool
+# sudo apt-get -y install ibus ibus-hangul fonts-unfonts-core
+# sudo apt-get -y install fonts-unfonts-core
 
 #wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
 #unzip distribute-0.7.3.zip
