@@ -5,6 +5,8 @@ supports Raspbian Jessie (ver 2016.04.30), with RaspBerryPi3
   - OS installation and setup to run fort the SDH sensors
   - It shows basic installation process for Raspi Sensor
     - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
+  - Installation Image for RaspberryPi3 (2018.08)
+    - http://tinyos.asuscomm.com:2081/open/2018_08_hawaii.zip
 
 ##### People
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeong(https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
