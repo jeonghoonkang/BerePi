@@ -16,14 +16,14 @@
 
 ## 3. Configuration
 
-   1) copy zabbix-agentd.conf file
+### 1) copy zabbix-agentd.conf file
 
    ```Shell
    $ sudo cp /etc/zabbix/zabbix-agentd.conf /etc/zabbix/zabbix-agentd.conf.bak
    $ sudo cp BerePi/apps/zabbix/conf/zabbix_agentd.rpi2.conf /etc/zabbix/zabbix-agentd.conf
    ```
 
-   2) Edit zabbix-agentd.conf
+### 2) Edit zabbix-agentd.conf
 
    ```Shell
    $ sudo vi /etc/zabbix/zabbix_agentd.conf
@@ -33,13 +33,13 @@
    Hostname=<hostname>
    ```
 
-   3) Enable system service
+### 3) Enable system service
 
   ```Shell
   $ sudo systemctl enable zabbix-agent.service
   ```
 
-   4) Restart zabbix-agent
+### 4) Restart zabbix-agent
 
    ```Shell
    $ sudo /etc/init.d/zabbix-agent restart
@@ -48,24 +48,24 @@
 
 ## 4. Configuring a host
 
-      1. Configuration > Hosts > Create host
+### 1) Configuration > Hosts > Create host
 
-      * Host name : \<Your name>
-      * Groups : select host groups
-      * Agent interfaces
-          * Public IP : IP/DNS
-          * Private IP/Active mode : 0.0.0.0
+     - Host name : \<Your name>
+     - Groups : select host groups
+     - Agent interfaces
+       - Public IP : IP/DNS
+       - Private IP/Active mode : 0.0.0.0
 
-      2. Templates : link templates
+### 2) Templates : link templates
 
-     * 'Select'
-     * 'Template OS Linux Active', 'Template App STALK Service Active'
+     - 'Select'
+     - 'Template OS Linux Active', 'Template App STALK Service Active'
 
-      4. Monitoring > Graphs : Check to receiving data
+### 3) Monitoring > Graphs : Check to receiving data
 
 ## 5. Appendixes
 
-      1. Zabbix agent 테스트
+### 1) Zabbix agent 테스트
 
 ```Shell
 $ sudo /etc/init.d/zabbix-agent status
