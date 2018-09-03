@@ -14,10 +14,12 @@
    ```
 
 ## 2. conf 파일 수정
-   ※  **Hostname 은 중복되어서는 안되며, zabbix server 에 등록된 Host 명과 일치해야함**
-      1. config 파일 다운로드
-     * [다운로드](https://raw.githubusercontent.com/jeonghoonkang/PDM/master/doc/zabbix_monitoring_system/conf/zabbix_agentd.win.conf)
-      2. config 파일 수정
+
+  ※  **Hostname 은 중복되지 않고, zabbix server 에 등록된 Host 와 일치해야함**
+  
+  1. config 파일 [다운로드](https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.win.conf)
+  
+  2. config 파일 수정
 
    ```
 LogFile=c:\zabbix_agents_3.4.6.win\zabbix_agentd.log
@@ -28,7 +30,7 @@ Hostname=<Your Hostname>
 
 ## 3. Zabbix agent 설치
 
-  * 설치하는 경우 시스템이 재시작되어도 agent 가 자동실행됨
+  * 설치하면 시스템이 재시작되어도 agent 가 자동실행되어 편리함
   * 무설치 실행의 경우 '추가' 항목을 참조할 것
 
   * 시작메뉴 -> 명령프롬프트(관리자) 실행
@@ -63,7 +65,7 @@ zabbix_agentd.exe --start
 
    ```
    cd c:\zabbix_agents_3.4.6.win\bin\win64
-   zabbix_agentd.exe -f --config c:\zabbix_agents_3.0.0.win\conf\zabbix_agentd.win.conf
+   zabbix_agentd.exe -f --config c:\zabbix_agents_3.4.6.win\conf\zabbix_agentd.win.conf
    ```
 
     2. Template 선택시 참고 사항
