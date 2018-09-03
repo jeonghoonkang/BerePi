@@ -16,33 +16,33 @@ $ wget http://repo.zabbix.com/zabbix/3.4/ubuntu/pool/main/z/zabbix/zabbix-agent_
 
 ## 2. conf 파일 설정
 
-      1. conf 파일 다운로드
+   1. conf 파일 다운로드
 
-```Shell
-$ wget https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.linux.conf
-```
+   ```Shell
+   $ wget https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.linux.conf
+   ```
 
    2. conf 파일 수정
 
-      ```
-      $ vi zabbix_agentd.linux.conf
-      ```
+   ```Shell
+   $ vi zabbix_agentd.linux.conf
+   ```
 
 
-```conf
-Hostname=<Your hostname>
-```
+   ```conf
+   Hostname=<Your hostname>
+   ```
 
-      3. Zabbix agent 설치
+   3. Zabbix agent 설치
 
     * ubuntu 14.04 이상에서 설치에 문제가 생기는 경우 libc6 가 2.17 이상인지 확인할 것
     * ubuntu 14.04 이하에서는 libc6 를 2.17 이상으로 설치해야함
 
-```Shell
-$ sudo dpkg -i zabbix-agent_3.0.4-1+trusty_amd64.deb
-```
+    ```Shell
+    $ sudo dpkg -i zabbix-agent_3.0.4-1+trusty_amd64.deb
+    ```
 
-      4. 설정파일 적용
+   4. 설정파일 적용
 
 ```Shell
 $ cp /etc/zabbix/zabbix_agentd.conf /etc/zabbix/zabbix_agentd.conf.bak
