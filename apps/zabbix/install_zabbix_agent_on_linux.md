@@ -2,27 +2,36 @@
 
 
 
-## 1. zabbiz-agent 다운로드
+## 1. Zabbiz agent 다운로드
 
   * [링크](http://repo.zabbix.com/zabbix/3.4/ubuntu/pool/main/z/zabbix/)에서 OS 버전에 따라 zabbix-agent 다운로드
-  * 아래는 zabbix agent 3.4.9 Ubuntu 14.04 LTS 64bit 의 다운로드 경로임
+  * 아래는 zabbix agent 3.4.9 Ubuntu 14.04 LTS 64bit 의 예
 
-```Shell
-$ mkdir ~/zabbix_bin
-$ mkdir ~/zabbix_bin/zabbix_agent
-$ cd ~/zabbix_bin/zabbix_agent
-$ wget http://repo.zabbix.com/zabbix/3.4/ubuntu/pool/main/z/zabbix/zabbix-agent_3.4.9-1%2Btrusty_amd64.deb
-```
+  ```Shell
+  $ mkdir ~/zabbix_bin
+  $ mkdir ~/zabbix_bin/zabbix_agent
+  $ cd ~/zabbix_bin/zabbix_agent
+  $ wget http://repo.zabbix.com/zabbix/3.4/ubuntu/pool/main/z/zabbix/zabbix-agent_3.4.9-1%2Btrusty_amd64.deb
+  ```
 
-## 2. conf 파일 설정
+## 2. Zabbix agent 설치
 
-   1. conf 파일 다운로드
+   - ubuntu 14.04 이상에서 설치에 문제가 생기는 경우 libc6 가 2.17 이상인지 확인할 것
+   - ubuntu 14.04 이하에서는 libc6 를 2.17 이상으로 설치해야함
+
+   ```Shell
+   $ sudo dpkg -i zabbix-agent_3.4.9-1+trusty_amd64.deb
+   ```
+
+## 3. conf 파일 설정
+
+   1) conf 파일 다운로드
 
    ```Shell
    $ wget https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.linux.conf
    ```
 
-   2. conf 파일 수정
+   2) conf 파일 수정
 
    ```Shell
    $ vi zabbix_agentd.linux.conf
@@ -33,22 +42,13 @@ $ wget http://repo.zabbix.com/zabbix/3.4/ubuntu/pool/main/z/zabbix/zabbix-agent_
    Hostname=<Your hostname>
    ```
 
-   3. Zabbix agent 설치
+   3) 설정파일 적용
 
-    * ubuntu 14.04 이상에서 설치에 문제가 생기는 경우 libc6 가 2.17 이상인지 확인할 것
-    * ubuntu 14.04 이하에서는 libc6 를 2.17 이상으로 설치해야함
-
-    ```Shell
-    $ sudo dpkg -i zabbix-agent_3.0.4-1+trusty_amd64.deb
-    ```
-
-   4. 설정파일 적용
-
-```Shell
-$ cp /etc/zabbix/zabbix_agentd.conf /etc/zabbix/zabbix_agentd.conf.bak
-$ mv zabbix_agentd.linux.conf /etc/zabbix/zabbix_agentd.conf
-$ sudo /etc/init.d/zabbix-agent restart
-```
+   ```Shell
+   $ cp /etc/zabbix/zabbix_agentd.conf /etc/zabbix/zabbix_agentd.conf.bak
+   $ mv zabbix_agentd.linux.conf /etc/zabbix/zabbix_agentd.conf
+   $ sudo /etc/init.d/zabbix-agent restart
+   ```
 
 
 ## 4. Zabbix Server 에 등록
