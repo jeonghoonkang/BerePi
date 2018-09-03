@@ -83,7 +83,7 @@ if __name__ == '__main__':
     except :
         print ('[exception] get log-in user name')
         name = 'pi' #라즈베리파이 경우. ubuntu는 사용자
-        # crontab 으로 실행할때는. getloin()에서 예외 발생하여, 이부분에 정학한 아이디를 넣어줘야함
+        # crontab 으로 실행할때는. getloin()에서 예외 발생하여, 이 부분에 정확한 아이디를 넣어줘야함
         # 아이디가 정확하지 않으면 실행 에러로 종료됨
         # 확인필수  : https://github.com/jeonghoonkang/BerePi/blob/master/apps/tinyosGW/debug/debug.log
     print ("using local id : ", name)
