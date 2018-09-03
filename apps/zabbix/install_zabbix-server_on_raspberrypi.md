@@ -82,7 +82,7 @@ sudo dpkg –i zabbix-agent_3.4.12-1+stretch_armhf.deb
 
 ```
 cp /etc/zabbix/zabbix-agent.conf /etc/zabbix/zabbix-agent.conf.bak
-sudo cp conf/zabbix_agentd.rpi2.conf /etc/zabbix/zabbix-agent.conf
+sudo cp BerePi/apps/zabbix/conf/zabbix_agentd.rpi2.conf /etc/zabbix/zabbix-agent.conf
 sudo vi /etc/zabbix/zabbix-agent.conf
 ```
 
