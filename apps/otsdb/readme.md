@@ -55,8 +55,14 @@ exit 0
    - import re 를 이용하여 string -> dictionary 변환 필요
  - Open TSDB 쓰기
    - post, socket put
- - 데이터변환, String / Dictionary
-  
+ - 데이터 검증
+   - 시간별
+     - input dp 존재해야하는 주기
+     - output valid or invalid, 손실비율, 데이터 편차 비율
+   - 데이터 수치 레벨 별
+     - input 평균탐색? 최대최소 탐색?
+     - output 최대편차, valid or invalid
+   
 <pre>
     _recom = re.compile('dps')
     _mobj = _recom.search(_read_buf)
