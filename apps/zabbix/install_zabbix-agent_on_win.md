@@ -1,8 +1,9 @@
-# Zabbix agent 설치 방법 (Windows)
+# Installing zabbix agent on Windows
 
-## 1. zabbiz-agent 설치
-   * http://www.zabbix.com/download.php > Zabbix pre-compiled agents > Zabbix 3.4 > Windows 다운로드 **or** [직접 다운로드](https://www.zabbix.com/downloads/3.4.6/zabbix_agents_3.4.6.win.zip)
-   * C:\ 에 압축해제 (conf 파일 경로를 위해 C:\ 설치를 추천)
+## 1. Download
+
+   * http://www.zabbix.com/download.php > Zabbix pre-compiled agents > Zabbix 3.4 > Windows download **or** [Driect download](https://www.zabbix.com/downloads/3.4.6/zabbix_agents_3.4.6.win.zip)
+   * Unzip for C:\ drive
 
    ```diretory
 .C:\
@@ -13,13 +14,11 @@
 ¦     ¦---- conf
    ```
 
-## 2. conf 파일 수정
+## 2. Configuration
 
-  ※  **Hostname 은 중복되지 않고, zabbix server 에 등록된 Host 와 일치해야함**
+### 1) Download zabbix-agentd.conf file [Direct download](https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.win.conf)
   
-  1. config 파일 [다운로드](https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.win.conf)
-  
-  2. config 파일 수정
+### 2) Edit zabbix-agentd.conf
 
    ```
 LogFile=c:\zabbix_agents_3.4.6.win\zabbix_agentd.log
@@ -28,49 +27,48 @@ ServerActive=118.129.98.184
 Hostname=<Your Hostname>
    ```
 
-## 3. Zabbix agent 설치
+## 3. Install
 
-  * 설치하면 시스템이 재시작되어도 agent 가 자동실행되어 편리함
-  * 무설치 실행의 경우 '추가' 항목을 참조할 것
-
-  * 시작메뉴 -> 명령프롬프트(관리자) 실행
+  * Win + x -> commadn Prompt(Admin)
   ```
 cd c:\zabbix_agents_3.4.6.win\bin\win64
 zabbix_agentd.exe --config c:\zabbix_agents_3.4.6.win\conf\zabbix_agentd.win.conf --install
 zabbix_agentd.exe --start
   ```
 
-## 4. Zabbix Server 에 등록
+## 4. Configuring a host
 
-    1. Configuration > Hosts > Create host
+### 1) Configuration > Hosts > Create host
 
-    2. Host 항목 입력
    - Host name : <Your name>
-   - Groups : 소유 그룹 선택
+   - Groups : slect host groups
    - Agent interfaces
-        * 고정 IP 인 경우 IP 입력
-        * Active 모드의 경우 0.0.0.0 입력
+        - Public IP : IP/DNS
+        - Private IP/Active mode : 0.0.0.0
 
-    3. Templates 항목 입력
-   - 'Select' 버튼
-   - 'Template OS Windows Active' 선택
+### 2) select Template
 
-    4. 'Add' 버튼 클릭
+   - 'Select' > Template OS Windows Active'
 
-    5. Monitoring > Graphs 에서 신규 등록된 Host 선택 후 데이터 수신 여부 확인
+### 3) Check to receiving data
 
-## 5. 추가
+   - Monitoring > Graphs
 
-    1. 설치없이 zabbix agent 실행하는 경우
+
+## 6. Appendixes
+
+### 1) Portable zabbix-agent
 
    ```
    cd c:\zabbix_agents_3.4.6.win\bin\win64
    zabbix_agentd.exe -f --config c:\zabbix_agents_3.4.6.win\conf\zabbix_agentd.win.conf
    ```
 
-    2. Template 선택시 참고 사항
+### 2) Zabbix agent TEST
 
-   - Template OS Windows : Zabbix Server 에서 Host 로 연결이 가능한 경우 (Public IP) 선택, Server 에서 Host 제어 가능함
-   - Template OS Windows Active : private address 로 연결되어 Server 에서 연결이 어려운 경우 선택
-
-[참조](http://www.zabbix.com/download.php)
+   ```Shell
+   $ sudo /etc/init.d/zabbix-agent status
+   $ zabbix_agentd -t user.proc.allcpu[<process>]
+   ```
+   
+[http://www.zabbix.com/download.php](http://www.zabbix.com/download.php)
