@@ -16,7 +16,9 @@
 
 ## 2. Configuration
 
-### 1) Download zabbix-agentd.conf file [Direct download](https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.win.conf)
+### 1) Download
+
+- zabbix-agentd.conf file : [Download](https://raw.githubusercontent.com/ipmstyle/zabbix_on_raspberry_pi/master/conf/zabbix_agentd.win.conf)
   
 ### 2) Edit zabbix-agentd.conf
 
@@ -31,9 +33,9 @@ Hostname=<Your Hostname>
 
   * Win + x -> commadn Prompt(Admin)
   ```
-cd c:\zabbix_agents_3.4.6.win\bin\win64
-zabbix_agentd.exe --config c:\zabbix_agents_3.4.6.win\conf\zabbix_agentd.win.conf --install
-zabbix_agentd.exe --start
+  cd c:\zabbix_agents_3.4.6.win\bin\win64
+  zabbix_agentd.exe --config c:\zabbix_agents_3.4.6.win\conf\zabbix_agentd.win.conf --install
+  zabbix_agentd.exe --start
   ```
 
 ## 4. Configuring a host
