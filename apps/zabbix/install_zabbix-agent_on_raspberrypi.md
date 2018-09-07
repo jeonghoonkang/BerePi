@@ -42,7 +42,7 @@
 ### 4) Restart zabbix-agent
 
    ```Shell
-   $ sudo /etc/init.d/zabbix-agent restart
+   $ sudo systemctl restart zabbix-agent.service
    ```
 
 
