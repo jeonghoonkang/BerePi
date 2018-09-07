@@ -59,13 +59,13 @@
 ### 2) Templates : link templates
 
      - 'Select'
-     - 'Template OS Linux Active', 'Template App STALK Service Active'
+     - 'Template OS Linux Active', 'Template App STALK Service Active', 'Template App Raspberry Pi Active'
 
 ### 3) Monitoring > Graphs : Check to receiving data
 
 ## 5. Appendixes
 
-### 1) Zabbix agent 테스트
+### 1) Zabbix agent TEST
 
 ```Shell
 $ sudo /etc/init.d/zabbix-agent status
