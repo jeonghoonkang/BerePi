@@ -19,4 +19,8 @@
       - Return metric name which has been written by funcion (dictionary)
     - Copy
       - read and write specific metric to other metric
- 
+  - Data check
+    - valid data
+    - worse data
+    - statistics of data stream
+    
