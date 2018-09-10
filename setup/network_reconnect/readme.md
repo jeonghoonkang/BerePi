@@ -4,4 +4,9 @@
   - http://www.intellamech.com/RaspberryPi-projects/rpi_nmcli.html
     - sudo apt-get update
     - sudo apt-get install network-manager
+
+- dhcp
+  - sudo dhclient eth0
+  - sudo systemctl restart dhcpcd
   
+   
