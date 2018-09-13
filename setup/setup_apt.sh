@@ -51,8 +51,9 @@ sudo pip install networkx
 sudo pip install httplib
 sudo pip install urllib3
 sudo pip install utils
-sudo pip install scikit-learn
 sudo pip install pandas
+sudo pip install scikit-learn
+sudo pip install tensorflow
 
 sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
 sudo pip install scipy
