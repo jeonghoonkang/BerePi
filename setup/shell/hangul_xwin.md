@@ -9,5 +9,9 @@
 - (라즈베리파이) sudo apt-get install ibus ibus-hangul fonts-unfonts-core
   - ttf-unfonts-core 대신 fonts-unfonts-core
   
+## 한글 입력기
+ - sudo apt-get install fcitx-hangul
+ 
+  
 ## to-do
 - 한글 입력기 설정
