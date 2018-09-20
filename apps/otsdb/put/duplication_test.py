@@ -80,7 +80,6 @@ def sockWriteTSD(__wmetric, __utime, __value, __tags = None):
 
     if __tags == None: __tags = 'duptest=true'
     _buf = "put %s %s %s %s\n" %( __wmetric, __utime, __value, __tags)
-
     ret = sock.sendall(_buf)
     pout = "  .... writing to TSDB, return(%s), cmd(%s) \r \r" %(ret, _buf)
     sys.stdout.write(pout)
