@@ -7,7 +7,7 @@
  - (설계) 데이터세트를 이용한 지능형 SW 구현 방법론 정의
 
 # SDH (Berkeley) sensor status check
- - Data Management
+ - (SDH) Data Management
  - http://new.openbms.org/status/
 
 # SDH (Berkeley) site-work note
