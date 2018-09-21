@@ -36,7 +36,8 @@ cd distribute-0.7.3
 sudo  python setup.py install
 sudo easy_install pip
 
-sudo easy_install distribute-0.7.3
+sudo pip install setuptools
+sudo easy_install distribute
 sudo pip2.7 install --upgrade distribute
 
 sudo apt-get -y install python-tk
