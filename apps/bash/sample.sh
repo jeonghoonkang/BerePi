@@ -1,3 +1,6 @@
+#/bin/bash
+
+hstoppath='.'
 
 if [ expr $1 == 'stop' ]
 then
