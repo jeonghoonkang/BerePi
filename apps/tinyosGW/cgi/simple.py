@@ -15,8 +15,7 @@ if __name__ == "__main__":
     args = cgi.FieldStorage()  
     #print os.environ.items()
 
-    print "Content-type: text/html\n"
-    
+    print "Content-type: text/html\n"    
     print "Simple CGI, Python ! <br>"
     print args
 
