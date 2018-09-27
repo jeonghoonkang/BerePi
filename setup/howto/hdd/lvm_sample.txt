@@ -1,0 +1,91 @@
+   
+ubuntu@ubuntu:~$ sudo vgdisplay
+  --- Volume group ---
+  VG Name               ubuntu-vg
+  System ID             
+  Format                lvm2
+  Metadata Areas        3
+  Metadata Sequence No  8
+  VG Access             read/write
+  VG Status             resizable
+  MAX LV                0
+  Cur LV                2
+  Open LV               0
+  Max PV                0
+  Cur PV                3
+  Act PV                3
+  VG Size               16.37 TiB
+  PE Size               4.00 MiB
+  Total PE              4292249
+  Alloc PE / Size       4292249 / 16.37 TiB
+  Free  PE / Size       0 / 0   
+  VG UUID               fWrvb0-gIld-lNgA-tM2d-PSAq-Sphk-x4JjC3
+   
+ubuntu@ubuntu:~$ sudo lvdisplay
+  --- Logical volume ---
+  LV Path                /dev/ubuntu-vg/root
+  LV Name                root
+  VG Name                ubuntu-vg
+  LV UUID                aEpUUk-4A4G-K05O-WLEq-yWiu-3IRW-UylBxo
+  LV Write Access        read/write
+  LV Creation host, time ubuntu, 2018-04-16 02:21:44 +0000
+  LV Status              available
+  # open                 0
+  LV Size                16.34 TiB
+  Current LE             4284067
+  Segments               3
+  Allocation             inherit
+  Read ahead sectors     auto
+  - currently set to     256
+  Block device           253:0
+   
+  --- Logical volume ---
+  LV Path                /dev/ubuntu-vg/swap_1
+  LV Name                swap_1
+  VG Name                ubuntu-vg
+  LV UUID                iIBpD0-hAQp-aUV4-IaQH-YUWj-Kdol-Df5VtI
+  LV Write Access        read/write
+  LV Creation host, time ubuntu, 2018-04-16 02:21:44 +0000
+  LV Status              available
+  # open                 0
+  LV Size                31.96 GiB
+  Current LE             8182
+  Segments               1
+  Allocation             inherit
+  Read ahead sectors     auto
+  - currently set to     256
+  Block device           253:1
+   
+ubuntu@ubuntu:~$ sudo pvdisplay
+  --- Physical volume ---
+  PV Name               /dev/sda5
+  VG Name               ubuntu-vg
+  PV Size               <1.82 TiB / not usable 4.00 MiB
+  Allocatable           yes (but full)
+  PE Size               4.00 MiB
+  Total PE              476809
+  Free PE               0
+  Allocated PE          476809
+  PV UUID               l1SMoC-hCYh-kON0-I3El-9Y3p-VuBp-E0tQPg
+   
+  --- Physical volume ---
+  PV Name               /dev/sdb1
+  VG Name               ubuntu-vg
+  PV Size               <7.28 TiB / not usable 4.00 MiB
+  Allocatable           yes (but full)
+  PE Size               4.00 MiB
+  Total PE              1907720
+  Free PE               0
+  Allocated PE          1907720
+  PV UUID               fVYdmr-N1Al-mt4r-AmAM-3bZF-IpzX-bny7Qz
+   
+  --- Physical volume ---
+  PV Name               /dev/sdd1
+  VG Name               ubuntu-vg
+  PV Size               <7.28 TiB / not usable 4.00 MiB
+  Allocatable           yes (but full)
+  PE Size               4.00 MiB
+  Total PE              1907720
+  Free PE               0
+  Allocated PE          1907720
+  PV UUID               l0VLjR-JqwM-lHnH-pWiV-ygCh-AW17-ZzG7XN
