@@ -106,3 +106,26 @@ UUID=d98c06a3-af17-481f-8cc5-d68e94057165 /boot           ext2    defaults      
 /dev/mapper/ubuntu--vg-swap_1 none            swap    sw              0       0
 UUID=446a19bb-44a7-4b17-a76c-e1e2940fa0b2 /ssd ext4 defaults 0 0
 
+
+
+
+
+ubuntu@ubuntu:~$ sudo blkid
+/dev/sda1: UUID="d98c06a3-af17-481f-8cc5-d68e94057165" TYPE="ext2" PARTUUID="e80f231b-01"
+/dev/sdc1: UUID="446a19bb-44a7-4b17-a76c-e1e2940fa0b2" TYPE="ext4" PARTUUID="eb0c6b71-1210-4c84-a6ea-a6632316ec83"
+/dev/loop0: TYPE="squashfs"
+/dev/loop1: TYPE="squashfs"
+/dev/loop2: TYPE="squashfs"
+/dev/loop3: TYPE="squashfs"
+/dev/loop4: TYPE="squashfs"
+/dev/loop5: TYPE="squashfs"
+/dev/loop6: TYPE="squashfs"
+/dev/loop7: TYPE="squashfs"
+/dev/sda5: UUID="l1SMoC-hCYh-kON0-I3El-9Y3p-VuBp-E0tQPg" TYPE="LVM2_member" PARTUUID="e80f231b-05"
+/dev/sdb1: UUID="fVYdmr-N1Al-mt4r-AmAM-3bZF-IpzX-bny7Qz" TYPE="LVM2_member" PARTLABEL="primary" PARTUUID="a6a52a00-2956-49a4-9313-b83d16d81e1c"
+/dev/sdd1: UUID="l0VLjR-JqwM-lHnH-pWiV-ygCh-AW17-ZzG7XN" TYPE="LVM2_member" PARTLABEL="primary" PARTUUID="28d879d9-73a1-47df-a2a6-7e0004ebc1b3"
+/dev/sde1: UUID="2018-07-25-03-21-56-00" LABEL="Ubuntu 18.04.1 LTS amd64" TYPE="iso9660" PTUUID="663eb4c4" PTTYPE="dos" PARTUUID="663eb4c4-01"
+/dev/sde2: SEC_TYPE="msdos" UUID="0D5F-1DB6" TYPE="vfat" PARTUUID="663eb4c4-02"
+/dev/mapper/ubuntu--vg-root: UUID="4c6e4d90-589a-4db9-bd4a-881424fa53e7" TYPE="ext4"
+/dev/mapper/ubuntu--vg-swap_1: UUID="dc4cc6c8-df1f-4806-a0d4-39d7defad901" TYPE="swap"
+
