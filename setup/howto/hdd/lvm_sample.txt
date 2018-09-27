@@ -89,3 +89,20 @@ ubuntu@ubuntu:~$ sudo pvdisplay
   Free PE               0
   Allocated PE          1907720
   PV UUID               l0VLjR-JqwM-lHnH-pWiV-ygCh-AW17-ZzG7XN
+  
+  
+  
+  
+  # /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+/dev/mapper/ubuntu--vg-root /               ext4    errors=remount-ro 0       1
+# /boot was on /dev/sda1 during installation
+UUID=d98c06a3-af17-481f-8cc5-d68e94057165 /boot           ext2    defaults        0       2
+/dev/mapper/ubuntu--vg-swap_1 none            swap    sw              0       0
+UUID=446a19bb-44a7-4b17-a76c-e1e2940fa0b2 /ssd ext4 defaults 0 0
+
