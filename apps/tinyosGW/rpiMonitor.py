@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/python
 """
 rpiMonitor.py : monitoring on raspberry pi
