@@ -51,6 +51,7 @@ set encoding=utf-8
 set fileencodings=utf-8,cp94
 
 "for Ubuntu
+" check Hack font website : https://github.com/source-foundry/Hack
 set guifont=Hack\ 12
 
 "for WIN10
