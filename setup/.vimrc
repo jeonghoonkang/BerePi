@@ -28,8 +28,7 @@ function MyDiff()
   silent execute '!' . cmd . ' ' . opt . arg1 . ' ' . arg2 . ' > ' . arg3 . eq
 endfunction
 
-
-set textwidth=79
+set textwidth=80
 set shiftwidth=4
 set tabstop=4
 set expandtab
