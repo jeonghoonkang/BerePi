@@ -39,7 +39,7 @@ set autoindent
 set mouse=n
 
 set nu
-"set lines=40 columns=100
+"set lines=50 columns=100
 colo blue
 "colo jellybeans
 "colo torte 
@@ -50,6 +50,10 @@ set encoding=utf-8
 "set fileencodings=utf-8,euckr
 set fileencodings=utf-8,cp94
 
-set guifont=Consolas:h10:cANSI
-set guifontwide=Dotumche:h10:cDEFAULT
+"for Ubuntu
+set guifont=Hack\ 12
+
+"for WIN10
+"set guifont=Consolas:h10:cANSI
+
 
