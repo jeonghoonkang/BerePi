@@ -48,6 +48,12 @@ sudo apt-get -y install python-dev
 # sudo apt-get -y install python-smbus
 # sudo apt-get -y install python-requests
 # sudo apt-get -y install python-twisted
+
+sudo apt-get -y install libblas-dev liblapack-dev libatlas-base-dev gfortran 
+sudo pip install -U setuptools
+
+sudo pip install openpyxl
+
 sudo pip install requests --upgrade
 sudo pip install twisted --upgrade
 
@@ -57,12 +63,12 @@ sudo pip install httplib
 sudo pip install urllib3
 sudo pip install utils
 
-sudo apt-get -y install libblas-dev liblapack-dev libatlas-base-dev gfortran 
 sudo pip install numpy
 sudo pip install pandas
 sudo pip install tensorflow
 sudo pip install scipy
 sudo pip install scikit-learn
+
 
 
 # (for PIP)
