@@ -1,5 +1,7 @@
-Can't Use apt i.e. /boot is 100% full
+Can't Use apt i.e. /boot is 100% full <br>
 NOTE: this is only if you can't use apt to clean up due to a 100% full /boot
+
+0. check current booting image name ``` uname -r ```
 
 1. Get the list of kernel images
 * Get the list of kernel images and determine what you can do without. This command will show installed kernels except the currently running one
