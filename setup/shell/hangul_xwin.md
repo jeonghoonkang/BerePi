@@ -13,6 +13,5 @@
  - sudo apt-get install fcitx-hangul
  - 위의 ibus 같은 다른 입력기들은 PIXEL 윈도우 상에서 사용에 문제가 좀 있었음 
  
-  
-## to-do
-- 한글 입력기 설정
+## 폰트설정
+- https://github.com/source-foundry/Hack
