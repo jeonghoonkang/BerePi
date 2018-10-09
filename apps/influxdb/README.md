@@ -1,6 +1,16 @@
-# InfluxDB 메뉴얼
-
+# InfluxDB 사용방법
+* help 사용 방법
+  - influx --help
+    - host 옵션 : 접속할 주소, 이 경우 기본 포트는 8086
+    - port 옵션 : 포트 번호
+    - 사용 예제도 출력됨
+      - influx -database 'metrics' -execute 'select * from cpu' -format 'json' -pretty
+    
 ## 동작확인 방법
+* Shell, CLI 에서 저장된 내용 확인 방법 
+  - influx -execute 'SHOW DATABASES'
+  - influx -execute 'show measurements on {db_name}'
+  - influx -execute 'show series on {db_name} limit 15'
 
 ## 설치 (influxdb 1.2.0)
 ```
@@ -35,7 +45,6 @@ Connet http://localhost:8083
 If you can see the web page, the installation is finished
 
 ```
-
 
 ## 구조
 
