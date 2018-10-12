@@ -20,7 +20,6 @@ $ sudo service influxd start
 ```
 
 #### 설치 (old version)
-
 ```
 sudo apt-get install apt-transport-https
 curl -sL https://repos.influxdata.com/influxdb.key | sudo apt-key add -
@@ -47,7 +46,6 @@ If you can see the web page, the installation is finished
 ```
 
 ## 구조
-
 ```
 - database
   - measurement
@@ -92,7 +90,6 @@ tinyos@PaaS:~$ influx -database 'kwangmyung' -execute "SELECT Power FROM slave1_
    slave1_ctn_02,1493164945000000000,-3
    slave1_ctn_02,1493164988000000000,-1
    slave1_ctn_02,1493165029000000000,-3
-
 </pre>
 
 # Grafana
