@@ -1,8 +1,8 @@
 # InfluxDB 사용방법
 * influxdb help 사용 방법 (CLI, command line interface)
   - influx --help
-    - host 옵션 : 접속할 주소, 이 경우 기본 포트는 8086
-    - port 옵션 : 포트 번호
+    - host 옵션 : 접속할 주소, 명시적인 옵션 입력이 없으면 기본 주소는 localhost
+    - port 옵션 : 포트 번호, 명시적인 옵션 입력이 없으면 기본 포트는 8086
     - 사용 예제도 출력됨
       - influx -database 'metrics' -execute 'select * from cpu' -format 'json' -pretty
     
