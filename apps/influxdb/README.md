@@ -1,5 +1,5 @@
 # InfluxDB 사용방법
-* influxdb help 사용 방법 (CLI)
+* influxdb help 사용 방법 (CLI, command line interface)
   - influx --help
     - host 옵션 : 접속할 주소, 이 경우 기본 포트는 8086
     - port 옵션 : 포트 번호
