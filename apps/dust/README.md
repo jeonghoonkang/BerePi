@@ -1,3 +1,6 @@
+## 센서 종류
+1. 샤프
+2. 하니웰
 
 ### Data Sheet
   - https://www.sparkfun.com/datasheets/Sensors/gp2y1010au_e.pdf
