@@ -59,8 +59,6 @@ If you can see the web page, the installation is finished
 * field : reading 로 구성
 * tags : 인덱스 값으로 검색에 사용됨
 
-## 사용법
-
 ### Python
 ```python
 import tsdb
