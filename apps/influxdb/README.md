@@ -6,7 +6,7 @@
     - 사용 예제도 출력됨
       - influx -database 'metrics' -execute 'select * from cpu' -format 'json' -pretty
     
-## influxDB CLI에서 스키마 내용 확인 방법
+## InfluxDB CLI에서 스키마 내용 확인 방법
 * Ubuntu 상에서 SQL 등의 사용없이, 로컬서버 influxDB에 간단하게 접근, 데이터를 확인할 수 있음
 * Shell, CLI 에서 저장된 내용 확인 방법 
   - influx -execute 'SHOW DATABASES'
