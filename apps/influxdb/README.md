@@ -1,5 +1,5 @@
 # InfluxDB 사용방법
-* influxdb help 사용 방법 (CLI, command line interface)
+* Influxdb help 사용 방법 (CLI, command line interface)
   - influx --help
     - host 옵션 : 접속할 주소, 명시적인 옵션 입력이 없으면 기본 주소는 localhost
     - port 옵션 : 포트 번호, 명시적인 옵션 입력이 없으면 기본 포트는 8086
@@ -87,7 +87,6 @@ tinyos@PaaS:~$ influx -database 'kwangmyung' -execute "SELECT Power FROM slave1_
    slave1_ctn_02,1493164902000000000,-3
    slave1_ctn_02,1493164945000000000,-3
    slave1_ctn_02,1493164988000000000,-1
-   slave1_ctn_02,1493165029000000000,-3
 </pre>
 
 # Grafana
