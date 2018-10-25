@@ -31,7 +31,7 @@ Hostname=<Your Hostname>
 
 ## 3. Install
 
-  * Win + x -> commadn Prompt(Admin)
+  * Win + x -> command Prompt(Admin)
   ```
   cd c:\zabbix_agents_3.4.6.win\bin\win64
   zabbix_agentd.exe --config c:\zabbix_agents_3.4.6.win\conf\zabbix_agentd.win.conf --install
