@@ -45,7 +45,7 @@ If you can see the web page, the installation is finished
 
 ```
 
-## 구조
+## 데이터 구조
 ```
 - database
   - measurement
