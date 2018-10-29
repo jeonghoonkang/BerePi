@@ -50,7 +50,7 @@ sudo vi /etc/php/7.0/apache2/php.ini
 
 ```conf
 [Date]
-data.timezone = Asia/Seoul
+date.timezone = Asia/Seoul
 ```
 
 ### 4) Installing zabbix
