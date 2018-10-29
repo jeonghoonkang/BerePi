@@ -6,7 +6,7 @@
 
 ```shell
 sudo apt update
-sudo apt install mysql-server apache2 php7.0 
+sudo apt install mysql-server apache2 php7.0 php7.0-mysql php7.0-gd php7.0-ldap php7.0-mbstring php7.0-bcmath php7.0-xml
 ```
 
 
@@ -78,6 +78,14 @@ DBPassword=<password>
 
 ```Shell
 sudo service zabbix-server restart
+```
+
+### 6) 한글폰트 사용
+
+```Shell
+sudo apt update
+sudo apt install fonts-nanum
+sudo ln -Tfs /usr/share/fonts/truetype/nanum/NanumGothic.ttf /etc/alternatives/zabbix-frontend-font
 ```
 
 
