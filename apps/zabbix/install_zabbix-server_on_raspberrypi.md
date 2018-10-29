@@ -21,6 +21,7 @@ sudo apt install mysql-server apache2 php7.0
   > UPDATE mysql.user SET plugin='';
   > UPDATE mysql.user SET password=PASSWORD("<password>") WHERE user='root';
   > FLUSH PRIVILEGES;
+  > exit;
   ```
 
 ### 1) Create zabbix user and database on Mariadb (MySQL)
