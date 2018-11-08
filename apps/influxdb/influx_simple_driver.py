@@ -1,4 +1,7 @@
 
+# -*- coding: utf-8 -*-
+# author : http://github.com/jeonghoonkang
+
 import argparse
 import datetime
 from influxdb import InfluxDBClient
@@ -75,12 +78,14 @@ def parse_args():
     """Parse the args."""
     parser = argparse.ArgumentParser(
         description='example code to play with InfluxDB')
+    
     parser.add_argument('--host', type=str, required=False,
                         default='localhost',
                         help='hostname of InfluxDB http API')
     parser.add_argument('--port', type=int, required=False, default=8086,
                         help='port of InfluxDB http API')
     return parser.parse_args()
+
 
 if __name__ == '__main__':
     args = parse_args()
