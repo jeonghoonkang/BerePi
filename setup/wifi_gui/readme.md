@@ -1,4 +1,4 @@
-#Wi-Fi setup by GUI
+# Wi-Fi setup by GUI
 ## wpagui SW 
 - installation
   - sudo apt install wpagui
