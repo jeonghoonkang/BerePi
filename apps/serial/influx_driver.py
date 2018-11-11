@@ -64,7 +64,7 @@ def main(host='localhost', port=8086, val=None, measurename=None):
     print("Write points: {0}".format(json_body))
     client.write_points(json_body)
 
-    query = 'select * from %s order by desc limit 1;' %measurementname
+    query = 'select dust from %s order by desc limit 1;' %measurementname
     print("Querying data: " + query)
     result = client.query(query)
     print("Result: {0}".format(result))
