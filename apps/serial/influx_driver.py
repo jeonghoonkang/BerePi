@@ -83,6 +83,7 @@ def parse_args():
     return parser.parse_args()
 
 def influx_write(val, measurename, host='127.0.0.1', port=8086) :
+    print host, port, measurename
     main(host, port, val, measurename)
 
 
