@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 # https://github.com/sharpsensoruser/sharp-sensor-demos/wiki/Application-Guide-for-Sharp-GP2Y1030AU0F-Dust-Sensor
-
+# serial speed 2400
 
 import serial,os,time
 import sys
