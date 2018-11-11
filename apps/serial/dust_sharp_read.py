@@ -40,10 +40,11 @@ def checkCRC(pack):
 def get_pm25(pack):
     pma = pack[4:8]
     pma_int = int(pma[0:2],16)*256 + int(pma[2:4],16)
-
     print "PM 2.5 =", pma_int
     print "*"*pma_int
     print "="*50
+    return pma_int
+
 
 def get_dust(pack):
     pma = pack[12:16]
@@ -73,7 +74,7 @@ def start_sensing(serial_in_device):
                     if not checkCRC(sync_packet_buf) :
                         return
                     val = get_pm25(sync_packet_buf)
-                    #val = get_dust(sync_packet_buf)
+                    influx_driver.influx_write(val, 'pm25_toshome', ip)
                     sync_packet_buf = ''
                     return
                 elif overlen > 100 :
@@ -112,6 +113,7 @@ if __name__== "__main__" :
 
     init()
     rate = sys.argv[1]
+    ip = sys.argv[2]
 
     try:
         # open RASPI serial device, 38400

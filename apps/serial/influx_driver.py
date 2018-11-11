@@ -82,7 +82,7 @@ def parse_args():
                         help='port of InfluxDB http API')
     return parser.parse_args()
 
-def influx_write(val, measurename, host=127.0.0.1, port=8086) :
+def influx_write(val, measurename, host='127.0.0.1', port=8086) :
     main(host, port, val, measurename)
 
 
