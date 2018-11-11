@@ -18,6 +18,24 @@ def init():
     macAddr = macAddr.replace(':','.')
     print " # eth0 HW MAC addr is " + macAddr
 
+def checkCRC(pack):
+    #Verify checksum by adding the raw data values and taking the lower 8 bits.
+    #print pack
+    int_sum =  int(pack[4:6],16)   #PM_A_High
+    int_sum += int(pack[6:8],16)   #PM_A_Low 
+    int_sum += int(pack[8:10],16)  #PM_B_High  
+    int_sum += int(pack[10:12],16) #PM_B_Low 
+    int_sum += int(pack[12:14],16) #PM_C_High 
+    int_sum += int(pack[14:16],16) #PM_C_Low
+
+    int_sum = int_sum & 0xff
+    checksum = int(pack[18:20],16)
+
+    if ( int_sum != checksum ):
+        return False
+    #print int_sum , checksum
+    return True
+
 def get_pm25(pack):
     pma = pack[4:8]
     pma_int = int(pma[0:2],16)*256 + int(pma[2:4],16)
@@ -49,11 +67,17 @@ def start_sensing(serial_in_device):
             if sync_packet_buf[:4] == 'fffa':
                 sync_packet_buf += str_byte
                 #print sync_packet_buf
-                if len(sync_packet_buf) == 20: 
+                overlen = len(sync_packet_buf) 
+                if overlen == 20: 
+                    if not checkCRC(sync_packet_buf) :
+                        return
                     val = get_pm25(sync_packet_buf)
                     #val = get_dust(sync_packet_buf)
                     sync_packet_buf = ''
                     return
+                elif overlen > 100 :
+                    sync_packet_buf = ''
+                else : continue
 
             in_packet_buf += str_byte
             #print in_packet_buf
@@ -101,4 +125,4 @@ if __name__== "__main__" :
 
     while True:
         start_sensing(serial_in_device)
-        time.sleep(10)
+        time.sleep(5)
