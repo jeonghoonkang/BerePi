@@ -6,6 +6,7 @@
 import serial,os,time
 import sys
 import fcntl, socket, struct
+import influx_driver
 
 
 def getHwAddr(ifname):
