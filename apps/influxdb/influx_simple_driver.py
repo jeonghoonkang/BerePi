@@ -10,34 +10,32 @@ def getTSnow():
     #print dtnow.strftime('%Y-%m-%dT%H:%M:%S')
     return dtnow.strftime('%Y-%m-%dT%H:%M:%S')
 
+default_mname = 'sample_data'
+dbname = 'kang_test'
 
-def main(host='localhost', port=8086):
+write_json = [
+    {
+        "measurement": default_mname,
+        "tags": {
+            "host": "test",
+            "work": "iot_insert"
+        },
+        #"time": "2009-11-10T23:00:00Z",
+        "time": getTSnow(),
+        "fields": {
+            "test_val": 7
+        }
+    }
+]
+
+def main(host='localhost', port=8086, measurename = default_mname):
     """Instantiate a connection to the InfluxDB."""
     user = 'root'
     password = 'root'
-    dbname = 'kang_test'
-    measurementname = 'sample_data'
+
     dbuser = 'smly'
     dbuser_password = 'my_secret_password'
     query = 'select value from cpu_load_short;'
-
-    json_body = [
-        {
-            "measurement": measurementname,
-            "tags": {
-                "host": "test",
-                "work": "iot_insert"
-            },
-            #"time": "2009-11-10T23:00:00Z",
-            "time": getTSnow(),
-            "fields": {
-                "Float_value": 0.64,
-                "Int_value": 3,
-                "String_value": "Text",
-                "Bool_value": True
-            }
-        }
-    ]
 
     client = InfluxDBClient(host, port, None, None, dbname)
 
@@ -61,16 +59,15 @@ def main(host='localhost', port=8086):
     print("Querying data: " + query)
     result = client.query(query)
     print("Result: {0}".format(result))
+    
+    write_json[measurement] = measurename
+    print("Write points: {0}".format(write_json))
+    client.write_points(write_json)
 
-    print("Write points: {0}".format(json_body))
-    client.write_points(json_body)
-
-    query = 'select * from %s ;' %measurementname
+    query = 'select * from %s ;' %measurename
     print("Querying data: " + query)
     result = client.query(query)
     print("Result: {0}".format(result))
-
-
 
 
 def parse_args():
@@ -86,7 +83,16 @@ def parse_args():
     return parser.parse_args()
 
 
+def influx_write(val, measurename, host='127.0.0.1', port=8086) :
+    print "trying to ..."
+    print host, port, measurename
+    main(host, port, val, measurename)    
+
 if __name__ == '__main__':
+
     args = parse_args()
     #print args
+    print "trying to ..."
+    print args.host, " /", args.port
+
     main(host=args.host, port=args.port)
