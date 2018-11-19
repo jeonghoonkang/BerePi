@@ -15,7 +15,7 @@ import ast
 import sys
 sys.path.insert(0, '../')
 
-HOST = '125.140.110.217'
+HOST = '127.0.0.1'
 PORT = 4242
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((HOST, PORT))
@@ -31,7 +31,7 @@ def parse_args():
         usage=usg,
         formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument("-url",    default="125.140.110.217",
+    parser.add_argument("-url",    default='127.0.0.1',
         help="URL input, or run fails")
     parser.add_argument("-start",  default='2016070100',
         help="start time input, like 2016110100")
