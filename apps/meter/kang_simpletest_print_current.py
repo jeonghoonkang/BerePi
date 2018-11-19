@@ -27,7 +27,7 @@ mcp = Adafruit_MCP3008.MCP3008(clk=CLK, cs=CS, miso=MISO, mosi=MOSI)
 
 # To insert data into TSDB
 PUT_PERIOD = 30
-PUT_URL = "http://125.140.110.217:4242/api/put"
+PUT_URL = "http://127.0.0.1:4242/api/put"
 METRIC_LIST = ["CT000.test1", "CT001.test1", "CT002.test1",
         "CT003.test1", "CT000.cur.test1", "CT001.cur.test1",
         "CT002.cur.test1", "CT003.cur.test1"]
