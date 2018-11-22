@@ -86,6 +86,7 @@ def parse_args():
 def influx_write(val, measurename, host='127.0.0.1', port=8086) :
     print "trying to ..."
     print host, port, measurename
+    # todo : try 구문 입력 및 에러시 반복 수행 
     main(host, port, val, measurename)    
 
 if __name__ == '__main__':
