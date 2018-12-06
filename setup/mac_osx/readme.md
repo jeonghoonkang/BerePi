@@ -4,4 +4,3 @@
 - MAC OS 에서 X-윈도우 삭제되어서, 이제는 추가로 설치해야 함
 - https://www.xquartz.org
 - https://blog.boxcorea.com/wp/archives/1718
-
