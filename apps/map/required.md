@@ -1,7 +1,6 @@
-# Required library
+# Required Python library
 
 1. Folium
-
     ```
     sudo pip folium
     ```
