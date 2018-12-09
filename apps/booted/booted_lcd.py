@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang https://github.com/jeonghoonkang
 
-# booting sw for raspberrypi
+# booting sw for raspberrypi, LED blinking
 
 import sys
 import subprocess
