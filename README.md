@@ -1,4 +1,4 @@
-## BerePi
+## BerePi (Bere + Pi)
 which supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3
 
 #### Wiki
