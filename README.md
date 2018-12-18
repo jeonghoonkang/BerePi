@@ -1,5 +1,5 @@
 ## BerePi (Bere + Pi)
-which supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3
+- supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3
 
 #### Wiki
   - OS installation and setup to run the SDH sensors
