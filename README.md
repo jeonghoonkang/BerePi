@@ -3,13 +3,13 @@
 
 #### Wiki
   - OS installation and setup to run the SDH sensors
-  - It shows basic installation process for Raspi Sensor
+  - It shows basic installation process for Raspi Sensor System
     - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
   - Installation Image for RaspberryPi3 (2018.08)
     - http://tinyos.asuscomm.com:2081/open/2018_08_hawaii.zip
 
 ##### People
-  - Jeonghoon Kang (https://github.com/jeonghoonkang), Wonsik Ko (https://github.com/kowonsik), Philman Jeong(https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
+  - Jeonghoon Kang (https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 
