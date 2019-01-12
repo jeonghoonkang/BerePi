@@ -1,6 +1,7 @@
 ## BerePi (Bere + Pi) Software Package
-- is based on RaspberryPi distribution (hardware and software)
+- Data collection and analytics based on IoT level computing
 - SW stack for physical computing and intelligent SW service based on IoT data collection
+- is based on RaspberryPi distribution (hardware and software)
 - supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3 (hangul mode, 한글모드)
 
 #### Wiki
