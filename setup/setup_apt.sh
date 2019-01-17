@@ -68,6 +68,7 @@ sudo pip install pandas
 sudo pip install tensorflow
 sudo pip install scipy
 sudo pip install scikit-learn
+sudo pip install jupyter
 
 
 
