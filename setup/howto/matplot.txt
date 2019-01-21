@@ -1,4 +1,6 @@
 
-mpl.use('Agg')
-plot
-bbox_extra_artists=[]
+python 실행후, 아래 라인이 실행되어 그래프가 그려져야 함
+
+>>> from matplotlib import pyplot as plt
+>>> plt.plot([1,2,3], [110,130,120])
+>>> plt.show()
