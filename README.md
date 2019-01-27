@@ -1,4 +1,4 @@
-## BerePi (Bere + Pi) Software Package
+## BerePi (Bere + Pi) Software System
 - Data collection and analytics based on IoT level computing
 - SW stack for physical computing and intelligent SW service based on IoT data collection
 - is based on RaspberryPi distribution (hardware and software)
