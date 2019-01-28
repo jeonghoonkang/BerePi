@@ -5,7 +5,7 @@
 - supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3 (hangul mode, 한글모드)
 
 #### Wiki
-  - OS installation and setup to run the SDH sensors
+  - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspi Sensor System
     - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
   - Installation Image for RaspberryPi3 (2018.08)
