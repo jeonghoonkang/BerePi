@@ -6,7 +6,7 @@
     - sudo apt-get install network-manager
     - sudo apt-get install network-manager-gnome
 
-- dhcp 클라이언트 실행 
+- dhcp 클라이언트로 네트워크 활성화 
   - sudo dhclient eth0
   - sudo systemctl restart dhcpcd
   
