@@ -30,10 +30,21 @@ def getiip():
 
     cmd="/sbin/ifconfig"
     _os_type = platform.system()
+
+    _os_ver = os.uname()
+    #print ( ' FIRST :' , _os_ver[0])
+    #print ( ' LAST :' , _os_ver[-1])
+    
+    if (_os_ver[0] == 'Linux') :
+        if (_os_ver[-1] == 'x86_64') :
+            _os_type = 'Win'
+            cmd = "ifconfig"
+
     print ('os-type', _os_type)
     if _os_type.find('Cygwin') > 0:
         cmd = "ipconfig"
     iip = run_cmd(cmd)
+    print (iip)
     return iip, _os_type
 
 def checkifexist(fname):
@@ -78,6 +89,7 @@ if __name__ == '__main__':
     p_ip = getip()
     i_ip, os_type = getiip()
     info = i_ip + p_ip
+    
     hostn = hostname()
     try : name = os.getlogin()
     except :
@@ -87,9 +99,12 @@ if __name__ == '__main__':
         # 아이디가 정확하지 않으면 실행 에러로 종료됨
         # 확인필수  : https://github.com/jeonghoonkang/BerePi/blob/master/apps/tinyosGW/debug/debug.log
     print ("using local id : ", name)
+
     sshpass = ''
     if os_type == "Linux":
         fname = '/home/%s/' %name
+    elif os_type == 'Win' :
+        fname = '/home/tinyos/' #수동설정해야 함
     elif os_type == "Darwin":
         fname = '/Users/%s/' %name
         sshpass = '/usr/local/bin/'
