@@ -1,1 +1,1 @@
-# logging 라이브러리 예제
+# Logging 라이브러리 예제
