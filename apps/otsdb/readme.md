@@ -1,7 +1,7 @@
 
 ### OpenTSDB 2.3 (ubuntu)
 
-#### 시스템 설치방법
+#### openTSDB 설치방법
 - https://github.com/kowonsik/RPiLogger/blob/master/README.md
 - JAVA 설치 : 라즈베리파이 기본 JDK 설치를 따르며, 정확한 경로로 설정해야 함
 - 단계별 테스트 샘플코드 
