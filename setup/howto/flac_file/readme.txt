@@ -1,1 +1,4 @@
-read the files.
+# Flac file conversion
+
+# installations
+- ffmpeg
