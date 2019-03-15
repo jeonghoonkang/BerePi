@@ -1,7 +1,7 @@
 
 #### 키 관리 방법, 자동 로그인
 
-1. ssh-keygen
+1. ssh-keygen (ssh client)
 1. cat ~/.ssh/id_rsa.pub | ssh -p {포트번호} {USERNAME@IP-ADDRESS} 'cat >> /home/USER/.ssh/authorized_keys'
    
 
