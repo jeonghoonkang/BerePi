@@ -1,4 +1,6 @@
 #!/bin/bash
+#Author: https://github.com/jeonghoonkang
+
 #입력인자 $1, -z 길이가 0인지 확인
 
 if [ -z $1 ] ;
