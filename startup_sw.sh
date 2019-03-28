@@ -8,7 +8,6 @@ alias sr='screen'
 #sudo screen -dmS lcd sudo python /home/pi/devel/BerePi/apps/lcd_berepi/watch.py -ip xxxxx
 #/home/pi/devel/BerePi/apps/tinyosGW/run_public_ip.sh {ip/url} {port} {login id} {pw}
 
-
 #### Please add below line on /etc/rc.local
 # sudo sh /home/pi/devel/BerePi/this_startup_sw.sh
 #### in other word,
