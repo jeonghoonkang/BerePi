@@ -2,6 +2,7 @@
 ## What's new ?
 - RedisTimeSeries
 - RedisAI
-  - https://github.com/RedisAI/RedisAI
+  - Documnet : https://oss.redislabs.com/redisai/
+  - Source code in GigHub : https://github.com/RedisAI/RedisAI
   
 
