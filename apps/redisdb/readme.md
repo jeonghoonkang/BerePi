@@ -2,4 +2,6 @@
 ## What's new ?
 - RedisTimeSeries
 - RedisAI
+  - https://github.com/RedisAI/RedisAI
+  
 
