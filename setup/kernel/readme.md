@@ -1,4 +1,4 @@
-Can't Use apt i.e. /boot is 100% full <br>
+#### Can't Use apt i.e. /boot is 100% full <br>
 NOTE: this is only if you can't use apt to clean up due to a 100% full /boot
 
 0. check current booting image name ``` uname -r ```
