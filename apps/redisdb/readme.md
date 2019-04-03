@@ -1,5 +1,5 @@
 # RedisDB in redisconf 2019
-## What's new ?
+## What's new in 2019 ?
 - RedisTimeSeries
 - RedisAI
   - Documnet : https://oss.redislabs.com/redisai/
@@ -7,3 +7,4 @@
 - Serverless , kubernetes
   - https://sandeepdinesh.com/#Projects
   - https://github.com/thesandlord/redis-gke-bootstrap
+  
