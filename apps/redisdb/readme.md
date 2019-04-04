@@ -16,3 +16,6 @@
   - https://www.mainflux.com/
   
   
+  - https://www.nubix.io/
+  
+  
