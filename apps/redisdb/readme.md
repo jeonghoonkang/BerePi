@@ -8,3 +8,11 @@
   - https://sandeepdinesh.com/#Projects
   - https://github.com/thesandlord/redis-gke-bootstrap
   
+- Video intelligence
+  - https://atomdocs.io/#element
+  - time series people count 
+    - 
+- Iot Platform
+  - https://www.mainflux.com/
+  
+  
