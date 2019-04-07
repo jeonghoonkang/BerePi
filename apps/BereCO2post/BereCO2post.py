@@ -3,7 +3,6 @@
 # Author : Kowonsik, github.com/kowonsik
 
 ## This code for T100, ELT CO2 sensor
-
 import serial,os,time
 import sys
 import RPi.GPIO as GPIO
