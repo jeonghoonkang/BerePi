@@ -11,7 +11,7 @@
   - Installation Image for RaspberryPi3 (2018.08)
     - http://tinyos.asuscomm.com:2081/open/2018_08_hawaii.zip
 
-##### People
+##### Contribution
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
