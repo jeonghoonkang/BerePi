@@ -1,7 +1,7 @@
 ## BerePi
 
 ##### 개발자
-  - Jeonghoon Kang (https://github.com/jeonghoonkang), Philman Jeongh (), Sukun Kim (https://github.com/sukunkim)
+  - Jeonghoon Kang (https://github.com/jeonghoonkang), Philman Jeong (https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
 
 ### Wireless Sensor Network (WSN) using RaspberryPi
    - 무선센서 네트워크 시스템을 라즈베리파이와 BerePi 센서 모듈로 구축할 수 있습니다
