@@ -28,7 +28,6 @@ sudo apt-get -y install postfix
 sudo apt-get -y install rrdtool
 
 sudo apt-get -y install fcitx-hangul
-
 sudo apt-get -y install fonts-unfonts-core
 
 wget https://pypi.python.org/packages/source/d/distribute/distribute-0.7.3.zip
@@ -54,7 +53,6 @@ sudo apt-get -y install python-dev
 
 sudo apt-get -y install libblas-dev liblapack-dev libatlas-base-dev gfortran 
 sudo pip install -U setuptools
-
 
 sudo pip install openpyxl
 
