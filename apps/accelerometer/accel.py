@@ -12,7 +12,6 @@ sys.path.append("../sht20")
 from lcd import *
 from sht25class import *
 
-
 def main():
   # Initialise display
   lcd_init()
