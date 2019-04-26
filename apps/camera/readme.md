@@ -56,7 +56,7 @@
 - ''$ python pi-cam_with_visionAPI.py /directory/of/image.jpg'' 처럼 위치와 파일명을 명세하면 해당 파라미터로 저장되며 파라미터 없이 실행하면 소소코드 내에 저장된 default위치와 파일명으로 저장된다.
 
 
-### Camera 설치 방법
+### USB Camera 설치 방법
 - 로지텍 카메라 설치 for 라즈베리파이
   - https://webnautes.tistory.com/909
   
