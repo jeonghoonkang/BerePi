@@ -1,4 +1,4 @@
-# Installation
+# Installation (Project : Motion)
 
 ## command
 - sudo apt-get installl motion
@@ -11,7 +11,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 ```
 
 # Resource
-## Motion source code
+## Source code
 - project homepage 
   - https://motion-project.github.io/index.html
   - repo : https://github.com/Motion-Project/motion
