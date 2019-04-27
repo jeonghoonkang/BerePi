@@ -1,6 +1,14 @@
 # Installation
 
+## command
 - sudo apt-get installl motion
+
+## requirements
+```
+Debian/Ubuntu/Raspbian
+Required
+sudo apt-get install autoconf automake build-essential pkgconf libtool git libzip-dev libjpeg-dev gettext libmicrohttpd-dev
+```
 
 # Resource
 ## Motion source code
