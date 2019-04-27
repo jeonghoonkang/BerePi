@@ -6,7 +6,7 @@
 ## Motion source code
 - project homepage 
   - https://motion-project.github.io/index.html
-- https://github.com/Motion-Project/motion
+  - repo : https://github.com/Motion-Project/motion
 
 ## Links (howto)
 - https://learn.adafruit.com/cloud-cam-connected-raspberry-pi-security-camera?view=all
