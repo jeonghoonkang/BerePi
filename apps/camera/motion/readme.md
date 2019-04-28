@@ -1,4 +1,4 @@
-# Installation (Project : Motion)
+# Motion detection S/W installation (Project : Motion)
 
 ## command
 - sudo apt-get installl motion
