@@ -3,3 +3,7 @@ find folder2 -name '*.*' -exec mv --target-directory=folder '{}' +
 
 # Using xargs
 find folder2 -name '*.*' | xargs mv --target-directory=folder
+
+$ find . -mtime +30 | xargs mv -i {} {}.bak  
+
+
