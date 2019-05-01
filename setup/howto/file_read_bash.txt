@@ -1,0 +1,9 @@
+
+while read 변수명; do
+	echo [$변수명]
+done < 파일명
+
+while read 변수명; do
+	if [ -z "$변수명" ]; then continue; fi
+	echo [$변수명]
+done < 파일명
