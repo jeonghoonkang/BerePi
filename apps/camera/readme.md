@@ -6,8 +6,6 @@
 - 그 중, 숫자를 뽑아내어, TSDB에 입력한다
 - 데모용 사진 : https://github.com/jeonghoonkang/BerePi/tree/master/apps/camera/dataset
 
-
-
 참고 내용
 
 - 라즈베리파이 카메라 원격 제어, 웹캠  <http://jamiej7.wixsite.com/anpr-on-raspberry-pi
