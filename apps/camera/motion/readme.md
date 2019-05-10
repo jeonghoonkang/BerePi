@@ -13,6 +13,13 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - /etc/modules
   - bcm2835-v4l2
 
+## Performance, run fact-info
+- 30 Min (DESK shot)
+  - generation 69MB JPG files
+  - 4351 pics
+- One day in office 
+  - light change effect : around 5 time 
+
 # Resource
 ## Source code
 - project homepage 
