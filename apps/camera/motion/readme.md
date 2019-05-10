@@ -23,5 +23,3 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - https://www.bouvet.no/bouvet-deler/utbrudd/building-a-motion-activated-security-camera-with-the-raspberry-pi-zero
   - https://learn.adafruit.com/cloud-cam-connected-raspberry-pi-security-camera?view=all
   - https://www.instructables.com/id/Raspberry-Pi-Motion-Detection-Security-Camera/#step5
-
-
