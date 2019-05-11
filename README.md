@@ -33,7 +33,6 @@ BerePi project opens software which using BerePi hardware modules.
     - Download OS image and set up scripts and environemnt, automatically
     - https://github.com/jeonghoonkang/BerePi/blob/master/Install_Raspi_OS.md
 
-
 ## Links
  - nice additional external works :
   1. http://www.raspberrypi-spy.co.uk/
