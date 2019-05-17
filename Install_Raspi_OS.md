@@ -1,4 +1,4 @@
-#### Installation, RaspberryPi OS for BerePi
+#### Installation, RaspberryPi OS to BerePi
   - Please download below RasberryPi OS - Rapberrian based on 2017 06 Jessie version
     - http://cogcom.asuscomm.com:6080/open/2017-06-BerePi-jessie-4G.img.gz
     - old versions
