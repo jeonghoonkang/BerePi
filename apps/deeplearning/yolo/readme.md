@@ -5,3 +5,7 @@
 ### installation instruction
 - https://j-remind.tistory.com/48?category=693866
 - stretch upgrade
+
+### windows and linux installation
+- https://github.com/AlexeyAB/darknet
+
