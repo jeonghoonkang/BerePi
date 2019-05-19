@@ -2,10 +2,10 @@
 ## Object detection
 ### darknet
 - https://pjreddie.com/darknet/
-### installation instruction
+### RaspberryPi : installation instruction
 - https://j-remind.tistory.com/48?category=693866
 - stretch upgrade
 
-### windows and linux installation
+### Windows and Linux installation
 - https://github.com/AlexeyAB/darknet
 
