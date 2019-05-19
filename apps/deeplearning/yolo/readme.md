@@ -1,7 +1,10 @@
-# YOLO, Darknet
-## Object detection
-### darknet
+# Darknet, YOLO
+
+## darknet, deep learning framework
 - https://pjreddie.com/darknet/
+
+## YOLO, object detection
+
 ### RaspberryPi : installation instruction
 - https://j-remind.tistory.com/48?category=693866
 - stretch upgrade
