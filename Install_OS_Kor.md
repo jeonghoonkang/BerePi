@@ -2,7 +2,6 @@
   - Stretch 이미지
   - 2017년 8월 이미지 파일 릴리즈
     - 2018년 4월 RaspberryPi 3 B+ 발표로 새롭게 적용
-    
 - Image 설치 : 2018년 4월 버전, 최근 버전 설치 
 <pre> http://125.140.110.217/open/2018-05-BerePi-stretch-4G-001.img </pre>
 <pre> http://125.140.110.217/open/2018-05-BerePi-stretch-4G-001.img.gz </pre>
