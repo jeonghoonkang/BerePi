@@ -12,3 +12,6 @@
 ### Windows and Linux installation
 - https://github.com/AlexeyAB/darknet
 
+### Movidius
+- https://www.pyimagesearch.com/2019/04/08/openvino-opencv-and-movidius-ncs-on-the-raspberry-pi/
+
