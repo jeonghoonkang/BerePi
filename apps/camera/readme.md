@@ -1,5 +1,5 @@
 
-#### 데모 SW 개발 목표
+## 데모 SW 개발 목표
 
 - 라즈베리파이 카메라로 촬영한 사진들을 
 - Google Vision API 를 통해 JSON 으로 회신 받고
@@ -13,7 +13,7 @@
 - 구글 API 사용 Python http://www.hardcopyworld.com/ngine/aduino/index.php/archives/2736
 
 
-#### 시각지능 분야 IoT 시스템 기술 접목 방법
+## 시각지능 분야 IoT 시스템 기술 접목 방법
   - 스마트미터 적용하여 문자를 인식함
   - 시각 지능 성능을 높이기위해 여러대의 카메라를  동기화하여 데이터를 수집함
   - 특정상황을 연출하고 그에 해당하는 다각도 영상을 수집, 저장처리함
@@ -26,20 +26,20 @@
 
 
 
-#### 카메라 동작  
+## 카메라 동작  
 
 - 기본 동작 완료    
 - 움직임(모션)이 발생한 경우만 촬영하도록 기능 추가 진행   
 - 웹  기반으로 동작하도록  진행  
 - 웹으로 촬영 하거나, 자동 촬영되어 있는 파일을 브라우징 할 수 있는 갤러리
 
-#### timelaps, motion detection, low light
+## timelaps, motion detection, low light
   - https://github.com/pageauc/pi-timolo
 
-#### Raspi NoIR Camera (with LED)
+## Raspi NoIR Camera (with LED)
   - https://www.raspberrypi.org/learning/infrared-bird-box/worksheet/
 
-#### Machine Vision info.
+## Machine Vision info.
   - ImageNet You Tube
     - It gives outline understanding of Vision Intelligence
     - https://youtu.be/40riCqvRoMs
