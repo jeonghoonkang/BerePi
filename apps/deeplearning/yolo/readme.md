@@ -4,6 +4,8 @@
 - https://pjreddie.com/darknet/
 
 ## YOLO, object detection
+- Yolo, Cam Streaming, Learning, etc.
+  - https://j-remind.tistory.com/58?category=693866
 
 ### RaspberryPi : installation instruction
 - https://j-remind.tistory.com/48?category=693866
