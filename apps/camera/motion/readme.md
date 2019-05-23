@@ -18,7 +18,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
   - generation 69MB JPG files
   - 4351 pics
 - One day in office 
-  - light change effect : around 5 time 
+  - light change effect : less 5 time or slightly more
 
 # Resource
 ## Source code
