@@ -1,4 +1,4 @@
-# Flac file conversion
+# ISO, APE, Flac file conversion
 
-# installations
-- ffmpeg
+## Preparation : installations
+- sudo apt-get install flac ffmpeg mp3splt libav-tools shntool
