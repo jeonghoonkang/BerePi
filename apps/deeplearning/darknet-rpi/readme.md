@@ -9,6 +9,12 @@
   카메라 추가 테스트<br>
   코드 리뷰<br>
   라이브러리 기능 <br>
+
+## 리뷰
+  Install PeachPy and confu<br>
+  Install Ninja<br>
+  Install clang<br>
+  Install NNPACK-darknet<br>
   
 ## 기타사항
   
