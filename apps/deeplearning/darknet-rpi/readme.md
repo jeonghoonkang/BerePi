@@ -12,7 +12,7 @@
 
 ## 리뷰
   Install PeachPy and confu<br>
-  &nbsp; naPortable Efficient Assembly Code-generator in Higher-level Python (PeachPy)<br>
+  &nbsp; Portable Efficient Assembly Code-generator in Higher-level Python (PeachPy)<br>
   Install Ninja<br>
   Install clang<br>
   Install NNPACK-darknet<br>
