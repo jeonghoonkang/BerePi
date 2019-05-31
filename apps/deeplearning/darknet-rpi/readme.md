@@ -6,7 +6,7 @@
   
 ## 테스트
   속도 테스트 <br>
-  카메라 추가 테스트<br>
+  [카메라 추가 테스트](https://webnautes.tistory.com/929)<br>
   코드 리뷰<br>
   라이브러리 기능 <br>
 
