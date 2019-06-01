@@ -13,6 +13,10 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - /etc/modules
   - bcm2835-v4l2
 
+## run / start / stop / daemon
+- sudo systemctl motion status / start / stop
+
+
 ## Performance, run fact-info
 - 30 Min (DESK shot)
   - generation 69MB JPG files
