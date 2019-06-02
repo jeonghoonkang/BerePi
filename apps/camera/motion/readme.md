@@ -14,7 +14,8 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
   - bcm2835-v4l2
 
 ## run / start / stop / daemon
-- sudo systemctl motion status / start / stop
+- sudo systemctl motion status ( start / stop )
+- hostname
 
 
 ## Performance, run fact-info
