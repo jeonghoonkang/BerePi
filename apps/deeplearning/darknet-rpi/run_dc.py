@@ -44,10 +44,13 @@ with picamera.PiCamera() as camera:
 
     result = subprocess.check_output(['./darknet detector test cfg/coco.data cfg/yolov3-tiny.cfg yolov3-tiny.weights now.jpg'], shell=True)
     percent = result.find("person")
+    percent2 = result.find("%")
     if percent > 0 : # Person Key word OK
-      f_percent = float(result[percent+8:-2])
-      if f_percent > 80 :
-        print "Person OK"
+      t_percent = type(result[percent+8:percent2])
+      print t_percent
+      f_percent = float(result[percent+8:percent2])
+      if f_percent > 60 :
+        print "Person OK: " + str(f_percent)
         now =  datetime.datetime.now()
         nowdatetime = now.strftime('%Y-%m-%d_%H:%M:%S')
         cmd = 'cp -f now.jpg ./screenshot/'+nowdatetime+'.jpg'
@@ -55,12 +58,11 @@ with picamera.PiCamera() as camera:
         os.system(cmd)
         #time.sleep(10)
       else :
-        print "Person None"
+        print "Person Not enough :" + str(f_percent)
         #time.sleep(10)
     else :
-      print "Person None"
-    time.sleep(10)
-
-  ledg_off()
+      print "Person is Not Here"
+    ledg_off()
+    time.sleep(60)
 
 GPIO.cleanup()
