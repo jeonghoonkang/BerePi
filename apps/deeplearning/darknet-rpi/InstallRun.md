@@ -6,7 +6,7 @@
 3. capture 사진을 파일이름을 시간으로 저장
 
 ## Step1 Camera Test
-&nbsp; &nbsp; &nbsp; 터미널 창에서 : vcgencmd get_camera <br>
+&nbsp; 터미널 창에서 : vcgencmd get_camera <br>
 &nbsp; <img width="300" src="./images/camera_test1.jpg"></img><br>
 
 ## Step2 Rpi State
@@ -40,7 +40,7 @@
 5. clang_install 설치<br>
 &nbsp; 터미널 창에서 : sudo apt-get install clang<br>
 &nbsp; <img width="800" src="./images/clang_install.png"></img><br>
-&nbsp; clang_install_done<br>
+&nbsp; clang_install done<br>
 &nbsp; <img width="800" src="./images/clang_install_done.png"></img><br>
 
 6. nnpack-darknet_git 다운로드<br>
@@ -64,21 +64,26 @@
 &nbsp; <img width="800" src="./images/nnpack-darknet_cp.png"></img><br>
 
 ## Step4 Install darknet_nnpack
-darknet_nnpack_git<br>
+1. darknet_nnpack_git 다운로드<br>
+&nbsp; 터미널 창에서 : git clone https://github.com/digitalbrain79/darknet-nnpack.git<br>
 &nbsp; <img width="600" src="./images/darknet_nnpack_git.png"></img><br>
-darknet_nnpack_make1<br>
+2. darknet_nnpack_make<br>
+&nbsp; 터미널 창에서 : make<br>
 &nbsp; <img width="600" src="./images/darknet_nnpack_make1.png"></img><br>
-darknet_nnpack_make2<br>
+&nbsp; darknet_nnpack_make Done<br>
 &nbsp; <img width="600" src="./images/darknet-nnpack_make2.png"></img><br>
 
 ## Step5 Download yolov file
-yolov3_download<br>
+1. yolov3 download<br>
+&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov3.weights<br>
 &nbsp; <img width="600" src="./images/yolov3_download.png"></img><br>
-yolov3_download2<br>
+&nbsp; yolov3_download2<br>
 &nbsp; <img width="600" src="./images/yolov3_download2.png"></img><br>
-yolov2-tiny_download<br>
+2. yolov2-tiny download<br>
+&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov2-tiny.weights<br>
 &nbsp; <img width="600" src="./images/yolov2-tiny_download.png"></img><br>
-yolov3-tiny_download<br>
+3. yolov3-tiny download <br>
+&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov3-tiny.weights<br>
 &nbsp; <img width="600" src="./images/yolov3-tiny_download.png"></img><br>
 
 ## Step6 Run darknet App
