@@ -1,5 +1,10 @@
 # YOLO & Camera 연동 with RPi3 B+
 
+- 재실 감지 시스템
+1. RPi에 Camera을 연동하고 YOLO System을 RPi에 설치함
+2. Camera로 실시간 상태를 촬영하고 이 사진을 YOLO에 연동하여 object를 detection을 확인
+3. capture 사진을 파일이름을 시간으로 저장
+
 ## Step1 Camera Test
 camera test<br>
 &nbsp; <img width="300" src="./images/camera_test1.jpg"></img><br>
