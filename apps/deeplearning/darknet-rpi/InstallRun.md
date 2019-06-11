@@ -20,33 +20,47 @@
 
 ## Step3 Install required library
 &nbsp; 1. PeachPy 설치<br>
-&nbsp; &nbsp; &nbsp; 터미널 창에서 :sudo pip install --upgrade git+https://github.com/Maratyszcza/PeachPy<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo pip install --upgrade git+https://github.com/Maratyszcza/PeachPy<br>
 &nbsp; <img width="800" src="./images/PeachPy.png"></img><br>
 
 &nbsp; 2. confu 설치<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo pip install --upgrade git+https://github.com/Maratyszcza/confu<br>
 &nbsp; <img width="800" src="./images/confu.png"></img><br>
 
 &nbsp; 3. ninja_git 다운로드<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : git clone https://github.com/ninja-build/ninja.git<br>
 &nbsp; <img width="600" src="./images/ninja_git.png"></img><br>
 &nbsp; 4. ninja_install_export 설치 및 설정<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : cd ninja<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : checkout release<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : ./configure.py –bootstrap<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : export NINJA_PATH=$PWD<br>
 &nbsp; <img width="800" src="./images/ninja_install_export.png"></img><br>
 
 &nbsp; 5.1 clang_install 설치<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo apt-get install clang<br>
 &nbsp; <img width="800" src="./images/clang_install.png"></img><br>
 &nbsp; 5.2 clang_install_done<br>
 &nbsp; <img width="800" src="./images/clang_install_done.png"></img><br>
 
 &nbsp; 6 nnpack-darknet_git 다운로드<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : git clone https://github.com/digitalbrain79/NNPACK-darknet.git<br>
 &nbsp; <img width="800" src="./images/nnpack-darknet_git.png"></img><br>
 &nbsp; 7 nnpack-darknet_confu 설치<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : confu setup<br>
 &nbsp; <img width="800" src="./images/nnpack-darknet_confu.png"></img><br>
 &nbsp; 8 nnpack-darknet_configure 설치<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : python ./configure.py –backend auto<br>
 &nbsp; <img width="800" src="./images/nnpack-darknet_configure.png"></img><br>
-&nbsp; 9 nnpack-darknet_ninja_1 설치<br>
+&nbsp; 9.1 nnpack-darknet_ninja_1 설치<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : $NINJA_PATH/ninja<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_1.png"></img><br>
-&nbsp; 10 nnpack-darknet_ninja_2 설치<br>
+&nbsp; 9.2 nnpack-darknet_ninja_2 설치<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_2.png"></img><br>
-&nbsp; 11 nnpack-darknet_cp <br>
+&nbsp; 10 nnpack-darknet_cp 복사<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo cp -a lib/* /usr/lib/<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo cp include/nnpack.h /usr/include/<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo cp deps/pthreadpool/include/pthreadpool.h /usr/include/<br>
 &nbsp; <img width="800" src="./images/nnpack-darknet_cp.png"></img><br>
 
 ## Step4 Install darknet_nnpack
