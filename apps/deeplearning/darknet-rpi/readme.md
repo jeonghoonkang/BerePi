@@ -1,6 +1,6 @@
 # RPI 3B+ install Darknet-nnpack 
 
-## 설치
+## 설치 참고 링크
   [darknet-nnpack](https://github.com/digitalbrain79/darknet-nnpack)<br>
   [Raspberry pi YOLO Real-time Object Detection](http://raspberrypi4u.blogspot.com/2018/10/raspberry-pi-yolo-real-time-object.html)<br>
   
@@ -10,12 +10,7 @@
   코드 리뷰<br>
   라이브러리 기능 <br>
 
-## 리뷰 >> 이부분 설치? 설명? 리뷰?
-  Install PeachPy and confu<br>
-  &nbsp; Portable Efficient Assembly Code-generator in Higher-level Python (PeachPy)<br>
-  Install Ninja<br>
-  Install clang<br>
-  Install NNPACK-darknet<br>
-  
+## 설치 설명 파일
+    
 ## 기타사항
   
