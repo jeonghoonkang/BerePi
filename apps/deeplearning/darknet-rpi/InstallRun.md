@@ -6,7 +6,7 @@
 3. capture 사진을 파일이름을 시간으로 저장
 
 ## Step1 Camera Test
-camera test<br>
+### &nbsp; cmd : vcgencmd get_camera<br>
 &nbsp; <img width="300" src="./images/camera_test1.jpg"></img><br>
 
 ## Step2 Rpi State
