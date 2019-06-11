@@ -6,13 +6,16 @@
 3. capture 사진을 파일이름을 시간으로 저장
 
 ## Step1 Camera Test
-### &nbsp; cmd : vcgencmd get_camera<br>
+### &nbsp; 터미널 창에서 : vcgencmd get_camera <br>
 &nbsp; <img width="300" src="./images/camera_test1.jpg"></img><br>
 
 ## Step2 Rpi State
-os-release<br>
+&nbsp; 1. os-release 버전 확인 <br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : vcgencmd get_camera <br>
 &nbsp; <img width="600" src="./images/os-release.png"></img><br>
-rpi_update_upgrade<br>
+&nbsp; 2. rpi_update_upgrade<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo apt-get update <br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo apt-get upgrade <br>
 &nbsp; <img width="600" src="./images/rpi_update_upgrade.png"></img><br>
 
 ## Step3 Install required library
