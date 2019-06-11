@@ -66,32 +66,32 @@
 ## Step4 Install darknet_nnpack
 1. darknet_nnpack_git 다운로드<br>
 &nbsp; 터미널 창에서 : git clone https://github.com/digitalbrain79/darknet-nnpack.git<br>
-&nbsp; <img width="600" src="./images/darknet_nnpack_git.png"></img><br>
+&nbsp; <img width="800" src="./images/darknet_nnpack_git.png"></img><br>
 2. darknet_nnpack_make<br>
 &nbsp; 터미널 창에서 : make<br>
-&nbsp; <img width="600" src="./images/darknet_nnpack_make1.png"></img><br>
+&nbsp; <img width="800" src="./images/darknet_nnpack_make1.png"></img><br>
 &nbsp; darknet_nnpack_make Done<br>
-&nbsp; <img width="600" src="./images/darknet-nnpack_make2.png"></img><br>
+&nbsp; <img width="800" src="./images/darknet-nnpack_make2.png"></img><br>
 
 ## Step5 Download yolov file
 1. yolov3 download<br>
 &nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov3.weights<br>
-&nbsp; <img width="600" src="./images/yolov3_download.png"></img><br>
+&nbsp; <img width="800" src="./images/yolov3_download.png"></img><br>
 &nbsp; yolov3_download2<br>
-&nbsp; <img width="600" src="./images/yolov3_download2.png"></img><br>
+&nbsp; <img width="800" src="./images/yolov3_download2.png"></img><br>
 2. yolov2-tiny download<br>
 &nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov2-tiny.weights<br>
-&nbsp; <img width="600" src="./images/yolov2-tiny_download.png"></img><br>
+&nbsp; <img width="800" src="./images/yolov2-tiny_download.png"></img><br>
 3. yolov3-tiny download <br>
 &nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov3-tiny.weights<br>
-&nbsp; <img width="600" src="./images/yolov3-tiny_download.png"></img><br>
+&nbsp; <img width="800" src="./images/yolov3-tiny_download.png"></img><br>
 
 ## Step6 Run darknet App
 darknet_test_person<br>
-&nbsp; <img width="600" src="./images/darknet_test_person.png"></img><br>
+&nbsp; <img width="800" src="./images/darknet_test_person.png"></img><br>
 
 ## Step7 재실감지 시스템
 python_run<br>
-&nbsp; <img width="600" src="./images/python_run.png"></img><br>
+&nbsp; <img width="800" src="./images/python_run.png"></img><br>
 save_screenshot<br>
-&nbsp; <img width="600" src="./images/save_screenshot.png"></img><br>
+&nbsp; <img width="800" src="./images/save_screenshot.png"></img><br>
