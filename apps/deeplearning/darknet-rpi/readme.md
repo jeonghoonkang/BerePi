@@ -8,11 +8,11 @@
 ## YOLO와 Camera 연동
   ### Test 환경<br>
   &nbsp; <img width="600" src="./images/testenv.png"></img><br>
-  ### 프로그램 동작 Flow<br>
+  ### run_dc.py program flow<br>
   &nbsp; <img width="600" src="./images/flow.png"></img><br>
   
 ## 설치 설명 파일
   [설치&동작 설명파일 InstallRum.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)
     
 ## 기타사항
-  
+  -- 현재 24개월 유아는 
