@@ -37,10 +37,10 @@
 &nbsp; 터미널 창에서 : export NINJA_PATH=$PWD<br>
 &nbsp; <img width="800" src="./images/ninja_install_export.png"></img><br>
 
-5.1. clang_install 설치<br>
+5. clang_install 설치<br>
 &nbsp; 터미널 창에서 : sudo apt-get install clang<br>
 &nbsp; <img width="800" src="./images/clang_install.png"></img><br>
-5.2. clang_install_done<br>
+&nbsp; clang_install_done<br>
 &nbsp; <img width="800" src="./images/clang_install_done.png"></img><br>
 
 6. nnpack-darknet_git 다운로드<br>
@@ -52,10 +52,10 @@
 8. nnpack-darknet_configure 설치<br>
 &nbsp; 터미널 창에서 : python ./configure.py –backend auto<br>
 &nbsp; <img width="800" src="./images/nnpack-darknet_configure.png"></img><br>
-9.1. nnpack-darknet_ninja_1 설치<br>
+9. nnpack-darknet_ninja_1 설치<br>
 &nbsp; 터미널 창에서 : $NINJA_PATH/ninja<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_1.png"></img><br>
-9.2. nnpack-darknet_ninja_2 설치<br>
+&nbsp; nnpack-darknet_ninja_2 설치<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_2.png"></img><br>
 10. nnpack-darknet_cp 복사<br>
 &nbsp; 터미널 창에서 : sudo cp -a lib/* /usr/lib/<br>
