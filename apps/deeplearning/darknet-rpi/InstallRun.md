@@ -87,11 +87,13 @@
 &nbsp; <img width="800" src="./images/yolov3-tiny_download.png"></img><br>
 
 ## Step6 Run darknet App
-darknet_test_person<br>
+1. darknet_test_person 실행<br>
+&nbsp; 터미널 창에서 : ./darknet detector test cfg/coco.data cfg/yolov3-tiny.cfg yolov3-tiny.weights camera_test1.jpg<br>
 &nbsp; <img width="800" src="./images/darknet_test_person.png"></img><br>
 
 ## Step7 재실감지 시스템
-python_run<br>
+1. run_dc.py<br>
+&nbsp; 터미널 창에서 : python run_dc.py<br>
 &nbsp; <img width="800" src="./images/python_run.png"></img><br>
-save_screenshot<br>
+&nbsp; save_screenshot<br>
 &nbsp; <img width="800" src="./images/save_screenshot.png"></img><br>
