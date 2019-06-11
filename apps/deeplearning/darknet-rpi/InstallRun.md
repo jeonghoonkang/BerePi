@@ -23,31 +23,31 @@
 &nbsp; &nbsp; &nbsp; 터미널 창에서 :sudo pip install --upgrade git+https://github.com/Maratyszcza/PeachPy<br>
 &nbsp; <img width="800" src="./images/PeachPy.png"></img><br>
 
-&nbsp; 2. confu<br>
+&nbsp; 2. confu 설치<br>
 &nbsp; <img width="800" src="./images/confu.png"></img><br>
 
-&nbsp; 3. ninja_git<br>
+&nbsp; 3. ninja_git 다운로드<br>
 &nbsp; <img width="600" src="./images/ninja_git.png"></img><br>
-&nbsp; 4. ninja_install_export<br>
-&nbsp; <img width="900" src="./images/ninja_install_export.png"></img><br>
+&nbsp; 4. ninja_install_export 설치 및 설정<br>
+&nbsp; <img width="800" src="./images/ninja_install_export.png"></img><br>
 
-&nbsp; 5.1 clang_install<br>
-&nbsp; <img width="900" src="./images/clang_install.png"></img><br>
+&nbsp; 5.1 clang_install 설치<br>
+&nbsp; <img width="800" src="./images/clang_install.png"></img><br>
 &nbsp; 5.2 clang_install_done<br>
-&nbsp; <img width="900" src="./images/clang_install_done.png"></img><br>
+&nbsp; <img width="800" src="./images/clang_install_done.png"></img><br>
 
-&nbsp; 6 nnpack-darknet_git<br>
-&nbsp; <img width="900" src="./images/nnpack-darknet_git.png"></img><br>
-&nbsp; 7 nnpack-darknet_confu<br>
-&nbsp; <img width="900" src="./images/nnpack-darknet_confu.png"></img><br>
-&nbsp; 8 nnpack-darknet_configure<br>
-&nbsp; <img width="900" src="./images/nnpack-darknet_configure.png"></img><br>
-&nbsp; 9 nnpack-darknet_ninja_1<br>
+&nbsp; 6 nnpack-darknet_git 다운로드<br>
+&nbsp; <img width="800" src="./images/nnpack-darknet_git.png"></img><br>
+&nbsp; 7 nnpack-darknet_confu 설치<br>
+&nbsp; <img width="800" src="./images/nnpack-darknet_confu.png"></img><br>
+&nbsp; 8 nnpack-darknet_configure 설치<br>
+&nbsp; <img width="800" src="./images/nnpack-darknet_configure.png"></img><br>
+&nbsp; 9 nnpack-darknet_ninja_1 설치<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_1.png"></img><br>
-&nbsp; 10 nnpack-darknet_ninja_2<br>
+&nbsp; 10 nnpack-darknet_ninja_2 설치<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_2.png"></img><br>
-&nbsp; 11 nnpack-darknet_cp<br>
-&nbsp; <img width="900" src="./images/nnpack-darknet_cp.png"></img><br>
+&nbsp; 11 nnpack-darknet_cp <br>
+&nbsp; <img width="800" src="./images/nnpack-darknet_cp.png"></img><br>
 
 ## Step4 Install darknet_nnpack
 darknet_nnpack_git<br>
