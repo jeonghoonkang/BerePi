@@ -15,4 +15,4 @@
   [설치&동작 설명파일 InstallRum.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)
     
 ## 기타사항
-  -- 현재 24개월 유아는 
+  -- 현재 24개월 유아는 못찾음
