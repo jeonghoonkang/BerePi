@@ -12,7 +12,7 @@
   &nbsp; <img width="600" src="./images/flow.png"></img><br>
   
 ## 설치 설명 파일
-  [설치&동작 설명파일 InstallRum.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)
+  [설치&동작 설명파일 InstallRun.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)
     
 ## 오류 리포트
   1. -- 정면은 잘 찾음<br>
