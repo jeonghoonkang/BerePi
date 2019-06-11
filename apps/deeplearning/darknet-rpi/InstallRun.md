@@ -6,7 +6,7 @@
 3. capture 사진을 파일이름을 시간으로 저장
 
 ## Step1 Camera Test
-### &nbsp; 터미널 창에서 : vcgencmd get_camera <br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 : vcgencmd get_camera <br>
 &nbsp; <img width="300" src="./images/camera_test1.jpg"></img><br>
 
 ## Step2 Rpi State
@@ -19,20 +19,21 @@
 &nbsp; <img width="600" src="./images/rpi_update_upgrade.png"></img><br>
 
 ## Step3 Install required library
-PeachPy<br>
+&nbsp; 1. PeachPy 설치<br>
+&nbsp; &nbsp; &nbsp; 터미널 창에서 :sudo pip install --upgrade git+https://github.com/Maratyszcza/PeachPy<br>
 &nbsp; <img width="600" src="./images/PeachPy.png"></img><br>
 
-confu<br>
+&nbsp; 2. confu<br>
 &nbsp; <img width="600" src="./images/confu.png"></img><br>
 
-ninja_git<br>
+&nbsp; 3. ninja_git<br>
 &nbsp; <img width="600" src="./images/ninja_git.png"></img><br>
-ninja_install_export<br>
+&nbsp; 4. ninja_install_export<br>
 &nbsp; <img width="600" src="./images/ninja_install_export.png"></img><br>
 
-clang_install<br>
+&nbsp; 5. clang_install<br>
 &nbsp; <img width="600" src="./images/clang_install.png"></img><br>
-clang_install_done<br>
+&nbsp; 5. clang_install_done<br>
 &nbsp; <img width="600" src="./images/clang_install_done.png"></img><br>
 
 nnpack-darknet_git<br>
