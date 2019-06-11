@@ -15,4 +15,8 @@
   [설치&동작 설명파일 InstallRum.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)
     
 ## 기타사항
-  -- 현재 24개월 유아는 못찾음
+  -- 정면은 잘 찾음<br>
+  &nbsp; <img width="600" src="./images/error_predictions2.jpg"></img><br>
+  -- 현재 24개월 유아는 옆모습은 못찾음<br>
+  &nbsp; <img width="600" src="./images/error_predictions3.jpg"></img><br>
+  
