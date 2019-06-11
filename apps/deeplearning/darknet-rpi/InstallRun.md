@@ -16,38 +16,38 @@
 &nbsp; 2. rpi_update_upgrade<br>
 &nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo apt-get update <br>
 &nbsp; &nbsp; &nbsp; 터미널 창에서 : sudo apt-get upgrade <br>
-&nbsp; <img width="600" src="./images/rpi_update_upgrade.png"></img><br>
+&nbsp; <img width="800" src="./images/rpi_update_upgrade.png"></img><br>
 
 ## Step3 Install required library
 &nbsp; 1. PeachPy 설치<br>
 &nbsp; &nbsp; &nbsp; 터미널 창에서 :sudo pip install --upgrade git+https://github.com/Maratyszcza/PeachPy<br>
-&nbsp; <img width="600" src="./images/PeachPy.png"></img><br>
+&nbsp; <img width="800" src="./images/PeachPy.png"></img><br>
 
 &nbsp; 2. confu<br>
-&nbsp; <img width="600" src="./images/confu.png"></img><br>
+&nbsp; <img width="800" src="./images/confu.png"></img><br>
 
 &nbsp; 3. ninja_git<br>
 &nbsp; <img width="600" src="./images/ninja_git.png"></img><br>
 &nbsp; 4. ninja_install_export<br>
-&nbsp; <img width="600" src="./images/ninja_install_export.png"></img><br>
+&nbsp; <img width="900" src="./images/ninja_install_export.png"></img><br>
 
-&nbsp; 5. clang_install<br>
-&nbsp; <img width="600" src="./images/clang_install.png"></img><br>
-&nbsp; 5. clang_install_done<br>
-&nbsp; <img width="600" src="./images/clang_install_done.png"></img><br>
+&nbsp; 5.1 clang_install<br>
+&nbsp; <img width="900" src="./images/clang_install.png"></img><br>
+&nbsp; 5.2 clang_install_done<br>
+&nbsp; <img width="900" src="./images/clang_install_done.png"></img><br>
 
-nnpack-darknet_git<br>
-&nbsp; <img width="600" src="./images/nnpack-darknet_git.png"></img><br>
-nnpack-darknet_confu<br>
-&nbsp; <img width="600" src="./images/nnpack-darknet_confu.png"></img><br>
-nnpack-darknet_configure<br>
-&nbsp; <img width="600" src="./images/nnpack-darknet_configure.png"></img><br>
-nnpack-darknet_ninja_1<br>
+&nbsp; 6 nnpack-darknet_git<br>
+&nbsp; <img width="900" src="./images/nnpack-darknet_git.png"></img><br>
+&nbsp; 7 nnpack-darknet_confu<br>
+&nbsp; <img width="900" src="./images/nnpack-darknet_confu.png"></img><br>
+&nbsp; 8 nnpack-darknet_configure<br>
+&nbsp; <img width="900" src="./images/nnpack-darknet_configure.png"></img><br>
+&nbsp; 9 nnpack-darknet_ninja_1<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_1.png"></img><br>
-nnpack-darknet_ninja_2<br>
+&nbsp; 10 nnpack-darknet_ninja_2<br>
 &nbsp; <img width="600" src="./images/nnpack-darknet_ninja_2.png"></img><br>
-nnpack-darknet_cp<br>
-&nbsp; <img width="600" src="./images/nnpack-darknet_cp.png"></img><br>
+&nbsp; 11 nnpack-darknet_cp<br>
+&nbsp; <img width="900" src="./images/nnpack-darknet_cp.png"></img><br>
 
 ## Step4 Install darknet_nnpack
 darknet_nnpack_git<br>
