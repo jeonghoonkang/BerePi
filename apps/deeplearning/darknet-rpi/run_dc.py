@@ -44,24 +44,44 @@ with picamera.PiCamera() as camera:
 
     result = subprocess.check_output(['./darknet detector test cfg/coco.data cfg/yolov3-tiny.cfg yolov3-tiny.weights now.jpg'], shell=True)
     percent = result.find("person")
-    percent2 = result.find("%")
-    if percent > 0 : # Person Key word OK
-      t_percent = type(result[percent+8:percent2])
-      print t_percent
-      f_percent = float(result[percent+8:percent2])
+    now =  datetime.datetime.now()
+    nowdatetime = now.strftime('%Y-%m-%d_%H:%M:%S')
+
+    i = 0
+    f_percent = 0.0
+    while percent > 0 :
+      sub = result[percent:]
+      percent2 = sub.find('%')
+      temp_f =  float(sub[8:percent2])
+      if f_percent < temp_f :
+        f_percent = temp_f
+        print str(i) + ' Percent value : ' +str(f_percent)
+      else :
+        print str(i) + ' Percent low'
+      i = i + 1
+      result = sub[percent2:]
+      percent = result.find("person")
+
+    if f_percent > 0 : # Person Key word OK
       if f_percent > 60 :
         print "Person OK: " + str(f_percent)
-        now =  datetime.datetime.now()
-        nowdatetime = now.strftime('%Y-%m-%d_%H:%M:%S')
+        #now =  datetime.datetime.now()
+        #nowdatetime = now.strftime('%Y-%m-%d_%H:%M:%S')
         cmd = 'cp -f now.jpg ./screenshot/'+nowdatetime+'.jpg'
-        print cmd
+        print 'S:' + cmd
         os.system(cmd)
         #time.sleep(10)
       else :
         print "Person Not enough :" + str(f_percent)
+        cmd = 'cp -f predictions.jpg ./errorshot/'+nowdatetime+'.jpg'
+        print 'E1:' + cmd
+        os.system(cmd)
         #time.sleep(10)
     else :
       print "Person is Not Here"
+      cmd = 'cp -f predictions.jpg ./errorshot/'+nowdatetime+'.jpg'
+      print 'E2:' + cmd
+      os.system(cmd)
     ledg_off()
     time.sleep(60)
 
