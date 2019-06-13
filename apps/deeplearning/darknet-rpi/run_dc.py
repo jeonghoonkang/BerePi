@@ -1,4 +1,5 @@
-## Crate by TJ
+
+## Crate by TJ, https://github.com/taijoon
 
 import serial,os,time
 import sys
