@@ -27,7 +27,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 
 # Resource
 ## Source code
-- project homepage 
+- Motion Project Homepage 
   - https://motion-project.github.io/index.html
   - repo : https://github.com/Motion-Project/motion
 
