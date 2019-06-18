@@ -1,4 +1,3 @@
-
 ## Crate by TJ, https://github.com/taijoon
 
 import serial,os,time
