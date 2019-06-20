@@ -3,6 +3,7 @@
 
 ## Dark-net
 ### Object detection based on deep learning
+#### Run on RPI3 B+
 
 ## TensorFlow
 
