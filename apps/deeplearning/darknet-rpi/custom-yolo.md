@@ -1,7 +1,7 @@
 # YOLO Custom
 
-## 1
+## 1 cfg
 
-## 2
+## 2 data
 
-## 3
+## 3 src
