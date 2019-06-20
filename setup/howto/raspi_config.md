@@ -1,3 +1,3 @@
-# HDMI Display rotate 
+#  Display rotate (HDMI)
 - dispaly_rotate=3 (1~4, clock wise prgress)
-- /boot/cmd.txt
+- /boot/config.txt
