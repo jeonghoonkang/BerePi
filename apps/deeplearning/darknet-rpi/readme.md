@@ -12,8 +12,8 @@
   &nbsp; <img width="600" src="./images/flow.png"></img><br>
   
 ## 설치 설명 파일
-  [설치&동작 설명파일 InstallRun.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)
-  [YOLO 설정파일 커스텀 custom-yolo.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/custom-yolo.md)
+  [설치&동작 설명파일 InstallRun.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)<br>
+  [YOLO 설정파일 커스텀 custom-yolo.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/custom-yolo.md)<br>
     
 ## 오류 리포트
   1. -- 정면은 잘 찾음<br>
