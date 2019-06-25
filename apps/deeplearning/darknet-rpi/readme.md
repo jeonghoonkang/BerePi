@@ -14,7 +14,9 @@
 ## 설치 설명 파일
   [설치&동작 설명파일 InstallRun.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)<br>
   [YOLO 설정파일 커스텀 custom-yolo.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/custom-yolo.md)<br>
-    
+
+## 속도 향상 방법 테스트
+  [사진 크기에 따른 속도 변화](https://github.com/jeonghoonkang/BerePi/tree/master/apps/deeplearning/darknet-rpi/runtime_test/readme.md)<br>
 ## 오류 리포트
   1. -- 정면은 잘 찾음<br>
   &nbsp; <img width="600" src="./images/error_predictions2.jpg"></img><br>
