@@ -16,4 +16,4 @@
   &nbsp; 사진 크기 512x384 <br>
   &nbsp; Predicted in 1.707834 seconds.<br>
   &nbsp; <img width="600" src="size_run(512-384).jpg"></img><br>
-  &nbsp; [결과 시간 TXT](size_run(512-384.txt)<br>
+  &nbsp; [결과 시간 TXT](size_run(512-384.txt))<br>
