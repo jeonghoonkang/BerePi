@@ -25,7 +25,6 @@ elif len(sys.argv) > 2:
 else:
 	pic = sys.argv[1]
 
-
 foto_cnt = 0
 
 camera =  picamera.PiCamera() 
