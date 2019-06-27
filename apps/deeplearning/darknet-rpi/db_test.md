@@ -1,5 +1,7 @@
 # DataBase 계획
 
 ## Column
-
-## row
+   &nbsp; Exist<br>
+   &nbsp; People_cnt<br>
+   &nbsp; <br>
+## Row
