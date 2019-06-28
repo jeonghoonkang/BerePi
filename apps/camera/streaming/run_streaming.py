@@ -13,11 +13,16 @@ from http import server
 PAGE="""\
 <html>
 <head>
-<title>Raspberry Pi - Surveillance Camera</title>
+<title>Surveillance Camera on BerePi</title>
 </head>
 <body>
-<center><h1>Raspberry Pi - Surveillance Camera</h1></center>
-<center><img src="stream.mjpg" width="640" height="480"></center>
+<center><h1>Surveillance Camera on BerePi</h1></center>
+<center><img src="stream.mjpg" width="640" height="480">
+<br>
+Code Run on BerePi S/W
+<br>
+https://github.com/jeonghoonkang/BerePi/apps/camera/streaming
+</center>
 </body>
 </html>
 """
@@ -82,10 +87,12 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+
+
 with picamera.PiCamera(resolution='640x480', framerate=24) as camera:
     output = StreamingOutput()
     #Uncomment the next line to change your Pi's Camera rotation (in degrees)
-    #camera.rotation = 90
+    camera.rotation = 180
     camera.start_recording(output, format='mjpeg')
     try:
         address = ('', 8000)
