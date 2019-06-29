@@ -1,7 +1,7 @@
 
 ## 개발 목표
 
-- 라즈베리파이 카메라로 촬영한 사진을
+- 라즈베리파이 카메라로 촬영한 사진을 AI S/W에 입력하여 지능적인 결과를 리턴 받는다
 - Google Vision API 를 통해 인식한  JSON 으로 회신 받고
 - 그 중, 숫자를 뽑아내어, TSDB에 입력한다
 - 데모용 사진 : https://github.com/jeonghoonkang/BerePi/tree/master/apps/camera/dataset
