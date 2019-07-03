@@ -1,5 +1,8 @@
 
-rsync -avhz --rsh='ssh -p62' mp3 photo video tinyos@cog.asmm.com:/var/www/webdav/data/BK/mins-ple
+echo "copying files to server"
+dest="tinyos@192.168.0.17:webdav/media/send"
+speed=$2
+echo $dest 
+echo $speed
 
-rsync -avhr --rsh='ssh -p22' --progress ./ tinyos@tinyos.comm.com:dav/m/mp3 
-
+rsync -avhz --progress --partial --bwlimit=$speed  --rsh='ssh -p22' $1 $dest 
