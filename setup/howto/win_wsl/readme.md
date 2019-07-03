@@ -6,7 +6,7 @@
   - export DISPLAY=localhost:0.0
   - 실행 할때마다, DISPLAY=localhost:0.0 을 적어줘도 됨
 
-# Crontab
+# Crontab for windows
   - crontab 실행
     - sudo cron
   - sudoer 에게 crontab 실행 가능하도록 group 권한 추가
