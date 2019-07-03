@@ -1,5 +1,5 @@
 # Xserver for windows
-## installation & run
+## Installation & run
 - Xserver 설치
 - 해당 S/W 실행후
 - WSL 터미널에서 DISPLAY 환경변수 지정
