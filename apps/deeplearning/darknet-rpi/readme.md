@@ -14,7 +14,8 @@
 ## DB 구축
   ## Server 환경
   &nbsp; ssh windarin@125.140.110.217 -p 7771<br>
-  &nbsp; 태준81<br>
+  [MySQL 설치 방법](./MySQL_Install.md)<br>
+  
   
 ## 설치 설명 파일
   [설치&동작 설명파일 InstallRun.md](https://github.com/jeonghoonkang/BerePi/blob/master/apps/deeplearning/darknet-rpi/InstallRun.md)<br>
