@@ -4,6 +4,7 @@
 - is based on RaspberryPi distribution (hardware and software)
 - supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3 (input hangul mode, 한글모드)
 
+
 #### Wiki doc
   - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspi Sensor System
