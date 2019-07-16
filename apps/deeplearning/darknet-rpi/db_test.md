@@ -18,7 +18,9 @@ count_person  | 사람 숫자 <br>
 percent_person | 확률 수치 <br>
 report_time  | 사진 찍힌 시간 <br>
 insert_time  | DB insert 시간 <br>
-  &nbsp; <img width="600" src="./images/mysql_person_table.png"></img><br>
+
+
+&nbsp; <img width="600" src="./images/mysql_person_table.png"></img><br>
 
 
 ## Row
