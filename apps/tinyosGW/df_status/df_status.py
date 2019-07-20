@@ -1,8 +1,18 @@
+#!/usr/bin/env python
 #-*- coding: utf-8 -*-
-#!/usr/bin/python
 # Author : jeonghoonkang, https://github.com/jeonghoonkang
 
+## 필독
+'''
+   ./out 디렉토리 생성해야 합니다
+   ./out 권한은 sudo chgrp www-data out 으로 그룹 허가 추가
+   sudo chmod 775 out 
+   '''
+
 from __future__ import print_function
+import cgi
+import cgitb
+
 from subprocess import *
 from types import *
 import platform
@@ -35,10 +45,7 @@ def getiip():
 
     cmd="/sbin/ifconfig"
     _os_type = platform.system()
-
     _os_ver = os.uname()
-    #print ( ' FIRST :' , _os_ver[0])
-    #print ( ' LAST :' , _os_ver[-1])
     
     if (_os_ver[0] == 'Linux') :
         if (_os_ver[-1] == 'x86_64') :
@@ -53,15 +60,18 @@ def getiip():
     return iip, _os_type
 
 def get_ostype():
-    _os_type = platform.system()
-
+    #_os_type = platform.system()
+    #_os_machine = platform.machine()
     _os_ver = os.uname()
-    #print ( ' FIRST :' , _os_ver[0])
-    #print ( ' LAST :' , _os_ver[-1])
+    #print (_os_ver) 
+    #출력예
+    #('Linux', 'gate', '4.1.19+', '#858 Tue Mar 15 15:52:03 GMT 2016','armv6l') 
     
     if (_os_ver[0] == 'Linux') :
         if (_os_ver[-1] == 'x86_64') :
             _os_type = 'Linux'   
+        if (_os_ver[-1] == 'armv6l') :
+            _os_type = 'Rasbian'
 
     return _os_type
 
@@ -101,39 +111,32 @@ def args_proc():
 
 if __name__ == '__main__':
 
-    print ('\n', datetime.datetime.now(), '\n')
-    #ip, port, id, passwd = args_proc()
+    cgitb.enable()
+    print ("Content-type: text\n")
+    #print ("Content-type: text/html\n")
 
-    #p_ip = getip()
-    #i_ip, os_type = getiip()
-    #info = i_ip + p_ip
     os_type = get_ostype()
     info = get_df()
-    print (info)
+    #print (os_type)
     
     hostn = hostname()
-    try : name = os.getlogin()
-    except :
-        print ('[exception] get log-in user name')
-        name = 'tinyos' 
-        # crontab 으로 실행할때는. getloin()에서 예외 발생하여, 이 부분에 정확한 아이디를 넣어줘야함
-        # 아이디가 정확하지 않으면 실행 에러로 종료됨
-        # 확인필수  : https://github.com/jeonghoonkang/BerePi/blob/master/apps/tinyosGW/debug/debug.log
-    print ("using local id : ", name)
 
-    sshpass = ''
-    if os_type == "Linux":
-        fname = '/home/%s/' %name
+    if os_type == 'Rasbian': name = 'pi' 
+    if os_type == 'Linux': name = 'tinyos' 
+
+    if (os_type == "Linux") or (os_type == 'Rasbian'): fname = '/home/%s/' %name
     elif os_type == 'Win' :
         fname = '/home/tinyos/' #수동설정해야 함
     elif os_type == "Darwin":
         fname = '/Users/%s/' %name
         sshpass = '/usr/local/bin/'
 
-    fname += 'devel/BerePi/apps/tinyosGW/out/%s_df.txt' %(hostn[:-1])
+    fname = './out/%s_df.txt' %(hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
+    
+    #print ("finish and return string")
+    print (info)
 
-    print ("finish ")
 
