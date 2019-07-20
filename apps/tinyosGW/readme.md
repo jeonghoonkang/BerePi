@@ -21,5 +21,17 @@
 - brew는 sshpass 를 제공하지 않아서, github에서 다운로드 받아서 설치해야 함
     - https://ole.michelsen.dk/blog/schedule-jobs-with-crontab-on-mac-osx.html
     
-    
-    
+      
+# 실행 플랫폼 확인
+
+<pre>
+os_type = platform.system()
+os_machine = platform.machine()
+os_ver = os.uname()
+
+#출력
+Linux
+armv6l
+('Linux', 'mins-gate', '4.1.19+', '#858 Tue Mar 15 15:52:03 GMT 2016', 'armv6l')
+</pre>
+
