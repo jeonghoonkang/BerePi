@@ -6,7 +6,7 @@ import cgitb
 import os
 import sys
 
-sys.path.append("/home/tinyos/devel/BerePi/apps/tinyosGW/cgi")
+sys.path.append("/home/pi/devel/BerePi/apps/tinyosGW/cgi")
 #import simple
 
 if __name__ == "__main__":
