@@ -1,0 +1,15 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    15  100    15    0     0     29      0 --:--:-- --:--:-- --:--:--    29
+usage : python /home/pi/devel/BerePi/apps/tinyosGW/publicip.py {server_IP_ADD} {server_PORT} {server_id} {passwd_for_server} => user should input arguments {}  
+
+... start running, inputs are  localhost 22 pi tinyos0
+[get-public-ip] 175.208.206.63
+
+os-type Linux
+exception get log-in user name
+/home/pi/devel/BerePi/apps/tinyosGW/out/mins-gate.txt
+
+sshpass -ptinyos0 scp -o StrictHostKeyChecking=no /home/pi/devel/BerePi/apps/tinyosGW/out/mins-gate.txt pi@localhost:/var/www/html/server/
+return of os.system =  0
+finish 
