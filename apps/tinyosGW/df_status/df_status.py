@@ -20,6 +20,11 @@ def hostname():
     ret = run_cmd(cmd)
     return ret
 
+def get_df():
+    cmd = "df -h"
+    ret = run_cmd(cmd)
+    return ret
+
 def getip():
     cmd = "curl http://checkip.amazonaws.com"
     ip = run_cmd(cmd)
@@ -46,6 +51,19 @@ def getiip():
     iip = run_cmd(cmd)
     print (iip)
     return iip, _os_type
+
+def get_ostype():
+    _os_type = platform.system()
+
+    _os_ver = os.uname()
+    #print ( ' FIRST :' , _os_ver[0])
+    #print ( ' LAST :' , _os_ver[-1])
+    
+    if (_os_ver[0] == 'Linux') :
+        if (_os_ver[-1] == 'x86_64') :
+            _os_type = 'Linux'   
+
+    return _os_type
 
 def checkifexist(fname):
     cmd='ls ' + fname
@@ -84,11 +102,14 @@ def args_proc():
 if __name__ == '__main__':
 
     print ('\n', datetime.datetime.now(), '\n')
-    ip, port, id, passwd = args_proc()
+    #ip, port, id, passwd = args_proc()
 
-    p_ip = getip()
-    i_ip, os_type = getiip()
-    info = i_ip + p_ip
+    #p_ip = getip()
+    #i_ip, os_type = getiip()
+    #info = i_ip + p_ip
+    os_type = get_ostype()
+    info = get_df()
+    print (info)
     
     hostn = hostname()
     try : name = os.getlogin()
@@ -109,19 +130,10 @@ if __name__ == '__main__':
         fname = '/Users/%s/' %name
         sshpass = '/usr/local/bin/'
 
-    fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
+    fname += 'devel/BerePi/apps/tinyosGW/out/%s_df.txt' %(hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
-    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
-    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-#    cmd = 'scp'
-#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-    print (cmd)
-    print ( 'return of os.system = ', os.system(cmd) )
-
-    #ret = run_cmd(cmd)
     print ("finish ")
-    #print (ret)
 
