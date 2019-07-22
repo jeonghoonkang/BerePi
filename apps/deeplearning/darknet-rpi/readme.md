@@ -13,7 +13,7 @@
   
 ## DB 구축
   ## Server 환경
-  &nbsp; ssh windarin@125.140.110.217 -p 7771<br>
+  &nbsp; ssh ID@10.10.10.10 -p 7771<br>
   &nbsp; [MySQL 설치 방법](./MySQL_Install.md)<br>
   
   
