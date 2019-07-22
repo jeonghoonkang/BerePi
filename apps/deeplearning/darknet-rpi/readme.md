@@ -1,9 +1,9 @@
 # RPI 3B+ install Darknet-nnpack 
 
-## 설치 참고 링크
-  [darknet-nnpack](https://github.com/digitalbrain79/darknet-nnpack)<br>
-  [Raspberry pi YOLO Real-time Object Detection](http://raspberrypi4u.blogspot.com/2018/10/raspberry-pi-yolo-real-time-object.html)<br>
-  [카메라 추가 테스트](https://webnautes.tistory.com/929)<br>
+## 설치 참고 
+  - [darknet-nnpack](https://github.com/digitalbrain79/darknet-nnpack)<br>
+  - [Raspberry pi YOLO Real-time Object Detection](http://raspberrypi4u.blogspot.com/2018/10/raspberry-pi-yolo-real-time-object.html)<br>
+  - [카메라 추가 테스트](https://webnautes.tistory.com/929)<br>
   
 ## YOLO와 Camera 연동
   ### Test 환경<br>
