@@ -1,7 +1,7 @@
 
 # Deep learning running SW
 
-## Dark-net
+## Dark-net (YOLO)
 ### Object detection based on deep learning
 #### Run on RPI3 B+
 - 테스트 완료
