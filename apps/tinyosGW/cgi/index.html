@@ -1,16 +1,21 @@
 
+
 <html>
+<script>
 
-Wecome to TinyOS Gateway Web Interface
-<br>
-<br>
+var loc = location.host
 
-<a href=http://192.168.0.200/gw>
-http://192.168.0.200/gw </a>
-<br>
-<br>
-<a href= http://192.168.0.200/cgi-bin/df_status.py>
-http://192.168.0.200/cgi-bin/df_status.py </a>
+loc = "http://" + loc 
 
-<br>
+var page =  "<br> <br>  Welcome to TinyOS Gateway Web Interface, APIs" + 
+           "<br>" + "<br>" + "<a href=" + loc + "/gw>" + loc +"/gw </a>" +
+	   "<br>" + "<br>" +  "<a href=" + loc + "/cam/motion>" + loc +"/cam/motion </a>" +
+	   "<br>" + "<br>" +  "<a href=" + loc + "/cgi-bin/df_status.py>" + loc +"/cgi-bin/df_status.py </a>" ;
+
+document.write(page);
+
+
+</script>
+
 </html>
+
