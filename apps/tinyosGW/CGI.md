@@ -1,6 +1,8 @@
 #### Python CGI
 - apache2 configuration for CGI
   - http://www.evernote.com/l/ABOLKkis29BDVYfV5b_HnJRsG_l3mthRQyA/
+  - sudo a2enmod cgid
+  - sudo a2enconf server-cgi-bin
   
 - requirements
   - should have below in the .py file
