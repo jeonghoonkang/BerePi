@@ -20,6 +20,7 @@
   - 진동센서
   - 진행중
     - Dust
+    - Camera, Motion, Detection
 -----
 
 
