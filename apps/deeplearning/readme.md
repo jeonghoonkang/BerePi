@@ -7,8 +7,8 @@
 - 테스트 완료
 - 실행 코드 패키징 완료
 #### Run on Jetson Nano
-- 테스트 완료
-- test prepare
+- 기본 동작 테스트 완료
+- 기능 추가 필요 
 
 ## TensorFlow
 
