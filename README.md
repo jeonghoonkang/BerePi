@@ -44,21 +44,8 @@ BerePi project opens software which using BerePi hardware modules.
      - short URL is https://goo.gl/GDiYfN  
      - It downloads init.sh file
      - download and run : source init.sh
-  - Raspi2 PinOut:
-    - http://www.element14.com/community/docs/DOC-73950/l/raspberry-pi-2-model-b-gpio-40-pin-block-pinout
+  - Raspi2 PinOut:http://www.element14.com/community/docs/DOC-73950/l/raspberry-pi-2-model-b-gpio-40-pin-block-pinout
  
 
 
 
-```
-┌───────────────────┤ Raspberry Pi Sensor Kit, Data Collection ├────────────────────┐
-│                                                                                   │
-│        1 Data System          Use Key Parameters                                  │
-│        2 Data System          Use Key Parameters                                  │
-│        3 Data System          Use Key Parameters                                  │
-│        4 Data System          Use Key Parameters                                  │
-│        5 Data System          Use Key Parameters                                  │
-│                       <Select>                     <Finish>                       │
-│                                                                                   │
-└───────────────────────────────────────────────────────────────────────────────────┘
-```
