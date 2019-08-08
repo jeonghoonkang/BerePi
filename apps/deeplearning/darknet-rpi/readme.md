@@ -1,10 +1,15 @@
 # 재실 & 출입인원 감지 시스템
 
 ## 구성
+
 ### 하드웨어
+&nbsp; RPI, PIR <br>
 ### 소프트웨어
-### 구성
+&nbsp; YOLO, Python,  <br>
 ### 데이터 모니터
+&nbsp; 그라파다, 안드로이드앱 <br>
+### 시스템 구성
+&nbsp; PIR, RPI, Server, Web, App<br>
 
 <br><br>
 # RPI 3B+ install Darknet-nnpack 
