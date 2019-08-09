@@ -38,7 +38,7 @@
 ## 속도 향상 방법 테스트
   [사진 크기에 따른 속도 변화](https://github.com/jeonghoonkang/BerePi/tree/master/apps/deeplearning/darknet-rpi/runtime_test/readme.md)<br>
   
-## 오류 리포트
+#### 오류 리포트
   1. -- 정면은 잘 찾음<br>
   &nbsp; <img width="600" src="./images/error_predictions2.jpg"></img><br>
   &nbsp; -- 현재 24개월 유아는 옆모습은 못찾음<br>
@@ -53,6 +53,5 @@
   &nbsp; <img width="600" src="./images/error/0616_4.jpg"></img><br>
   &nbsp; -- 5<br>
   &nbsp; <img width="600" src="./images/error/0616_5.jpg"></img><br>
-  
-  
-## 기타 
+    
+#### 기타 
