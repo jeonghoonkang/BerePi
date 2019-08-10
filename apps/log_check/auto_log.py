@@ -14,7 +14,7 @@ kor_time = datetime.datetime.now()
 time_diff = kor_time - utc_time 
 
 
-_t = strftime("%Y-%m-%d %H:%M:%S", gmtime(9*60*60)) + ' : ' + myhost
+_t = strftime("%Y-%m-%d %H:%M:%S", kor_time) + ' : ' + myhost
 filename = 'doole_log' + myhost + '.txt'
 
 # Mac OSX
