@@ -4,11 +4,17 @@
 
 from __future__ import print_function
 from time import gmtime, strftime
+import datetime
 import os
 
 myhost = os.uname()[1]
 
-_t = strftime("%Y-%m-%d %H:%M:%S", gmtime()) + ' : ' + myhost
+utc_time = datetime.datetime.utcnow()
+kor_time = datetime.datetime.now()
+time_diff = kor_time - utc_time 
+
+
+_t = strftime("%Y-%m-%d %H:%M:%S", gmtime(9*60*60)) + ' : ' + myhost
 filename = 'doole_log' + myhost + '.txt'
 
 # Mac OSX
@@ -17,3 +23,4 @@ filename = 'doole_log' + myhost + '.txt'
 # RaspberryPi
 with open('/home/pi/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
     outfile.write(_t + '\n')
+    print (_t)
