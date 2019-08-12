@@ -2,7 +2,7 @@
 9 2 * * * /var/www/html/cam/motion/cleanup_file.sh > /home/pi/devel/BerePi/apps/debug/debug_motion.log 2>&1
 30 */4 * * * /var/www/html/cam/motion/del_sort.sh > /home/pi/devel/BerePi/apps/debug/debug_motion.log 2>&1
 45 */8 * * * /home/pi/devel/BerePi/apps/log_check/run_cron.sh 
-50 */7 * * * /home/pi/devel/BerePi/apps/log_check/run_cron_svn.sh 
+50 */10 * * * /home/pi/devel/BerePi/apps/log_check/run_cron_svn.sh 
 
 
 ##############################
