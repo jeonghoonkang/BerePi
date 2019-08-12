@@ -15,7 +15,7 @@ time_diff = kor_time - utc_time
 
 _t = kor_time.strftime('%Y-%m-%d %H:%M:%S') + ' : ' + myhost 
 #_t = strftime("%Y-%m-%d %H:%M:%S", kor_time) + ' : ' + myhost
-filename = 'doole_log' + myhost + '.txt'
+filename = 'doodle_log' + myhost + '.txt'
 
 # Mac OSX
 #with open('/Users/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
