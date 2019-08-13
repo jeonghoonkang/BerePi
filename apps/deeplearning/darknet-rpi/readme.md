@@ -4,16 +4,24 @@
 - PIR을 이용한 사용자 출입자 확인 시스템
 - 2대 PRI를 연동하여 저가형 출입자 확인 시스템 구축
 - 재실 여부 확인용 시스템
-- 안면인식
+- 안면인식 가능 여부 테스트
 
 ### 하드웨어
 &nbsp; RPI, PIR <br>
+
 ### 소프트웨어
 &nbsp; YOLO, Python,  <br>
+
 ### 데이터 모니터
-&nbsp; 그라파다, 안드로이드앱 <br>
+&nbsp; 데이터 분석 : 그라파다
+&nbsp; 안드로이드앱 <br>
+
 ### 시스템 구성
 &nbsp; PIR, RPI, Server, Web, App<br>
+
+### 기타 
+&nbsp; 최신 사진을 서버로 보내서 App에서 확인
+&nbsp; 서버에서 YOLO분석 가능 테스트
 
 <br><br>
 # RPI 3B+ install Darknet-nnpack 
