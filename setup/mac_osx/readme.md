@@ -9,3 +9,7 @@
 
 ### Home Brew installation
 - https://brew.sh/index_ko
+
+### pip installation
+- $ sudo easy_install pip
+
