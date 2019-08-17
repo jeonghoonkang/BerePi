@@ -5,3 +5,7 @@
   - X서버 설치필요 xQuartz 를 앱스토어에서 
 - https://www.xquartz.org
 - https://blog.boxcorea.com/wp/archives/1718
+
+
+### Home Brew installation
+- https://brew.sh/index_ko
