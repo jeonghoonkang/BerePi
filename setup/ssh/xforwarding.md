@@ -12,6 +12,8 @@
 
 ### MAC OSX
 OSX 터미널을 열어,
+
+<pre>
 $ cd ~/.ssh
 (만약 이 폴더가 없으면 ssh-keygen 명령을 수행하면 자동으로 만들어 진다)
 
@@ -21,3 +23,4 @@ host X11ubuntu
        Port 22
        ForwardAgent yes
        ForwardX11 yes
+</pre>
