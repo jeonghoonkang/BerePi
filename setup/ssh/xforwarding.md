@@ -1,4 +1,4 @@
-### X forwarding for RaspberryPi
+### X forwarding for RaspberryPi (Xserver) (Xwindow)
 - https://www.raspberrypi.org/documentation/remote-access/ssh/unix.md
 
 ### Windows
