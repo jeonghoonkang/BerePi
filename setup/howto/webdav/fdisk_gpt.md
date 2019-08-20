@@ -1,3 +1,8 @@
+
+https://topis.me/109#patc
+
+
+
 2. 파티션 삭제
 $sudo fdisk /dev/sdb
 
