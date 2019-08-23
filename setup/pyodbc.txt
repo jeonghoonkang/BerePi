@@ -1,0 +1,13 @@
+   87  pip install pyodbc
+   88  sudo pip install pyodbc
+   89  sudo pip install python-dev
+   90  sudo apt-get install python-dev
+   91  sudo pip install pyodbc
+   92  sudo pip install -U setuptools
+   93  sudo pip install pyodbc
+   94  sudo apt-get -y install libblas-dev liblapack-dev libatlas-base-dev gfortran
+   95  sudo pip install pyodbc
+   96  sudo apt-get install g++
+   97  sudo pip install pyodbc
+   98  sudo apt install unixodbc-dev
+   99  sudo pip install pyodbc
