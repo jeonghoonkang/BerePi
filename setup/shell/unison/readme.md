@@ -7,4 +7,7 @@
 - mac osx : need to install Xcode, before unison compile
 ## how to install
 - https://gist.github.com/parisholley/510f42b9eb64ac9d8d29f0e2a6c8a1a0
+
 # Unison usage
+- unison ./WK ssh://ID@IP:PORT//home/USER/WK -times -batch
+- It will execute Server's unison automatically
