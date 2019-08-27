@@ -34,3 +34,11 @@
     $ git checkout --orphan c_YYMMDD_CAMPAIGNNAME $ git rm -rf . 
     $ git push origin c_YYMMDD_CAMPAIGNNAME
 
+
+
+$ git config credential.helper store
+$ git config --global credential.helper 'cache --timeout 7200'
+git clone
+git commit -a -m
+git push origin master
+git pull origin master
