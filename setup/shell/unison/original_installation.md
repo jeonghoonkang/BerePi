@@ -1,6 +1,11 @@
 How to install Unison on Mac OS El Sierra & Vagrant - for Docker Sync
 from https://gist.github.com/parisholley/510f42b9eb64ac9d8d29f0e2a6c8a1a0
 ----------------------------------------------------------------------
+아래 내용중 추가 작업한 내용은,
+컴파일이 되지 않아서 Xcode 를 설치해서 컴파일 함
+그러나, 다른 MAC OSX 에서  Xcode 를 설치한 후에, 아래 절차를 실행했으나 컴파일 되지 않음
+현재는 한번 컴파일된 코드를 복사해서 사용하고 있음
+----------------------------------------------------------------------
 
 You can install Unison on the Mac via homebrew (`brew install unison`),
 but it's very likely that it won't work properly, resulting in errors like:
