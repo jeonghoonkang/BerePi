@@ -1,4 +1,4 @@
-# IP setup, cmdline.txt on Boot time
+## IP setup, cmdline.txt on Boot time
 - Setting the Raspberry Pi’s IP address
    - Edit your cmdline.txt file:
    - You can edit it directly on the Raspberry Pi:
