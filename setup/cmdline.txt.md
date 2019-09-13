@@ -1,4 +1,5 @@
- - Setting the Raspberry Pi’s IP address
+# IP setup, cmdline.txt on Boot time
+- Setting the Raspberry Pi’s IP address
    - Edit your cmdline.txt file:
    - You can edit it directly on the Raspberry Pi:
    - /boot/cmdline.txt
@@ -9,3 +10,8 @@
     - ip=192.168.0.2
       - Ensure you take note of this IP address (you will need it every time you want to directly connect to the Raspberry Pi, although you might be able to use the hostname).
       
+
+## Use Terminal Boot not GUI mode
+- /boot/cmdline.txt
+- add   ' init=/bin/sh '
+- reboot will get into TEXT mode
