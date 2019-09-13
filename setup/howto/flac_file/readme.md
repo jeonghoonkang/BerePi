@@ -2,3 +2,4 @@
 
 ## Preparation : installations
 - sudo apt-get install flac ffmpeg mp3splt libav-tools shntool
+- sudo apt-get install wavpack cuetools

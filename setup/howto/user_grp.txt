@@ -7,6 +7,9 @@ Ubuntu 사용자 그룹 변경 group chgrp
   usermod -a -G crontab {username} # ubuntu user group change 변경, crontab 
   
   # group 확인
-  groups , id
+    - groups 
+    - id
+    - cat /etc/gropu | grep data
+ 
   
   
