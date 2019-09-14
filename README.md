@@ -2,7 +2,7 @@
 - IoT big data collection and analytics software toolkit based on RaspberryPi IoT level computing system
 - Software stack for physical computing and intelligent SW service based on IoT data collection & processing (Big data)
 - is based on RaspberryPi distribution (hardware and software)
-- supports Raspbian Stretch (ver 2018.08.30), with RaspBerryPi3 (input hangul mode, 한글모드)
+- supports Raspbian Buster (ver 2019.09.12), with RaspBerryPi3 (input hangul mode, 한글모드)
 
 #### Wiki doc
   - RaspberryPi OS installation and setup to run the SDH sensors
