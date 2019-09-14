@@ -1,5 +1,8 @@
 
-#Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
+# Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
+# last modification 2019.9.13
+# Raspberrypi Buster release support
+
 
 #sudo apt-get -y install subversion
 
@@ -16,15 +19,15 @@ sudo apt-get -y install dcfldd pv
 sudo apt-get -y install lrzsz
 sudo apt-get -y install lynx
 sudo apt-get -y install ntpdate
-#sudo apt-get -y install vim-gnome
+sudo apt-get -y install vim-gnome
 sudo apt-get -y install dos2unix
 # sudo apt-get -y install dosbox
-#sudo apt-get -y install wicd wicd-curses
+sudo apt-get -y install wicd wicd-curses
 #sudo apt-get -y install samba samba-common-bin
 #sudo apt-get -y install php5 libapache2-mod-php5
 #sudo apt-get -y install mysql-server php5-mysql
 sudo apt-get -y install postfix
-#sudo apt-get -y install apache2
+sudo apt-get -y install apache2
 sudo apt-get -y install rrdtool
 
 sudo apt-get -y install fcitx-hangul
