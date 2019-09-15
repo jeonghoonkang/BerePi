@@ -1,8 +1,5 @@
 # -*- coding:utf-8 -*-
-
-'''
-    Author : http://github.com/jeonghoonkang
-'''
+# Author : http://github.com/jeonghoonkang
 
 from __future__ import print_function
 import argparse
@@ -25,7 +22,7 @@ def brush_argparse():
 
 if __name__ =='__main__':
 
-    filename = 'car_ids.py'
+    filename = 'out_put_list.py'
 
     _args_pack_ = brush_argparse()
     #print (_args_pack_)
@@ -37,15 +34,21 @@ if __name__ =='__main__':
         sys.exit(0)
         # 파일 리스트를 보여주고 선택하도록 기능 추가
 
+    # todo : 고정입력된 엑셀 항목들을 입력받도록 수정 필요
     dframe = pd.read_excel(_input_xlsx, sheet_name='201906')
     dframe = dframe.sort_values(["COUNT"], ascending=[False]).reset_index(drop=True)
     carID = dframe["PHONE_NUM"].unique()
     id_list = carID.tolist()
+    print ("len of list = ", len(id_list))
     #print (type(id_list))
 
     # to String, save list object to string
 
     __ofile = open(filename,"w")
-    __ofile.write(__odata)
+    print ("writing list to file ")
+    print ("id_list=", file=__ofile)
+    print (id_list, file=__ofile)
+    print ("finish : file write  ")
+
     __ofile.close()
 
