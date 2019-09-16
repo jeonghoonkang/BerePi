@@ -39,7 +39,8 @@ if __name__ =='__main__':
     dframe = dframe.sort_values(["COUNT"], ascending=[False]).reset_index(drop=True)
     carID = dframe["PHONE_NUM"].unique()
     id_list = carID.tolist()
-    print ("len of list = ", len(id_list))
+    _len = len(id_list)
+    print ("len of list = ", _len)
     #print (type(id_list))
 
     # to String, save list object to string
@@ -48,6 +49,7 @@ if __name__ =='__main__':
     print ("writing list to file ")
     print ("id_list=", file=__ofile)
     print (id_list, file=__ofile)
+    print ('#', 'length=', _len, file=__ofile)
     print ("finish : file write  ")
 
     __ofile.close()
