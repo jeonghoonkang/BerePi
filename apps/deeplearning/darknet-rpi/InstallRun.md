@@ -75,15 +75,15 @@
 
 ## Step5 Download yolov file
 1. yolov3 download<br>
-&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov3.weights<br>
+&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yolov3.weights<br>
 &nbsp; <img width="800" src="./images/yolov3_download.png"></img><br>
 &nbsp; yolov3_download2<br>
 &nbsp; <img width="800" src="./images/yolov3_download2.png"></img><br>
 2. yolov2-tiny download<br>
-&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov2-tiny.weights<br>
+&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yolov2-tiny.weights<br>
 &nbsp; <img width="800" src="./images/yolov2-tiny_download.png"></img><br>
 3. yolov3-tiny download <br>
-&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yollov3-tiny.weights<br>
+&nbsp; 터미널 창에서 : wget https://pjreddie.com/media/files/yolov3-tiny.weights<br>
 &nbsp; <img width="800" src="./images/yolov3-tiny_download.png"></img><br>
 
 ## Step6 Run darknet App
