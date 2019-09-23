@@ -13,3 +13,10 @@
 ### pip installation
 - $ sudo easy_install pip
 
+### SIP (....)
+- /System , /bin , /sbin , /usr
+- 부팅시 cmd + R
+- 안전모드 진입
+- 유틸리티 메뉴 , 터미널 실행
+- <code> csrutil disable </code> 입력
+- reboot
