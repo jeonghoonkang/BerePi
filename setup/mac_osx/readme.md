@@ -20,3 +20,12 @@
 - 유틸리티 메뉴 , 터미널 실행
 - <code> csrutil disable </code> 입력
 - reboot
+
+#### 문제발생
+- /usr/bin 의 권한을 실수로 변경
+  - renamed the login file to sth else so terminal would work again
+  - started another terminal instance
+  - reverted the name change (and kept the working terminal instance open)
+  - in the working terminal:
+  - "sudo chown root:wheel /usr/bin/login"
+  - "sudo chmod 4755 /usr/bin/login"
