@@ -21,8 +21,11 @@
 - <code> csrutil disable </code> 입력
 - reboot
 
-#### 문제발생
+#### 문제발생 및 복구
 - /usr/bin 의 권한을 실수로 변경
+  - 부팅시 cmd + R 계속 누르고 있다가, 복구모드 진입
+    - 복구모드 터미널 실행하여, 
+    - /volume/HDD/usr/bin 부분 변경
   - renamed the login file to sth else so terminal would work again
   - started another terminal instance
   - reverted the name change (and kept the working terminal instance open)
