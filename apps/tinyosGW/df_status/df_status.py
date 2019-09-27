@@ -35,6 +35,17 @@ def get_df():
     ret = run_cmd(cmd)
     return ret
 
+def get_file_count():
+    cmd = "ls /var/www/html/cam/motion | wc -l"
+    ret = run_cmd(cmd)
+
+    cmd = "ls /var/www/html/cam/motion | grep avi | wc -l"
+    val = run_cmd(cmd)
+    ret = " Total -> " + ret
+    ret = ret + " AVI -> " + val
+
+    return ret
+   
 def getip():
     cmd = "curl http://checkip.amazonaws.com"
     ip = run_cmd(cmd)
