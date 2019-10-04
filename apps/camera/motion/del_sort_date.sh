@@ -1,4 +1,4 @@
-#!/bin/baxh
+#!/bin/bash
 #Author: github.com/jeonghoonkang
 
 #14일된 파일 삭제
