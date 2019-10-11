@@ -1,0 +1,4 @@
+ $ pkill -9 -ef PROCESS_NAME
+
+$ pgrep -f jekyll
+13701
