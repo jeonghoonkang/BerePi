@@ -5,7 +5,7 @@
 - collecting Tos Packets and forwarding to Cloud service
 
 # Requrements
-- RaspBerryPi 2/3
+- RaspBerryPi 2/3/4
 - TinyOS mote
   - Teglos rev.B family
   - Kmote is best for this system
