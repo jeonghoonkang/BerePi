@@ -18,7 +18,8 @@ PROCESS = "python"
 
 FILE_MAX_BYTE = 1024 * 1024 * 100 #100MB
 FILE_MAX_COUNT = 10
-FILENAME = '/home/pi/rpi_log.log'
+#FILENAME = '/home/pi/rpi_log.log'
+FILENAME = './out/rpi_log.log'
 formatter = logging.Formatter('[%(levelname)s] %(asctime)s > %(message)s')
 
 logger = logging.getLogger('rpi_logger')

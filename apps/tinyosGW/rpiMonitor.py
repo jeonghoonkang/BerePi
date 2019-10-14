@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 rpiMonitor.py : monitoring on raspberry pi
 """
@@ -78,10 +78,10 @@ def get_proc_mem(proc):
     except ValueError:
         return None
 
-#print disk_usage('/', 'free')
-#print get_df()
-#print get_free()
-#print get_uptime()
-#print get_hostname()
-#print get_proc_cpu("python")
-#print get_proc_mem("python")
+print(disk_usage('/', 'free'))
+print(get_df())
+print(get_free())
+print(get_uptime())
+print(get_hostname())
+print(get_proc_cpu("python"))
+print(get_proc_mem("python"))
