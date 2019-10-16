@@ -4,7 +4,7 @@
 import re
 
 #LOGFILE = "*.log"
-LOGFILE = "/home/pi/rpi_log.log"
+LOGFILE = "out/rpi_log.log"
 PATTERN = re.compile("\[INFO\] (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) > (.+)\n", re.DOTALL)
 RPIINFO = ['HOSTNAME', 'IP', 'HDD', 'FREE MEM', 'CPU(\(.+\))', 'MEM(\(.+\))']
 
@@ -25,7 +25,17 @@ for line in lines:
     else:
         rpi_info = [info for info in rpi_info if len(info) > 0]
 	tmp_str += line
-print CNT
-print rpi_info_list
-
 f.close()
+
+#print CNT
+#print rpi_info_list
+print "Content-type:text/html\r\n\r\n"
+print "<html>"
+print "<head>"
+print "<title>tinyosGW</title>"
+print "</head>"
+print "<body>"
+for i in rpi_info_list:
+    print i
+print "</body>"
+print "</html>"
