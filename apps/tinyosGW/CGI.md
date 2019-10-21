@@ -13,6 +13,24 @@
     
 #### CGI 설정 추가 정보
 - https://github.com/jeonghoonkang/keti/blob/master/BootCamp/cschae/CGI/readme.md
+- Rasbian 2019-07-10 (apache2 2.4.38) 기준 CGI 설정파일은 **/etc/apache2/conf-available/serve-cgi-bin.conf**
+- 다음 예제는 ```http://<IP>/gw/``` 경로에 ```/home/pi/Documents/BerePi/apps/tinyosGW/``` 폴더를 cgi 로 추가한 설정
+```apacheconf
+        <IfDefine ENABLE_USR_LIB_CGI_BIN>
+                ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
+                <Directory "/usr/lib/cgi-bin">
+                        AllowOverride None
+                        Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+                        Require all granted
+                </Directory>
+                ScriptAlias /gw/ /home/pi/Documents/BerePi/apps/tinyosGW/
+                <Directory "/home/pi/Documents/BerePi/apps/tinyosGW/">
+                        AllowOverride None
+                        Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+                        Require all granted
+                </Directory>
+        </IfDefine>
+```
 
 
 #### /usr/lib/cgi-bin 권한설정
