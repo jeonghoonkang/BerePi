@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # code from : https://randomnerdtutorials.com/video-streaming-with-raspberry-pi-camera/
 # Web streaming example
 # Source code from the official PiCamera package
