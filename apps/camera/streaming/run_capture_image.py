@@ -87,7 +87,8 @@ with picamera.PiCamera() as camera:
     #camera.resolution = (1920, 1080)
     camera.resolution = (640, 480)
     camera.framerate = 2
-    camera.exposure_mode = 'snow'
+    camera.rotation = 180
+    #camera.exposure_mode = 'snow'
     camera.shutter_speed = 10000
     address = ('', 8000)
     server = StreamingServer(address, StreamingHandler)
