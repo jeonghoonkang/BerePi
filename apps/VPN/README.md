@@ -22,7 +22,9 @@
 
   - create _berepi_ profile
 
-  ```sudo vim /etc/ppp/peers/berepi```
+  ```sudo vim /etc/ppp/peers/<vpn profile>```
+  
+  ex) ```sudo vim /etc/ppp/peers/berepi```
   
   
  
@@ -54,13 +56,17 @@
 
   - start VPN
   
-  ```sudo pon berepi```
+  ```sudo pon <vpn profile>```
+  
+  ex) ```sudo pon berepi```
 
 ### 4) disconnect to VPN server
 
   - done VPN
   
-  ```sudo poff berepi```
+  ```sudo poff <vpn profile>```
+  
+  ex) ```sudo poff berepi```
 
 ### Reference :
 
