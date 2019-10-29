@@ -8,6 +8,10 @@
 
 ## 1. SERVER
 
+### 1) install PiVPN
+
+  ```curl -L https://install.pivpn.io | bash```
+
 ## 2. CLIENT
 
 ### 1) install pptp-linux
@@ -60,4 +64,5 @@
 
 ### Reference :
 
+http://www.pivpn.io
 https://prosindo.com/blog/2015/08/24/vpn-pptp-client-on-raspberry-pi/
