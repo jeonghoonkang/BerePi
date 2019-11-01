@@ -17,7 +17,6 @@
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi.
 BerePi project opens software which using BerePi hardware modules. 
-
   - Simple LED video 01 (YouTube : https://youtu.be/ygJ3qMiGQvw)
   - BereCO2 HW module   
   - BereCO2 update with enclosure
