@@ -48,4 +48,5 @@ pi@odesk-motion /usr/lib/cgi-bin $
 #### rsync
 
 ssh 포트를 사용하여 remote 서버로 tinyosGW 정보를 전송
-_<tinyosGW hostname>_<정보>.log_
+
+```<tinyosGW hostname>_<정보>.log```
