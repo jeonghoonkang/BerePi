@@ -1,2 +1,2 @@
-## Big data Storage on Internet
+## Big data storage on Internet
 - https://zenodo.org/
