@@ -45,6 +45,13 @@ pi@odesk-motion /usr/lib/cgi-bin $
 </pre>
 
 
+### index.py
+
+'CGI 설정 추가 정보' 에서 추가된 경로의 index.py 을 사용한 결과
+(../../files/tinyosGW.index.py_1.png)
+(../../files/tinyosGW.index.py_2.png)
+
+
 #### rsync
 
 ssh 포트를 사용하여 remote 서버로 tinyosGW 정보를 전송
