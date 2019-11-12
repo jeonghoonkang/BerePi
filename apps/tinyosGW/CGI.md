@@ -48,8 +48,9 @@ pi@odesk-motion /usr/lib/cgi-bin $
 ### index.py
 
 'CGI 설정 추가 정보' 에서 추가된 경로의 index.py 을 사용한 결과
-(../../files/tinyosGW.index.py_1.png)
-(../../files/tinyosGW.index.py_2.png)
+
+<img src="../../files/tinyosGW.index.py_1.png" width="300px" title="initial screen" alt="index.py initial screen"></img><br/>
+<img src="../../files/tinyosGW.index.py_2.png" width="300px" title="after click 'rpi_log'" alt="after click 'rpi_log'"></img><br/>
 
 
 #### rsync
