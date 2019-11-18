@@ -1,4 +1,4 @@
-# VPN (Virtual private network)
+# VPN (Virtual Private Network)
 
   1) PPTP (Point to Point Tunneling Protocol)
   2) L2TP (Layer 2 Tunneling Protocol)
