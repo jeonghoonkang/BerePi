@@ -26,8 +26,6 @@
   
   ex) ```sudo vim /etc/ppp/peers/berepi```
   
-  
- 
   - $VPNHOSTNAME : VPN server DNS/IP
   - $USERNAME : username
   - $PASSWORD : password
