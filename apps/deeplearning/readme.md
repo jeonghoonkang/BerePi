@@ -18,3 +18,4 @@
 ## other similar, reference
 - https://github.com/Guanghan/ROLO
 - https://github.com/felixchenfy , https://github.com/felixchenfy/Realtime-Action-Recognition
+- https://github.com/eldar/pose-tensorflow
