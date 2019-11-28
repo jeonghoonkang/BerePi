@@ -18,8 +18,8 @@ url = "http://localhost:4242/api/query?"
 #url = "http://49.254.13.34:4242/api/put"
 response ={}
 _test_dict = {}
-HOST = '125.140.110.217'
-PORT = 54242
+HOST = '125.140.100.100'
+PORT = 4242
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 print "host , port ", HOST, PORT
 sock.connect((HOST, PORT))
