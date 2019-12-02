@@ -12,6 +12,9 @@
 4. 해당 결과를 DB에 입력하고, 사용 숫자를 그래프로 출력
 
 ### 추가 의견
+
+&nbsp; <img width="" height="350" src="./images/Demo.png"></img><br>
+
 1. 데모용 Trigger 제작
 RPI로 데모를 동작시키면 딜레이가 발생하기 때문에 BLE나 zigbee 버튼 모듈로 버튼을 누르면 데모 1루프 실행<br>
 무언가 감지된 순간 사진을 찍는식 <br>
