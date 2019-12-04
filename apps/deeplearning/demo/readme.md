@@ -14,7 +14,6 @@
 
 #### 1단계 데모 구현 방안 
 - 데모 시스템 초기 구현에서 우선적으로 동작 테스트를 진행할 수 있는 방법으로 구성 
-
 &nbsp; <img width="" height="350" src="./images/Demo.png"></img><br>
 
 1. 데모용 Trigger 제작
@@ -28,11 +27,29 @@
 
 #### 시스템 구성 및 동작
 
+&nbsp; <img width="" height="442" src="./images/system_network.png"></img><br>
+
 1. RPI4의 카메라 촬영횟수<br>
-ex) 3/RPI3갯수 (ex : 3/3 = 1sec)<br>
+  - 3/RPI3갯수 (ex : 3/3 = 1sec)<br>
 
 2. 시스템 동작 절차
+  - RPI4가 사진 획득
+    - P1생성(공유폴더 in RPI4)
+    - RPI3(YOLO1)이 분석
+    - 결과 저장(Mysql in RPI4)
+    - R1생성(공유폴더 in RPI4) & P1삭제
+    - P2생성(공유폴더 in RPI4)
+    - .........
+    - R2생성(공유폴더 in RPI4) & P2삭제
+    - P3생성(공유폴더 in RPI4)
+    - .........
+    - R3생성(공유폴더 in RPI4) & P3삭제
 
 3. web site 기능
+  - 현재 사진<br>
+  - 최근 감지 사진<br>
+  - 리스트 (날짜별 감지 현황)<br>
+  - 차트 (날짜별 감지 현황)<br>
 
 #### GUI 초안
+&nbsp; <img width="" height="482" src="./images/demo_gui.png"></img><br>
