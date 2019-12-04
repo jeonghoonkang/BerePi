@@ -33,18 +33,19 @@
   - 3/RPI3갯수 (ex : 3/3 = 1sec)<br>
 
 2. 시스템 동작 절차
-  - RPI4가 사진 획득
-    - P1생성(공유폴더 in RPI4)
-    - RPI3(YOLO1)이 분석
-    - 결과 저장(Mysql in RPI4)
-    - R1생성(공유폴더 in RPI4) & P1삭제
-    - P2생성(공유폴더 in RPI4)
-    - .........
-    - R2생성(공유폴더 in RPI4) & P2삭제
-    - P3생성(공유폴더 in RPI4)
-    - .........
-    - R3생성(공유폴더 in RPI4) & P3삭제
-
+  <pre>
+  1 RPI4가 사진 획득
+    1-1 P1생성(공유폴더 in RPI4)
+    1-2 RPI3(YOLO1)이 분석
+    1-3 결과 저장(Mysql in RPI4)
+    1-4 R1생성(공유폴더 in RPI4) & P1삭제
+    2-1 P2생성(공유폴더 in RPI4)
+    .........
+    2-4 R2생성(공유폴더 in RPI4) & P2삭제
+    3-1 P3생성(공유폴더 in RPI4)
+    .........
+    3-4 R3생성(공유폴더 in RPI4) & P3삭제
+  </pre>
 3. web site 기능
   - 현재 사진<br>
   - 최근 감지 사진<br>
@@ -53,3 +54,6 @@
 
 #### GUI 초안
 &nbsp; <img width="" height="482" src="./images/demo_gui.png"></img><br>
+
+#### 기타
+ - [오경컴텍 ORC용 카메라에 연동 테스트](https://github.com/OKCOMTECH/OK_DEV_LABORATORY/tree/master/PCRS/Camera)
