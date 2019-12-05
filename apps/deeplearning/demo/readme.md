@@ -55,5 +55,12 @@
 #### GUI 초안
 &nbsp; <img width="" height="482" src="./images/demo_gui.png"></img><br>
 
+#### 진행 현황
+  - 2019-12-05<br>
+    - RPI4 Server Settnig Done
+    - RPI4 MySQL Setting Done
+    - RPI4 Samba Setting Fail(Static IP Need)
+    - GUI 구성 스타트
+    
 #### 기타
  - [오경컴텍 ORC용 카메라에 연동 테스트](https://github.com/OKCOMTECH/OK_DEV_LABORATORY/tree/master/PCRS/Camera)
