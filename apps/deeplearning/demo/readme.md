@@ -62,5 +62,9 @@
     - RPI4 Samba Setting Fail(Static IP Need)
     - GUI 구성 스타트
     
+  - 2019-12-06<br>
+    - GUI 테스트<br>
+&nbsp; <img width="" height="600" src="./images/Detection%20Demo.png"></img><br>
+    
 #### 기타
  - [오경컴텍 ORC용 카메라에 연동 테스트](https://github.com/OKCOMTECH/OK_DEV_LABORATORY/tree/master/PCRS/Camera)
