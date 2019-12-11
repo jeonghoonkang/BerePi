@@ -1,4 +1,4 @@
-### Detection Demo. 시스템
+### Human Detection Demo. 시스템
 
 #### 목표 데모 시스템 동작절차
 1. 사람 감지하면, 카메라 촬영
