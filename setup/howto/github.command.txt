@@ -37,6 +37,9 @@
 
 
 $ git config credential.helper store
+--> git directory에선 반영구적으로 인증 절차가 생략됩니다
+
+
 $ git config --global credential.helper 'cache --timeout 7200'
 
 git clone
