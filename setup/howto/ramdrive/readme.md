@@ -1,8 +1,6 @@
-https://hiseon.me/linux/linux-ramdisk/
 
+## RAM Drive / RAM Disk (ramdisk)
 
-$ sudo mount -t [TYPE] -o size=[SIZE] [FSTYPE] [MOUNTPOINT]
-
-
-
-$ sudo mount -t tmpfs -o size=1G tmpfs /mnt/ramdisk
+- https://hiseon.me/linux/linux-ramdisk/
+- $ sudo mount -t [TYPE] -o size=[SIZE] [FSTYPE] [MOUNTPOINT]
+- $ sudo mount -t tmpfs -o size=1G tmpfs /mnt/ramdisk
