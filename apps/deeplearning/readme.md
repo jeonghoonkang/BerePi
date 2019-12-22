@@ -1,5 +1,5 @@
 
-# Deep learning - model execution SW
+# Deep Learning - model execution SW
 
 ## Dark-net (YOLO)
 ### Object detection based on deep learning
