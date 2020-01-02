@@ -34,3 +34,7 @@ def speak(text):
 text = "안녕하세요, 좋은 아침입니다"
 speak(text)
 ```
+
+## Etc
+
+- [example link](https://github.com/OKCOMTECH/project/tree/master/industry4.0s_TESTBED_DEMO)
