@@ -1,7 +1,9 @@
 - OS 버전 운영체제 확인
   - cat /etc/os-release
   - uname -a
-  
+
+- Ubuntu 최초 설치 날짜
+  - ll --time-style full-iso /var/log/installer/syslog
  
  - Hardware 버전
    - pi2
@@ -41,3 +43,6 @@ CPU part : 0xc07
 CPU revision : 5Hardware : BCM2709
 Revision : a21041
 Serial : 00000000c15e9432 ```
+
+
+
