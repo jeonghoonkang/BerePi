@@ -5,6 +5,15 @@
 - Ubuntu 최초 설치 날짜
   - ll --time-style full-iso /var/log/installer/syslog
  
+- 로그인 확인
+  - last root
+  - last -t 20120212040000 
+    - YYYYMMDDHHMMSS(연월일시분초)
+  - last -F
+ 
+- 이전 Reboot 시간 확인
+  - last reboot
+  
  - Hardware 버전
    - pi2
 ```pi@raspberrypi ~ $ cat /proc/cpuinfo
