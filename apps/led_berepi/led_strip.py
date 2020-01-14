@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import sys
 import board
 import neopixel
@@ -10,10 +12,11 @@ import time
 # off (0,0,0)
 # color (R,G,B)
 #####
-# test.py <ID> <cmd> <option>
-# test.py 1 on
-# test.py 1 off
-# test.py 1 color 255 255 255
+# sudo pip3 install adafruit-circuitpython-neopixel
+# led_strip.py <ID> <cmd> <option>
+# led_strip.py 1 on
+# led_strip.py 1 off
+# led_strip.py 1 color 255 255 255
 
 def led_on(pin):
     if pin == 1:
@@ -45,6 +48,12 @@ def led_color(pin, R=255,G=255,B=255):
         return False
     pixels.fill((R, G, B))
     return True
+
+def main():
+    parser = argparse.ArgumentParser(description="control 2-LED strips")
+    parser.add_argument('-c', '--cmd', dest='cmd')
+
+    pass
 
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[2] == 'on':
