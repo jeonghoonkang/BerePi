@@ -31,13 +31,12 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 ## Source code
 - Motion Project Homepage 
   - https://motion-project.github.io/index.html
-  - repo : https://github.com/Motion-Project/motion
+  - Repo : https://github.com/Motion-Project/motion
 
 ## Links (howto)
 - https://www.bouvet.no/bouvet-deler/utbrudd/building-a-motion-activated-security-camera-with-the-raspberry-pi-zero
   - https://learn.adafruit.com/cloud-cam-connected-raspberry-pi-security-camera?view=all
   - https://www.instructables.com/id/Raspberry-Pi-Motion-Detection-Security-Camera/#step5
-
 
 # Copying camera capture files to SERVER
 - scp -P 22 -pr /var/lib/motion tinyos@IP:webdav/gw/cam
