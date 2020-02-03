@@ -37,4 +37,4 @@ speak(text)
 
 ## Etc
 
-- [example link](https://github.com/OKCOMTECH/project/tree/master/industry4.0s_TESTBED_DEMO)
+- [example link](https://github.com/OKCOMTECH/project/tree/master/industry4.0s_TESTBED_DEMO) _ for internal(private repo) use only
