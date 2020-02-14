@@ -1,3 +1,6 @@
+ dpkg --list | grep linux-image
+ sudo apt-get purge linux-image-4.15.0-33
+
 df -h 로 용량 확인해보니 /boot 가 100% 인 것을 확인
 
 리눅스 커널이 업데이트 될 때 /boot 용량 부족으로 일부 패키지가 설치되지 않은 것
