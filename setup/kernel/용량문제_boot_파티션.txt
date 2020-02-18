@@ -7,22 +7,27 @@ df -h 로 용량 확인해보니 /boot 가 100% 인 것을 확인
 
 /boot 용량 확보를 위해 dpkg -l "*4.4.0-*" | grep ^ii 명령어로 삭제하기 위한 예전 커널 목록 확인
 
-아래와 같은 apt-get purge 명령어로 삭제하려고 하니 설치하다 문제가 생긴 최신 linux-image-4.4.0-98-generic '의존성이 맞지 않습니다.' 오류가 뜨며 apt-get purge 가 실행되지 않음
+아래와 같은 apt-get purge 명령어로 삭제하려고 하니 설치하다 문제가 생김
+최신 linux-image-4.4.0-98-generic '의존성이 맞지 않습니다.' 오류가 뜨며 apt-get purge 가 실행되지 않음
 apt-get purge linux-headers-4.4.0-93 linux-headers-4.4.0-93-generic linux-image-4.4.0-93-generic linux-image-extra-4.4.0-93-generic linux-signed-image-4.4.0-93-generic
 
-'apt-get -f install 을 시도해 보십시오' 라고 나오나 /boot 용량이 없어 의존성 문제가 생긴 패키지를 설치할 수 없으니 해결되지 않음
+'apt-get -f install 을 시도해 보십시오' 라고 나오나 
+/boot 용량이 없어 의존성 문제가 생긴 패키지를 설치할 수 없으니 해결되지 않음
 
 아래와 같이 dpkg --purge 로 삭제하니 의존성 문제 나오지 않으며 삭제되어 /boot 용량 확보
+
 dpkg --purge linux-headers-4.4.0-93 linux-headers-4.4.0-93-generic linux-image-4.4.0-93-generic linux-image-extra-4.4.0-93-generic linux-signed-image-4.4.0-93-generic
 
 apt autoremove
 apt-get autoclean
+
 실행하여 정리
 
 다시 처음부터
+
 sudo apt-get -f install
 sudo apt-get update
 sudo apt-get upgrade
 실행하여 최신 패키지 설치 완료
 
-추후에는 최신 패키지 upgrade 하기 전에 /boot 용량 확인하자.
+추후에는 최신 패키지 upgrade 하기 전에 /boot 용량 확인 필요
