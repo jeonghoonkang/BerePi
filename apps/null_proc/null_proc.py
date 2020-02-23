@@ -1,3 +1,4 @@
+
 from __future__ import print_function
 import sys
 import time
@@ -11,6 +12,4 @@ while (True):
     #print ( " do nothing well : ", str(count), end="\r")
     print ( " do nothing well : ", str(count))
     #print ( " do nothing well \r")
-
-
 
