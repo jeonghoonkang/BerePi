@@ -1,5 +1,5 @@
 
-  * github 사용법
+  * github 사용법 (git command)
     * fork 사용법
       - https://dogfeet.github.io/articles/2012/how-to-github.html
 
@@ -7,6 +7,7 @@
     * git clone https://~~~~
     * git fetch
     * git config --global user.email "email address" (commit 했더니 필요하다고 함)
+    ** 
     * git commit -m "change"
     * git push origin master
     
