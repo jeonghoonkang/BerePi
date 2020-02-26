@@ -114,13 +114,7 @@ sudo apt-get dist-upgrade
   - http://webix.com/demos/
   - http://bokeh.pydata.org/en/latest/
 
-### Git command
-  - git clone https://github.com/username/username.github.io
-  - git add --all
-  - git config --global user.email "gadin.kang@gmail.com"
-  - git commit -m "Initial commit"
-  - git push -u origin master
-  
+
 
 ### systemctl
   - sudo systemctl status networking.service
