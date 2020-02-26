@@ -37,7 +37,7 @@
     $ git push origin c_YYMMDD_CAMPAIGNNAME
 
 
-$ git config credential.helper store
+$ git config --global credential.helper store
 --> git directory에선 반영구적으로 인증 절차가 생략됩니다
 
 
