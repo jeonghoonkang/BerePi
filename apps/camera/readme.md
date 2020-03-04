@@ -53,3 +53,6 @@
 - 로지텍 카메라 설치 for 라즈베리파이
   - https://webnautes.tistory.com/909
   
+
+## Too many files, 인수가 너무 길어지는 경우
+- <code> find /home/pi/cam_data/ -name "*.jpg" -print0 | xargs -0 ls </code>
