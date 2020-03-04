@@ -56,3 +56,4 @@
 
 ## Too many files, 인수가 너무 길어지는 경우
 - <code> find /home/pi/cam_data/ -name "*.jpg" -print0 | xargs -0 ls </code>
+- <code>find /home/pi/cam_data/ -name "*.jpg" -exec rsync -avhz '--rsh=ssh -p2020' {} tinyos@keties.iptime.org:webdav/gw/cam/motion \;  </code>
