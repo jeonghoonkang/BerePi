@@ -66,3 +66,24 @@ To                         Action      From
 
 - 서비스 재시작
   - systemctl restart [서비스명]
+
+
+<pre>
+/etc/samba/smb.conf
+
+[global]
+follow symlinks = yes
+wide links = yes
+unix extensions = no 
+
+[pi]
+path = /home/pi
+comment = PI - Sharing file
+valid users = pi
+;create mask = 0600
+;directory mask = 0700
+writable = yes
+browseable = yes
+create mask = 0666
+directory mask = 0777       
+</pre>
