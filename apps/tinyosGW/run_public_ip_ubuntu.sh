@@ -5,6 +5,7 @@ export ip=''
 export port=''
 export id=''
 export passwd=''
+
 export ip=$1
 export port=$2
 export id=$3
