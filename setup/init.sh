@@ -7,6 +7,7 @@ echo "Help: source init.sh co <-- checkout"
 echo "      source init.sh up <-- update" 
 
 export gitdnpath='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup'
+export pubip='https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/apps/tinyosGW/publicip.py' 
 
 if [ $1 = 'co' ]; 
 then
@@ -21,6 +22,9 @@ elif [ $1 = 'up' ];
 then
     echo ".... update"
     ./setup_code.sh up
+elif [ $1 = 'ip' ];
+then
+    wget -N $pubip  
 else
     echo ".... no action... please add argument "
 fi
