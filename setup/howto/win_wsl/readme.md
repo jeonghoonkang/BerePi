@@ -5,6 +5,8 @@
 - WSL 터미널에서 DISPLAY 환경변수 지정
   - export DISPLAY=localhost:0.0
   - 실행 할때마다, DISPLAY=localhost:0.0 을 적어줘도 됨
+  - ssh -Yf {}
+  
 
 # Crontab for windows
   - crontab 실행
