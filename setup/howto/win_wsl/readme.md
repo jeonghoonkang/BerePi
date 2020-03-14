@@ -6,6 +6,7 @@
   - export DISPLAY=localhost:0.0
   - 실행 할때마다, DISPLAY=localhost:0.0 을 적어줘도 됨
   - ssh -Yf {}
+  - (예) DISPLAY=localhost:0.0 ssh -Yf tinyos@***.***.***.*** -p 7022 xfce4-terminal  
   
 
 # Crontab for windows
