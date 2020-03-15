@@ -4,6 +4,7 @@
 ### Windows
 - export DISPLAY=localhost:0.0
 - ssh -Yf {}
+- DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
 
 
 ### 포트 확인
@@ -13,8 +14,11 @@
 ### MAC OSX
 
 - ssh -X ids@xxx.xxx.xxx.xxx -vvv -p72 xeyes
+- https://www.xquartz.org/
 
 <pre>
+( 사용하지 않음 )
+
 OSX 터미널을 열어,
 
 $ cd ~/.ssh
