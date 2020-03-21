@@ -1,3 +1,15 @@
+## Docker Installation
+- ubuntu
+먼저 오래된 버전의 도커가 설치되어 있다면, 아래의 명령어를 사용해서 삭제해 주시기 바랍니다.
+$ sudo apt-get remove docker docker-engine docker.io
+
+$ sudo apt-get update && sudo apt-get install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    software-properties-common
+    
+
 
 ### 설치
   - www.docker.com
