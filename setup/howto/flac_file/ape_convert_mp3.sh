@@ -16,7 +16,7 @@
 
 # Next example: FLAC!
 # convert APE to FLAC:
-#ffmpeg -i cd.ape cd.flac
+# ffmpeg -i cd.ape cd.flac
 
 # Now, split your FLAC file. Credits for method go to the arch linux wiki:
 # https://wiki.archlinux.org/index.php/CUE_Splitting
