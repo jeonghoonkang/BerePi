@@ -20,7 +20,7 @@
 
 # Now, split your FLAC file. Credits for method go to the arch linux wiki:
 # https://wiki.archlinux.org/index.php/CUE_Splitting
-# shnsplit -f cd.cue -t "%p_%a_%n_%t" -o flac cd.flac 
+# shnsplit -f cd.cue -t "%n_%t_%a_%p" -o flac cd.flac 
 
 # one more note, you can go directly from APE -> FLAC with shnsplit because that
 # tool is fucking awesome, but you need the "mac" encoder. This is a pain in the ass to get
