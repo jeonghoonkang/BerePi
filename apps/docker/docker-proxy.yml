@@ -1,0 +1,44 @@
+# Author : Jeonghoonkang, github.com/jeonghoonkang
+
+version: '2'
+
+#volumes:
+#    nextcloud:
+#    db:
+
+services: 
+    db:
+        #image: mrriadb:kjh001
+      image: mariadb:latest
+      command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+      restart: always
+      volumes:
+          - /home/tinyos/devel/docker/mariadb_volume:/var/lib/mysql 
+          #- db:/var/lib/mysql 
+      ports:
+        # 호스트포트 : 컨테이너포트 
+        - 3307:3306
+      environment:
+      - MYSQL_ROOT_PASSWORD=1234
+      - MYSQL_PASSWORD=1234
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    #healthcheck:
+    #  test: "pg_isready -h localhost -p 5432 -q -U postgres"
+    #  interval: 3s
+    #  timeout: 1s
+    #  retries: 10
+
+    app:
+        #image: nextcloud:latest
+      image: nextcloud_002:kjh
+      # 호스트포트 : 컨테이너포트 
+      ports:
+      - 2082:80
+      - 9000:443
+      links:
+      - db
+      volumes:
+          #- app:/var/www/html
+          - /home/tinyos/devel/docker/nextcloud_volume:/var/www/html
+      restart: always
