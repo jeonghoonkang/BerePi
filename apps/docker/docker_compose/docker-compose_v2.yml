@@ -1,7 +1,7 @@
 # Author : Jeonghoonkang, github.com/jeonghoonkang
 
-version: '2'
 
+version: '2'
 
 #volumes:
 #    nextcloud:
@@ -43,4 +43,3 @@ services:
           #- app:/var/www/html
           - /home/tinyos/devel/docker/nextcloud_volume:/var/www/html
       restart: always
-
