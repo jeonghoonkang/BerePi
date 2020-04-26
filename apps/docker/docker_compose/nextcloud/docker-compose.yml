@@ -15,14 +15,15 @@ services:
 
   app:
     image: nextcloud:apache
+    #image: nextcloud_002:kjh
     restart: always
     volumes:
       - /home/tinyos/devel/docker/nextcloud_volume:/var/www/html      
 #      - nextcloud:/var/www/html
     environment:
-      - VIRTUAL_HOST=
-      - LETSENCRYPT_HOST=
-      - LETSENCRYPT_EMAIL=
+      - VIRTUAL_HOST=keties.iptime.org
+      - LETSENCRYPT_HOST=keties.iptime.org
+      - LETSENCRYPT_EMAIL=gadin.kang@gmail.com
       - MYSQL_HOST=db
     env_file:
       - db.env
@@ -41,9 +42,9 @@ services:
     labels:
       com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
     volumes:
-      - certs:/etc/nginx/certs:ro
-      - vhost.d:/etc/nginx/vhost.d
-      - html:/usr/share/nginx/html
+      - /home/tinyos/devel/docker/nginx_proxy/nginx_certs:/etc/nginx/certs:ro
+      - /home/tinyos/devel/docker/nginx_proxy/nginx_vhost.d:/etc/nginx/vhost.d
+      - /home/tinyos/devel/docker/nginx_proxy/nginx_html:/usr/share/nginx/html
       - /var/run/docker.sock:/tmp/docker.sock:ro
     networks:
       - proxy-tier
@@ -52,21 +53,22 @@ services:
     image: jrcs/letsencrypt-nginx-proxy-companion
     restart: always
     volumes:
-      - certs:/etc/nginx/certs
-      - vhost.d:/etc/nginx/vhost.d
-      - html:/usr/share/nginx/html
+      - /home/tinyos/devel/docker/nginx_proxy/nginx_certs:/etc/nginx/certs
+      - /home/tinyos/devel/docker/nginx_proxy/nginx_vhost.d:/etc/nginx/vhost.d
+      - /home/tinyos/devel/docker/nginx_proxy/nginx_html:/usr/share/nginx/html
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - proxy-tier
     depends_on:
       - proxy
 
-volumes:
-  db:
-  nextcloud:
-  certs:
-  vhost.d:
-  html:
+#volumes:
+#  db:
+#  nextcloud:
+#  certs:
+#  vhost.d:
+#  html:
 
 networks:
   proxy-tier:
+
