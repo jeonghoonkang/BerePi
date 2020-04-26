@@ -10,7 +10,7 @@
 - 외부 http 요청이, nextcloud docker reverse proxy 의 80 포트로 포워딩 되어야 함
 - 외부 https 요청이, nextcloud docker reverse proxy 의 443 포트로 포워딩 되어야 함
 
-### 초기 설치에서 grant access 가 동작  안하고
+### 초기 설치에서 grant access 가 동작  안하는 경우 
 - endpoint http://URL/poll 에러가 발생 하는 경우
 - /var/www/nextcloud/config/config.php 내 설정을 추가해줘야함
   - 원래 'over.write.url' => 'http://URL' 로 되어 있는 부분에 http 를 https 로 변경
