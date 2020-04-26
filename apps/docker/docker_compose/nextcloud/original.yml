@@ -6,10 +6,9 @@ services:
     command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
     restart: always
     volumes:
-      - /home/tinyos/devel/docker/mariadb_volume:/var/lib/mysql
-#     - db:/var/lib/mysql
+      - db:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=1234
+      - MYSQL_ROOT_PASSWORD=
     env_file:
       - db.env
 
@@ -17,8 +16,7 @@ services:
     image: nextcloud:apache
     restart: always
     volumes:
-      - /home/tinyos/devel/docker/nextcloud_volume:/var/www/html      
-#      - nextcloud:/var/www/html
+      - nextcloud:/var/www/html
     environment:
       - VIRTUAL_HOST=
       - LETSENCRYPT_HOST=
