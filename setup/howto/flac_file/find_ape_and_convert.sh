@@ -5,7 +5,8 @@ NAME=`basename "$file" .ape`
 CUR=`pwd`
 cd "$DIR"
 rm *.flac
-shnsplit -f CDImage.cue -t %n-%t -o flac CDImage.ape
+shnsplit -f CDImage.cue -t %n-%t-%a-%p -o flac CDImage.ape
+#"${NAME}.ape"
 cuetag "${NAME}.cue" *.flac
 cd "$CUR"
 done
