@@ -27,10 +27,8 @@
 
 #### 추가정보
 - 이미 apache2 가 설치되어 동작되고 있는 경우
-  - sudo update-rc.d apache2 disable 로 시작할때 실행 제외
-  - sudo update-rc.d apache2 defaults 다시 등록
-  - sudo update-rc.d apache2 disable 로 등록 상태에서 컨트롤 가능함
+  - sudo update-rc.d apache2 disable 로 시작할때 실행 순서에서 제외
   - sudo update-rc.d apache2 enable 
-  
-
+  - sudo update-rc.d apache2 remove 로 등록 상태를 해지
+  - sudo update-rc.d apache2 defaults 다시 등록
 
