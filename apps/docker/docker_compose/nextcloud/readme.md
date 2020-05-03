@@ -24,3 +24,13 @@
 ### 초기 설정 입력 사항
 - DB 사용자, DB 이름, 패스워드는 db.env 내의 내용을 작성
 - Database 의 호스트:포트 를 적는 제일 마지막에는 docker-compose.yml 의 MariaDB를 포인팅하는 "db" 입력 
+
+#### 추가정보
+- 이미 apache2 가 설치되어 동작되고 있는 경우
+  - sudo update-rc.d apache2 disable 로 시작할때 실행 제외
+  - sudo update-rc.d apache2 defaults 다시 등록
+  - sudo update-rc.d apache2 disable 로 등록 상태에서 컨트롤 가능함
+  - sudo update-rc.d apache2 enable 
+  
+
+
