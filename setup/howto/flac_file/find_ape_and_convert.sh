@@ -7,7 +7,7 @@ cd "$DIR"
 rm *.flac
 shnsplit -f CDImage.cue -t %n-%t-%a-%p -o flac CDImage.ape
 # "${NAME}.ape"
-# ffmpeg -i cd.ape cd.flac
+# ffmpeg -y -i cd.ape cd.flac
 cuetag "${NAME}.cue" *.flac
 cd "$CUR"
 done
