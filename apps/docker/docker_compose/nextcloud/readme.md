@@ -1,4 +1,4 @@
-## nextcloud 
+## nextcloud 설치방법
 - 주요 핵심 설정 방법은 https://github.com/nextcloud/docker/tree/master/.examples 참조
 - docker-compose.yml 파일의 라인별 세부 내용을 이해 해야함
 ### 내용
@@ -8,7 +8,8 @@
 ## 설정
 ### Version
 - '3' 을 '2'로 바꾸어서 실행한 경우 있음. '3'인 경우 에러 발생
-
+### DNS 설정
+- IPTIME에서 제공하는 DDNS로도 사용을 잘 하고 있음
 ### 처음 port 설정
 - 외부 http 요청이, nextcloud docker reverse proxy 의 80 포트로 포워딩 되어야 함
 - 외부 https 요청이, nextcloud docker reverse proxy 의 443 포트로 포워딩 되어야 함
@@ -19,6 +20,7 @@
 - /var/www/nextcloud/config/config.php 내 설정을 추가해줘야함
   - 원래 'over.write.url' => 'http://URL' 로 되어 있는 부분에 http 를 https 로 변경
   - https 설정 내용 추가 "overwriteprotocol" => "https"
+- 어떤 경우, http:// 로도 사용을 할 수 있는 경우가 있었음 
 ### 초기 설정 입력 사항
 - DB 사용자, DB 이름, 패스워드는 db.env 내의 내용을 작성
 - Database 의 호스트:포트 를 적는 제일 마지막에는 docker-compose.yml 의 MariaDB를 포인팅하는 "db" 입력 
