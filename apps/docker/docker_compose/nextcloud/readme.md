@@ -16,3 +16,6 @@
 - /var/www/nextcloud/config/config.php 내 설정을 추가해줘야함
   - 원래 'over.write.url' => 'http://URL' 로 되어 있는 부분에 http 를 https 로 변경
   - https 설정 내용 추가 "overwriteprotocol" => "https"
+### 초기 설정 입력 사항
+- DB 사용자, DB 이름, 패스워드는 db.env 내의 내용을 작성
+- Database 의 호스트:포트 를 적는 제일 마지막에는 docker-compose.yml 의 MariaDB를 포인팅하는 "db" 입력 
