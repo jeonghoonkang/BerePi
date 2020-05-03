@@ -6,6 +6,9 @@
 - sudo docker-compose up -d 로 실행
 - sudo docker-compose stop 으로 정지
 ## 설정
+### Version
+- '3' 을 '2'로 바꾸어서 실행한 경우 있음. '3'인 경우 에러 발생
+
 ### 처음 port 설정
 - 외부 http 요청이, nextcloud docker reverse proxy 의 80 포트로 포워딩 되어야 함
 - 외부 https 요청이, nextcloud docker reverse proxy 의 443 포트로 포워딩 되어야 함
