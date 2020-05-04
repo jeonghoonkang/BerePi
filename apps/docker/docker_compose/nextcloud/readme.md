@@ -31,4 +31,5 @@
   - sudo update-rc.d apache2 enable 
   - sudo update-rc.d apache2 remove 로 등록 상태를 해지
   - sudo update-rc.d apache2 defaults 다시 등록
-
+  - crontab 실행
+    - sudo docker-compose -f /home/tinyos/devel/BerePi/apps/docker/docker_compose/nextcloud/docker-compose.yml up -d
