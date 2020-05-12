@@ -1,4 +1,13 @@
+<<<<<<< HEAD
 version: '2'
+=======
+
+# Author : Jeonghoon Kang, https://github.com/jeonghoonkang
+
+
+
+version: '2' #3 사용 가능, 기존은 3. 일부 Ubuntu에서 실행이 안되어서 2로 낮추어씀. 문제 발생 없음
+>>>>>>> e768c0bf89e4f8e5c9a76aedd092a47480b1ff84
 
 services:
   db:
