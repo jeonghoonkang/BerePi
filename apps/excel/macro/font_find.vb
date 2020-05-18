@@ -1,3 +1,5 @@
+# Jeonhghoon Knag
+
 Option Explicit
 Dim myShp As Shape
 Dim slide_num As Long
