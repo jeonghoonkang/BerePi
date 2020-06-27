@@ -1,6 +1,6 @@
 
 
-# zsh 설치
+# zsh 설치 (Mac OSX )
 
 - echo $0
 
