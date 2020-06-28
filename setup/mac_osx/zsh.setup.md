@@ -19,11 +19,7 @@
 
 - (폰트설치) Powerlevel9k 테마 폰트 리포지토리를 다운로드 받고 그 폴더로 이동.
   - git clone https://github.com/powerline/fonts.git /tmp/powerlevel9k-fonts && cd $_
-
-- install.sh를 실행해 폰트를 설치
-  - sh ./install.sh
-
-- 다운로드 받았던 리포지토리 삭제
-  - cd .. && rm -rf /tmp/powerlevel9k-fonts
-
-
+  - install.sh를 실행해 폰트를 설치
+    - sh ./install.sh
+  - 다운로드 받았던 리포지토리 삭제
+    - cd .. && rm -rf /tmp/powerlevel9k-fonts
