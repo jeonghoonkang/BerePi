@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author : jeonghoonkang https://github.com/jeonghoonkang
 
+
 # booting sw for raspberrypi, LED blinking
 
 import sys
@@ -24,6 +25,7 @@ def run_cmd(cmd):
 
 if __name__== "__main__" :
 
+  print __file__
   print tmp_dir
 
   lcd_init()
