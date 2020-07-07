@@ -12,7 +12,7 @@
     - http://tinyos.asuscomm.com:2081/open/2018_08_hawaii.zip
 
 ##### Contribution
-  - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
+  - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi.
