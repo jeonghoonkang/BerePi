@@ -15,9 +15,6 @@
 #### OpenTSDB 실행  
 - sudo sh /usr/local/opentsdb/build/tsdb tsd --port=4242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/opentsdb/tmp --auto-metric
   - staticroot 와 cachedir 의 퍼미션 확인해야 함
-  
-#### OpenTSDB 도커 
-- https://github.com/ChulseoungChae/KETI_docker_sw
 
 #### 실행 방법
  - 실행 설정 방법
@@ -82,6 +79,9 @@ exit 0
     
 </pre>
 
+
+### OpenTSDB 도커 
+- https://github.com/ChulseoungChae/KETI_docker_sw
 
 #### 참고
 - http://www.erol.si/2014/06/opentsdb-the-perfect-database-for-your-internet-of-things-projects/
