@@ -16,7 +16,8 @@
 - sudo sh /usr/local/opentsdb/build/tsdb tsd --port=4242 --staticroot=/usr/local/opentsdb/build/staticroot --cachedir=/usr/local/opentsdb/tmp --auto-metric
   - staticroot 와 cachedir 의 퍼미션 확인해야 함
   
-#### OpenTSDB 2.3 이미지 파일 (예정)
+#### OpenTSDB 도커 
+- https://github.com/ChulseoungChae/KETI_docker_sw
 
 #### 실행 방법
  - 실행 설정 방법
