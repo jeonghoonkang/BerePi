@@ -38,7 +38,7 @@ def getiip():
     if (_os_ver[0] == 'Linux') :
         if (_os_ver[-1] == 'x86_64') :
             _os_type = 'Linux'
-            cmd = "ifconfig"
+            cmd = "/sbin/ifconfig"
 
     print ('os-type', _os_type)
     if _os_type.find('Cygwin') > 0:
