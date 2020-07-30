@@ -1,5 +1,5 @@
 ## nextcloud 설치방법
-- 주요 핵심 설정 방법은 https://github.com/nextcloud/docker/tree/master/.examples 참조
+- 주요 핵심 설정 방법은 https://github.com/nextcloud/docker/tree/master/.examples 참조 (docker-compose 부분)
 - docker-compose.yml 파일의 라인별 세부 내용을 이해 해야함
 ### 내용
 - 동작을 위한 docker-compose.yml 설정
