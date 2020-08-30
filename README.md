@@ -11,6 +11,10 @@
   - Installation Image for RaspberryPi4 (2020.08)
     - RaspberryPi image install (use your computer to copy raspberrypi OS in SD card)
       - https://www.raspberrypi.org/downloads/
+    - important first setup check box steps:
+      1. use American English language, US keyboard, US timezone (like LA)
+      2. change hostname by editing /etc/hostname (like tinygw-4b-0820-31)
+      3. raspberrypi config run to setup SSH connection
 
 ##### Contribution
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
