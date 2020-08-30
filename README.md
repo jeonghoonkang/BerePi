@@ -8,8 +8,9 @@
   - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspberyypi Sensor System
     - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
-  - Installation Image for RaspberryPi3 (2018.08)
-    - http://tinyos.asuscomm.com:2081/open/2018_08_hawaii.zip
+  - Installation Image for RaspberryPi4 (2020.08)
+    - RaspberryPi image install (use your computer to copy raspberrypi OS in SD card)
+      - https://www.raspberrypi.org/downloads/
 
 ##### Contribution
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
