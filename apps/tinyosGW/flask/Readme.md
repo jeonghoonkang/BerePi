@@ -3,7 +3,7 @@
 ## 소개
 
 - publicip.py 로 생성된 tinyosGW `.txt` 파일을 정리한다.
-- flask 가 필요하다.
+- flask 로 동작
 
 ## 웹 실행 방법
 
