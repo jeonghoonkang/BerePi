@@ -50,6 +50,3 @@ BerePi project opens software which using BerePi hardware modules.
      - download and run : source init.sh
   - Raspi2 PinOut:http://www.element14.com/community/docs/DOC-73950/l/raspberry-pi-2-model-b-gpio-40-pin-block-pinout
  
-
-
-
