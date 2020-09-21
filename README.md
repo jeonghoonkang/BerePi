@@ -18,6 +18,7 @@
       1. use American English language, US keyboard, US timezone (like LA)
       2. change hostname by editing /etc/hostname (like tinygw-4b-0820-31)
       3. raspberrypi config run to setup SSH connection
+    - if you want to install Ubuntu 64-bit, follow the instruction, it needs 8G sd card.
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi.
