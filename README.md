@@ -4,21 +4,20 @@
 - is based on RaspberryPi distribution (hardware and software)
 - supports Raspbian OS, Buster (ver 2019.09.12), with RaspBerryPi4 (input hangul mode, 한글모드)
 
-#### Wiki doc
+##### Contribution
+  - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
 
+#### Wiki doc
   - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspberyypi Sensor System
     - [BerePi Wiki](https://github.com/jeonghoonkang/BerePi/wiki)
   - Installation Image for RaspberryPi4 (2020.08)
     - RaspberryPi image install (use your computer to copy raspberrypi OS in SD card)
       - https://www.raspberrypi.org/downloads/
-    - important first setup check box steps:
+    - important first setup check steps:
       1. use American English language, US keyboard, US timezone (like LA)
       2. change hostname by editing /etc/hostname (like tinygw-4b-0820-31)
       3. raspberrypi config run to setup SSH connection
-
-##### Contribution
-  - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi.
