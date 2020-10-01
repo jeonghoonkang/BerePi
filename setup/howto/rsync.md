@@ -1,6 +1,7 @@
 ### 기본 사용법
 - rsync -avhzu --progress -e 'ssh -p 22' id@ip:webdav/bk_office /home/tinyos/work_win
   - --progress --partial => -P
+  - --bwlimit=5120 
 
 
 ### 특정 시간 이후(또는 특정월)의 파일만 sync하는 방법
