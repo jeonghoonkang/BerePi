@@ -1,7 +1,11 @@
-### 기본 사용법
-- rsync -avhzu --progress -e 'ssh -p 22' id@ip:webdav/bk_office /home/tinyos/work_win
-  - --progress --partial => -P
-  - --bwlimit=5120 
+### 사용법
+- 기본 사용법
+  - rsync -avhzu --progress -e 'ssh -p 22' id@ip:webdav/bk_office /home/tinyos/work_win
+    - --progress --partial => -P
+    - --bwlimit=5120 
+- Back copy, Back rsync, reverse rsync
+  - #!/bin/bash
+  - rsync -avhz --progress --bwlimit=5120 --partial -v -e 'ssh -p ****' tinyos@**.**.**.**:webdav/media/send/$1 /hdd2/
 
 
 ### 특정 시간 이후(또는 특정월)의 파일만 sync하는 방법
