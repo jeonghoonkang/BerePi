@@ -29,6 +29,7 @@ sudo apt-get -y install wicd wicd-curses
 sudo apt-get -y install postfix
 sudo apt-get -y install apache2
 sudo apt-get -y install rrdtool
+sudo apt-get -y install xrdp
 
 sudo apt-get -y install fcitx-hangul
 sudo apt-get -y install fonts-unfonts-core
