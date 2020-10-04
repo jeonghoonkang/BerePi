@@ -20,6 +20,9 @@ sudo apt-get update && sudo apt-get install docker-ce
   
 ### 실행
   - docker run -it --name {내가 정하는 실행이름} {실행할 이미지 이름} /bin/bash
+    - (접속방법) 
+      - sudo docker ps 로 컨테이너 이미지 이름 확인
+      - docker exec -it  {컨테이너 이름} /bin/bash
   - docker images : 이미지 리스트 보여줌
   - docker ps -a : 컨테이너 리스트 보여줌
   - docker start {내가 정한 실행할 컨테이너 이름 }
