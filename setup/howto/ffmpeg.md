@@ -1,5 +1,6 @@
 One method is a bash for loop.
 
+<pre>
 For converting only .mp4 files:
 
 mkdir outputs
@@ -12,3 +13,4 @@ For converting anything use the "*" wildcard:
 
 mkdir outputs
 for f in *; do ffmpeg -i "$f" -c:a libmp3lame "outputs/${f%.*}.mp3"; done
+</pre>
