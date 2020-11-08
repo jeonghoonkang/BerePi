@@ -11,3 +11,5 @@
   - https://launchpad.net/~nextcloud-devs/+archive/ubuntu/client
 
 
+## 커맨드라인 명령어
+- sudo docker exec -it -u 33 nextcloud_app_1 php occ files:scan --all 
