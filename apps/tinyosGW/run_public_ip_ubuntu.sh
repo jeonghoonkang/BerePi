@@ -21,5 +21,5 @@ export cmd='python /home/tinyos/devel/BerePi/apps/tinyosGW/publicip.py '$ip' '$p
 echo $cmd 
 exec $cmd 
 
-# crontab 입력
+# crontab 작성으로 주기적 실행 
 # */30 * * * * /bin/bash /home/tinyos/..../run_public_ip_ubuntu.sh
