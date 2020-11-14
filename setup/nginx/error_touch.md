@@ -37,3 +37,7 @@ http {
 daemon off;
 
 </pre>
+
+
+- 다시 시작 
+  - `bash-5.0# nginx -s reload`
