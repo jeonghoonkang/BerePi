@@ -31,7 +31,7 @@ http {
     #gzip  on;
 
     include /etc/nginx/conf.d/*.conf;
-
+#### too large nginx 에러시, 아래 버퍼 사이즈를 8K -> 16K로 증가 (default는 표시 안함)
     large_client_header_buffers 4 16k;
 }
 daemon off;
