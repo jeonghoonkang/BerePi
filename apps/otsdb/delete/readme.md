@@ -5,6 +5,7 @@
   - scan [--delete|--import] START-DATE [END-DATE] query [queries...]
     - tsdb scan --delete 1970/01/01-00:00:00 sum temperatures
     - tsdb scan --delete 1970/01/01-00:00:00 sum meterreadings
+    - time sudo tsdb scan 2014/01/01-00:00:00 2017/06/01-00:10:00 none HanuriTN_00test
 
 - <code> sudo tsdb uid grep metrics . </code>
   - 모든 메트릭 이름 검색
