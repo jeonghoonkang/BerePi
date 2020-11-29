@@ -5,3 +5,5 @@
 find /var/www/html/cam/motion/ -maxdepth 2  -name '*.avi' -mtime +14 | xargs rm -f
 find /var/www/html/cam/motion/ -maxdepth 2  -name '*.jpg' -mtime +14 | xargs rm -f
 
+# find 후 삭제 방법
+# find /path/to/files -type f -mtime +10 -delete
