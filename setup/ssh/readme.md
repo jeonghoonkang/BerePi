@@ -30,5 +30,6 @@ The key's randomart image is:
 </pre>
 
 
-
+###
+ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 
