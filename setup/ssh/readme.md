@@ -38,3 +38,5 @@ ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 - connection reset by 10.10.10.10 port 22 라고 나오는 경우
 - sudo ssh-keygen -A
 
+### 서버 
+- systemctl enable ssh.service
