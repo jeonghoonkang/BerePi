@@ -5,4 +5,4 @@ speed=$2
 echo $dest 
 echo $speed
 
-rsync -avhz --progress --partial --bwlimit=$speed  --rsh='ssh -p22' $1 $dest 
+rsync -avhz --progress --partial --bwlimit=$speed  -e'ssh -p22' $1 $dest 
