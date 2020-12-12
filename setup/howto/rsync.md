@@ -33,3 +33,11 @@ find . -type f -printf "%TY_%Tm %p\n"|grep "^2006_06"|sed "s/^2006_06 //g" | rsy
 --max-size=, --min-size= 옵션으로 특정 크기 이상의 파일은 제외(--max-size=)하거나 이하의 파일은 제외
 (--min-size=)할 수 있다. --max-size= 는 rsync 2.6.4부터, --min-size= 는 2.6.7부터 추가된 옵션이다
 </pre>
+
+### backcopy
+<pre>
+rsync -avhz --progress --partial -e 'ssh -p 7022' tinyos@***.***.***.***:webdav/media/send/backcopy ./
+</pre>
+
+
+
