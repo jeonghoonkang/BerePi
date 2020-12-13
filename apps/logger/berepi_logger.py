@@ -6,7 +6,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 #logging.config.fileConfig('logging.conf')
-LOG_FILENAME = "./log/berelogger.log"
+LOG_FILENAME = "/home/pi/devel/BerePi/logs/berelogger.log"
 
 logger = logging.getLogger('BereLogger')
 logger.setLevel(logging.DEBUG)
