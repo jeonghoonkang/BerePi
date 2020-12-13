@@ -10,6 +10,9 @@ import sys
 import os
 import datetime
 
+import tailer
+
+
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
@@ -19,7 +22,6 @@ def hostname():
     cmd = "hostname"
     ret = run_cmd(cmd)
     return ret
-
 
 def get_measure():
 
@@ -46,9 +48,11 @@ def checkifexist(fname):
     cmd='ls ' + fname
     print (run_cmd(cmd))
 
-def writefile(_in, fn="ip.txt"):
+def writefile_list(_in, fn="ip.txt"):
     f = open(fn, 'w')
-    f.write(_in)
+    tin = "\n".join(_in)
+    print(tin)
+    f.write(tin)
     f.flush()
     f.close()
     return
@@ -97,20 +101,24 @@ if __name__ == '__main__':
 
     sshpass = ''
     if os_type == "Linux":
-        fname = '/home/%s/' %name
+        fname = '/home/%s' %name
     elif os_type == 'Win' :
-        fname = '/home/tinyos/' #수동설정해야 함
+        fname = '/home/tinyos' #수동설정해야 함
     elif os_type == "Darwin":
-        fname = '/Users/%s/' %name
+        fname = '/Users/%s' %name
         sshpass = '/usr/local/bin/'
 
-    log_file_loc = '%s/devel/Raspberry_SensorKit/apps/Sensor/DustSensor/log/berelogger.log' %fname
+    log_file_loc = '%s/devel/BerePi/logs/berelogger_%s.log' %(fname,hostn[:-1])
 
-    writefile (info, log_file_loc)
     checkifexist(log_file_loc)
 
+    lines = tailer.tail(open(str(log_file_loc)),20)
+    print(lines, type(lines))
+
+    writefile_list (lines, './tmp.log')
+
     cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
-    cmd += " %s " %log_file_loc + '%s@%s:' %(id,ip) + '/var/www/html/sensor/'
+    cmd += " tmp.log " + '%s@%s:' %(id,ip) + '/var/www/html/sensor/sensor_dust_%s.log ' %hostn[:-1]
 #    cmd = 'scp'
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     print (cmd)
