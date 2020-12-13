@@ -20,6 +20,9 @@ logger.addHandler(handler)
 def berelog(msg_name, value):
     logger.info(msg_name + ' ==> ' + value)
 
+def berelog(msg):
+    logger.info(msg)
+
 if __name__ == "__main__":
 
     berelog('sesnor type co2', '25')
