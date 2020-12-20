@@ -1,0 +1,24 @@
+Apache
+Enabling CORS on apache is a two-step process. First you must create a file with the name .htaccess and add it to the directory where your cross-domain-friendly files are. We recommend you create a new directory for this. The file must contain the following code, (lines 2 and 3 may be optional):
+
+
+Header always set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Headers "origin, x-requested-with, content-type"
+Header set Access-Control-Allow-Methods "PUT, GET, POST, DELETE, OPTIONS"
+
+The second step in the process is to enable .htaccess files. Test out the CORS requests and see if they are already working (some installations of Apache come with .htaccess files already enabled). In order to test if it’s working, reload apache (using the command below) and then fire your ajax request at your server.
+
+
+sudo service apache2 restart
+
+If that worked, you’re done. If not, then you need to add the following code inside the VirtualHosts section of your 000-default.conf in your /etc/apache2/sites-available folder:
+
+
+<Directory /var/www/>
+Options Indexes FollowSymLinks MultiViews
+AllowOverride All
+Order allow,deny
+allow from all
+</Directory>
+
+Make sure you replace the /var/www/ with the actual path to your document root.
