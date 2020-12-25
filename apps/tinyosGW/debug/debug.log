@@ -1,38 +1,38 @@
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    15  100    15    0     0     23      0 --:--:-- --:--:-- --:--:--    24
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    15  100    15    0     0     37      0 --:--:-- --:--:-- --:--:--    37
 
- 2019-07-20 18:00:04.000065 
+ 2020-12-25 14:00:02.475559 
 
 usage : python /home/pi/devel/BerePi/apps/tinyosGW/publicip.py {server_IP_ADD} {server_PORT} {server_id} {passwd_for_server} => user should input arguments {}  
 
 ... start running, inputs are  localhost 22 pi tinyos0
-[get-public-ip] 175.208.206.63
+[get-public-ip] 123.213.188.30
 
 os-type Linux
 eth0      Link encap:Ethernet  HWaddr f0:1e:34:00:48:9f  
-          inet addr:192.168.0.200  Bcast:192.168.0.255  Mask:255.255.255.0
+          inet addr:192.168.35.161  Bcast:192.168.35.255  Mask:255.255.255.0
+          inet6 addr: fe80::c5cc:48aa:bb11:67ec/64 Scope:Link
           UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
-          RX packets:5862680 errors:0 dropped:6 overruns:0 frame:0
-          TX packets:5480314 errors:0 dropped:0 overruns:0 carrier:0
+          RX packets:10138 errors:0 dropped:20 overruns:0 frame:0
+          TX packets:1277 errors:0 dropped:0 overruns:0 carrier:0
           collisions:0 txqueuelen:1000 
-          RX bytes:994450173 (948.3 MiB)  TX bytes:836064287 (797.3 MiB)
+          RX bytes:1067951 (1.0 MiB)  TX bytes:182587 (178.3 KiB)
 
 lo        Link encap:Local Loopback  
           inet addr:127.0.0.1  Mask:255.0.0.0
           inet6 addr: ::1/128 Scope:Host
           UP LOOPBACK RUNNING  MTU:65536  Metric:1
-          RX packets:6436244 errors:0 dropped:0 overruns:0 frame:0
-          TX packets:6436244 errors:0 dropped:0 overruns:0 carrier:0
+          RX packets:684 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:684 errors:0 dropped:0 overruns:0 carrier:0
           collisions:0 txqueuelen:0 
-          RX bytes:338379777 (322.7 MiB)  TX bytes:338379777 (322.7 MiB)
+          RX bytes:94140 (91.9 KiB)  TX bytes:94140 (91.9 KiB)
 
 
 [exception] get log-in user name
-using local id :  tinyos
-Traceback (most recent call last):
-  File "/home/pi/devel/BerePi/apps/tinyosGW/publicip.py", line 114, in <module>
-    writefile (info, fname)
-  File "/home/pi/devel/BerePi/apps/tinyosGW/publicip.py", line 55, in writefile
-    f = open(fn, 'w')
-IOError: [Errno 2] No such file or directory: '/home/tinyos/devel/BerePi/apps/tinyosGW/out/mins-gate.txt'
+using local id :  pi
+/home/pi/devel/BerePi/apps/tinyosGW/out/mins-gate.txt
+
+sshpass -ptinyos0 scp -P22 -o StrictHostKeyChecking=no /home/pi/devel/BerePi/apps/tinyosGW/out/mins-gate.txt pi@localhost:/var/www/html/server/
+return of os.system =  0
+finish 
