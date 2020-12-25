@@ -84,43 +84,10 @@ def args_proc():
 if __name__ == '__main__':
 
     print ('\n', datetime.datetime.now(), '\n')
-    ip, port, id, passwd = args_proc()
+    #ip, port, id, passwd = args_proc()
 
     p_ip = getip()
-    i_ip, os_type = getiip()
-    info = i_ip + p_ip
-    
-    hostn = hostname()
-    try : name = os.getlogin()
-    except :
-        print ('[exception] get log-in user name')
-        name = 'pi' #라즈베리파이 경우. ubuntu는 사용자
-        # crontab 으로 실행할때는. getloin()에서 예외 발생하여, 이 부분에 정확한 아이디를 넣어줘야함
-        # 아이디가 정확하지 않으면 실행 에러로 종료됨
-        # 확인필수  : https://github.com/jeonghoonkang/BerePi/blob/master/apps/tinyosGW/debug/debug.log
-    print ("using local id : ", name)
-
-    sshpass = ''
-    if os_type == "Linux":
-        fname = '/home/%s/' %name
-    elif os_type == 'Win' :
-        fname = '/home/tinyos/' #수동설정해야 함
-    elif os_type == "Darwin":
-        fname = '/Users/%s/' %name
-        sshpass = '/usr/local/bin/'
-
-    fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
-
-    writefile (info, fname)
-    checkifexist(fname)
-
-    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -P%s' %port + ' -o' + ' StrictHostKeyChecking=no'
-    cmd +=  " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-#    cmd = 'scp'
-#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-    print (cmd)
-    print ( 'return of os.system = ', os.system(cmd) )
-
+    print (p_ip)
     #ret = run_cmd(cmd)
     print ("finish ")
     #print (ret)
