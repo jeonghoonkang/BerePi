@@ -34,6 +34,11 @@ def get_hostname():
     p = os.popen("hostname")
     return p.read()
 
+def get_pip():
+    cmd = "curl http://checkip.amazonaws.com"
+    ip = os.popen(cmd).read()
+    return ip
+
 def get_proxy():
     p = os.popen("cat /lib/systemd/system/reverseProxy.service | grep autossh")
     return p.read()
@@ -85,6 +90,7 @@ def get_proc_mem(proc):
 if __name__ == '__main__':
     print(disk_usage('/', 'free'))
     print(get_df())
+    print(get_pip())
     print(get_free())
     print(get_uptime())
     print(get_hostname())
