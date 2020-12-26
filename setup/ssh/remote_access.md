@@ -1,2 +1,2 @@
 
-- autossh -M 20000 -N __@__.__.__.__ -R 2222:localhost:22 -vvv
+- autossh -M 20000 -N _*_@_*_._*_._*_._*_ -R 2222:localhost:22 -vvv
