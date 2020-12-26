@@ -19,7 +19,8 @@ echo $passwd
 #echo " FILENAME "${0##*/}
 
 #export cmd='python /home/pi/devel/BerePi/apps/tinyosGW/publicip.py {ip or URL} {port} {ID} {password}'
-export cmd='python /home/pi/devel/BerePi/apps/tinyosGW/sensor_val_tx.py '$ip' '$port' '$id' '$passwd
+export cmd='python /home/pi/devel/BerePi/apps/tinyosGW/sensor_val_tx.py '$ip' '$port' '$id' '$passwd' '
+
 echo '[script file:] '${0##*/}
 echo $cmd 
-exec $cmd 
+$cmd 

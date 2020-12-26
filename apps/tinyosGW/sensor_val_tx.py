@@ -12,7 +12,6 @@ import datetime
 
 import tailer
 
-
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
@@ -24,7 +23,6 @@ def hostname():
     return ret
 
 def get_measure():
-
     cmd="/sbin/ifconfig"
     _os_type = platform.system()
 
@@ -82,7 +80,6 @@ def args_proc():
 
 if __name__ == '__main__':
 
-    
     print ('\n', datetime.datetime.now(), '\n')
     ip, port, id, passwd = args_proc()
 
@@ -109,18 +106,17 @@ if __name__ == '__main__':
         sshpass = '/usr/local/bin/'
 
     log_file_loc = '%s/devel/BerePi/logs/berelogger_%s.log' %(fname,hostn[:-1])
-
     checkifexist(log_file_loc)
 
-    lines = tailer.tail(open(str(log_file_loc)),20)
+    lines = tailer.tail(open(str(log_file_loc)),40)
     print(lines, type(lines))
 
     writefile_list (lines, './tmp.log')
 
-    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -o' + ' StrictHostKeyChecking=no'
+    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -P=%s'%port + ' -o' + ' StrictHostKeyChecking=no'
     cmd += " tmp.log " + '%s@%s:' %(id,ip) + '/var/www/html/sensor/sensor_dust_%s.log ' %hostn[:-1]
-#    cmd = 'scp'
-#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+    #cmd = 'scp'
+    #cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     print (cmd)
     print ( 'return of os.system = ', os.system(cmd) )
 
