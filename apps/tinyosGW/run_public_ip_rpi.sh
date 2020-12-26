@@ -23,9 +23,10 @@ echo $passwd
 export cmd101='python /home/pi/devel/BerePi/apps/tinyosGW/run_rpi_info.py'
 export cmd102='python /home/pi/devel/BerePi/apps/tinyosGW/publicip.py '$ip' '$port' '$id' '$passwd' '
 echo '[script file:] '${0##*/}
-echo $cmd102 
-$cmd102
-sleep 2
+
 echo $cmd101
 $cmd101
+
+echo $cmd102 
+$cmd102
 
