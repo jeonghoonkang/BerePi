@@ -83,13 +83,14 @@ def args_proc():
 
 if __name__ == '__main__':
 
+    FILENAME = 'rpi_sys_service_log.log'
+
     print ('\n', datetime.datetime.now(), '\n')
     ip, port, id, passwd = args_proc()
 
     p_ip = getip()
     i_ip, os_type = getiip()
-    info = i_ip + p_ip
-    
+    info = i_ip + p_ip 
     hostn = hostname()
     try : name = os.getlogin()
     except :
@@ -109,21 +110,23 @@ if __name__ == '__main__':
         fname = '/Users/%s/' %name
         sshpass = '/usr/local/bin/'
 
-    fname += 'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
+    logname = fname +  'devel/BerePi/apps/tinyosGW/out/%s' %(FILENAME)
+    fname = fname +  'devel/BerePi/apps/tinyosGW/out/%s.txt' %(hostn[:-1])
 
     writefile (info, fname)
     checkifexist(fname)
 
     cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -P%s' %port + ' -o' + ' StrictHostKeyChecking=no'
-    cmd +=  " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+    cmd1 = cmd + " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+    cmd2 = cmd + " %s " %logname + ' %s@%s:' %(id,ip) + '/var/www/html/server/%s' %FILENAME[:-4] + ".%s " %hostn
 #    cmd = 'scp'
 #    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
-    print (cmd)
-    print ( 'return of os.system = ', os.system(cmd) )
+    print (cmd1)
+    print (cmd2)
+    print ( 'return of os.system = ', os.system(cmd1) )
+    print ( 'return of os.system = ', os.system(cmd2) )
 
-    #ret = run_cmd(cmd)
     print ("finish ")
-    #print (ret)
 
 # ssh-keygen
 # cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@xxx.xxx.xxx 'cat >>

@@ -34,6 +34,10 @@ def get_hostname():
     p = os.popen("hostname")
     return p.read()
 
+def get_proxy():
+    p = os.popen("cat /lib/systemd/system/reverseProxy.service | grep autossh")
+    return p.read()
+
 ## function get_df : return disk usage info
 def get_df(valueflag=False):
     p = os.popen("df -h")
@@ -78,10 +82,11 @@ def get_proc_mem(proc):
     except ValueError:
         return None
 
-print(disk_usage('/', 'free'))
-print(get_df())
-print(get_free())
-print(get_uptime())
-print(get_hostname())
-print(get_proc_cpu("python"))
-print(get_proc_mem("python"))
+if __name__ == '__main__':
+    print(disk_usage('/', 'free'))
+    print(get_df())
+    print(get_free())
+    print(get_uptime())
+    print(get_hostname())
+    print(get_proc_cpu("python"))
+    print(get_proc_mem("python"))
