@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     writefile_list (lines, './tmp.log')
 
-    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -P=%s'%port + ' -o' + ' StrictHostKeyChecking=no'
+    cmd = sshpass + 'sshpass -p' + passwd + ' ' + 'scp' + ' -P%s'%port + ' -o' + ' StrictHostKeyChecking=no'
     cmd += " tmp.log " + '%s@%s:' %(id,ip) + '/var/www/html/sensor/sensor_dust_%s.log ' %hostn[:-1]
     #cmd = 'scp'
     #cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
