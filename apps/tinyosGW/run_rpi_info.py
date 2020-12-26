@@ -16,10 +16,10 @@ logging.critical('')
 
 PROCESS = "python"
 
-FILE_MAX_BYTE = 1024 * 1 * 1 #100MB
-FILE_MAX_COUNT = 10
+FILE_MAX_BYTE = 1024 * 10 * 1 #100MB
+FILE_MAX_COUNT = 0
 #FILENAME = '/home/pi/rpi_log.log'
-FILENAME = './out/rpi_sys_service_log.log'
+FILENAME = '/home/pi/devel/BerePi/apps/tinyosGW/out/rpi_sys_service_log.log'
 formatter = logging.Formatter('[%(levelname)s] %(asctime)s > %(message)s')
 
 logger = logging.getLogger('rpi_logger')
@@ -37,6 +37,7 @@ logger.addHandler(streamHandler)
 logger.setLevel(logging.DEBUG)
 
 logger.info("PROGRAM START")
+logger.info("PUBLIC IP : %s" %rpi.get_pip() )
 logger.info("HOSTNAME : %s" % rpi.get_hostname())
 logger.info("SSH_PROXY : %s" % rpi.get_proxy())
 logger.info("IP : \n%s" % rpi.get_ifconfig())
