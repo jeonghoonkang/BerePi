@@ -38,7 +38,7 @@ def disk_usage(path, diskUsage='all'):
     return diskUsage
 
 def get_route():
-    cmd = "route -n"
+    cmd = "/sbin/route -n"
     ret = run_shell_cmd(cmd)
     return ret
 
@@ -76,7 +76,7 @@ def get_uptime():
 
 ## function get_ifconfig : return network interfaces info
 def get_ifconfig(valueflag=False):
-    cmd = "ifconfig"
+    cmd = "/sbin/ifconfig"
     ret = run_shell_cmd(cmd)
     return ret
 
