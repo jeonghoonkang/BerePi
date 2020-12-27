@@ -4,6 +4,7 @@
   - sudo systemctl daemon-reload 
   - sudo systemctl restart reverseProxy.service
   - sudo systemctl status reverseProxy.service
+  - sudo systemctl enable reverseProxy.service
     - reverseProxcy.service
 <pre>    
 [Unit]
