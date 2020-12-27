@@ -10,6 +10,9 @@ import sys
 import os
 import datetime
 
+# crontab 실행을 위해서는 full path 명시 필요
+# 예) /sbin/ifconfig
+
 def run_cmd(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     output = p.communicate()[0]
