@@ -29,6 +29,10 @@ def disk_usage(path, diskUsage='all'):
 
     return diskUsage
 
+def get_route():
+    p = os.popen("route -n")
+    return p.read()
+
 ## funtion get_hostname : return raspberry pi hostname info 
 def get_hostname():
     p = os.popen("hostname")
