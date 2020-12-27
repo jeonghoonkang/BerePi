@@ -5,11 +5,19 @@ rpiMonitor.py : monitoring on raspberry pi
 """
 
 import os
+from subprocess import *
+
+def run_shell_cmd(cmd):
+    # wait until shell command is done
+    p = Popen(cmd, shell=True, stdout=PIPE)
+    output = p.communicate()[0]
+    return output
 
 ## function disk_usage : return disk usage info at numbers
 # all : total disk usage at list
 # free : free disk usage at int
 # used : used disk usage at int
+
 def disk_usage(path, diskUsage='all'):
     st = os.statvfs(path)
     free = st.f_bavail * st.f_frsize
@@ -30,8 +38,9 @@ def disk_usage(path, diskUsage='all'):
     return diskUsage
 
 def get_route():
-    p = os.popen("route -n")
-    return p.read()
+    cmd = "route -n"
+    ret = run_shell_cmd(cmd)
+    return ret
 
 ## funtion get_hostname : return raspberry pi hostname info 
 def get_hostname():
@@ -40,7 +49,7 @@ def get_hostname():
 
 def get_pip():
     cmd = "curl http://checkip.amazonaws.com"
-    ip = os.popen(cmd).read()
+    ip = run_shell_cmd(cmd)
     return ip
 
 def get_proxy():
@@ -67,8 +76,9 @@ def get_uptime():
 
 ## function get_ifconfig : return network interfaces info
 def get_ifconfig(valueflag=False):
-    p = os.popen("ifconfig")
-    return p.read()
+    cmd = "ifconfig"
+    ret = run_shell_cmd(cmd)
+    return ret
 
 ## function get_stalk_status : return stalk service info
 def get_stalk_status():
@@ -92,11 +102,15 @@ def get_proc_mem(proc):
         return None
 
 if __name__ == '__main__':
+    print("##### test start")
     print(disk_usage('/', 'free'))
     print(get_df())
     print(get_pip())
+    print(get_route())
+    print(get_ifconfig())
     print(get_free())
     print(get_uptime())
     print(get_hostname())
     print(get_proc_cpu("python"))
     print(get_proc_mem("python"))
+    print("test finish #####")
