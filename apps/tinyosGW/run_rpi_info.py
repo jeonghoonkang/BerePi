@@ -46,6 +46,6 @@ logger.info("HDD :\n %s " % rpi.get_df())
 logger.info("FREE MEM : \n%s" % rpi.get_free())
 logger.info("CPU(%s) : %s" % (PROCESS, rpi.get_proc_cpu(PROCESS)) )
 logger.info("MEM(%s) : %s" % (PROCESS, rpi.get_proc_mem(PROCESS)) )
-logger.info("RUN FINISH #####")
+logger.info("     RUN FINISH #####")
 
 
