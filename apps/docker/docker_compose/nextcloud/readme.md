@@ -33,6 +33,22 @@
   - 80, 443 포트는 열려 있어야 함 (공유기 설정)
   - docker exec nginx-letsencrypt /app/force_renew
     - history | grep renew 로 검색 가능 
+<code>
+sudo docker exec nextcloud_letsencrypt-companion_1 /app/force_renew
+/etc/nginx/certs/~~.~~.~~ /app
+Creating/renewal bigsoft.iptime.org certificates... (bigsoft.iptime.org)
+2021-01-03 00:57:04,884:INFO:simp_le:1450: Generating new certificate private key
+2021-01-03 00:57:09,978:INFO:simp_le:401: Saving key.pem
+2021-01-03 00:57:09,978:INFO:simp_le:401: Saving chain.pem
+2021-01-03 00:57:09,978:INFO:simp_le:401: Saving fullchain.pem
+2021-01-03 00:57:09,998:INFO:simp_le:401: Saving cert.pem
+/app
+Reloading nginx proxy (481d0570d02db1a14a6316ee543a45fa56cad26b961d9004a6ee0ad1187f7f50)...
+2021/01/03 00:57:12 Generated '/etc/nginx/conf.d/default.conf' from 4 containers
+2021/01/03 00:57:12 [notice] 108#108: signal process started  
+</code>
+    
+    
   - 인증서 기간 확인
     - echo | openssl s_client -connect #호스트주소DDNS#:443 2>/dev/null | openssl x509 -noout -dates
 
