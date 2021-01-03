@@ -30,8 +30,9 @@
 - Let's Encrypt 사용시, 90일마다 expire
 - 30일 남았을때 부터 renewal 가능
   - letsencrypt 실행중인 컨테이너에서 실행
-  - 80, 443 포트는 열려 있어야 함
+  - 80, 443 포트는 열려 있어야 함 (공유기 설정)
   - docker exec nginx-letsencrypt /app/force_renew
+    - history | grep renew 로 검색 가능 
 
 #### 추가정보
 - 이미 apache2 가 설치되어 동작되고 있는 경우
