@@ -33,6 +33,8 @@
   - 80, 443 포트는 열려 있어야 함 (공유기 설정)
   - docker exec nginx-letsencrypt /app/force_renew
     - history | grep renew 로 검색 가능 
+  - 인증서 기간 확인
+    - echo | openssl s_client -connect bigsoft.###.###:443 2>/dev/null | openssl x509 -noout -dates
 
 #### 추가정보
 - 이미 apache2 가 설치되어 동작되고 있는 경우
