@@ -33,7 +33,7 @@
   - 80, 443 포트는 열려 있어야 함 (공유기 설정)
   - docker exec nginx-letsencrypt /app/force_renew
     - history | grep renew 로 검색 가능 
-<code>
+<pre>
 sudo docker exec nextcloud_letsencrypt-companion_1 /app/force_renew
 /etc/nginx/certs/~~.~~.~~ /app
 Creating/renewal bigsoft.iptime.org certificates... (bigsoft.iptime.org)
@@ -46,7 +46,7 @@ Creating/renewal bigsoft.iptime.org certificates... (bigsoft.iptime.org)
 Reloading nginx proxy (481d0570d02db1a14a6316ee543a45fa56cad26b961d9004a6ee0ad1187f7f50)...
 2021/01/03 00:57:12 Generated '/etc/nginx/conf.d/default.conf' from 4 containers
 2021/01/03 00:57:12 [notice] 108#108: signal process started  
-</code>
+</pre>
     
     
   - 인증서 기간 확인
