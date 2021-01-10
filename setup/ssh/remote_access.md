@@ -1,5 +1,7 @@
-- reverse proxy style , ssh forwarding
+- reverse proxy style , ssh forwarding 방법
   - autossh -M 20000 -N _*_@_*_._*_._*_._*_ -R 2222:localhost:22 -vvv
+    - 20000: 관리포트 번호, 추가 필요한 포트번호는 20001 로 구성됨, 비워놔야함 
+    - 2222: reverse 원격에서 접근할 포트
   - sudo vim /lib/systemd/system/reverseProxy.service
   - sudo systemctl daemon-reload 
   - sudo systemctl restart reverseProxy.service
