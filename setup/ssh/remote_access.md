@@ -5,11 +5,6 @@
     - _*_@_*_._*_._*_._*_ 는 Reverse Proxy로 동작할 서버 및 해당 서버 ID
   - sudo vim /lib/systemd/system/reverseProxy.service
     - 서비스로 등록하고 시스템 재시작시에 실행. Daemon으로 등록, 실행
-  - sudo systemctl daemon-reload 
-  - sudo systemctl restart reverseProxy.service
-  - sudo systemctl status reverseProxy.service
-  - sudo systemctl enable reverseProxy.service
-    - reverseProxcy.service
 <pre>    
 [Unit]
 Description=SSH reverse tunneling 
@@ -21,8 +16,13 @@ ExecStart=/usr/bin/autossh -M 20000 -N ID@IP.IP.IP.IP -R 2222:localhost:22
    
 [Install]
 WantedBy=network-online.target
-</pre>
-
+</pre>    
+    
+  - sudo systemctl daemon-reload 
+  - sudo systemctl restart reverseProxy.service
+  - sudo systemctl status reverseProxy.service
+  - sudo systemctl enable reverseProxy.service
+    - reverseProxcy.service
 
 - examples
   - systemctl list-units --type target
