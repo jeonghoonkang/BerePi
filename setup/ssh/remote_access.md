@@ -3,6 +3,7 @@
     - 20000: 관리포트 번호, 추가 필요한 포트번호는 20001 로 구성됨, 비워놔야함 
     - 2222: reverse 원격에서 접근할 포트
   - sudo vim /lib/systemd/system/reverseProxy.service
+    - 서비스로 등록하고 시스템 재시작시에 실행. Daemon으로 등록, 실행
   - sudo systemctl daemon-reload 
   - sudo systemctl restart reverseProxy.service
   - sudo systemctl status reverseProxy.service
