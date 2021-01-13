@@ -17,6 +17,11 @@ ExecStart=/usr/bin/autossh -M 20000 -N ID@IP.IP.IP.IP -R 2222:localhost:22
 [Install]
 WantedBy=network-online.target
 </pre>    
+
+## 주요 설정
+ - 단말기(현장 기기) - reverseProxy(클라우드 단말) 사이에는, ssh 키가 공유 되어서 로그인시에 password 입력이 필요없어야 함
+   - 설정 방법
+     - https://github.com/jeonghoonkang/BerePi/blob/master/setup/ssh/key.sh
     
   - sudo systemctl daemon-reload 
   - sudo systemctl restart reverseProxy.service
