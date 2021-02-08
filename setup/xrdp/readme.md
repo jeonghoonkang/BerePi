@@ -15,3 +15,5 @@ fi
 . /usr/bin/startxfce4
 
 </pre>
+
+https://corona-world.tistory.com/26
