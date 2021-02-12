@@ -14,6 +14,25 @@ fi
 #. /etc/X11/Xsession
 . /usr/bin/startxfce4
 
+
+
+
+
+
+
+Ubuntu 20.10 - xrdp/remote access
+
+Remote login, after 'apt install xrdp', gives a static grey screen. The following appears to be one way to solve the problem ...
+Code: Select all
+
+sudo apt install xrdp
+sudo systemctl status xrdp
+# Remote gery screen problem and solution 
+sudo adduser xrdp ssl-cert // not use
+sudo systemctl restart xrdp
+sudo apt-get install xfce4
+echo xfce4-session > .xsession
+
 </pre>
 
 https://corona-world.tistory.com/26
