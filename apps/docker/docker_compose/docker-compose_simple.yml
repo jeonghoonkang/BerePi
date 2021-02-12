@@ -1,0 +1,16 @@
+# Author : Jeonghoonkang, github.com/jeonghoonkang
+
+version: '2'
+
+#volumes:
+#    nextcloud:
+#    db:
+
+services: 
+    app:
+        #image: mrriadb:kjh001
+      image: nginx:1.18.0
+      restart: always
+      ports:
+        - 7080:80
+
