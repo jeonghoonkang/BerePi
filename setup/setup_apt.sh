@@ -70,12 +70,12 @@ sudo pip install httplib
 sudo pip install urllib3
 sudo pip install utils
 
-sudo pip install numpy
-sudo pip install pandas
+#sudo pip install numpy
+#sudo pip install pandas
 # sometimes on Mac OSX, sudo pip install tld --ignore-installed six --user
-sudo pip install tensorflow
-sudo pip install scipy
-sudo pip install scikit-learn
+#sudo pip install tensorflow
+#sudo pip install scipy
+#sudo pip install scikit-learn
 sudo pip install jupyter
 
 
