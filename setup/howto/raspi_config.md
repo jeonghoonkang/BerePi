@@ -12,3 +12,6 @@
     - sudo vim /boot/config.txt
     - enable_uart=1
     - dtoverlay=pi3-disable-bt
+# GPIO 사용 권한
+- sudo usermod -a -G gpio pi
+- pi 유저에게 GPIO 사용 권한 허가
