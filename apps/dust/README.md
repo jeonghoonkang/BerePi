@@ -36,3 +36,13 @@ License
 -------
 Please refer to LICENSE file for licensing information.
 ```
+
+
+### 참고 crontab
+'''
+*/5 * * * * bash /home/pi/devel/Raspberry_SensorKit/apps/Sensor/DustSensor/run.sh > /home/pi/devel/log/crontab.dust.log 2>&1 
+
+*/33 * * * * bash /home/pi/devel/BerePi/apps/tinyosGW/run_public_ip_rpi.sh <URL> <PORT> <ID> <PASS> > /home/pi/devel/log/crontab.gw.log 2>&1
+
+*/33 * * * * sshpass -p<PASS> scp -o StrictHostKeyChecking=no  /home/pi/devel/BerePi/logs/berelogger.log <ID>@<URL>:www/sensor > /home/pi/devel/log/crontab.dust.cp.log 2>&1
+'''
