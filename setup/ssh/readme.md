@@ -50,3 +50,5 @@ $ ssh-copy-id -i ~/.ssh/id_rsa.pub lesstif@192.168.10.1
 ### Auth 방법 결정 
 - PubkeyAuthentication yes
 - PasswordAuthentication no
+- sudo vim /etc/ssh/sshd_config
+
