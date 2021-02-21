@@ -40,3 +40,8 @@ ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 
 ### 서버 실행 
 - systemctl enable ssh.service
+
+
+
+### 
+$ ssh-copy-id -i ~/.ssh/id_rsa.pub lesstif@192.168.10.1
