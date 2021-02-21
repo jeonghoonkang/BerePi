@@ -43,5 +43,5 @@ ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 
 
 
-### 
+### 키 복사 방법 
 $ ssh-copy-id -i ~/.ssh/id_rsa.pub lesstif@192.168.10.1
