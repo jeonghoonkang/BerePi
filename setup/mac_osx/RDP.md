@@ -1,5 +1,6 @@
-# Remote Desktop Protocol, 원격 데스크탑 
-- https://jazznblues.club/viewtopic.php?t=6974&p=7094&hilit=herbie+hancock+chick+corea#p7094
+# Remote Desktop Protocol 키보드 한영 전환 
+- 원격 데스크탑 키보드 한영전환 shift space 설정
+
 - Mac OSX 설정
   - 설정 / 키보드 / 단축키 / 입력소스 
     - 이전 입력 소스, ctrl shift space
