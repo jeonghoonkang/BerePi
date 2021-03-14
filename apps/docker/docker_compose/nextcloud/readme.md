@@ -51,6 +51,7 @@ Reloading nginx proxy (481d0570d02db1a14a6316ee543a45fa56cad26b961d9004a6ee0ad11
     
   - 인증서 기간 확인
     - echo | openssl s_client -connect #호스트주소DDNS#:443 2>/dev/null | openssl x509 -noout -dates
+    - cert_status
 
 #### 추가정보
 - 이미 apache2 가 설치되어 동작되고 있는 경우
