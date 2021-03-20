@@ -127,7 +127,7 @@ if __name__ == '__main__':
     print (cmd1)
     print (cmd2)
     print ( 'return of os.system = ', os.system(cmd1) )
-    print ( 'return of os.system = ', os.system(cmd2) )
+    #print ( 'return of os.system = ', os.system(cmd2) )
 
     print ("finish ")
 
