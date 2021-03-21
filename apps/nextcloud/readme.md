@@ -20,9 +20,10 @@
 ### Nextcloud backup
 <pre> rsync -Aavx nextcloud/ nextcloud-dirbkp_`date +"%Y%m%d"`/ </pre>
 <pre> mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] > nextcloud-sqlbkp_`date +"%Y%m%d"`.bak </pre>
-<pre> rsync -Aax nextcloud-dirbkp/ nextcloud/ </pre>
-<pre> mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" </pre>
+
 
 ### Nextcloud restore
+<pre> rsync -Aax nextcloud-dirbkp/ nextcloud/ </pre>
+<pre> mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" </pre>
 <pre> mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" </pre>
 <pre>mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"</pre>
