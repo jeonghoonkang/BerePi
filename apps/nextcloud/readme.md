@@ -12,4 +12,5 @@
 
 
 ## 커맨드라인 명령어
-- sudo docker exec -it -u 33 nextcloud_app_1 php occ files:scan --all 
+- 서버 파일 추가후, 리스캔 & 등록
+  - sudo docker exec -it -u 33 nextcloud_app_1 php occ files:scan --all 
