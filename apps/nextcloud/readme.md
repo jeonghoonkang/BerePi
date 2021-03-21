@@ -14,3 +14,8 @@
 ## 커맨드라인 명령어
 - 서버 파일 추가후, 리스캔 & 등록
   - sudo docker exec -it -u 33 nextcloud_app_1 php occ files:scan --all 
+
+## Nextcloud Backup 
+- rsync -Aavx nextcloud/ nextcloud-dirbkp_`date +"%Y%m%d"`/
+- mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] > nextcloud-sqlbkp_`date +"%Y%m%d"`.bak
+
