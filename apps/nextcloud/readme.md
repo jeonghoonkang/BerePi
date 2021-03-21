@@ -18,9 +18,12 @@
 ## Nextcloud Backup & Restore
 
 ### Nextcloud backup
-<pre> rsync -Aavx nextcloud/ nextcloud-dirbkp_`date +"%Y%m%d"`/ </pre>
-<pre> mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] > nextcloud-sqlbkp_`date +"%Y%m%d"`.bak </pre>
-<pre> ex) mysqldump --single-transaction -h IP -u nextcloud -p{PW} nextcloud > nextcloud_sql_bk_new.bak </pre>
+<pre> 
+rsync -Aavx nextcloud/ nextcloud-dirbkp_`date +"%Y%m%d"`/ 
+mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] > nextcloud-sqlbkp_`date +"%Y%m%d"`.bak 
+    ex) mysqldump --single-transaction -h IP -u nextcloud -p{PW} nextcloud > nextcloud_sql_bk_new.bak 
+    ex) sudo docker inspect nextcloud_db_1 | grep IP 
+</pre>
 
 ### Nextcloud restore
 <pre> rsync -Aax nextcloud-dirbkp/ nextcloud/ </pre>
