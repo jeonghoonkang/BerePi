@@ -26,7 +26,10 @@ mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] 
 </pre>
 
 ### Nextcloud restore
-<pre> rsync -Aax nextcloud-dirbkp/ nextcloud/ </pre>
-<pre> mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" </pre>
-<pre> mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" </pre>
-<pre>mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"</pre>
+<pre> rsync -Aax nextcloud-dirbkp/ nextcloud/ 
+
+mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" 
+
+mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" 
+mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
+mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak </pre>
