@@ -12,7 +12,7 @@ services:
       image: nginx:1.18.0
       restart: always
       ports:
-        - 7080:80
+        - 80:80
 
 
 
