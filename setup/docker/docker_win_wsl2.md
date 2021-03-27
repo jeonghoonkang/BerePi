@@ -13,3 +13,11 @@
 - wsl --set-default-version 2
 - wsl -t {Ubuntu}
 
+### 설정후 확인
+<pre>
+C:\Users\bigsoft>wsl -l -v
+  NAME                   STATE           VERSION
+* Ubuntu-20.04           Running         2
+  docker-desktop-data    Running         2
+  docker-desktop         Running         2
+</pre>
