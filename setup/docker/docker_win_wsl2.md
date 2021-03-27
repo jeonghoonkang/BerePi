@@ -9,4 +9,7 @@
 - ubuntu 터미널 설치
 - wsl -l
 - wsl -l -v
-- 
+- wsl --set-version {Ubuntu} 2
+- wsl --set-default-version 2
+- wsl -t {Ubuntu}
+
