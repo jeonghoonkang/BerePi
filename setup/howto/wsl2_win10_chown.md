@@ -7,4 +7,4 @@
 - umount -f /PATH/OF/BUSY-NFS (NETWORK-FILE-SYSTEM)
 
 ## 디렉토리 권한 설정 
-![WsL 디렉토리 권한](디랙토리권한.png)
+![WsL 디렉토리 권한](res/dir_permission.png)
