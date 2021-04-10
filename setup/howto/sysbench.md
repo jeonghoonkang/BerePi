@@ -1,5 +1,6 @@
 
 <pre>
+fit-let / MiniPC MINI2
 tinyos@toshome-fit001:~$ sysbench --test=cpu run
 WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.
 sysbench 1.0.18 (using system LuaJIT 2.1.0-beta3)
