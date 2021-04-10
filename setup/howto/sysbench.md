@@ -131,3 +131,30 @@ Threads fairness:
     events (avg/stddev):           13548.0000/0.00
     execution time (avg/stddev):   9.9662/0.00
 </pre>
+
+<pre>
+ACERPC MINI
+tinyos@DESKTOP-5F3J3LU:/mnt/d/devel/docker_run/vol/nextcloud$ sysbench --test=cpu run                                                     
+WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.                     
+sysbench 1.0.18 (using system LuaJIT 2.1.0-beta3)                                                                                                                   
+Running the test with following options:                                                                                                  
+Number of threads: 1                                                                                                                      
+Initializing random number generator from current time                                                                                            
+Prime numbers limit: 10000                                                                                                                                         
+Initializing worker threads...                                                                                                                                     
+Threads started!       
+CPU speed:   
+events per second:   698.18     
+General statistics:      
+total time:                          10.0005s                                                                                             
+total number of events:              6984                                                                                                                           
+Latency (ms):                                                                                                                                      
+    min:                                    1.00
+    avg:                                    1.43
+    max:                                    4.82
+    95th percentile:                        1.82
+    sum:                                 9989.01
+    Threads fairness:                                                                                                                             
+    events (avg/stddev):           6984.0000/0.00                                                                                             
+    execution time (avg/stddev):   9.9890/0.00            
+</pre>
