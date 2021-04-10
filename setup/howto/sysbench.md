@@ -1,6 +1,7 @@
 
 <pre>
 fit-let / MiniPC MINI2
+
 tinyos@toshome-fit001:~$ sysbench --test=cpu run
 WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.
 sysbench 1.0.18 (using system LuaJIT 2.1.0-beta3)
@@ -73,6 +74,7 @@ Threads fairness:
 
 <pre>
 DELL P-Edge R230
+
 tinyos@bigws-PEdge-R230 ~ $ sysbench --test=cpu run
 sysbench 0.4.12:  multi-threaded system evaluation benchmark
 
@@ -104,6 +106,7 @@ Threads fairness:
 
 <pre>
 NUC-i7
+
 tinyos@DESKTOP-C9UTUR7 ~ $ sysbench --test=cpu run
 WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.
 sysbench 1.0.11 (using system LuaJIT 2.1.0-beta3)
