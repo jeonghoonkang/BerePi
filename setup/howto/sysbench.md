@@ -1,3 +1,9 @@
+sysbench --test=cpu run
+
+sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 prepare
+sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 run
+sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 cleanup
+
 
 <pre>
 fit-let / MiniPC MINI2
