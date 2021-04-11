@@ -174,3 +174,54 @@ Latency (ms):
     events (avg/stddev):           6984.0000/0.00                                                                                             
     execution time (avg/stddev):   9.9890/0.00            
 </pre>
+
+
+<pre>
+tinyos@toshome-fit001:~$ sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 run
+sysbench 1.0.18 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Extra file open flags: (none)
+128 files, 120MiB each
+15GiB total file size
+Block size 16KiB
+Number of IO requests: 0
+Read/Write ratio for combined random IO test: 1.50
+Periodic FSYNC enabled, calling fsync() each 100 requests.
+Calling fsync() at the end of test, Enabled.
+Using synchronous I/O mode
+Doing random r/w test
+Initializing worker threads...
+
+Threads started!
+
+
+File operations:
+    reads/s:                      3475.24
+    writes/s:                     2316.83
+    fsyncs/s:                     7414.17
+
+Throughput:
+    read, MiB/s:                  54.30
+    written, MiB/s:               36.20
+
+General statistics:
+    total time:                          300.0116s
+    total number of events:              3961928
+
+Latency (ms):
+         min:                                    0.00
+         avg:                                    0.07
+         max:                                   64.97
+         95th percentile:                        0.15
+         sum:                               296914.23
+
+Threads fairness:
+    events (avg/stddev):           3961928.0000/0.00
+    execution time (avg/stddev):   296.9142/0.00
+
+</pre>
