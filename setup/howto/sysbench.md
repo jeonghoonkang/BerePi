@@ -79,6 +79,42 @@ Threads fairness:
 </pre>
 
 <pre>
+tinyos@jh-RPuntu:~$ sysbench --test=cpu run
+WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Prime numbers limit: 10000
+
+Initializing worker threads...
+
+Threads started!
+
+CPU speed:
+    events per second:  1488.82
+
+General statistics:
+    total time:                          10.0005s
+    total number of events:              14895
+
+Latency (ms):
+         min:                                    0.67
+         avg:                                    0.67
+         max:                                    1.39
+         95th percentile:                        0.68
+         sum:                                 9991.60
+
+Threads fairness:
+    events (avg/stddev):           14895.0000/0.00
+    execution time (avg/stddev):   9.9916/0.00
+
+</pre>
+
+<pre>
 DELL P-Edge R230
 
 tinyos@bigws-PEdge-R230 ~ $ sysbench --test=cpu run
