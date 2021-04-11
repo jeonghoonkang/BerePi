@@ -225,3 +225,53 @@ Threads fairness:
     execution time (avg/stddev):   296.9142/0.00
 
 </pre>
+
+<pre>
+ tinyos@minskangui-iMac  ~  sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 run
+
+sysbench 1.0.20 (using bundled LuaJIT 2.1.0-beta2)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Extra file open flags: (none)
+128 files, 120MiB each
+15GiB total file size
+Block size 16KiB
+Number of IO requests: 0
+Read/Write ratio for combined random IO test: 1.50
+Periodic FSYNC enabled, calling fsync() each 100 requests.
+Calling fsync() at the end of test, Enabled.
+Using synchronous I/O mode
+Doing random r/w test
+Initializing worker threads...
+
+Threads started!
+
+
+File operations:
+    reads/s:                      92.86
+    writes/s:                     61.90
+    fsyncs/s:                     198.39
+
+Throughput:
+    read, MiB/s:                  1.45
+    written, MiB/s:               0.97
+
+General statistics:
+    total time:                          300.0092s
+    total number of events:              105823
+
+Latency (ms):
+         min:                                    0.00
+         avg:                                    2.83
+         max:                                  450.47
+         95th percentile:                       10.84
+         sum:                               299789.49
+
+Threads fairness:
+    events (avg/stddev):           105823.0000/0.00
+    execution time (avg/stddev):   299.7895/0.00
+</pre>
