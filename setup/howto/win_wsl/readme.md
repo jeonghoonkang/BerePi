@@ -15,4 +15,3 @@
   - sudoer 에게 crontab 실행 가능하도록 group 권한 추가
     - usermod -a -G crontab {username} # ubuntu user group change 변경 
   - 동작을 안하는 경우가 많은것 같음. 테스트 필요함
-          
