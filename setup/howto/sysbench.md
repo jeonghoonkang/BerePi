@@ -6,6 +6,43 @@
 
 
 <pre>
+RaspberryPi4 4G RAM with SSD
+tinyos@rpuntu-001:~$ sysbench --test=cpu run
+WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.
+sysbench 1.0.20 (using system LuaJIT 2.1.0-beta3)
+
+Running the test with following options:
+Number of threads: 1
+Initializing random number generator from current time
+
+
+Prime numbers limit: 10000
+
+Initializing worker threads...
+
+Threads started!
+
+CPU speed:
+    events per second:  1488.30
+
+General statistics:
+    total time:                          10.0005s
+    total number of events:              14891
+
+Latency (ms):
+         min:                                    0.67
+         avg:                                    0.67
+         max:                                    1.66
+         95th percentile:                        0.69
+         sum:                                 9993.73
+
+Threads fairness:
+    events (avg/stddev):           14891.0000/0.00
+    execution time (avg/stddev):   9.9937/0.00
+</pre>
+
+
+<pre>
 fit-let / MiniPC MINI2
 
 tinyos@toshome-fit001:~$ sysbench --test=cpu run
