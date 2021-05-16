@@ -58,3 +58,7 @@
 <pre> find /home/pi/cam_data/ -name "*.jpg" -print0 | xargs -0 ls
  find /home/pi/cam_data/ -name "*.jpg" -exec rsync -avhz '--rsh=ssh -p22' {} tos@s.iptime.org:webdav/gw/cam/motion \;  
 </pre>
+
+
+## 참고
+- rsync -avhzu --progress -e 'ssh -p 22' id@ip:webdav/bk_office /home/tinyos/work_win
