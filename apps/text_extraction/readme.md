@@ -13,6 +13,9 @@
   - HADOOP
   - File System
   - DB
+
+## text, data file format 처리 방법
+- cat myjsonfile.json | python -m json.tool > pretty.json
    
   
 
