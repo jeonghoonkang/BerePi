@@ -7,4 +7,4 @@ BOOT_ORDER=0xf41
 
 sudo -E rpi-eeprom-config --edit
 
-
+ vcgencmd bootloader_config
