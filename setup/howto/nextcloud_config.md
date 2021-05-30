@@ -1,9 +1,11 @@
 
-sudo docker cp compose_script_app_1:/var/www/html/config/config.php ./
-sudo docker cp config.php compose_script_app_1:/var/www/html/config/config.php 
-sudo docker exec -it compose_script_app_1 cat /var/www/html/config/config.php
+- sudo docker cp compose_script_app_1:/var/www/html/config/config.php ./
+- sudo docker cp config.php compose_script_app_1:/var/www/html/config/config.php 
+- sudo docker exec -it compose_script_app_1 cat /var/www/html/config/config.php
+- sudo docker exec -it nextcloud_app_1 cat /var/www/html/config/config.php
 
->> sudo docker exec -it nextcloud_app_1 cat /var/www/html/config/config.php
+
+<pre>
 
 <?php
 $CONFIG = array (
@@ -45,3 +47,5 @@ $CONFIG = array (
   'dbpassword' => '1234',
   'installed' => true,
 );
+
+</pre>
