@@ -1,4 +1,4 @@
-# Nextcloud Sync System
+# Nextcloud File Syncronization System
 
 ## Nextcloud server
 - 설정
