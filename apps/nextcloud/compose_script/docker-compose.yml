@@ -9,20 +9,19 @@ services:
     volumes:
       - ${VOL_PATH}/mariadb_volume:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=1234
+      - MYSQL_ROOT_PASSWORD=***
     env_file:
       - db.env
 
   app:
     image: nextcloud:apache
-    #image: nextcloud_002:kjh
     restart: always
     volumes:
       - ${VOL_PATH}/nextcloud_volume:/var/www/html
     environment:
-      - VIRTUAL_HOST=tinyos.mooo.com
-      - LETSENCRYPT_HOST=tinyos.mooo.com
-      - LETSENCRYPT_EMAIL=gadin.kang@gmail.com
+      - VIRTUAL_HOST=***.mooo.com
+      - LETSENCRYPT_HOST=***.mooo.com
+      - LETSENCRYPT_EMAIL=***@gmail.com
       - MYSQL_HOST=db
     env_file:
       - db.env
