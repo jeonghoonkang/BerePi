@@ -1,0 +1,65 @@
+# Author : Jeonghoon Kang, https://github.com/jeonghoonkang
+version: '2' #3 사용 가능, 기존은 3. 일부 Ubuntu에서 실행이 안되어서 2로 낮추어씀. 문제 발생 없음
+
+services:
+  db:
+    image: mariadb
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    restart: always
+    volumes:
+      - ${VOL_PATH}/mariadb_volume:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=1234
+    env_file:
+      - db.env
+
+  app:
+    image: nextcloud:apache
+    #image: nextcloud_002:kjh
+    restart: always
+    volumes:
+      - ${VOL_PATH}/nextcloud_volume:/var/www/html
+    environment:
+      - VIRTUAL_HOST=tinyos.mooo.com
+      - LETSENCRYPT_HOST=tinyos.mooo.com
+      - LETSENCRYPT_EMAIL=gadin.kang@gmail.com
+      - MYSQL_HOST=db
+    env_file:
+      - db.env
+    depends_on:
+      - db
+    networks:
+      - proxy-tier
+      - default
+
+  proxy:
+    build: ./proxy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    labels:
+      com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+    volumes:
+      - ${VOL_PATH}/nginx_proxy/nginx_certs:/etc/nginx/certs:ro
+      - ${VOL_PATH}/nginx_proxy/nginx_vhost.d:/etc/nginx/vhost.d
+      - ${VOL_PATH}/nginx_proxy/nginx_html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - proxy-tier
+
+  letsencrypt-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    restart: always
+    volumes:
+      - ${VOL_PATH}/nginx_proxy/nginx_certs:/etc/nginx/certs
+      - ${VOL_PATH}/nginx_proxy/nginx_vhost.d:/etc/nginx/vhost.d
+      - ${VOL_PATH}/nginx_proxy/nginx_html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy-tier
+    depends_on:
+      - proxy
+
+networks:
+  proxy-tier:
