@@ -13,8 +13,12 @@ fi
 
 #. /etc/X11/Xsession
 . /usr/bin/startxfce4
+</pre>
 
-
+<pre>
+test -x /usr/bin/startxfce4 && exec /usr/bin/startxfce4
+exec /bin/sh /usr/bin/startxfce4
+</pre>
 
 
 
