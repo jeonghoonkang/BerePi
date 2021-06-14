@@ -39,6 +39,9 @@ mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak -v
 
 sudo docker exec -it -u 33 compose_script_app_1 php occ upgrade
 
+
+version' => '21.0.2.1',
+  
 </pre>
 
 
