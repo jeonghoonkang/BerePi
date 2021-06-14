@@ -7,6 +7,11 @@
 ##### Contribution
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
 
+### DiskPi which is a new direction for secure pi computing
+- As of 2021, not long ago, RaspberryPi started to support SSD/HDD Booting by USB connection. It gave us a new approach to the quick booting and secure, hard to be beaten by electricity accident SD card crash.
+
+### Old documents which is still valid.
+
 #### Wiki doc
   - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspberyypi Sensor System
