@@ -36,3 +36,7 @@ mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud"
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" 
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
 mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak -v </pre>
+
+
+
+https://www.nemonein.xyz/2020/01/2987/
