@@ -1,8 +1,9 @@
+
 # Localhost information through Telegram bot
 - 텔레그램 봇 연결
 - 메세지 전송
 
-# 실행
+# 직접 실행
 - python3 main.py
 
 # crontab 실행
