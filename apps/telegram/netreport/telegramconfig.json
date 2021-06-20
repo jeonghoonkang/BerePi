@@ -1,0 +1,9 @@
+{
+    "telegram_bot_setting": {
+        "token": "",
+        "chat_id": ""
+    },
+    "schedule": {
+        "time": 2 
+    }
+}
