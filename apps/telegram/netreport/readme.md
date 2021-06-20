@@ -2,3 +2,8 @@
 - 텔레그램 봇 연결
 - 메세지 전송
 
+# 실행
+- python3 main.py
+
+# crontab 실행
+<pre> * */8 * * * python3 /home/tinyos/devel/crontab/netreport/main.py > /home/tinyos/devel/crontab/netreport/err.txt 2>&1 </pre>
