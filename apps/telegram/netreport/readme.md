@@ -5,7 +5,7 @@
 - 1*****12:*************U9gvr3BtTbxJW*****
 - https://api.telegram.org/bot*************U9gvr3BtTbxJW*****/getUpdates
 - {"ok":true,"result":[{"update_id":280468502,
-"message":{"message_id":4,"from":{"id":51651596,"is_bot":false,"first_name":"Jhoon","last_name":"K","username":"pinkfloyd","language_code":"ko"},"chat":{"id":51651596,"first_name":"Jhoon","last_name":"K","username":"pinkfloyd","type":"private"},"date":1625000586,"text":"Tomorrow belongs to those who can hear it coming."}}]}
+"message":{"message_id":4,"from":{"id":5165***,"is_bot":false,"first_name":" ","last_name":"K","username":"****","language_code":"ko"},"chat":{"id":51651***,"first_name":"oon","last_name":"K","username":"loyd","type":"private"},"date":1625000586,"text":"Tomorrow belongs to those who can hear it coming."}}]}
 </pre>
 - 메세지 전송
 
