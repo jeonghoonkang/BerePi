@@ -49,3 +49,5 @@ if __name__ == "__main__" :
                 send_message(token=token, chat_id=chat_id, message=message)
 
     print ("finish end of sending telegram message via Bot, good bye .... ")
+
+# 10 */8 * * * python3 /home/---/devel/crontab/diskreport/main.py > /home/---/devel/crontab/diskreport/err.txt 2>&1
