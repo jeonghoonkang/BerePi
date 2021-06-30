@@ -46,7 +46,10 @@ if __name__ == "__main__" :
                 #print (sub)
                 token = sub["token"]
                 chat_id = sub["chat_id"]
-                send_message(token=token, chat_id=chat_id, message=message)
+                try:
+                    send_message(token=token, chat_id=chat_id, message=message)
+                except telegram.error.TelegramError as e:
+                    None
 
     print ("finish end of sending telegram message via Bot, good bye .... ")
 
