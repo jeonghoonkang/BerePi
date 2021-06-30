@@ -7,6 +7,7 @@ import local_port_scanning
 import socket
 import fcntl
 import struct
+import os
 
 
 def get_ip_address(ifname):
@@ -15,6 +16,12 @@ def get_ip_address(ifname):
         struct.pack('256s', bytes(ifname[:15], 'utf-8')))  
     return ''.join(['%d.' % b for b in info[20:24]])[:-1]
 
+def get_free_space():
+    ret = os.statvfs('./') 
+    free_space = ret.f_frsize * ret.f_bfree / 1024 / 1024 / 1024 # 기가바이트 
+    #print (free_space)
+    retrun free_space
+
 def local_port_scanning_job():
     message = local_port_scanning.make_message()
     local_port_scanning.send_message(token=token, chat_id=chat_id, message=message)
@@ -22,21 +29,25 @@ def local_port_scanning_job():
 
 if __name__ == "__main__" :
 
-    local_ip = get_ip_address('enp1s0')
+    get_free_space()
+
+    #local_ip = get_ip_address('enp1s0')
     # should check network device interface name by ifconfig
 
-    print (" open telegram config file, telegramconfig.json")
+    #print (" open telegram config file, telegramconfig.json")
 
-    with open("telegramconfig.json") as f:
-        settings = json.load(f)
+    #with open("telegramconfig.json") as f:
+    #    settings = json.load(f)
     
     token = settings["telegram_bot_setting"]["token"]
     chat_id = settings["telegram_bot_setting"]["chat_id"]
         
-    message = local_port_scanning.make_message()
-    message = message + 'LOCAL IP address:' + local_ip
-    print (message)
-    local_port_scanning.send_message(token=token, chat_id=chat_id, message=message)
+    #message = local_port_scanning.make_message()
+    #message = message + 'LOCAL IP address:' + local_ip
+    #print (message)
+
+    #local_port_scanning.send_message(token=token, chat_id=chat_id, message=message)
+
 
     print ("finish end of sending telegram message via Bot, good bye .... ")
     
