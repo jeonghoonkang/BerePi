@@ -36,7 +36,7 @@ if __name__ == "__main__" :
     local_ip = get_ip_address('enp1s0')
     message += local_ip
 
-    with open("telegramconfig.json") as f:
+    with open("telegramconfig.json") as f: #절대경로 사용 추천 
         settings = json.load(f)
     
     for x,y in settings.items():
