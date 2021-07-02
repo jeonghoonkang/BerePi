@@ -20,6 +20,7 @@
 ### Nextcloud backup
 <pre> 
 rsync -Aavx -e 'ssh -p22' --progress --partial nextcloud/ nextcloud-dirbkp_`date +"%Y%m%d"`/ 
+
 mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] > nextcloud-sqlbkp_`date +"%Y%m%d"`.bak 
     ex) mysqldump --single-transaction -h {IP} -u nextcloud -p{PW} nextcloud > nextcloud_sql_bk_new.bak 
     ex) sudo docker inspect nextcloud_db_1 | grep IP 
@@ -39,8 +40,7 @@ mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak -v
 
 sudo docker exec -it -u 33 compose_script_app_1 php occ upgrade
 
-
-version' => '21.0.2.1',
+     version' => '21.0.2.1',
   
 </pre>
 
