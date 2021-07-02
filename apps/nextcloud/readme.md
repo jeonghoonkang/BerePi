@@ -30,7 +30,8 @@ mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] 
 </pre>
 
 ### Nextcloud restore
-<pre> rsync -Aax nextcloud-dirbkp/ nextcloud/ 
+<pre>
+rsync -Aax nextcloud-dirbkp/ nextcloud/ 
 
 mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" 
 
