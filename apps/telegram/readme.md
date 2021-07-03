@@ -6,3 +6,6 @@
 ### How to add Telegram message API 
   - http://python-telegram-bot.readthedocs.io/en/latest/index.html
   
+### Crontab
+15 */12 * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1
+#* * * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1
