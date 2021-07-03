@@ -33,6 +33,9 @@ mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] 
 <pre>
 rsync -Aax nextcloud-dirbkp/ nextcloud/ 
 
+   (참고) DB 컨테이너 IP Address 확인 방법
+         sudo docker inspect {컨테어너명} | grep IP
+
 mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" 
 
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" 
