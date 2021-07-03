@@ -50,6 +50,7 @@ sudo docker exec -it -u 33 {컨테이너 이름} php occ upgrade
 - 업그레이드 불가능한 앱은 disable 시켜야 함
   - sudo docker exec -it -u 33 {컨테이너 이름} php occ app:list
   - sudo docker exec -it -u 33 {컨테이너 이름} php occ app:disable richdocumentscode 
+- 참고 : https://docs.nextcloud.com/server/15/admin_manual/configuration_server/occ_command.html#apps-commands
   
 </pre>
 
