@@ -42,7 +42,7 @@ mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud"
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
 mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak -v 
 
-sudo docker exec -it -u 33 compose_script_app_1 php occ upgrade
+sudo docker exec -it -u 33 {컨테이너 이름} php occ upgrade
 
      version' => '21.0.2.1',
   
