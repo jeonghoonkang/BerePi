@@ -12,8 +12,9 @@
 # 직접 실행
 - python3 main.py
 
-# 필요 
-- python-telegram-bot
+# 필요 사항 
+- pip3 install python-telegram-bot
+- apt install python3-pip
 
 # crontab 실행
 - <pre> * */8 * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1  </pre>
