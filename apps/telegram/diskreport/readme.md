@@ -16,4 +16,4 @@
 - python-telegram-bot
 
 # crontab 실행
-- * */8 * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1 
+- <pre> * */8 * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1  </pre>
