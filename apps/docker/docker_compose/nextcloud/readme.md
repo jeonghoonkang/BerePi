@@ -34,7 +34,8 @@
   - docker exec nginx-letsencrypt /app/force_renew
     - history | grep renew 로 검색 가능 
 <pre>
-sudo docker exec nextcloud_letsencrypt-companion_1 /app/force_renew
+- sudo docker exec {nextcloud_letsencrypt-companion_1} /app/force_renew
+- {컨테이너 이름}
 /etc/nginx/certs/~~.~~.~~ /app
 Creating/renewal bigsoft.iptime.org certificates... (bigsoft.iptime.org)
 2021-01-03 00:57:04,884:INFO:simp_le:1450: Generating new certificate private key
