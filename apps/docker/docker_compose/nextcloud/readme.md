@@ -62,3 +62,18 @@ Reloading nginx proxy (481d0570d02db1a14a6316ee543a45fa56cad26b961d9004a6ee0ad11
   - sudo update-rc.d apache2 defaults 다시 등록
   - crontab 실행
     - sudo docker-compose -f /home/tinyos/devel/BerePi/apps/docker/docker_compose/nextcloud/docker-compose.yml up -d
+
+#### lets encrypt renew 메세지
+<pre>
+tinyos@toshome-fit001:~/devel/docker/nextcloud$ sudo docker exec letsencrypt-companion_1 /app/force_renew
+Creating/renewal domain.domain.com certificates... (domain.domain.com)
+[Sat Jul 10 02:53:12 UTC 2021] Using CA: https://acme-v02.api.letsencrypt.org/directory
+[Sat Jul 10 02:53:12 UTC 2021] Creating domain key
+[Sat Jul 10 02:53:17 UTC 2021] The domain key is here: /etc/acme.sh/n.@ail.com/s.oo.com/s.m.com.key
+[Sat Jul 10 02:53:17 UTC 2021] Single domain='o.o.com'
+[Sat Jul 10 02:53:17 UTC 2021] Getting domain auth token for each domain
+[Sat Jul 10 02:53:20 UTC 2021] Getting webroot for domain='o.o.com'
+[Sat Jul 10 02:53:20 UTC 2021] Verifying: o.o.com
+[Sat Jul 10 02:53:24 UTC 2021] Pending
+[Sat Jul 10 02:53:27 UTC 2021] Pending
+</pre>
