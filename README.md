@@ -8,7 +8,7 @@
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
 
 ### DiskPi which is a new direction for secure pi computing
-- As of 2021, not long ago, RaspberryPi started to support SSD/HDD Booting by USB connection. It gave us a new approach to the quick booting and secure, hard to be beaten by electricity accident SD card crash.
+- As of 2021, not long ago, RaspberryPi started to support SSD/HDD Booting by USB link. It gives us a new approach which has a very quick booting speed and secure, nice non-breakable booting code, rather than beaten by electricity accident such as SD card crash.
 
 ### Old documents which is still valid.
 
