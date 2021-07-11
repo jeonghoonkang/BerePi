@@ -1,6 +1,6 @@
 # Nextcloud File Syncronization System
 
-## Nextcloud server
+## Nextcloud server by docker-compose 
 - 설정
   - https://github.com/jeonghoonkang/BerePi/tree/master/apps/docker/docker_compose/nextcloud
   - 도커 컴포즈를 이용한 서비스 실행 
