@@ -40,10 +40,7 @@ sudo systemctl status xrdp
   - sudo systemctl restart xrdp
   - sudo apt-get install xfce4
   - echo xfce4-session > .xsession
-
-</pre>
-
-https://corona-world.tistory.com/26
+  - https://corona-world.tistory.com/26
 
 
 
