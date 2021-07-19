@@ -35,10 +35,11 @@ sudo systemctl status xrdp
 
 - Ubuntu 20 버전으로 넘어오면서 회색화면 이슈는 해결된것으로 보임 (2021.6 기준)
 
-sudo adduser xrdp ssl-cert // not use
-sudo systemctl restart xrdp
-sudo apt-get install xfce4
-echo xfce4-session > .xsession
+- 참고) 이전버전 경우, 
+  - sudo adduser xrdp ssl-cert // not use
+  - sudo systemctl restart xrdp
+  - sudo apt-get install xfce4
+  - echo xfce4-session > .xsession
 
 </pre>
 
