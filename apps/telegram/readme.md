@@ -9,3 +9,17 @@
 ### Crontab
 - 15 */12 * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1
 - #* * * * * python3 /home/tinyos/devel/crontab/diskreport/main.py > /home/tinyos/devel/crontab/diskreport/err.txt 2>&1
+
+
+<pre>
+import os
+import time
+
+def measure_temp():
+        temp = os.popen("vcgencmd measure_temp").readline()
+        return (temp.replace("temp=",""))
+
+while True:
+        print(measure_temp())
+        time.sleep(1)
+</pre>
