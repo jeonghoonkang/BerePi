@@ -52,4 +52,8 @@ ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 - PubkeyAuthentication yes
 - PasswordAuthentication no
 - sudo vim /etc/ssh/sshd_config
+      
+      
+      
+ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.22" 
 
