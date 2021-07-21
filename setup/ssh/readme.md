@@ -30,7 +30,7 @@ The key's randomart image is:
 </pre>
 
 
-### 키 변경되었을 경우
+### 키 변경되었을 경우 (ssh -R)
 ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 
 
