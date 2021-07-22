@@ -1,23 +1,18 @@
 ### X forwarding for RaspberryPi (Xserver) (Xwindow)
 - https://www.raspberrypi.org/documentation/remote-access/ssh/unix.md
 
-### Windows
+### Windows 에서 원격 우분투 서버의 Xwindows GUI 실행 방법
+- 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함
 - export DISPLAY=localhost:0.0
 - ssh -Yf {}
 - DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
 
-
-### 포트 확인
-- netstat -tnlp
-- nmap localhost
-
 ### MAC OSX
-
+- https://www.xquartz.org/ 가 설치되어 있어야 함
 - ssh -X ids@xxx.xxx.xxx.xxx -vvv -p72 xeyes
-- https://www.xquartz.org/
 
 <pre>
-( 사용하지 않음 )
+( 이제는 아래 내용 사용하지 않아도 됨. )
 
 OSX 터미널을 열어,
 
@@ -31,3 +26,7 @@ host X11ubuntu
        ForwardAgent yes
        ForwardX11 yes
 </pre>
+
+### 포트 확인
+- netstat -tnlp
+- nmap localhost
