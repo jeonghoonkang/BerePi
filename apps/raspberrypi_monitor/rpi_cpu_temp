@@ -1,0 +1,4 @@
+#!/bin/bash
+nowTime=$(date +"%Y-%m-%d %H:%M:%S")
+nowTemp=$(sed 's/\(...\)$/.\1/' < /sys/class/thermal/thermal_zone0/temp)
+echo "$nowTime $nowTemp"
