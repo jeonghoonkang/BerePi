@@ -15,12 +15,12 @@ time_diff = kor_time - utc_time
 
 _t = kor_time.strftime('%Y-%m-%d %H:%M:%S') + ' : ' + myhost 
 #_t = strftime("%Y-%m-%d %H:%M:%S", kor_time) + ' : ' + myhost
-filename = 'doodle_log' + myhost + '.txt'
+filename = 'doodle_log_' + myhost + '.txt'
 
 # Mac OSX
-#with open('/Users/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
+with open('/Users/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
 
 # RaspberryPi
-with open('/home/pi/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
+#with open('/home/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
     outfile.write(_t + '\n')
     print (_t)
