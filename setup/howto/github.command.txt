@@ -47,3 +47,8 @@ git clone
 git commit -a -m
 git push origin master
 git pull origin master
+
+
+# PAT 키 생성
+https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token
+
