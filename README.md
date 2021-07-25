@@ -2,7 +2,8 @@
 - IoT data collection and analytics software tool-kit based on RaspberryPi which is driven for IoT level computing system
 - Software stack for physical computing and intelligent SW service based on IoT data collection & processing (Big data)
 - is based on RaspberryPi distribution (hardware and software)
-- supports Raspbian OS, Buster (ver 2019.09.12), with RaspBerryPi4 (input hangul mode, 한글모드)
+- supports Ubuntu64_ARM
+  - previous version : Raspbian OS, Buster (ver 2019.09.12), with RaspBerryPi4 (input hangul mode, 한글모드)
 
 ##### Contribution
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
