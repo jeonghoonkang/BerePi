@@ -1,3 +1,5 @@
+WSL2 에서 파일 생성, 디렉토리 변경 등이 동작하지 않는 경우  
+
 ## 사용방법
 - sudo umount /mnt/c
 - sudo mount -t drvfs d: /mnt/d -o metadata 
