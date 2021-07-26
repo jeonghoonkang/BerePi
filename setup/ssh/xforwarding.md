@@ -2,7 +2,7 @@
 - https://www.raspberrypi.org/documentation/remote-access/ssh/unix.md
 
 ### Windows 에서 원격 우분투 서버의 Xwindows GUI 실행 방법
-- 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함
+- 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함 (VcXsrv)
 - export DISPLAY=localhost:0.0
 - ssh -Yf {}
 - DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
