@@ -42,3 +42,20 @@ host X11ubuntu
 ### 포트 확인
 - netstat -tnlp
 - nmap localhost
+
+
+### windows10 설치 방법 (2021.8)
+
+- VcXserv 실행시 Disable access contorl 을 체크해 줘야 함
+- 방화벽 설청 필요
+
+#### WSL Access via firewall
+- "Firewall & Network Protection" >> advanced settings
+- New Rule
+- Protocol and Ports
+  - ![포트 설정](res/2021-08-04-18-09-55.png)
+- 해당 아이피 오픈
+  - WSL2 는 가상머신에서 실행되고 있기 때문에, 해당 아이피를 확인하여 마지막에 /12 추가함
+  - ![아이피오픈](res/2021-08-04-18-10-59.png)
+  - <pre> export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0 </pre>
+  - <pre>export LIBGL_ALWAYS_INDIRECT=1 </pre>
