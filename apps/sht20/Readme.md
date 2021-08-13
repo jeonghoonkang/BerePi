@@ -51,6 +51,7 @@ like this
 - install GPIO
   - sudo apt update
   - sudo apt install python3-lgpio
+  - http://abyz.me.uk/lg/py_lgpio.html#i2c_write_byte
 
 #### Links 
 - [adafruit link](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c)
