@@ -46,6 +46,12 @@ like this
   - sudo i2cdetect -y 1
   - you should see i2c table (https://learn.adafruit.com/assets/3055)
 
+
+#### Ubuntu64 installation
+- install GPIO
+  - sudo apt update
+  - sudo apt install python3-lgpio
+
 #### Links 
 - [adafruit link](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c)
 
