@@ -1,6 +1,6 @@
 
 # Author : Jeonghoon.Kang (http://github.com/jeonghoonkang)
-# last modification 2021.2.14
+# last modification 2021.8.14
 # Raspberrypi Buster release support
 
 
@@ -40,6 +40,9 @@ unzip distribute-0.7.3.zip
 cd distribute-0.7.3
 sudo  python setup.py install
 sudo easy_install pip
+
+# apt-get -y install python3-distutils
+# curl https://bootstrap.pypa.io/get-pip.py | python3
 
 sudo pip install setuptools
 sudo easy_install distribute
