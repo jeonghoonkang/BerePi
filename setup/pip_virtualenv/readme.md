@@ -11,7 +11,14 @@
     - sudo apt-get install python3-setuptools
     - sudo easy_install3 pip
 
+### 설치방법
+- curl https://bootstrap.pypa.io/get-pip.py > get.py
+- python3 get.py
+- apt-get -y install python3-distutils
+
+#### 참고
 - sudo apt-get install python3-pip
+
 
 - Python 2.x
   - sudo easy_install 모듈명
