@@ -34,7 +34,6 @@ The key's randomart image is:
 ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "[keties.iptime.org]:60000"
 
-
 ### 초기설치 후 에러
 - connection reset by 10.10.10.10 port 22 라고 나오는 경우
 - sudo ssh-keygen -A
@@ -42,19 +41,14 @@ ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "[keties.iptime.org]:60000"
 ### 서버 실행 
 - systemctl enable ssh.service
 
-
-
 ### 키 복사 방법 
 - ssh-copy-id -i ~/.ssh/id_rsa.pub lesstif@192.168.10.1
 - ssh-copy-id -n -i ~/.ssh/id_rsa.pub -p7022 <id>@<host>
-
 
 ### Auth 방법 결정 
 - PubkeyAuthentication yes
 - PasswordAuthentication no
 - sudo vim /etc/ssh/sshd_config
       
-      
-      
-ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.22" 
-
+### WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!  
+- ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.22" 
