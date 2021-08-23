@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # Author : https://github.com/jeonghoonkang
 
 from __future__ import print_function
@@ -18,9 +17,9 @@ _t = kor_time.strftime('%Y-%m-%d %H:%M:%S') + ' : ' + myhost
 filename = 'doodle_log_' + myhost + '.txt'
 
 # Mac OSX
-with open('/Users/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
+#with open('/Users/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
 
 # RaspberryPi
-#with open('/home/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
+with open('/home/tinyos/devel/BerePi/apps/log_check/output/' + filename , 'w') as outfile:
     outfile.write(_t + '\n')
     print (_t)
