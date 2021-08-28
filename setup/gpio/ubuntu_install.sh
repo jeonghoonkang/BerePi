@@ -1,1 +1,1 @@
-sudo apt install python3-lgpio
+sudo apt install -y python3-lgpio 
