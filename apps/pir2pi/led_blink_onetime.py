@@ -38,8 +38,8 @@ if __name__=="__main__":
 
 
     except KeyboardInterrupt:
-        lgpio.gpio_write(h, LED0, 0)
-        lgpio.gpio_write(h, LED1, 0)
-        lgpio.gpio_write(h, LED2, 0)
+        lgpio.gpio_write(h, LED0, 1)
+        lgpio.gpio_write(h, LED1, 1)
+        lgpio.gpio_write(h, LED2, 1)
         lgpio.gpiochip_close(h)
 
