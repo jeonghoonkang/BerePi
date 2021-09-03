@@ -19,3 +19,5 @@
 ### Movidius
 - https://www.pyimagesearch.com/2019/04/08/openvino-opencv-and-movidius-ncs-on-the-raspberry-pi/
 
+
+- /darknet detect cfg/yolov3.cfg yolov3.weights data/dog.jpg
