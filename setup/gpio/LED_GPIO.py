@@ -22,7 +22,7 @@ try:
         time.sleep(1)
         
 except KeyboardInterrupt:
-    lgpio.gpio_write(h, LED, 0)
+    lgpio.gpio_write(h, LED, 1)
     lgpio.gpiochip_close(h)
 
 
