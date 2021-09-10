@@ -26,7 +26,7 @@ host X11ubuntu
 - netstat -tnlp
 - nmap localhost
 
-### windows10 설치 방법 (2021.8)
+### Windows10 (WSL2) 설치, 실행 방법 (2021.8)
 - (중요) VcXserv 실행시 Disable access contorl 을 체크해 줘야 함
 - 아래처럼 방화벽 설청 필요
 
@@ -49,5 +49,4 @@ host X11ubuntu
     ![방화벽 설정](res/win_defender.png)
 
 - 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함 (VcXsrv 추천)
-- ssh -Yf {}
-- DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
+- ssh -Yf id@ipaddress {실행할 SW}
