@@ -1,23 +1,6 @@
 ### X forwarding for RaspberryPi (Xserver) (Xwindow)
 - https://www.raspberrypi.org/documentation/remote-access/ssh/unix.md
 
-### Windows 에서 원격 우분투 서버의 Xwindows GUI 실행 방법
-- 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함 (VcXsrv)
-- export DISPLAY=localhost:0.0
-- ssh -Yf {}
-- DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
-#### 우분투 터미널 WSL2 에서 사용하기 위한 설정
-  - 아래 명령 실행으로 .bashrc 입력 필요
-  - DISPLAY 환경변수에서 localhost 는 동작하지 않음. 기존 방법은 DISPLAY=localhost:0.0
-  - env | grep DISPLAY 로 확인
-  <pre> echo 'export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '"'"'{print $2}'"'"'):0.0' >> ~/.bashrc
- </pre>
-
-  - Windows10 에서 설정
-    - 제어판\시스템 및 보안\Windows Defender 방화벽
-    - VcXsrv (또는 Xming) windows xserver 는 모두 허용으로 바꾸어야 함
-    ![방화벽 설정](res/win_defender.png)
-
 
 ### MAC OSX
 - https://www.xquartz.org/ 가 설치되어 있어야 함
@@ -43,11 +26,9 @@ host X11ubuntu
 - netstat -tnlp
 - nmap localhost
 
-
 ### windows10 설치 방법 (2021.8)
-
-- VcXserv 실행시 Disable access contorl 을 체크해 줘야 함
-- 방화벽 설청 필요
+- (중요) VcXserv 실행시 Disable access contorl 을 체크해 줘야 함
+- 아래처럼 방화벽 설청 필요
 
 #### WSL Access via firewall
 - "Firewall & Network Protection" >> advanced settings
@@ -59,3 +40,20 @@ host X11ubuntu
   - ![아이피오픈](res/2021-08-04-18-10-59.png)
   - <pre> export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0 </pre>
   - <pre>export LIBGL_ALWAYS_INDIRECT=1 </pre>
+
+#### 우분투 터미널 WSL2 에서 사용하기 위한 설정
+  - 아래 명령 실행으로 .bashrc 입력 필요
+  - DISPLAY 환경변수에서 localhost 는 동작하지 않음. 기존 방법은 DISPLAY=localhost:0.0
+  - env | grep DISPLAY 로 확인
+  <pre> echo 'export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '"'"'{print $2}'"'"'):0.0' >> ~/.bashrc
+  </pre>
+
+  - Windows10 에서 설정
+    - 제어판\시스템 및 보안\Windows Defender 방화벽
+    - VcXsrv (또는 Xming) windows xserver 는 모두 허용으로 바꾸어야 함
+    ![방화벽 설정](res/win_defender.png)
+
+- 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함 (VcXsrv 추천)
+- export DISPLAY=localhost:0.0
+- ssh -Yf {}
+- DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
