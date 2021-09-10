@@ -42,9 +42,6 @@ host X11ubuntu
   - <pre>export LIBGL_ALWAYS_INDIRECT=1 </pre>
 
 #### 우분투 터미널 WSL2 에서 사용하기 위한 설정
-  - env | grep DISPLAY 로 확인
-  <pre> echo 'export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '"'"'{print $2}'"'"'):0.0' >> ~/.bashrc
-  </pre>
 
   - Windows10 에서 설정
     - 제어판\시스템 및 보안\Windows Defender 방화벽
@@ -52,6 +49,5 @@ host X11ubuntu
     ![방화벽 설정](res/win_defender.png)
 
 - 로컬 윈도우즈에 xming 이나 X11 server가 설치되어 있어야 함 (VcXsrv 추천)
-- export DISPLAY=localhost:0.0
 - ssh -Yf {}
 - DISPLAY=localhost:0.0 ssh -Yf id@ipaddress {실행할 SW}
