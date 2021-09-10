@@ -42,8 +42,6 @@ host X11ubuntu
   - <pre>export LIBGL_ALWAYS_INDIRECT=1 </pre>
 
 #### 우분투 터미널 WSL2 에서 사용하기 위한 설정
-  - 아래 명령 실행으로 .bashrc 입력 필요
-  - DISPLAY 환경변수에서 localhost 는 동작하지 않음. 기존 방법은 DISPLAY=localhost:0.0
   - env | grep DISPLAY 로 확인
   <pre> echo 'export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '"'"'{print $2}'"'"'):0.0' >> ~/.bashrc
   </pre>
