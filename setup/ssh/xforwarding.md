@@ -36,7 +36,7 @@ host X11ubuntu
 - Protocol and Ports
   - ![포트 설정](res/2021-08-04-18-09-55.png)
 - 해당 아이피 오픈
-  - WSL2 는 가상머신에서 실행되고 있기 때문에, 해당 아이피를 확인하여 마지막에 /12 추가함
+  - WSL2 는 가상머신에서 실행되고 있기 때문에, 해당 아이피를 확인(ifconfig)하여 마지막에 /12 추가함
   - ![아이피오픈](res/2021-08-04-18-10-59.png)
   - <pre> export DISPLAY=$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null):0 </pre>
   - <pre>export LIBGL_ALWAYS_INDIRECT=1 </pre>
