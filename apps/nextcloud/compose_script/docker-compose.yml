@@ -1,10 +1,10 @@
 # Author : Jeonghoon Kang, https://github.com/jeonghoonkang
-version: '2' #3 사용 가능, 기존은 3. 일부 Ubuntu에서 실행이 안되어서 2로 낮추어씀. 문제 발생 없음
+version: '2' #3 사용 가능, 기존은 Ver 3. 일부 Ubuntu 에서 실행이 안되며, Ver 2로 낮춰야 문제가 발생하지 않음
 
 services:
   db:
     image: mariadb
-    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
     restart: always
     volumes:
       - ${VOL_PATH}/mariadb_volume:/var/lib/mysql
