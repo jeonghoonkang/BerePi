@@ -18,8 +18,7 @@ vcgencmd bootloader_config
 
 
 
-
---- 라즈베리파이3
+### 라즈베리파이3 확인 방법 
 참고 : https://m.blog.naver.com/jeonsr8710/221783418217
 
 ```pi@raspberrypi:~ $ vcgencmd otp_dump | grep 17```
