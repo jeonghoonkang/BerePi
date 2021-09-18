@@ -6,7 +6,7 @@
 ## 부팅 설정 파일
 - crontab 용 환경변수 파일
   - .../BerePi/setup/.crontab_env
-  - SONNO_HOME 환경 변수 
+  - SONNO_HOME 환경변수가 정의하고 있는 위치 중요 
 
 ## 부팅시 초기화 및 초기 실행
 
