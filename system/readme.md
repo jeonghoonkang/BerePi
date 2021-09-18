@@ -15,7 +15,7 @@
 
 ## 로그파일
 ### 동작상태 등, 저장 로그
-- .../BerePi/logs/berepi_sys_log.log 
+- .../BerePi/logs/berelogger.log 
   - 파일당 2MB, 9개까지 저장 (Rotate Log)
 ### 시스템 동작 로그
 - .../BerePi/logs/berepi_sys_log.log
