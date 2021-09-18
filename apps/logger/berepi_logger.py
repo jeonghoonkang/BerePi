@@ -4,6 +4,7 @@
 import logging
 #import logging.config
 from logging.handlers import RotatingFileHandler
+import sys
 
 #logging.config.fileConfig('logging.conf')
 LOG_FILENAME = "/home/tinyos/devel/BerePi/logs/berelogger.log"
@@ -13,7 +14,7 @@ logger.setLevel(logging.DEBUG)
 
 # Choose TimeRoatatingFileHandler or RotatingFileHandler 
 #handler = logging.handlers.TimedRotatingFileHandler(filename=LOG_FILENAME, when="midnight", interval=1, encoding="utf-8")
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, mode='a', maxBytes=2000, backupCount=1)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, mode='a', maxBytes=200000, backupCount=9)
 handler.formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 logger.addHandler(handler)
@@ -27,32 +28,23 @@ def berelog(msg_name, value=None):
 
 def args_proc():
  
-    msg = "usage : python %s {} {} {} {}" %__file__
-    msg += " => user should input arguments {} "
-    print (msg, '\n')
-  
-    if len(sys.argv) < 2:
-       exit("[bye] you need to input args, ip / port / id")
- 
-    arg1 = sys.argv[1]
-    arg2 = sys.argv[2]
-    arg3 = sys.argv[3]
-    arg4 = sys.argv[4]
- 
-    ip   = arg1
-    port = arg2
-    id   = arg3
-    passwd = arg4
- 
-    print ("... start running, inputs are ", ip, port, id, passwd)
- 
-    return ip, port, id, passwd
+    num_of_args = len(sys.argv)
+    if num_of_args < 2:
+       print('current number of args -->  ', num_of_args )
+       exit("[bye] you have to write input args ")
+
+    arg=[0 for i in range(num_of_args)]
+    for loop_num in range(num_of_args): 
+        #print ('##loop_num :', loop_num)
+        #print (arg[loop_num])
+        arg[loop_num] = sys.argv[loop_num]
+    return arg
 
 
 if __name__ == "__main__":
 
-    berelog('temperature', '25')
-    berelog('temperature')
+    args = args_proc()
+    berelog('logging cpu temp', args[1])
     
     # 'application' code
     #logger.debug('debug message')
