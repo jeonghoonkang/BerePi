@@ -13,4 +13,5 @@
 -  부팅후 초기 실행하는 파일
   - .../BerePi/system/init_file/sonno_start.sh
 
-
+## 로그파일
+- .../BerePi/apps/logger/berepi_logger.py
