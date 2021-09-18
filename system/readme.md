@@ -22,4 +22,4 @@
 
 ### sudo crontab
 - 부팅 초기에 주기적으로 실행해야 하는 코드는 아래처럼 실행
-  - <code> */3 * * * * bash /home/tinyos/devel/BerePi/system/init_file/sonno_start.sh `sudo vcgencmd measure_temp` > /home/tinyos/devel/BerePi/logs/berepi_sys_log.log 2>&1 </code>
+  - <pre> */3 * * * * bash /home/tinyos/devel/BerePi/system/init_file/sonno_start.sh `sudo vcgencmd measure_temp` > /home/tinyos/devel/BerePi/logs/berepi_sys_log.log 2>&1 </pre>
