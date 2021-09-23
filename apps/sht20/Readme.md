@@ -1,5 +1,5 @@
 
-## SHT2x driver for Raspi##
+## SHT2x driver for Raspi
 Desc : Temperature & Humidity sensor, this driver using smbus
        but it shows only ±0.7℃ scale. thus my team move to the  different API SW
        Please consider this restrictions
