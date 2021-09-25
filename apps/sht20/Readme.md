@@ -1,5 +1,5 @@
 ## SHT2X Driver 
-- last modify : apply ubuntu64 with lgpio
+- last modify : apply ubuntu64 with lgpio, 2021/9/24
 - run file : sudo python3 sht20_ubuntu64.py, sudo python3 sht20class_ubuntu.py 
 
 
