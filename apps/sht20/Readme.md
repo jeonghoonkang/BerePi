@@ -1,5 +1,9 @@
+## SHT2X Driver 
+- last modify : apply ubuntu64 with lgpio
+- run file : sudo python3 sht20_ubuntu64.py, sudo python3 sht20class_ubuntu.py 
 
-## SHT2x driver for Raspi
+
+### SHT2x driver for Raspi
 Desc : Temperature & Humidity sensor, this driver using smbus
        but it shows only ±0.7℃ scale. thus my team move to the  different API SW
        Please consider this restrictions
