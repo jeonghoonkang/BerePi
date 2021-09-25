@@ -4,6 +4,8 @@
 # should read it : http://abyz.me.uk/lg/py_lgpio.html#i2c_read_byte
 # 2021/9/25 only temperature is working
 
+# ubuntu I2C : https://ubuntu.com/tutorials/gpio-on-raspberry-pi#4-i2c-example
+
 import unittest
 import fcntl
 import time
