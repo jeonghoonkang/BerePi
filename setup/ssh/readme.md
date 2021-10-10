@@ -41,10 +41,18 @@ ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "[keties.iptime.org]:60000"
 ### 서버 실행 
 - systemctl enable ssh.service
 
-### 키 복사 방법 
+### ssh 키 복사 방법
 - ssh-copy-id -i ~/.ssh/id_rsa.pub lesstif@192.168.10.1
 - ssh-copy-id -n -i ~/.ssh/id_rsa.pub -p7022 <id>@<host>
+- ssh-keygen -t rsa
+  - ~/.ssh 경로에 id_rsa 와 id_rsa.pub 파일 생성
+  - ssh-copy-id -i ~/.ssh/id_rsa.pub [원격서버 주소]
 
+
+
+출처: https://blackas119.tistory.com/16 [CodeBlack]
+      
+      
 ### Auth 방법 결정 
 - PubkeyAuthentication yes
 - PasswordAuthentication no
