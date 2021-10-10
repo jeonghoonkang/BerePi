@@ -55,3 +55,10 @@ The key's randomart image is:
       
 ### WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!  
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.22" 
+      
+### key 를 이용하여 자동 로그인이 안되는 경우
+- 디렉토리 등의 권한 설정이 잘 안되어 있는 경우임 
+  - /home/아이디 는 chmod 755
+  - .ssh 는 700
+  - authorized_keys 는 600
+      
