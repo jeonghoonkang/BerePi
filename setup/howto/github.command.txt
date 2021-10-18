@@ -52,3 +52,9 @@ git pull origin master
 # PAT 키 생성
 https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token
 
+
+
+# stash 관련
+- git stash
+- git stash list
+- git stash drop stash@{0}
