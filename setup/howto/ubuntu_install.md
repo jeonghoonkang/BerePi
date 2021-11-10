@@ -9,3 +9,5 @@
 - ls, cat
 - prefix = ()/boot/grub
 
+### make usb image from UBUNTU
+- sudo apt install usb-creator-gtk 
