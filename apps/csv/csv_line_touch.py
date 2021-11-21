@@ -130,7 +130,7 @@ if __name__== "__main__" :
     # df = pd.read_pickle("df.pkl")
     # f = open("df.pkl", "rb")
     # temp = pickle.load(f)
-    # f.close() """
+    # f.close() 
     # df = pd.read_csv ('file_name.csv',usecols= ['column_name1','column_name2']) #subset of fields, sep='\t'
     # header=0, default, the first row of the CSV file will be treated as column names, header=None
     # df = pd.read_csv('example.csv', skiprows = 1,header = None)   
