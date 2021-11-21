@@ -8,6 +8,7 @@ import os
 import sys 
 import pickle
 import info #read info for processing
+import gc
 
 
 def change_string_to_arry(fstring):
@@ -68,6 +69,7 @@ def csv_to_df_merge(_flist, fnum=None): #csv 파일을 하나의 dataframe 으�
         _flist = _flist[:fnum] #fnum 갯수로 제한
 
     allData = []# 읽어 들인 csv파일 내용을 저장할 빈 리스트를 하나 만든다
+    _dataframe = pd.DataFrame()
     cnt = 0
     print(" 디렉토리 모든 CSV를 데이터프레임으로 변환중 ...")
     for file in _flist:
@@ -75,6 +77,9 @@ def csv_to_df_merge(_flist, fnum=None): #csv 파일을 하나의 dataframe 으�
         printProgressBar(cnt, len(_flist))
         _csvdf = pd.read_csv(file, skiprows = 3, header = None) 
         allData.append(_csvdf) # 리스트에 추가 
+        #_dataframe.append(_csvdf)
+        del [[_csvdf]]
+        gc.collect()
     
     _dataframe = pd.concat(allData, axis=0, ignore_index=True)
     print (cnt, "개의 파일을 처리했습니다.. ")
@@ -102,7 +107,7 @@ if __name__== "__main__" :
     print ("디렉토리 경로", info.local_path)
 
     file_list = []
-    _d_limit_f_=10 # 개발에만 사용 일부 파일만 테스트, 테스트 파일 갯수
+    _d_limit_f_=1000 # 개발에만 사용 일부 파일만 테스트, 테스트 파일 갯수
     csvpath = info.local_path
 
     recursive_search_dir(csvpath, file_list)
