@@ -5,6 +5,8 @@
 import text as txt
 import pandas as pd
 
+#텍스트 파일에서 CSV 헤더를 두개 읽어서, 비교
+#변경여부 확인
 
 if __name__== "__main__" :
 
