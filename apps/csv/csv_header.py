@@ -38,7 +38,7 @@ if __name__== "__main__" :
 
     #exit(1)
     df = pd.DataFrame(buf,columns=["1_first","2_second"])
-    df.to_csv("output.csv", header=1, index="1_first")       
+    df.to_csv("_o_output.csv", header=1, index="1_first")       
     #''.join(str_list) 
 
 
