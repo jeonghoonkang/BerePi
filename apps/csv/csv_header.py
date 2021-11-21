@@ -26,7 +26,7 @@ if __name__== "__main__" :
     for idx in range(0,range_end) :
         line_num += 1
         print (line_num, firstlist[idx], "<##>", secondlist[idx])
-#       buf.append(line_num)
+        #sub_buf.append(line_num)
         sub_buf.append(firstlist[idx])
         sub_buf.append(secondlist[idx])
         buf.append(sub_buf)
@@ -35,8 +35,8 @@ if __name__== "__main__" :
     print (buf)
 
     #exit(1)
-    df = pd.DataFrame(buf,columns=["first","second"])
-    df.to_csv("output.csv", header=None, index=None)       
+    df = pd.DataFrame(buf,columns=["1_first","2_second"])
+    df.to_csv("output.csv", header=1, index="1_first")       
     #''.join(str_list) 
 
 
