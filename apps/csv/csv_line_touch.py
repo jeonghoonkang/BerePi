@@ -88,7 +88,7 @@ def csv_to_df_merge(_flist, fnum=None): #csv 파일을 하나의 dataframe 으�
 def df_to_csv(_d, _h=None):
 
     if _h != None : 
-        print ("CSV with Header ... ")
+        print ( "CSV with Header ... in ", df_to_csv.__name__)
         _d.columns = _h
         _d.to_csv("_o_df_2_csv.csv", header=True, index=False) #인덱스 없이 저장
     else :
@@ -117,17 +117,22 @@ if __name__== "__main__" :
     print (len(file_list))
 
     df_m = csv_to_df_merge(file_list, _d_limit_f_)
-    print ("Dataframe 라인갯수", len(df_m.index))
-    _dataframe_print_(df_m)
-
-    _header = info.fields_name
-    header_list = change_string_to_arry(_header)
-
-    df_to_csv(df_m, header_list)
-
+  
+   # 피클저장
     __f = open("_o_df.pkl","wb")
     pickle.dump(df_m,__f) 
     __f.close()
+    
+    # 출력 DF 정보
+    print ("Dataframe 라인갯수", len(df_m.index))
+    #_dataframe_print_(df_m)
+
+    # CSV용 header 리스트 생성
+    _header = info.fields_name
+    header_list = change_string_to_arry(_header)
+    
+    # CSV 파일 저장 
+    df_to_csv(df_m, header_list)
 
 
 
