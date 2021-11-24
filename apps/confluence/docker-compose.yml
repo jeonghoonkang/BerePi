@@ -1,0 +1,33 @@
+# docker-compose.yml
+version: '2.1'
+services:
+    confluence:
+        image: atlassian/confluence-server:6.6.6
+        restart: always
+        container_name: confluence
+        # environment:
+        ports:
+            - "8090:8090"
+            - "8091:8091"
+        volumes:
+            - C:\Users\hungr\docker-volume\confluence-data:/var/atlassian/application-data/confluence
+        links:
+            - postgresql
+
+    postgresql:
+        image: postgres:10.4
+        restart: always
+        container_name: confluence-postgres
+        environment:
+            POSTGRES_DB: confluence  # 필수
+            POSTGRES_USER: dbuser
+            POSTGRES_PASSWORD: dbpassword
+            POSTGRES_INITDB_ARGS: --encoding=UTF-8
+            # PGDATA: /var/lib/postgresql/data
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+
+volumes:
+    postgres_data:
