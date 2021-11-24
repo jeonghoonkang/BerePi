@@ -1,0 +1,19 @@
+
+
+// PostgreSQL Docker 생성
+$ docker run -v {Confluence Data Host 폴더}:/var/lib/postgresql/data --name="confluence-postgres" -d -e POSTGRES_PASSWORD='{root암호}' postgres
+
+// PostgreSQL Docker 인스턴스에 접속 (사용자 & DB 추가)
+# psql -U postgres
+psql (10.1)
+Type "help" for help.
+
+postgres=# create role {사용자ID} with login password '{사용자PW}' valid until 'infinity';
+CREATE ROLE
+postgres=# create database confluence with encoding='utf-8' owner={사용자ID} connection limit=-1;
+CREATE DATABASE
+postgres=# \q
+
+// Confluence Docker 생성
+$ docker run -v {Confluence Data Host 폴더}:/var/atlassian/application-data/confluence --name="confluence" --link confluence-postgres:confluence-db -d -e CATALINA_CONNECTOR_PROXYNAME='{도메인주소}' -e CATALINA_CONNECTOR_PROXYPORT='443' -e CATALINA_CONNECTOR_SCHEME='https' -p 8090:8090 -p 8091:8091 atlassian/confluence-server
+
