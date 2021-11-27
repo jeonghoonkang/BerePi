@@ -4,23 +4,25 @@ services:
   confluence:
     image: atlassian/confluence
     restart: always
+    container_name: confluence
     ports:
       - "8885:8090"
       - "8886:8091"
-        #links:
-        #- database
     volumes:
       - confluence-data:/var/atlassian/confluence
 
   database:
     image: postgres:9.4
     restart: always
+    container_name: confluence-postgres
     ports:
       - "8887:5432"
     environment:
       - POSTGRES_DB=wiki
       - POSTGRES_USER=tinyos
       - POSTGRES_PASSWORD=tinyosdb
+      - POSTGRES_INITDB_ARGS: --encoding=UTF-8
+
     volumes:
       - database-data:/var/lib/postgresql/data
       
