@@ -21,7 +21,7 @@ services:
       - POSTGRES_DB=wiki
       - POSTGRES_USER=tinyos
       - POSTGRES_PASSWORD=tinyosdb
-      - POSTGRES_INITDB_ARGS: --encoding=UTF-8
+      #- POSTGRES_INITDB_ARGS=--encoding=UTF-8
 
     volumes:
       - database-data:/var/lib/postgresql/data
