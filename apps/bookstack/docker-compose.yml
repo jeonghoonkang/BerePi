@@ -2,37 +2,41 @@
 
 version: "2"
 services:
+
   bookstack:
     image: lscr.io/linuxserver/bookstack
     container_name: bookstack
     environment:
       - PUID=1000
       - PGID=1000
-      - APP_URL=
+      - APP_URL= #빈칸으로 동작함
       - DB_HOST=bookstack_db
       - DB_USER=bookstack
       - DB_PASS=#######
       - DB_DATABASE=bookstackapp
     volumes:
       - ~/devel/dockers/bookstack/config:/config
+        #경로 아래 bookstak_db 부분과 동일해야 함
     ports:
       - 6875:80
     restart: unless-stopped
     depends_on:
       - bookstack_db
+      
   bookstack_db:
     image: lscr.io/linuxserver/mariadb
     container_name: bookstack_db
     environment:
       - PUID=1000
       - PGID=1000
-      - MYSQL_ROOT_PASSWORD=<yourdbpass>
-      - TZ=Europe/London
+      - MYSQL_ROOT_PASSWORD=#######
+      #- TZ=Europe/London      
+      - TZ=Asia/Seoul
       - MYSQL_DATABASE=bookstackapp
       - MYSQL_USER=bookstack
-      - MYSQL_PASSWORD=<yourdbpass>
+      - MYSQL_PASSWORD=#######
     volumes:
-      - ~/devel/dockers/bookstack/db/config:/config
+      - ~/devel/dockers/bookstack/config:/config
+        #경로 위 bookstak 부분과 동일해야 함
+
     restart: unless-stopped
-
-
