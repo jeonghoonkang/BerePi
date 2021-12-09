@@ -76,10 +76,11 @@ def csv_to_df_merge(_flist, fnum=None): #csv 파일을 하나의 dataframe 으�
         cnt += 1
         printProgressBar(cnt, len(_flist))
         _csvdf = pd.read_csv(file, skiprows = 3, header = None) 
-        allData.append(_csvdf) # 리스트에 추가 
-        #_dataframe.append(_csvdf)
+        #allData.append(_csvdf) # 리스트에 추가 
+        _dataframe_sum = _dataframe.append(_csvdf)
         del [[_csvdf]]
         gc.collect()
+    return _dataframe_sum
     
     _dataframe = pd.concat(allData, axis=0, ignore_index=True)
     print (cnt, "개의 파일을 처리했습니다.. ")
@@ -90,10 +91,10 @@ def df_to_csv(_d, _h=None):
     if _h != None : 
         print ( "CSV with Header ... in ", df_to_csv.__name__)
         _d.columns = _h
-        _d.to_csv("_o_df_2_csv.csv", header=True, index=False) #인덱스 없이 저장
+        _d.to_csv("_o_df_2_csv_2000.csv", header=True, index=False) #인덱스 없이 저장
     else :
         print ("CSV without Header ... ")    
-        _d.to_csv("_o_df_2_csv.csv", header=False, index=False) 
+        _d.to_csv("_o_df_2_csv_2000.csv", header=False, index=False) 
 
 
 def _dataframe_print_(_d):
@@ -107,7 +108,7 @@ if __name__== "__main__" :
     print ("디렉토리 경로", info.local_path)
 
     file_list = []
-    _d_limit_f_=1000 # 개발에만 사용 일부 파일만 테스트, 테스트 파일 갯수
+    _d_limit_f_=2000 # 개발에만 사용 일부 파일만 테스트, 테스트 파일 갯수
     csvpath = info.local_path
 
     recursive_search_dir(csvpath, file_list)
@@ -119,7 +120,7 @@ if __name__== "__main__" :
     df_m = csv_to_df_merge(file_list, _d_limit_f_)
   
    # 피클저장
-    __f = open("_o_df.pkl","wb")
+    __f = open("_o_df_2000.pkl","wb")
     pickle.dump(df_m,__f) 
     __f.close()
     
