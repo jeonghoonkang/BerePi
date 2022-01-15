@@ -1,6 +1,6 @@
 https://solarianprogrammer.com/2021/06/15/install-python-numpy-scipy-matplotlib-macos-apple-silicon-arm64/
 
-'''
+<pre>
 numpy 설치 참고 
 
    58  htop
@@ -48,4 +48,4 @@ numpy 설치 참고
   134  sudo pyenv virtualenv  miniforge3-4.9.2
   135  sudo pyenv activate miniforge3-4.9.2
   136  conda
-'''
+</pre>
