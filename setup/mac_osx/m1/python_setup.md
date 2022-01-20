@@ -1,7 +1,14 @@
 https://solarianprogrammer.com/2021/06/15/install-python-numpy-scipy-matplotlib-macos-apple-silicon-arm64/
 
 <pre>
+
+
 numpy 설치 참고 
+
+최근방법 (22.1.20)
+pip3 install --upgrade pip
+
+예전방법
 
    58  htop
    59  clear
