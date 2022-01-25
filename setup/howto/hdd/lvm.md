@@ -107,3 +107,16 @@ pvremove /dev/sdb1 /dev/sdb2 /dev/sdc1
 
 
 
+
+<pre>
+sudo vgdisplay
+sudo vgremove /dev/vgubuntu                                                                                                                                          
+sudo vgextend ubuntu-vg /dev/sdb2                                                                                                                                
+sudo vgscan                                                                                                                                                      
+sudo lvextend -l +100%FREE                                                                                                                                         
+sudo  lvdisplay                                                                                                                                                  
+sudo lvextend -l +100%FREE /dev/ubuntu-vg/root                                                                                                                   
+df -h                                                                                                                                                            
+sudo resize2fs /dev/ubuntu-vg/root   
+</pre>
+
