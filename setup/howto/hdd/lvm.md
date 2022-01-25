@@ -47,13 +47,11 @@ lvcreate -L 용량 (G,M,K) -n  LV이름 VG이름     <-- VG이름은 위에 vg �
 
 lvscan
 
-lvdisplay
-
- 
+lvdisplay 
 
 LVM 용량 수정(확장만 가능)
-
-lvresize -L 용량 (G,M,K) LV경로
+  lvresize -L 용량 (G,M,K) LV경로
+  lvresize -L +3G /dev/vg00/lvol00
 
 lvscan
 
@@ -63,7 +61,6 @@ e2fsck -f LV경로
 
 resize2fs LV경로
 
- 
 
 * 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
 
@@ -77,7 +74,6 @@ file 타입을 linux LVM (8e) 로 변경
 
 pvcreate /dev/sdc1
 
- 
 
 vgextend VG이름 /dev/sdc1
 
@@ -111,4 +107,3 @@ pvremove /dev/sdb1 /dev/sdb2 /dev/sdc1
 
 
 
-출처: https://2factor.tistory.com/9 [IT 일기]
