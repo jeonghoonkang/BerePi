@@ -16,6 +16,7 @@
   * 자주 사용하는 git 명령어
     $ git status 현재상태(머지나 추가사항) 확인 
     $ git stash 임시저장 
+    $ git remote -v #원격저장소 확인
 
     $ git branch -> 로컬 branch 확인 
     $ git branch -r 서버 branch 확인 
