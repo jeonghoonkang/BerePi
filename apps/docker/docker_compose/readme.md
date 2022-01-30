@@ -27,7 +27,6 @@ CONTAINER ID   IMAGE                                    COMMAND                 
 eeb030fbb47e   teslamate/grafana:latest                 "/run.sh"                7 months ago   Up 5 weeks   0.0.0.0:3000->3000/tcp, :::3000->3000/tcp                                  teslamate_grafana_1
 badef534b5cf   eclipse-mosquitto:1.6                    "/docker-entrypoint.…"   7 months ago   Up 5 weeks   0.0.0.0:1883->1883/tcp, :::1883->1883/tcp                                  teslamate_mosquitto_1
 
-(중요부분 0d3563b90198 는 머신마다 다릅니다. 위 출력에서 찾으셔야 합니다. 0d3563b90198   postgres:12)
 
 $ docker inspect 0d3563b90198 | grep com.docker.compose 
 
