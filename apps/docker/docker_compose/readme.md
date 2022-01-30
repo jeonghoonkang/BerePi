@@ -1,7 +1,7 @@
 
 ## 기본 사용방법
 docker-compose_simple.yml 파일 실행 
-sudo docker-compose -f docker-compose_simple.yml up (-d)
+<code> sudo docker-compose -f docker-compose_simple.yml up (-d) </code>
 
 sudo docker-compose ps 로 실행 컨테이너 확인
 docker ps 로도 확인 가능
