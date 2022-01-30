@@ -1,6 +1,4 @@
 
-# 도커 컴포즈, 동작 확인을 위해
-
 ## 기본 사용방법
 docker-compose_simple.yml 파일 실행 
 sudo docker-compose -f docker-compose_simple.yml up (-d)
