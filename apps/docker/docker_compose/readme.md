@@ -15,8 +15,9 @@ docker ps 로도 확인 가능
 sudo lsof -i -P -n | grep LISTEN
  
 ### 참고, 컨테이너 정보 확인 방법 (docker-compose 실행 위치 정보 확인 방법)
- 검색하고 메뉴얼 보니, docker inspect 로 실행 위치 찾을수 있네요. 아래 방법 참고 하세요. 
- 검색하고 메뉴얼 보니, docker inspect 로 실행 위치 찾을수 있네요. 아래 방법 참고 하세요
+docker inspect 로 실행 위치 검색
+
+<pre>
 $ sudo docker ps
 
 [sudo] password for: 
@@ -39,3 +40,4 @@ $ docker inspect 0d3563b90198 | grep com.docker.compose
                 "com.docker.compose.service": "database",
                 "com.docker.compose.version": "1.25.0"
  
+</pre>
