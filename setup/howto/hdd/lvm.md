@@ -1,4 +1,4 @@
-## LVM ubuntu
+## LVM ubuntu (main note)
 - https://github.com/jeonghoonkang/keti/blob/master/BootCamp/Jin/About/abt_lvm.md
 - 추가 사항
   - pvdisplay
