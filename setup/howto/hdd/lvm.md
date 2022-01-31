@@ -45,6 +45,7 @@ fdisk 로 파티션 생성 ..
 
 - lv 생성
   - lvcreate -L 용량 (G,M,K) -n  LV이름 VG이름     <-- VG이름은 위에 vg 생성시 입력햇던 이름기입
+    - lvcreate -l 100%FREE -n [LV 이름] [VG 이름] 
   - lvscan
   - lvdisplay 
 
