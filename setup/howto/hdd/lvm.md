@@ -54,11 +54,10 @@ fdisk 로 파티션 생성 ..
   - lvresize -L +3G /dev/vg00/lvol00
   - lvscan
     - 이상태에서 마운트 해봐야 lvdisplay  에서는 용량이 추가 되었지만 mount 시 용량은 변경이 없다.
-
-  - e2fsck -f LV경로
-  - resize2fs LV경로
-
-    - * 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
+  - sudo mkfs.ext3 /dev/vg/lv{lv 경로} 
+    - (확인필요) e2fsck -f LV경로
+    - (확인필요) resize2fs LV경로
+    - (확인필요) 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
 
 - LVM  용량 추가 (하드디스크 하나 추가 - pv 가 새로 생성)
   - fdisk 로 파티션 생성
@@ -95,3 +94,4 @@ df -h
 sudo resize2fs /dev/ubuntu-vg/root   
 </pre>
 
+https://dinggur.tistory.com/30
