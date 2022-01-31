@@ -9,103 +9,77 @@
   - (참고) https://www.howtogeek.com/howto/40702/how-to-manage-and-use-lvm-logical-volume-management-in-ubuntu/
   
   
-LVM 생성 및 용량 수정 , 용량 추가 ..
+- LVM 생성 및 용량 수정 , 용량 추가 ..
 
  
 
 fdisk 로 파티션 생성 .. 
 
-파일타입을  linux LVM (8e) 로 교체후 저장
-
- 
-
-pv 생성
-
-pvcreate /dev/sdb1
-
-pvcreate /dev/sdb2
-
-pvscan
-
-pvdisplay
-
- 
-
-vg 생성
-
-vgcreate VG이름 /dev/sdb1 /dev/sdb2
-
-vgscan
-
-vgdisplay
-
- 
-
-lv 생성
-
-lvcreate -L 용량 (G,M,K) -n  LV이름 VG이름     <-- VG이름은 위에 vg 생성시 입력햇던 이름기입
-
-lvscan
-
-lvdisplay 
-
-LVM 용량 수정(확장만 가능)
-  lvresize -L 용량 (G,M,K) LV경로
-  lvresize -L +3G /dev/vg00/lvol00
-
-lvscan
-
-이상태에서 마운트 해봐야 lvdisplay  에서는 용량이 추가 되었지만 mount 시 용량은 변경이 없다.
-
-e2fsck -f LV경로
-
-resize2fs LV경로
+- parted /dev/sdb
+  - (parted) mklabel gpt
+  - (parted) print                                                           
+    - Disk geometry for /dev/sdb: 0kB - 3701GB
+    - Disk label type: gpt
+    - Number  Start   End     Size    File system  Name  Flags
+    - partition을 primary로 3701GB full로 잡자.
+  - (parted) mkpart primary 0 3701GB
+  - (parted) print                                                           
+    - Disk geometry for /dev/sdb: 0kB - 3701GB
+    - Disk label type: gpt
+    - Number  Start   End     Size    File system  Name  Flags
+    - 1       17kB    3701GB  3701GB                                    
+  - (parted) quit                                                            
 
 
-* 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
+- 파일타입을  linux LVM (8e) 로 교체후 저장
+  - pv 생성
+  - pvcreate /dev/sdb1
+  - pvcreate /dev/sdb2
+  - pvscan
+  - pvdisplay
 
- 
+- vg 생성
+  - vgcreate VG이름 /dev/sdb1 /dev/sdb2
+  - vgscan
+  - vgdisplay
 
-LVM  용량 추가 (하드디스크 하나 추가 - pv 가 새로 생성)
+- lv 생성
+  - lvcreate -L 용량 (G,M,K) -n  LV이름 VG이름     <-- VG이름은 위에 vg 생성시 입력햇던 이름기입
+  - lvscan
+  - lvdisplay 
 
-fdisk 로 파티션 생성
+- LVM 용량 수정(확장만 가능)
+  - lvresize -L 용량 (G,M,K) LV경로
+  - lvresize -L +3G /dev/vg00/lvol00
+  - lvscan
+    - 이상태에서 마운트 해봐야 lvdisplay  에서는 용량이 추가 되었지만 mount 시 용량은 변경이 없다.
 
-file 타입을 linux LVM (8e) 로 변경
+  - e2fsck -f LV경로
+  - resize2fs LV경로
 
-pvcreate /dev/sdc1
+    - * 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
 
+- LVM  용량 추가 (하드디스크 하나 추가 - pv 가 새로 생성)
+  - fdisk 로 파티션 생성
+  - file 타입을 linux LVM (8e) 로 변경
 
-vgextend VG이름 /dev/sdc1
+  - pvcreate /dev/sdc1
+  - vgextend VG이름 /dev/sdc1
+  - vgdisplay
 
-vgdisplay
+  - lvresize -L 용량 (G,M,K) LV이름
+  - lvscan
+  - 이상태에서 마운트 해봐야 lvdisplay  에서는 용량이 추가 되었지만 mount 시 용량은 변경이 없다.
 
- 
+  - e2fsck -f LV이름
+  - resize2fs LV이름
 
-lvresize -L 용량 (G,M,K) LV이름
+  - 참고. 파티션 라벨명 변경 . e2label /파티션이름 /라벨명
+  - 참고2. lvm 을 해체하고자 하면 만든 순서의 반대로 진행
 
-lvscan
-
-이상태에서 마운트 해봐야 lvdisplay  에서는 용량이 추가 되었지만 mount 시 용량은 변경이 없다.
-
-e2fsck -f LV이름
-
-resize2fs LV이름
-
- 
-
- 
-
-참고. 파티션 라벨명 변경 . e2label /파티션이름 /라벨명
-
-참고2. lvm 을 해체하고자 하면 만든 순서의 반대로 진행
-
-lvremove /dev/VG이름/LV이름
-
-vgremove /dev/VG이름
-
-pvremove /dev/sdb1 /dev/sdb2 /dev/sdc1
-
-
+    - lvremove /dev/VG이름/LV이름
+    - vgremove /dev/VG이름
+    - pvremove /dev/sdb1 /dev/sdb2 /dev/sdc1
 
 
 <pre>
