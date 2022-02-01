@@ -59,6 +59,18 @@
     - sudo fdisk -l
       - Disk /dev/mapper/vg--r440-lv--r440: 7.28 TiB, 8001528266752 bytes, 15627984896 sectors
     - sudo mount /dev/mapper/vg--r440-lv--r440 /mount_name{마운트위치}   
+    - UUID 확인 
+    <pre>
+    $ sudo ls -l /dev/disk/by-uuid
+    lrwxrwxrwx 1 root root 10  2월  1 13:39 65afb022-482b-4244-ba26-bc4d469ab131 -> ../../sda2
+    lrwxrwxrwx 1 root root 10  2월  1 13:39 887e0e3f-9738-4221-9645-1a14e911d894 -> ../../dm-0
+    lrwxrwxrwx 1 root root 10  2월  1 13:39 AD86-EBED -> ../../sda1
+    </pre>
+    - fstab 편집, sudo vim /etc/fstab
+    <pre>
+     # <file system> <mount point>   <type>  <options>       <dump>  <pass>
+     UUID=887e0e3f-9738-4221-9645-1a14e911d894   /hdd_lvm    ext3    defaults    0   1
+    </pre>
      
   - 참고 : https://devbrain.tistory.com/65
 
