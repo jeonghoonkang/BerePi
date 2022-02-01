@@ -1,14 +1,7 @@
 ## LVM ubuntu (main note)
-- https://github.com/jeonghoonkang/keti/blob/master/BootCamp/Jin/About/abt_lvm.md
-- 추가 사항
-  - pvdisplay
-  - vgdisplay
-    - vg 삭제는 vgreduce --select UUID 로 실행 
-  - lvdisplay
-- 한번 입력된 LVM 다시 설정하기
-  - (참고) https://www.howtogeek.com/howto/40702/how-to-manage-and-use-lvm-logical-volume-management-in-ubuntu/
-  
-  
+- 초기 작성 내용
+  - https://github.com/jeonghoonkang/keti/blob/master/BootCamp/Jin/About/abt_lvm.md
+
 ### LVM 생성 및 기존 Regular Patition에 마운트 하기
 
 - parted /dev/sdb
@@ -53,7 +46,6 @@
   - sudo mkfs.ext3 /dev/vg/lv{lv 경로} 
     - (확인필요) e2fsck -f LV경로
     - (확인필요) resize2fs LV경로
-    - (확인필요) 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
 
   - 마운트 하기
     - sudo mkdir /mount_name; sudo chmod 777 /mount_name{마운트위치}
@@ -105,4 +97,15 @@ df -h
 sudo resize2fs /dev/ubuntu-vg/root   
 </pre>
 
-https://dinggur.tistory.com/30
+## 
+- https://dinggur.tistory.com/30
+
+- 추가 사항
+  - pvdisplay
+  - vgdisplay
+    - vg 삭제는 vgreduce --select UUID 로 실행 
+  - lvdisplay
+- 한번 입력된 LVM 다시 설정하기
+  - (참고) https://www.howtogeek.com/howto/40702/how-to-manage-and-use-lvm-logical-volume-management-in-ubuntu/
+  
+  
