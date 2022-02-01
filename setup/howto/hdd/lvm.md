@@ -2,7 +2,7 @@
 - 초기 작성 내용
   - https://github.com/jeonghoonkang/keti/blob/master/BootCamp/Jin/About/abt_lvm.md
 
-### LVM 생성 및 기존 Regular Patition에 마운트 하기
+### LVM 생성 및 기존 파티션에 마운트 하기
 
 - parted /dev/sdb
   - (parted) mklabel gpt
