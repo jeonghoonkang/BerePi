@@ -9,11 +9,7 @@
   - (참고) https://www.howtogeek.com/howto/40702/how-to-manage-and-use-lvm-logical-volume-management-in-ubuntu/
   
   
-- LVM 생성 및 용량 수정 , 용량 추가 ..
-
- 
-
-fdisk 로 파티션 생성 .. 
+### LVM 생성 및 기존 Regular Patition에 마운트 하기
 
 - parted /dev/sdb
   - (parted) mklabel gpt
@@ -59,7 +55,22 @@ fdisk 로 파티션 생성 ..
     - (확인필요) resize2fs LV경로
     - (확인필요) 수정 테스트시 mount 상태에서도 경고메세지만 나오고 이상없이 진행되었다. 
 
-- LVM  용량 추가 (하드디스크 하나 추가 - pv 가 새로 생성)
+  - 마운트 하기
+    - sudo mkdir /mount_name; sudo chmod 777 /mount_name{마운트위치}
+    - sudo apt install lvm2
+    - sudo modprobe dm-mod
+    - sudo vgscan 
+      - Found volume group "vg-r440" using metadata type lvm2 
+      - (volume group 이름 확인)
+    - sudo vgchange -ay vg-r440{vg 이름}
+      -   1 logical volume(s) in volume group "vg-r440" now active 
+    - sudo fdisk -l
+      - Disk /dev/mapper/vg--r440-lv--r440: 7.28 TiB, 8001528266752 bytes, 15627984896 sectors
+    - sudo mount /dev/mapper/vg--r440-lv--r440 /mount_name{마운트위치}   
+     
+  - 참고 : https://devbrain.tistory.com/65
+
+### LVM  용량 추가 (하드디스크 하나 추가 - pv 가 새로 생성)
   - fdisk 로 파티션 생성
   - file 타입을 linux LVM (8e) 로 변경
 
