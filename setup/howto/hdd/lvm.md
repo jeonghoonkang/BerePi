@@ -74,8 +74,9 @@
      
   - 참고 : https://devbrain.tistory.com/65
 
-### LVM  용량 추가 (하드디스크 하나 추가 - pv 가 새로 생성)
-  - fdisk 로 파티션 생성
+### LVM  용량 추가 (하드디스크 하나 추가 pv를 새로 생성)
+
+  - fdisk 로 파티션 생성 (용량이 2T 이상인 경우 gparted 로 생성) 
   - file 타입을 linux LVM (8e) 로 변경
 
   - pvcreate /dev/sdc1
@@ -84,13 +85,12 @@
 
   - lvresize -L 용량 (G,M,K) LV이름
   - lvscan
-  - 이상태에서 마운트 해봐야 lvdisplay  에서는 용량이 추가 되었지만 mount 시 용량은 변경이 없다.
 
   - e2fsck -f LV이름
   - resize2fs LV이름
 
   - 참고. 파티션 라벨명 변경 . e2label /파티션이름 /라벨명
-  - 참고2. lvm 을 해체하고자 하면 만든 순서의 반대로 진행
+  - 참고. lvm 을 해하고자 하면 만든 순서의 반대로 진행
 
     - lvremove /dev/VG이름/LV이름
     - vgremove /dev/VG이름
