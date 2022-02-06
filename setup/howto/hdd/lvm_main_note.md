@@ -82,44 +82,42 @@
   - file 타입을 linux LVM (8e) 로 변경
 
   - pvcreate /dev/sdc1
+  - pvdisplay
+  
   - vgextend VG이름 /dev/sdc1
   - vgdisplay
 
-  - lvresize -L 용량 (G,M,K) LV이름
+  - lvresize -L 용량 (G,M,K) LV이름{형식:/dev/ubuntu-vg/root}
   - lvscan
 
   - e2fsck -f LV이름
   - resize2fs LV이름
 
-  - 참고. 파티션 라벨명 변경 . e2label /파티션이름 /라벨명
   - 참고. lvm 을 해하고자 하면 만든 순서의 반대로 진행
 
     - lvremove /dev/VG이름/LV이름
     - vgremove /dev/VG이름
     - pvremove /dev/sdb1 /dev/sdb2 /dev/sdc1
 
-
+  - 
 <pre>
 sudo vgdisplay
-sudo vgremove /dev/vgubuntu                                                                                                                                          
+sudo vgremove /dev/vgubuntu                                                                                                                                         
 sudo vgextend ubuntu-vg /dev/sdb2                                                                                                                                
 sudo vgscan                                                                                                                                                      
-sudo lvextend -l +100%FREE                                                                                                                                         
 sudo  lvdisplay                                                                                                                                                  
 sudo lvextend -l +100%FREE /dev/ubuntu-vg/root                                                                                                                   
-df -h                                                                                                                                                            
 sudo resize2fs /dev/ubuntu-vg/root   
+df -h                                                                                                                                                            
 </pre>
 
 ## 
 - https://dinggur.tistory.com/30
 
 - 추가 사항
-  - pvdisplay
   - vgdisplay
     - vg 삭제는 vgreduce --select UUID 로 실행 
-  - lvdisplay
-- 한번 입력된 LVM 다시 설정하기
+  - 한번 설정된 LVM 다시 설정하기
   - (참고) https://www.howtogeek.com/howto/40702/how-to-manage-and-use-lvm-logical-volume-management-in-ubuntu/
   
   
