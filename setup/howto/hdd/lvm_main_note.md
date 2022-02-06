@@ -10,7 +10,7 @@
     - Disk geometry for /dev/sdb: 0kB - 3701GB
     - Disk label type: gpt
     - Number  Start   End     Size    File system  Name  Flags
-    - partition을 primary로 3701GB full로 잡자.
+    - partition을 primary로 3701GB full로 설정 
   - (parted) mkpart primary 0 3701GB
   - (parted) print                                                           
     - Disk geometry for /dev/sdb: 0kB - 3701GB
