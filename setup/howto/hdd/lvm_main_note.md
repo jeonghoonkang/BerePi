@@ -22,14 +22,12 @@
     1       17kB    3701GB  3701GB                                    
     </pre>
   - (parted) quit                                                            
-
-
-- 파일타입을  linux LVM (8e) 로 교체후 저장
-  - pv 생성
-  - pvcreate /dev/sdb1
-  - pvcreate /dev/sdb2
-  - pvscan
-  - pvdisplay
+  
+  - pv 생성 및 확인 
+    - pvcreate /dev/sdb1
+    - pvcreate /dev/sdb2
+    - pvscan
+    - pvdisplay
 
 - vg 생성
   - vgcreate VG이름 /dev/sdb1 /dev/sdb2
