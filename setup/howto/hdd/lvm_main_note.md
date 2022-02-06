@@ -7,16 +7,20 @@
 - parted /dev/sdb
   - (parted) mklabel gpt
   - (parted) print                                                           
-    - Disk geometry for /dev/sdb: 0kB - 3701GB
-    - Disk label type: gpt
-    - Number  Start   End     Size    File system  Name  Flags
+    <pre>
+    Disk geometry for /dev/sdb: 0kB - 3701GB
+    Disk label type: gpt
+    Number  Start   End     Size    File system  Name  Flags
+    </pre>
     - partition을 primary로 3701GB full로 설정 
   - (parted) mkpart primary 0 3701GB
-  - (parted) print                                                           
-    - Disk geometry for /dev/sdb: 0kB - 3701GB
-    - Disk label type: gpt
-    - Number  Start   End     Size    File system  Name  Flags
-    - 1       17kB    3701GB  3701GB                                    
+  - (parted) print    
+    <pre>                                                      
+    Disk geometry for /dev/sdb: 0kB - 3701GB
+    Disk label type: gpt
+    Number  Start   End     Size    File system  Name  Flags
+    1       17kB    3701GB  3701GB                                    
+    </pre>
   - (parted) quit                                                            
 
 
