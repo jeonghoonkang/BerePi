@@ -9,4 +9,7 @@ while [ $secs -gt 0 ]; do
 done
 
 sshpass -p{PW} scp -v -r -o StrictHostKeyChecking=no admin@192.168.0.1:rtx/* ./{path}/  
+
+rsync -avrh --rsh="sshpass -p {PW} ssh -p {PORT} -l daehan" {DEST}.com:/home/daehan/data /home/backup/
+
 </pre>
