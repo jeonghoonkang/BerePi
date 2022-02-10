@@ -10,6 +10,7 @@ services:
       - PUID=1000
       - PGID=1000
       - APP_URL= #빈칸으로 동작함
+      #APP_TIMEZONE=Asia/Seoul   ##/var/www/html/.env 파일 
       - DB_HOST=bookstack_db
       - DB_USER=bookstack
       - DB_PASS=#######
