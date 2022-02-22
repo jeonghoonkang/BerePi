@@ -4,6 +4,8 @@
 - sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 run
 - sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 cleanup
 
+- hdd 속도 hdd speed
+  - ioping -q -c 10 -s 8k -W .
 
 <pre>
 RaspberryPi4 4G RAM with SSD
