@@ -27,10 +27,11 @@ exec /bin/sh /usr/bin/startxfce4
 Ubuntu 20.10 - xrdp/remote access
 
 Remote login, after 'apt install xrdp', gives a static grey screen. The following appears to be one way to solve the problem ...
-Code: Select all
 
-sudo apt install xrdp
-sudo systemctl status xrdp
+- Code: Select all
+- sudo apt install xrdp
+- sudo systemctl status xrdp
+
 # Remote grey screen problem and solution 
 
 - Ubuntu 20 버전으로 넘어오면서 회색화면 이슈는 해결된것으로 보임 (2021.6 기준)
