@@ -7,7 +7,8 @@ from logging.handlers import RotatingFileHandler
 import sys
 
 #logging.config.fileConfig('logging.conf')
-LOG_FILENAME = "/home/tinyos/devel/BerePi/logs/berelogger.log"
+#LOG_FILENAME = "/home/tinyos/devel/BerePi/logs/berelogger.log"
+LOG_FILENAME = "/Users/tinyos/devel/BerePi/logs/berelogger.log"
 
 logger = logging.getLogger('BereLogger')
 logger.setLevel(logging.DEBUG)
@@ -19,8 +20,9 @@ handler.formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s',
 
 logger.addHandler(handler)
 
+# API for outside 
 def berelog(msg_name, value=None):
-    print (LOG_FILENAME, 'log file name')
+    print ("logging to", LOG_FILENAME, 'log file name')
     if (value == None):
         logger.info(msg_name )
     elif (value != None):
