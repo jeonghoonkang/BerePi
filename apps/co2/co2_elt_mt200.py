@@ -6,6 +6,9 @@
 import serial
 import time
 import sys
+sys.path.append("/Users/tinyos/devel/BerePi/apps/logger")
+import berepi_logger
+
 
 def find_ppm(ins):
     print ('RAW string',ins)
@@ -31,12 +34,14 @@ def find_ppm(ins):
 
 def pass2file(ins):
     print("...logging...")
+    berepi_logger.berelog('co2 ppm', str(ins))
 
 if __name__ == "__main__":
-
-    port = sys.argv[1]    
-    if port == None :
-        op = '/dev/ttyUSB0'
+    if len(sys.argv) > 1 :
+        port = sys.argv[1]    
+    else :
+        port = '/dev/ttyUSB0'
+        
     print (' open port ', port )
     op = serial.Serial(port, baudrate=38400, rtscts=True)
     time.sleep(3) 
