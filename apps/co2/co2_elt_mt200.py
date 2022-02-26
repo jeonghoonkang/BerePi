@@ -1,9 +1,11 @@
-# jeonghoonkang
+# Author : jeonghoonkang
 
 # http://www.eltsensor.co.kr/products-by-gas/co2/ndir/monitor?tpf=product/view&category_code=101012&code=22
+# Mac OSX /dev/cu.usbserial-D200A1RU 
 
 import serial
 import time
+import sys
 
 def find_ppm(ins):
     print ('RAW string',ins)
@@ -31,8 +33,12 @@ def pass2file(ins):
     print("...logging...")
 
 if __name__ == "__main__":
-    
-    op = serial.Serial('/dev/ttyUSB0', baudrate=38400, rtscts=True)
+
+    port = sys.argv[1]    
+    if port == None :
+        op = '/dev/ttyUSB0'
+    print (' open port ', port )
+    op = serial.Serial(port, baudrate=38400, rtscts=True)
     time.sleep(3) 
 
     in_string = op.read(32)
