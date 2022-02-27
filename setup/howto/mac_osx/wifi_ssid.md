@@ -1,0 +1,1 @@
+ networksetup -getairportnetwork en1 | cut -c 24-
