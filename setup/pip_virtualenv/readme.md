@@ -46,3 +46,17 @@
 
 - source venv/bin/activate , deactivate
 
+
+## pipenv
+- 가상환경 들어가기
+pipenv shell
+(나갈 때는 deactivate)
+
+- 가상환경에 장고 설치
+pipenv install django
+
+- pipenv lock
+
+
+
+출처: https://myinbox.tistory.com/129 [나의 인박스]
