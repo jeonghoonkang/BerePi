@@ -26,3 +26,12 @@
 
 
 ## NVIDIA 삭제 후 드라이버 재설치 
+- dpkg -l | grep -i nvidia
+- sudo apt remove --purge nvidia-*
+- sudo apt autoremove
+
+  - 다른 방법 
+    - sudo apt-get remove --purge nvidia-*
+    - sudo apt-get autoremove
+    - sudo apt-get update
+
