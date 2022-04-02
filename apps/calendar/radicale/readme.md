@@ -4,6 +4,7 @@
 
 ### Installation sub check 
 - sudo pip install passlib (for encrypt)
+- sudo apt install apache2-utils (for htpasswd)
 - htpasswd -B -c /etc/radicale/users {id} {pass}
 
 
