@@ -9,6 +9,7 @@
 
 
 # Run
+$ python3 -m radicale --storage-filesystem-folder=~/.var/lib/radicale/collections
 
 # Config check
 ## Radicale
