@@ -33,7 +33,7 @@
                    proxy_set_header  Host $http_host;
                    proxy_pass_header Authorization;
           }
-   }
-    </pre>
+     }
+   </pre>
 -  network port check : netstat -lntp
 
