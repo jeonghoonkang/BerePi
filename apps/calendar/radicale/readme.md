@@ -2,8 +2,9 @@
 - $ python3 -m pip install --upgrade radicale
 - $ python3 -m radicale --storage-filesystem-folder=~/.var/lib/radicale/collections
 ### Installation sub check 
-- htpasswd -B -c /etc/radicale/users loom loom
-- 
+- htpasswd -B -c /etc/radicale/users {id} {pass}
+
+
 # Run
 
 # Config check
@@ -17,6 +18,5 @@
 
 ## nginx
 -  /etc/nginx/conf.d/radicale.conf
--  port check : netstat -lntp
--  
+-  network port check : netstat -lntp
 
