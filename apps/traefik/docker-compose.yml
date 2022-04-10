@@ -1,0 +1,103 @@
+# 특정 docker-compose 문법을 사용하기 위해서는 3.x 이상이 필요합니다.
+version: '3.7'
+ 
+services:
+  traefik:
+    container_name: traefik
+    image: traefik:latest
+    restart: always
+    # docker log를 쉘에서 확인하기 https://www.clien.net/service/board/cm_nas/13947705
+    # 예전처럼 GUI에서 로그를 확인할거면 아래 두 줄 주석
+    logging:
+      driver: json-file
+    command: # CLI arguments
+      - --global.checkNewVersion=true
+      - --global.sendAnonymousUsage=true
+      # 2개의 entrypoint를 정의합니다. http 80포트 https 443포트
+      # 아래 ports: 항목에도 해당 포트를 오픈(publish)해 주어야 합니다.
+      # 또한 공유기로 포트 포워딩도 해줘야 합니다.
+      # 80/443 포트를 못 연다면 https://www.clien.net/service/board/cm_nas/13753034
+      # 다른 임의의 포트(예를들어 http는 1280 https는 12443)를 사용해도 될 것 같지만 확인해보지는 않았습니다.
+      - --entryPoints.http.address=:80
+      - --entryPoints.https.address=:443
+      # 여기서 api는 dashboard를 올리기 위해 필요합니다.
+      - --api=true
+      # api에 http 연결을 허용하려면 아래 주석 해제
+      # - --api.insecure=true
+      # 최종 목적지가 https인 서비스를 연결할 때 아래 옵션이 필요합니다. 예를들어 ESXi webui
+      - --serversTransport.insecureSkipVerify=true
+      # 로그 관련 옵션은 한 번 찾아보세요.
+      # https://docs.traefik.io/observability/access-logs/
+      - --log=true
+      - --log.level=INFO # (Default: error) DEBUG, INFO, WARN, ERROR, FATAL, PANIC
+      - --accessLog=true
+      - --accessLog.filePath=/traefik.log
+      - --accessLog.bufferingSize=100 # Configuring a buffer of 100 lines
+      - --accessLog.filters.statusCodes=400-499
+      # frontend라는 이름의 docker network에 있는 컨테이너들을 자동으로 인식해서 연결해줍니다.
+      # 다만 자동으로 노출하지는 않고 각 컨테이너마다 traefik.enable=true를 주도록 했습니다.
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=frontend
+      - --providers.docker.swarmMode=false
+      # /rules 폴더에 있는 설정 파일들을 사용하며 그 중 traefik-dynamic.toml는 자동 인식해서 실시간으로 반영합니다.
+      - --providers.file.directory=/rules # Load dynamic configuration from one or more .toml or .yml files in a directory.
+      # - --providers.file.filename=traefik-conf.toml # Load dynamic configuration from a file.
+      - --providers.file.watch=true # Only works on top level files in the rules folder
+      # Lets encrypt 설정. 80 포트를 이용하는 http challenge 사용. dns challenge는 직접 해보세요.
+      - --certificatesResolvers.leresolver.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory # production이 아닌 staging을 인증서버로 사용, 테스트 이후 주석처리해서 최종 적용
+      - --certificatesresolvers.leresolver.acme.httpchallenge=true
+      - --certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=http
+      - --certificatesresolvers.leresolver.acme.email=${TRF_LE_EMAIL}
+      - --certificatesresolvers.leresolver.acme.storage=/acme.json
+    # 두 네트워크에 모두 참여하고 있어야 소속 컨테이너에 traefik을 적용할 수 있음
+    networks:
+      - frontend
+      - backend
+    ports:
+      # https://www.reddit.com/r/docker/comments/c1wrep/traefik_reverse_proxy_question_docker_overlay/
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKER_ROOT}/traefik/acme.json:/acme.json
+      - ${DOCKER_ROOT}/traefik/traefik.log:/traefik.log
+      - ${DOCKER_ROOT}/traefik/rules:/rules
+    labels:
+      - "traefik.enable=true"
+      # HTTP-to-HTTPS Redirect
+      # entrypoint http로 들어오는 모든 요청을 redirect-to-https라는 이름의 middleware를 적용한다.
+      # 그 middleware가 https로 리다이렉트 해 줌
+      - "traefik.http.routers.http-catchall.entrypoints=http"
+      - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      # HTTP Routers
+      # entrypoint https로 들어오는 요청 중 호스트명이 ${TRF_DOMAIN}이고 path가 /traefik이거나 /api면 
+      # leresolver를 사용해서 인증서를 적용함. 이 라우팅의 이름은 traefik-rtr
+      - "traefik.http.routers.traefik-rtr.entrypoints=https"
+      - "traefik.http.routers.traefik-rtr.rule=Host(`${TRF_DOMAIN}`) && (PathPrefix(`/traefik`) || PathPrefix(`/api`))"
+      - "traefik.http.routers.traefik-rtr.tls=true"
+      - "traefik.http.routers.traefik-rtr.tls.certresolver=leresolver"
+      # Middlewares
+      - "traefik.http.routers.traefik-rtr.middlewares=traefik-stripprefix"
+      - "traefik.http.middlewares.traefik-stripprefix.stripprefix.prefixes=/traefik"
+      ## Services - API
+      # traefik-rtr 라우팅의 최종 목적지인 service는 내부적으로만 오픈된 traefik api
+      - "traefik.http.routers.traefik-rtr.service=api@internal"
+ 
+networks:
+  frontend:
+    name: frontend
+    driver: bridge
+ 
+  backend:
+    name: backend
+    driver: bridge
