@@ -20,6 +20,7 @@ services:
     image: traefik/whoami
     labels:
       - "traefik.http.routers.whoami.rule=Host(`sonno.iptime.org`)"
+
   helloworld:
     image: hello-world:latest
     labels:
