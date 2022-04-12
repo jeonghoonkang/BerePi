@@ -1,11 +1,17 @@
-version: '3' 
+version: '3'
 
 services:
   reverse-proxy:
     # The official v2 Traefik docker image
     image: traefik:v2.6
     # Enables the web UI and tells Traefik to listen to docker
-    command: --api.insecure=true --providers.docker
+    command: #--api.insecure=true --providers.docker
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      #- "--providers.docker.network=frontend"
+      
     ports:
       # The HTTP port
       - "80:80"
