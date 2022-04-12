@@ -14,15 +14,49 @@ services:
     volumes:
       # So that Traefik can listen to the Docker events
       - /var/run/docker.sock:/var/run/docker.sock
+    #networks:
+    #  - frontend
 
-  whoami:
+#  nginxdemo:
     # A container that exposes an API to show its IP address
-    image: traefik/whoami
-    labels:
-      - "traefik.http.routers.whoami.rule=Host(`sonno.iptime.org`)"
+#    image: nginxdemos/hello
+#    labels:
+#      - "traefik.enable=true"
+      #- "traefik.port=80"
+#      - "traefik.http.routers.nginxdemo.rule=Host(`sonno.iptime.org`)"
+#      - "traefik.http.routers.nginxdemo.entrypoints=web"
+    #networks:
+    #  - frontend
 
-  helloworld:
-    image: hello-world:latest
+  grafana:
+    #image: teslamate/grafana:latest
+    image: grafana/grafana
+    #networks:
+    #  - frontend
+    #  - backend
+    environment:
+      - GF_SERVER_ROOT_URL=http://sonno.iptime.org/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     labels:
-      - "traefik.http.routers.whoami.rule=Host(`sonno.iptime.org`)"
-    
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`sonno.iptime.org`) && (Path(`/grafana`) || PathPrefix(`/grafana/`) )"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      #- "traefik.docker.network=frontend"
+      #- "traefik.port=3000"
+      #- "traefik.http.routers.grafana.rule=Host(`sonno.iptime.org`)"
+      #- "traefik.http.middlewares.redirect.redirectscheme.scheme=http"
+      #- "traefik.http.routers.grafana-insecure.middlewares=redirect"
+      #- "traefik.http.routers.grafana.middlewares=redirect"
+
+    volumes:
+      #- /home/tinyos/devel/BerePi/apps/docker/docker_compose/traefik/grafana:/var/lib/grafana
+      #- "/home/tinyos/devel/grafana.ini:/usr/share/conf/defaults.ini"
+      - data-grafana:/var/lib/grafana
+
+#  networks:
+#    frontend:
+#      name: frontend
+#    backend:
+#      name: backend
+
