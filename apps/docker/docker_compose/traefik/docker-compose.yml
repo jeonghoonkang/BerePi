@@ -23,14 +23,19 @@ services:
     #networks:
     #  - frontend
 
-#  nginxdemo:
+
+  nginxdemo:
     # A container that exposes an API to show its IP address
-#    image: nginxdemos/hello
-#    labels:
-#      - "traefik.enable=true"
-      #- "traefik.port=80"
-#      - "traefik.http.routers.nginxdemo.rule=Host(`sonno.iptime.org`)"
-#      - "traefik.http.routers.nginxdemo.entrypoints=web"
+    image: nginxdemos/hello
+    labels:
+      - "traefik.enable=true"
+      - "traefik.port=80"
+      - "traefik.http.routers.nginxdemo.rule=Host(`sonno.iptime.org`)"
+      - "traefik.http.routers.nginxdemo.entrypoints=web"
+      - "traefik.http.routers.nginxdemo.middlewares=test-auth"
+      # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.test-auth.basicauth.users=tinyos:$$apr1$$nqgD3Ut3$$Er9r.bvxgtGxLwTufl63C."
+
     #networks:
     #  - frontend
 
