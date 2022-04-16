@@ -5,8 +5,7 @@ https://github.com/ckulka/baikal-docker
 
 
 
-# Reverse Proxy 설정 
-- 참고 
-  - nginx, apache 설정  
+# web ROOT 를 서브 디렉토리로 설정하는 경우
+  - Reverse Proxy 상태에서의 설정 (nginx, apache)
   - https://github.com/lovasoa/whitebophir/wiki/Setup-behind-Reverse-Proxies
   
