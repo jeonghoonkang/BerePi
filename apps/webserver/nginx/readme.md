@@ -23,3 +23,23 @@ location / {
 location /api {
     proxy_pass http://127.0.0.1:5000;
 }
+
+<pre>
+
+#sudo vi /etc/nginx/sites-available/default
+ 
+server {
+    ...
+ 
+    # sub directory setting
+    location ^~ /asia {
+        proxy_pass http://localhost/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+ 
+    ...
+
+</pre>
+
+
