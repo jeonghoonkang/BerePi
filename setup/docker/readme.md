@@ -37,7 +37,7 @@ sudo apt-get update && sudo apt-get install docker-ce
                     {실행중인 컨테이너} {생성할 이미지이름 : 태그}
   - 백업
     - docker save oracle_backup > /backup/oracle_xx.tar
-                  {이미지이름}
+                  {이미지이름:docker images로 확인되는 이름, commit하면 생성됨}
   - 복원
     - docker load < /backup/oracle_xx.tar 
     - docker load --input {백업파일이름}
