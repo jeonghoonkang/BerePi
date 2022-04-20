@@ -1,0 +1,18 @@
+version: "2"
+
+services:
+agendav:
+image: nagimov/agendav-docker:latest
+container_name: agendav
+environment:
+- AGENDAV_SERVER_NAME=****
+- AGENDAV_TITLE=****
+- AGENDAV_FOOTER=**
+- AGENDAV_ENC_KEY=k3y
+- AGENDAV_CALDAV_SERVER=http://***/dav.php
+- AGENDAV_TIMEZONE=Asia/Seoul
+- AGENDAV_LANG=ko
+- AGENDAV_LOG_DIR=/tmp
+
+ports:
+- "52321:80"
