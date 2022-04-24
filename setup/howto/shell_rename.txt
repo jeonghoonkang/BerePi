@@ -1,0 +1,20 @@
+
+find . -depth -name "*.txt" -exec sh -c 'f="{}"; mv -- "$f" "${f%.txt}.pdf"' \;
+
+
+rename -v 's/.txt/.pdf/' *.txt
+rename -v 's/example/test/' *.txt
+rename -v 's/ample//' *.txt
+rename -v 's/(ex|s)ample/test/' *.txt
+rename -v 'y/ /\_/' *.txt
+rename -v 'y/a-z/A-Z/' *.txt
+
+
+#!/bin/bash
+for f in *.txt; do
+    mv -- "$f" "${f%.txt}.pdf"
+done
+
+
+from
+-- https://phoenixnap.com/kb/rename-file-linux
