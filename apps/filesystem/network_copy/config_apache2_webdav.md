@@ -37,7 +37,7 @@ $ sudo cat 000-default.conf
 	#Include conf-available/serve-cgi-bin.conf
 
     Alias /*** /var/www/***
-    <Location /development>
+    <Location /***>
         DAV On
         AuthType Basic
         AuthName "= Webdav User"
