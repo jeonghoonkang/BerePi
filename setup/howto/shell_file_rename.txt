@@ -18,3 +18,5 @@ done
 
 from
 -- https://phoenixnap.com/kb/rename-file-linux
+
+#mv 00000001.png capture.$(date +%F_%R).jpg
