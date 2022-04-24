@@ -15,6 +15,9 @@
  - htpasswd -c /usr/uj/jurbanek/.htpasswd john
  - htpasswd -D /usr/uj/jurbanek/.htpasswd john
  - htpasswd /usr/uj/jurbanek/.htpasswd dave
+ - htpasswd 사용
+   - sudo htpasswd -D /etc/apache2/파일이름.pwd 아이디 (아이디 삭제)
+   - sudo htpasswd /etc/apache2/파일이름.pwd 아이디 (아이디 추가) 
  - webdav 
  - 참고 : http://blog.yojm.net/?p=94
  
