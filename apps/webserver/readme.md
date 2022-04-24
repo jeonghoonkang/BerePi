@@ -19,6 +19,7 @@
    - sudo htpasswd -D /etc/apache2/파일이름.pwd 아이디 (아이디 삭제)
    - sudo htpasswd /etc/apache2/파일이름.pwd 아이디 (아이디 추가) 
  - webdav 
+ - sudo usermod -a -G www-data 
  - 참고 : http://blog.yojm.net/?p=94
  
 ```
