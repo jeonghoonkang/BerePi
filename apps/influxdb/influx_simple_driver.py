@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # author : http://github.com/jeonghoonkang
 
+# influxdb 버전2 사용 바랍니다. Old version 입니다. 
+
 import argparse
 import datetime
 from influxdb import InfluxDBClient
