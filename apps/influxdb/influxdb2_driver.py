@@ -9,11 +9,11 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 # You can generate a Token from the "Tokens Tab" in the UI
-token = "CAIjbOjcqkY2pmxocs8H66wyylfIJeUbQ87vQLMlYY2l1lpJn_ogwLUmmozEUmeMcbxu2G5KzblhLalMS7vExQ=="
-org = "c4ae385d9b19a8b4"
+token = "CAIjbOjcqkY2pmxomozEUmeMcbxu2G5KzblhLalMS7vExQ=="
+org = "c4aeb19a8b4"
 bucket = "keti_sw"
 
-client = InfluxDBClient(url="http://keties.iptime.org:8086", token=token)
+client = InfluxDBClient(url="http://:8086", token=token)
 write_api = client.write_api(write_options=SYNCHRONOUS)
 # after make data ready, call ''' write_api.write(bucket, org, data) '''
 
