@@ -65,7 +65,7 @@ services:
       - "traefik.http.routers.teslamate.entrypoints=teslaweb"
       - "traefik.http.routers.teslamate.middlewares=MYAUTH"
       # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
-      - "traefik.http.middlewares.MYAUTH.basicauth.users=tinyos:$$apr1$$nqgD3Ut3$$Er9r.bvxgtGxLwTufl63C."
+      - "traefik.http.middlewares.MYAUTH.basicauth.users=tinyos:$$apr1$$nqgD3Ut3$$Er9r#You should replace with above sed command#"
 
   database:
     image: postgres:12
