@@ -1,0 +1,109 @@
+version: "3"
+
+services:
+
+  reverse-proxy:
+    # The official v2 Traefik docker image
+    image: traefik:v2.6
+    
+    # Enables the web UI and tells Traefik to listen to docker
+    command: #--api.insecure=true --providers.docker
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--providers.docker.exposedbydefault=false"
+      #- "--entrypoints.http.address=:80"
+      - "--entrypoints.teslaweb.address=:4000"
+      - "--log.level=DEBUG"
+      - "--log.filePath=/var/log/traefik.log"
+      - "--accesslog=true"
+      - "--accesslog.filePath=/var/log/access.log"
+    
+    environment: #command 와 evironment 둘중 하나 사용 
+      - TZ=${TM_TZ}
+      #- TRAEFIK_ENTRYPOINTS_web_HTTP=:80
+    
+    ports:
+      # The HTTP port
+      #- "8880:8880"
+      # The Web UI (enabled by --api.insecure=true)
+      - "8080:8080"
+      - "4000:4000"
+
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/log/:/var/log/
+
+
+  teslamate:
+    image: teslamate/teslamate:latest
+    container_name: teslamate
+    restart: always
+
+    environment:
+      - DATABASE_USER=teslamate
+      - DATABASE_PASS=secret
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+      - MQTT_HOST=mosquitto
+      - TZ=${TM_TZ}
+      
+    #ports:
+    #  - 4000:4000
+    #ports following traefik
+    
+    volumes:
+      - ./import:/opt/app/import
+    cap_drop:
+      - all
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.port=4000"
+      #- "traefik.http.routers.teslamate.rule=Host(`sonno.iptime.org`) && (Path(`/tesla`)) "
+      - "traefik.http.routers.teslamate.rule=Host(`sonno.iptime.org`)"
+      - "traefik.http.routers.teslamate.entrypoints=teslaweb"
+      - "traefik.http.routers.teslamate.middlewares=MYAUTH"
+      # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.MYAUTH.basicauth.users=tinyos:$$apr1$$nqgD3Ut3$$Er9r.bvxgtGxLwTufl63C."
+
+  database:
+    image: postgres:12
+    restart: always
+    environment:
+      - POSTGRES_USER=teslamate
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=teslamate
+    volumes:
+      - teslamate-db:/var/lib/postgresql/data
+    #labels:
+    #  - "traefik.enable=true"
+    #  - "traefik.http.routers.postdb.rule=Host(`sonno.iptime.org`) "
+
+  grafana:
+    image: teslamate/grafana:latest
+    restart: always
+    environment:
+      - DATABASE_USER=teslamate
+      - DATABASE_PASS=secret
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+    ports:
+      - 3000:3000
+    volumes:
+      - teslamate-grafana-data:/var/lib/grafana
+
+  mosquitto:
+    image: eclipse-mosquitto:1.6
+    restart: always
+    ports:
+      - 1883:1883
+    volumes:
+      - mosquitto-conf:/mosquitto/config
+      - mosquitto-data:/mosquitto/data
+
+volumes:
+  teslamate-db:
+  teslamate-grafana-data:
+  mosquitto-conf:
+  mosquitto-data:
