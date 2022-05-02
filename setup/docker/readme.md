@@ -83,10 +83,13 @@ sudo apt-get update && sudo apt-get install docker-ce
     - apt-get install locales
       - export LANGUAGE=ko_KR.UTF-8
       - export LANG=ko_KR.UTF-8
+        - echo "export LANGUAGE=ko_KR.UTF-8" >> ~/.bashrc
+        - echo "export LANG=ko_KR.UTF-8" >> ~/.bashrc
       - locale-gen ko_KR ko_KR.UTF-8
       - update-locale LANG=ko_KR.UTF-8
-      - dpkg-reconfigure locales
-        - 선택. 286 ko_KR.UTF-8
+      - 사용하지 않아도, 한글설정이 완료 되었음 
+        - dpkg-reconfigure locales
+          - 선택. 286 ko_KR.UTF-8
   - Xmanager 설정
     - xfce4-terminal
     - gnome-terminal --geometry=80x48
