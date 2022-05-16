@@ -1,3 +1,5 @@
+<pre>
+
 # 1. daily-timer 확인.
 systemctl list-timers | grep apt-daily
 Sat 2022-05-14 17:52:23 KST 6h left        Sat 2022-05-14 03:10:49 KST 7h ago       apt-daily.timer              apt-daily.service
@@ -18,3 +20,5 @@ systemctl disable apt-daily-upgrade.service
 
 # 4. 타이머 확인.
 systemctl list-timers | grep apt-daily
+
+</pre>
