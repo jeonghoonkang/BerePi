@@ -87,4 +87,4 @@ exit 0
 - http://www.erol.si/2014/06/opentsdb-the-perfect-database-for-your-internet-of-things-projects/
 - http://www.erol.si/2015/01/why-i-switched-from-opentsdb-to-kairosdb/
 - openTSDB API 작업중
-
+- 로고 파일 위치 /usr/local/share/opentsdb/static/opentsdb_header.jpg 
