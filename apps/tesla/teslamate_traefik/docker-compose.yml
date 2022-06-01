@@ -1,0 +1,107 @@
+#Author: github.com/jeonghoonkang
+#should check .env file in the same directory location
+
+version: "3"
+
+services:
+
+  traefik-proxy:
+    # The official v2 Traefik docker image
+    image: traefik:v2.6
+    # Enables the web UI and tells Traefik to listen to docker
+    command: #--api.insecure=true --providers.docker
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.http.address=:80"
+      - "--entrypoints.teslamateweb.address=:4000"
+      - "--log.level=DEBUG"
+      - "--log.filePath=/var/log/traefik.log"
+      - "--accesslog=true"
+      - "--accesslog.filePath=/var/log/access.log"
+    
+    environment: #command 
+      #- TRAEFIK_ENTRYPOINTS_teslamateweb_HTTP=:4000
+      - TZ=${TM_TZ}
+
+    container_name: k_traefik
+    
+    ports:
+      # The HTTP port
+      - "80:80"
+      # Tesla mate port 
+      - "4000:4000"
+      # The Web UI (enabled by --api.insecure=true)
+      - "8080:8080"
+
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/log/:/var/log/
+
+
+  teslamate:
+    image: teslamate/teslamate:latest
+    container_name: k_teslamate
+    restart: always
+
+    environment:
+      - DATABASE_USER=teslamate
+      - DATABASE_PASS=secret
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+      - MQTT_HOST=mosquitto
+      - TZ=${TM_TZ}
+
+    volumes:
+      - ./import:/opt/app/import
+    cap_drop:
+      - all
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.port=4000"
+      #check HOSTMACH variable in .env file
+      - "traefik.http.routers.teslamate.rule=Host(`${HOSTMACH}`)"
+      - "traefik.http.routers.teslamate.entrypoints=teslamateweb"
+      - "traefik.http.routers.teslamate.middlewares=MYAUTH"
+      # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.MYAUTH.basicauth.users=tesla:$$apr1$$g9xkDJAI$$ns2tQFP4HnWuZqIM7IL.O0 "
+
+  database:
+    image: postgres:12
+    restart: always
+    environment:
+      - POSTGRES_USER=teslamate
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=teslamate
+    volumes:
+      - teslamate-db:/var/lib/postgresql/data
+
+  grafana:
+    image: teslamate/grafana:latest
+    restart: always
+    environment:
+      - DATABASE_USER=teslamate
+      - DATABASE_PASS=secret
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+    ports:
+      - 3000:3000
+    volumes:
+      - teslamate-grafana-data:/var/lib/grafana
+
+  mosquitto:
+    image: eclipse-mosquitto:1.6
+    restart: always
+    ports:
+      - 1883:1883
+    volumes:
+      - mosquitto-conf:/mosquitto/config
+      - mosquitto-data:/mosquitto/data
+
+volumes:
+  teslamate-db:
+  teslamate-grafana-data:
+  mosquitto-conf:
+  mosquitto-data:
