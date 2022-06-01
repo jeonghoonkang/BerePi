@@ -3,3 +3,10 @@
 ### How to install and run
 - copy docker-compose.yml .env file to your machine
 - sudo docker-compose up -d 
+
+### to Connect to Teslamate
+- you should input (tesla/ktesla)
+
+### Access to webservice
+- http://HOSTMACH:4000 (for TeslaMate)
+- http://HOSTMACH:8080 (for Traefik access)
