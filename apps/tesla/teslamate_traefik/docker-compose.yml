@@ -10,17 +10,19 @@ services:
     image: traefik:v2.6
     # Enables the web UI and tells Traefik to listen to docker
     command: #--api.insecure=true --providers.docker
-      - "--api.insecure=true"
+      #- "--api.insecure=true"
+      - "--api.dashboard=true"
       - "--providers.docker"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.http.address=:80"
       - "--entrypoints.teslamateweb.address=:4000"
+      - "--entrypoints.tesla_traefik.address=:8080"
       - "--log.level=DEBUG"
       - "--log.filePath=/var/log/traefik.log"
       - "--accesslog=true"
       - "--accesslog.filePath=/var/log/access.log"
     
-    environment: #command 
+    environment: #command 와 evironment 둘중 하나 사용 
       #- TRAEFIK_ENTRYPOINTS_teslamateweb_HTTP=:4000
       - TZ=${TM_TZ}
 
@@ -34,6 +36,17 @@ services:
       # The Web UI (enabled by --api.insecure=true)
       - "8080:8080"
 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.t_traefik.rule=Host(`${HOSTMACH}`)"
+      - "traefik.http.routers.t_traefik.entrypoints=tesla_traefik"
+      - "traefik.http.routers.t_traefik.service=api@internal"
+      - "traefik.http.routers.t_traefik.middlewares=tMYAUTH"
+      # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.tMYAUTH.basicauth.users=tesla:$$apr1$$g9xkDJAI$$ns2tQFP4HnWuZqIM7IL.O0 "
+      #- "traefik.port=8080"
+      #- "traefik.frontend.auth.basic=tesla:$$apr1$$g9xkDJAI$$ns2tQFP4HnWuZqIM7IL.O0 "
+      
     volumes:
       # So that Traefik can listen to the Docker events
       - /var/run/docker.sock:/var/run/docker.sock
@@ -61,6 +74,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.port=4000"
+      #- "traefik.port=8080"
+      #t_traefik
       #check HOSTMACH variable in .env file
       - "traefik.http.routers.teslamate.rule=Host(`${HOSTMACH}`)"
       - "traefik.http.routers.teslamate.entrypoints=teslamateweb"
@@ -71,6 +86,7 @@ services:
   database:
     image: postgres:12
     restart: always
+    container_name: k_tesla_db
     environment:
       - POSTGRES_USER=teslamate
       - POSTGRES_PASSWORD=secret
@@ -81,6 +97,7 @@ services:
   grafana:
     image: teslamate/grafana:latest
     restart: always
+    container_name: k_tesla_grafana
     environment:
       - DATABASE_USER=teslamate
       - DATABASE_PASS=secret
@@ -94,6 +111,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:1.6
     restart: always
+    container_name: k_tesla_mosquitto
     ports:
       - 1883:1883
     volumes:
@@ -105,3 +123,4 @@ volumes:
   teslamate-grafana-data:
   mosquitto-conf:
   mosquitto-data:
+
