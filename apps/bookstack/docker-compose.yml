@@ -41,3 +41,7 @@ services:
         #경로 위 bookstak 부분과 동일해야 함
 
     restart: unless-stopped
+
+
+
+# DB 접속 에러 - https://github.com/linuxserver/docker-bookstack/issues/100
