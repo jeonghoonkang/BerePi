@@ -16,8 +16,10 @@ services:
       - DB_PASS=#######
       - DB_DATABASE=bookstackapp
     volumes:
-      - ~/devel/docker_service/bookstack/config:/config
+      - /home/{user}/devel/docker_service/bookstack/config:/config
         #경로 아래 bookstak_db 부분과 동일해야 함
+        #careful path 
+
     ports:
       - 6875:80
     restart: unless-stopped
@@ -37,7 +39,7 @@ services:
       - MYSQL_USER=bookstack
       - MYSQL_PASSWORD=#######
     volumes:
-      - ~/devel/docker_service/bookstack/config:/config
+      - /home/{user}/devel/docker_service/bookstack/config:/config
         #경로 위 bookstak 부분과 동일해야 함
 
     restart: unless-stopped
