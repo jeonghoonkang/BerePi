@@ -11,3 +11,5 @@
 
 ### make usb image from UBUNTU
 - sudo apt install usb-creator-gtk 
+- ssh -Yf tinyos@192.168.0.24 usb-creator-gtk
+   - Before download : https://ubuntu.com/download/desktop/thank-you?version=22.04&architecture=amd64
