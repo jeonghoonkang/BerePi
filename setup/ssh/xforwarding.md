@@ -4,7 +4,8 @@
 
 ### MAC OSX
 - https://www.xquartz.org/ 가 설치되어 있어야 함
-- ssh -X ids@xxx.xxx.xxx.xxx -vvv -p72 xeyes
+- ssh -Y tinyos@**.**.**.** xeyes
+  - 동작 안함 (2022.6.11) ssh -X ids@xxx.xxx.xxx.xxx -vvv -p72 xeyes
 
 <pre>
 ( 이제는 아래 내용 사용하지 않아도 됨. )
