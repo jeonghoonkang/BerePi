@@ -1,0 +1,2 @@
+AI & Human, How Can We Coexist? (Michael I. Jordan과의 대담) - SUN/교육부 
+https://youtu.be/xfi7pYMk5ds
