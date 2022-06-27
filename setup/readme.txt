@@ -1,4 +1,4 @@
-This directory contains how to setup system
+This directory contains how to setup system such as Ubuntu, Mac OSX, RaspberryPi
 shell setup and install packages
 
 for automatic package install use below file :
