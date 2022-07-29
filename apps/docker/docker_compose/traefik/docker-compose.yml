@@ -30,7 +30,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.port=80"
-      - "traefik.http.routers.nginxdemo.rule=Host(`sonno.iptime.org`)"
+      - "traefik.http.routers.nginxdemo.rule=Host(`so**.ip**.org`)"
       - "traefik.http.routers.nginxdemo.entrypoints=web"
       - "traefik.http.routers.nginxdemo.middlewares=test-auth"
       # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
