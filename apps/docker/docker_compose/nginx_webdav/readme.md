@@ -9,8 +9,8 @@ services:
     image: sashgorokhov/webdav
     container_name: up-nginx
     environment:
-      - USERNAME:"ev"
-      - PASSWORD:"onedaymovie"
+      - USERNAME:"user"
+      - PASSWORD:"pass"
     volumes:
       - ./up_files:/media
     ports:
