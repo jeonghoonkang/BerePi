@@ -9,7 +9,6 @@ services:
     image: sashgorokhov/webdav
     container_name: up-nginx
     environment:
-      - SERVER:"http://keties.iptime.org"
       - USERNAME:"ev"
       - PASSWORD:"onedaymovie"
     volumes:
