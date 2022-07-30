@@ -6,7 +6,7 @@ version: '3'
 services:
 
   uploadserver:
-    image: sashgorokhov/webdav
+    image: sashgorokhov/webdav #https://github.com/sashgorokhov/docker-nginx-webdav
     container_name: up-nginx
     environment:
       - USERNAME:"user"
