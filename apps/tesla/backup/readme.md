@@ -2,6 +2,9 @@
 - refence : https://docs.teslamate.org/docs/maintenance/backup_restore/
 ## DB Backup
 <pre> docker-compose exec -T database pg_dump -U teslamate teslamate > /backuplocation/teslamate.bck </pre>
+- DATABASE_NAME=teslamate
+- DATABASE_USER=teslamate
+- DATABASE_HOST=database
 
 ## Restore DB
 <pre>
