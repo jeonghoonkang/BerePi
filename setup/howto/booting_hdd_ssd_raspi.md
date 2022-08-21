@@ -6,15 +6,17 @@ https://m.blog.naver.com/emperonics/221979352174
 https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloader_config.md
 
 
-sudo rpi-eeprom-update
+### 라즈베리파이4 확인 방법
+- 업데이트
+  - sudo rpi-eeprom-update
+  - sudo rpi-eeprom-update -a
 
-sudo rpi-eeprom-update -a
+- 부팅 순서 변경
+  - sudo -E rpi-eeprom-config --edit
+  - BOOT_ORDER=0xf41
+    - 0xf14 로 저장되어 있음. 이경우 변경해야 함   
 
-BOOT_ORDER=0xf41
-
-sudo -E rpi-eeprom-config --edit
-
-vcgencmd bootloader_config
+- vcgencmd bootloader_config
 
 
 
