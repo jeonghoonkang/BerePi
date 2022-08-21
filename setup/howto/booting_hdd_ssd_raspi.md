@@ -16,7 +16,8 @@ https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloade
   - BOOT_ORDER=0xf41
     - 0xf14 로 저장되어 있음. 이경우 변경해야 함   
 
-- vcgencmd bootloader_config
+- 확인 방법
+  - vcgencmd bootloader_config
 
 
 
