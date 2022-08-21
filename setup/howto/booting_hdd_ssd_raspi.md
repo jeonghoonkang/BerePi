@@ -26,7 +26,7 @@ https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloade
 
 ```pi@raspberrypi:~ $ vcgencmd otp_dump | grep 17```
 
-```17:3020000a (USB부팅)```
+```17:3020000a (USB부팅) 1020000a는 USB부팅이 안되는 설정임```
 
 - 설정방법 
 <pre>
