@@ -39,3 +39,9 @@ $ docker inspect 0d3563b90198 | grep com.docker.compose
                 "com.docker.compose.version": "1.25.0"
  
 </pre>
+
+
+
+## 에러로 컨테이너 실행 불가능 한 경우 
+- docker ps -a
+- docker cp CONTAINERID:/컨테이너 내부 경로 /호스트OS 경로
