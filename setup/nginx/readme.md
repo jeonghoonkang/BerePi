@@ -5,3 +5,5 @@
 
 - test and clear understanding rex regular expression
   - https://regex101.com/ 
+
+- PathPrefix(`/app1{regex:$$|/.*}`)
