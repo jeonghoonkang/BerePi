@@ -1,0 +1,27 @@
+version: "3.3"
+
+services:
+
+   whoami:
+     container_name: "simple-service"
+     image: traefik/whoami
+     labels:
+       - "traefik.enable=true"
+       - "traefik.http.routers.whoami.rule=Host(`${HOSTMACH}`) && (Path(`/whoami`))"
+       - "traefik.http.routers.whoami.entrypoints=#entrypoint#"
+
+   upserver:
+     image: test_arm_webdav_3:v113
+
+     container_name: upload_nginx_arm_test3
+
+     volumes:
+       - ./up_files:/media
+
+    labels:
+       - "traefik.enable=true"
+       - "traefik.http.routers.upserver.rule=Host(`${HOSTMACH}`) && (Path(`/dav/`)) "
+       - "traefik.http.routers.upserver.entrypoints=kang1"
+       #- "traefik.http.services.upserver.loadbalancer.server.port=80"
+
+  
