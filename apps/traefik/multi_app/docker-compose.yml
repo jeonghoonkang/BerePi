@@ -20,7 +20,7 @@ services:
 
     labels:
        - "traefik.enable=true"
-       - "traefik.http.routers.upserver.rule=Host(`${HOSTMACH}`) && (Path(`/dav/`)) "
+       - "traefik.http.routers.upserver.rule=Host(`${HOSTMACH}`) && (Path(`/dav/`)) " #주의 반드시 http://IP/dav/ 로 호출해야함. 마지막 /
        - "traefik.http.routers.upserver.entrypoints=kang1"
        #- "traefik.http.services.upserver.loadbalancer.server.port=80"
 
