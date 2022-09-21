@@ -8,3 +8,7 @@
 
 ### run update again
 - sudo apt-get update && sudo apt-get dist-upgrade
+
+
+### Please check , lold repo 
+- https://old-releases.ubuntu.com/ubuntu/dists/
