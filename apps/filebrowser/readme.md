@@ -11,8 +11,8 @@
   - filebrowser config set -a {0.0.0.0}
   - filebrowser config set -p {포트번호}
 
-<code>
+<pre>
 filebrowser config set -a 0.0.0.0
 filebrowser config set -p 5320
 filebrowser -r ./
-</code>
+</pre>
