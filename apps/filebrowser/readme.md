@@ -13,6 +13,6 @@
 
 <pre>
 filebrowser config set -a 0.0.0.0
-filebrowser config set -p 5320
+filebrowser config set -p 5522
 filebrowser -r ./
 </pre>
