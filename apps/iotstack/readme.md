@@ -4,4 +4,4 @@
 ## 설치
 - curl -fsSL https://raw.githubusercontent.com/SensorsIot/IOTstack/master/install.sh | bash
 - cd ~/IOTstack
-- ./menu.sh
+- sudo ./menu.sh
