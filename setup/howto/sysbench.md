@@ -350,3 +350,13 @@ Threads fairness:
     events (avg/stddev):           105823.0000/0.00
     execution time (avg/stddev):   299.7895/0.00
 </pre>
+
+
+
+order='ls'
+START=`date`; PERIOD=30; 
+while true; do $1; $order;   date; 
+echo "---------- split line ----------  (info)"$PERIOD" secs peroid  "; 
+echo "  start time: "$START; echo " "; 
+sleep $PERIOD; 
+done; 
