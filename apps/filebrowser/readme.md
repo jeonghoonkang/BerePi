@@ -7,7 +7,8 @@
 - by just run shell command
   - curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 ## run
-  - filebrowser -r /path/to/your/files
+  - bash 또는 shell 에서 아래 명령으로 실행
+    - filebrowser -r /path/to/your/files
 ## configure
   - filebrowser config set -a {0.0.0.0}
   - filebrowser config set -p {포트번호}
