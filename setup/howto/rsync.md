@@ -40,4 +40,15 @@ rsync -avhz --progress --partial -e 'ssh -p 7022' tinyos@***.***.***.***:webdav/
 </pre>
 
 
+<pre>
+#!/bin/bash
 
+if [ -z $1 ] ;
+then 
+        ls
+else
+        time rsync -avhze 'ssh -p7022' --bwlimit=5120 --partial --progress -v $1 tinyos@192.168.0.**:webdav/media/send/
+        #time rsync -avhze 'ssh -p7022' --partial --progress -v $1 tinyos@192.168.0.**:webdav/media/send/
+fi
+
+</pre>
