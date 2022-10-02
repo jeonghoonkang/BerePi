@@ -6,11 +6,16 @@
 - Now we can start configuring iptables. We would like to forward specific traffic to cloud server and that traffic is defined on a couple of ports. If we have a website on our server we need to forward port 80 (for HTTP) and if we want to have an option to connect remotely to our server with ssh connection we need to forward port 22.  Also, we need to forward port that is your server specific, in my case we need to forward 1500 that is defined for our MqTT server. We can do this following commands:
   - iptables -t nat -A PREROUTING -p tcp –dport {Source_Port_Number} -j DNAT –to-destination {Destination_IP_address}:{Destination_Port_Number}
 
-- Example:
 <pre>
+# Example
 iptables -t nat -A PREROUTING -p tcp –dport 80 -j DNAT –to-destination 66.249.75.126:80
 
 # And now we need to save our iptables with next command:
 iptables -t nat -A POSTROUTING -j MASQUERADE
 
 </pre>
+
+
+- The easiest way to start this script at boot up is to edit rc.local file. We need to edit this file, that is located in /etc/, with the line below, ant that is everything that we need. 
+
+  - sudo bash /home/pi/BLN_Redirect.sh & 
