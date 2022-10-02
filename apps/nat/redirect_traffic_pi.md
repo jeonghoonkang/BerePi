@@ -16,6 +16,19 @@ iptables -t nat -A POSTROUTING -j MASQUERADE
 </pre>
 
 
+<pre>
+#! /bin/bash
+echo "1" > /proc/sys/net/ipv4/ip_forward
+cat /proc/sys/net/ipv4/ip_forward
+
+iptables -t nat -A PREROUTING -p tcp --dport 22 -j DNAT --to-destination 66.249.75.126:22
+
+iptables -t nat -A POSTROUTING - j MASQUERADE
+
+date >> /home/pi/log.txt
+
+</pre>
+
 - The easiest way to start this script at boot up is to edit rc.local file. We need to edit this file, that is located in /etc/, with the line below, ant that is everything that we need. 
 
   - sudo bash /home/pi/BLN_Redirect.sh & 
