@@ -240,7 +240,7 @@ apt-get install openntpd
 
 
 
-There's an error in /usr/local/sbin/nat.sh
-iptables -A FORWARD -i $WAN -o $WAN -j REJECT
-should be
-iptables -A FORWARD -i $WAN -o $LAN -j REJECT
+- There's an error in /usr/local/sbin/nat.sh
+  - iptables -A FORWARD -i $WAN -o $WAN -j REJECT
+- should be
+  - iptables -A FORWARD -i $WAN -o $LAN -j REJECT
