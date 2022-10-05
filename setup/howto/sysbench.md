@@ -6,7 +6,7 @@ order='date';
 START=`date`; PERIOD=30; 
 while true; do $order; echo ""; $s1; echo ""; $s2; 
 echo "---------- split line ----------  (info)"$PERIOD" secs peroid  "; 
-echo "  start time: "$START; echo " "; 
+echo "  one-shot run time: "$START; echo " "; 
 sleep $PERIOD; 
 done; 
 </pre>
