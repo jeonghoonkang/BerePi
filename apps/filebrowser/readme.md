@@ -14,7 +14,7 @@
   - filebrowser config set -p {포트번호}
 
 <pre>
-filebrowser config set -a 0.0.0.0
-filebrowser config set -p 5522
-filebrowser -r ./
+filebrowser config set -a 0.0.0.0  ## 외부접근 IP 허용
+filebrowser config set -p 5522  ## 포트설정
+filebrowser -r ./ ## 실행
 </pre>
