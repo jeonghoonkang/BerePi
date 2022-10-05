@@ -1,3 +1,16 @@
+<pre>
+s1="sysbench --test=cpu run" 
+s2="ioping -q -c 10 -s 8k -W ." 
+
+order='date';
+START=`date`; PERIOD=30; 
+while true; do $order; echo ""; $s1; echo ""; $s2; 
+echo "---------- split line ----------  (info)"$PERIOD" secs peroid  "; 
+echo "  start time: "$START; echo " "; 
+sleep $PERIOD; 
+done; 
+</pre>
+
 - sysbench --test=cpu run
 
 - sysbench fileio --file-total-size=15G --file-test-mode=rndrw --time=300 --max-requests=0 prepare
@@ -357,14 +370,4 @@ Threads fairness:
 </pre>
 
 
-<pre>
-s=sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 
-order='ls'
-START=`date`; PERIOD=30; 
-while true; do $s; $order;   date; 
-echo "---------- split line ----------  (info)"$PERIOD" secs peroid  "; 
-echo "  start time: "$START; echo " "; 
-sleep $PERIOD; 
-done; 
-</pre>
