@@ -8,6 +8,11 @@
   - ioping -q -c 10 -s 8k -W .
 
 <pre>
+sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
+</pre>
+
+
+<pre>
 RaspberryPi4 4G RAM with SSD
 tinyos@rpuntu-001:~$ sysbench --test=cpu run
 WARNING: the --test option is deprecated. You can pass a script name or path on the command line without any options.
@@ -352,6 +357,8 @@ Threads fairness:
 </pre>
 
 
+<pre>
+sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 
 order='ls'
 START=`date`; PERIOD=30; 
@@ -360,3 +367,4 @@ echo "---------- split line ----------  (info)"$PERIOD" secs peroid  ";
 echo "  start time: "$START; echo " "; 
 sleep $PERIOD; 
 done; 
+</pre>
