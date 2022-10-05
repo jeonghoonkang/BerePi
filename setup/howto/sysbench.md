@@ -358,11 +358,11 @@ Threads fairness:
 
 
 <pre>
-sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
+s=sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 
 order='ls'
 START=`date`; PERIOD=30; 
-while true; do $1; $order;   date; 
+while true; do $s; $order;   date; 
 echo "---------- split line ----------  (info)"$PERIOD" secs peroid  "; 
 echo "  start time: "$START; echo " "; 
 sleep $PERIOD; 
