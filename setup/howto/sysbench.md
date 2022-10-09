@@ -1,7 +1,6 @@
 <pre>
-s1="sysbench --test=cpu run" 
-s2="ioping -q -c 10 -s 8k -W ." 
-
+s1="sysbench --test=cpu run" ;
+s2="ioping -q -c 10 -s 8k -W ." ;
 order='date';
 START=`date`; PERIOD=30; 
 when=$START
