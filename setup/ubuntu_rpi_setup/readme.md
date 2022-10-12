@@ -10,5 +10,7 @@
 - sudo apt-get update && sudo apt-get dist-upgrade
 
 
-### Please check , lold repo 
+### Please check , old repo 
 - https://old-releases.ubuntu.com/ubuntu/dists/
+- <pre>deb http://old-releases.ubuntu.com/ubuntu/ hirsute-updates universe
+ </pre>
