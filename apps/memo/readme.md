@@ -1,2 +1,2 @@
-### Memo 애플리케이션
+### Memo 서비스 
 - https://github.com/usememos/memos
