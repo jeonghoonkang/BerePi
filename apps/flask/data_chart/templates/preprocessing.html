@@ -1,0 +1,67 @@
+<!-- CSS -->
+<link href="{{ url_for('static', filename='main.css') }}" rel="stylesheet">
+
+<head>
+  <script src="http://code.jquery.com/jquery.js"></script>
+  <script type="text/javascript">
+      $(function(){
+          $("#btn1").click(function(){
+          setInterval(function (){
+              $.ajax({
+                  type:"get",
+                  url: "./log",
+                  dataType: "text",
+                  //timeout:3000,
+                  success: function(data){
+                      $("#textView1").html(data);
+                  }
+              });
+          }, 1000);
+          });
+      });
+  </script>
+</head>
+
+<div class="wrapper fadeInDown">
+  <header>
+    <div class="container">
+      <h1 class="logo">전처리</h1>
+    </div>
+  </header> 
+  <div id="formContent">
+    <h2 class="active"> File Upload </h2>
+  </div>
+  <div id="formFooter">
+    <div class="iframebox">
+      <iframe src="http://bigsoft.iptime.org:8304/files/data"></iframe>
+    </div>
+  </div>
+  <br>
+
+  <div id="formContent">
+    <h2 class="active"> exec </h2>
+  </div>
+  <div id="formFooter">
+    
+    <div class="iframebox">
+        <iframe src="http://bigsoft.iptime.org:8306/preproc_args"></iframe>
+    </div>
+  </div>
+  
+  <br>
+  
+  <div id="formContent">
+    <h2 class="active"> result </h2>
+  </div>
+  <div id="formFooter">
+    <!-- Input Form -->
+    <center>
+    <form method="GET" action="/result">
+        <input id="btn1" type="button" value="View log">
+        <div id="formlog">
+            <div id="textView1"></div>
+        </div>
+    </form>
+    </center>
+  </div>
+</div>

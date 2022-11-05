@@ -1,0 +1,120 @@
+<link href="{{ url_for('static', filename='sub.css') }}" rel="stylesheet">
+
+<center>
+  <form method="GET" action="/chart_form">
+      <label for="csv_path"> csv file path </label>
+      <input type="text" id="csv_path" class="fadeIn second" name="csv_path" value="/home/keti/data/csv_split_by_id/1c9dc244e5bc.csv">
+      <br>
+      <input type="submit" class="fadeIn fourth" value="RUN">
+  </form>
+</center>
+
+{% if data1 %}
+  {% if data3 %}
+    <br>
+    <br>
+    <center>
+    ************ selected field list *************
+    <br>
+    {{data2}}
+    </center>
+    <br>
+    <br>
+    <center>
+    ************ selected time field *************
+    <br>
+    {{data3}}
+    </center>
+    <br>
+    <br>
+    <center>
+    MIN_TIME : {{data4}} &nbsp {{data5}}
+    <br>
+    MAX_TIME : {{data6}} &nbsp {{data7}}
+    </center>
+    <br>
+    <br>
+    <center>
+      <form method="GET" action="/chart_form">
+          <label for="csv_path"> csv path </label>
+          <input type="text" id="csv_path" class="fadeIn second" name="csv_path" value={{data1}}>
+          <label for="time_field"> time field </label>
+          <input type="text" id="time_field" class="fadeIn second" name="time_field" value={{data3}}>
+          <label for="for_plot_field"> field to plot </label>
+          <input type="text" id="to_plot_field" class="fadeIn second" name="to_plot_field" value={{data2}}>
+          <br>
+          <label for="start_time"> start time </label>
+          <br>
+          <input type="date" id="start_date" class="fadeIn second" name="start_date" value={{data4}}>
+          <input type="time" id="start_time" class="fadeIn second" name="start_time" value={{data5}}>
+          <br>
+          <label for="end_time"> end time </label>
+          <br>
+          <input type="date" id="end_date" class="fadeIn second" name="end_date" value={{data6}}>
+          <input type="time" id="end_time" class="fadeIn second" name="end_time" value={{data7}}>
+          <br>
+          <input type="submit" class="fadeIn fourth" value="RUN">
+      </form>
+    </center>
+    {% if data8 %}
+      <br>
+      <br>
+      <center>
+      {{data6}}
+      <br>
+      <br>
+      <img src="{{url_for('static', filename = '../static/output/output.png')}}" style="width: 800px; height:auto;"> <!--'../output/output.png'-->
+      </center>
+    {% endif %}
+  {% else %}
+    csv file path = {{data1}}
+    <br>
+    <br>
+    <center>
+    ************ field list *************
+    </center>
+    <br>
+    {{data2}}
+    <br>
+    <br>
+    <center>
+    ******** add field by click *********
+    </center>
+    <br>
+    {% for c in data2 %}
+      <button type="button" id="field_button" onclick="field_click(this.innerText);">{{c}}</button> &nbsp&nbsp
+    {% endfor %}
+    <br>
+    <br>
+    <center>
+      <form method="GET" action="/chart_form">
+          <label for="csv_path"> csv path </label>
+          <input type="text" id="csv_path" class="fadeIn second" name="csv_path" value={{data1}}>
+          <br>
+          <label for="time_field"> time field </label>
+          <input type="text" id="time_field" class="fadeIn second" name="time_field" value="regdate">
+          <br>
+          <label for="for_plot_field"> field to plot </label>
+          <input type="text" id="to_plot_field" class="fadeIn second" name="to_plot_field" value="">
+          <br>
+          <input type="submit" class="fadeIn fourth" value="RUN">
+      </form>
+    </center>
+  {% endif %}
+{% endif %}
+
+<script>
+
+function field_click(field_name) {
+  const subs2 = document.getElementById('to_plot_field');
+  //window.alert(field_name);
+  if (subs2.value == ''){
+    subs2.value = field_name;
+    //window.alert(subs2.value);
+    }
+  else{
+    subs2.value = subs2.value + '|' +field_name;
+    //window.alert(subs2.value);
+    }
+}
+</script>

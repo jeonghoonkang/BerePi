@@ -1,0 +1,16 @@
+<link href="{{ url_for('static', filename='sub.css') }}" rel="stylesheet">
+
+<center>
+  <form method="GET" action="/preproc_args">
+    <label for="input_path"> 입력파일경로 </label>
+    <input type="text" id="input_path" class="fadeIn second" name="input_path" placeholder="/home/keti/data">
+    <br>
+    <label for="output_path"> 출력파일경로 </label>
+    <input type="text" id="output_path" class="fadeIn second" name="output_path" placeholder="/home/keti/data">
+    <br>
+    <label for="rmfile"> 처리전 파일 삭제 여부 </label>
+    <input type="text" id="rmfile" class="fadeIn second" name="rmfile" placeholder="pre = 유지, rm = 삭제">
+    <br>
+    <input type="submit" class="fadeIn fourth" value="Exec">
+  </form>
+</center>

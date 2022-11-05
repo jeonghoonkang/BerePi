@@ -1,0 +1,28 @@
+[INFO|recursive_search_dir] [2020-09-02 15:56:09,695] [loop] recursive searching ../files_volume
+[INFO|_main] [2020-09-02 15:56:09,696] --------------------file list--------------------
+[INFO|_main] [2020-09-02 15:56:09,696] file: ../files_volume/01225797052.xlsx   size: 7.757 (MB)
+[INFO|_main] [2020-09-02 15:56:09,697] file: ../files_volume/01225797247.csv   size: 29.360 (MB)
+[INFO|_main] [2020-09-02 15:56:09,697] file: ../files_volume/ms_01225797226.csv   size: 0.004 (MB)
+[INFO|_main] [2020-09-02 15:56:09,698] --------------------------------------------------
+[INFO|start_work] [2020-09-02 15:56:09,784] 멀티 프로세스 생성 완료 및 작업 시작..
+[INFO|_consume] [2020-09-02 15:56:09,785] DB전송 프로세스 (PID : 465) Start Work
+[INFO|_produce] [2020-09-02 15:56:09,786] 데이터 처리 프로세스 (PID : 454) Start Work
+[INFO|_produce] [2020-09-02 15:56:09,788] 데이터 처리 프로세스 (PID : 458) Start Work
+[INFO|_consume] [2020-09-02 15:56:09,799] DB전송 프로세스 (PID : 469) Start Work
+[INFO|file2df] [2020-09-02 15:56:19,079] 메인 프로세스 : ../files_volume/01225797052.xlsx read 완료 (DataFrame length: 52369)
+[INFO|file2df] [2020-09-02 15:56:19,334] 메인 프로세스 : ../files_volume/01225797247.csv read 완료 (DataFrame length: 122850)
+[INFO|file2df] [2020-09-02 15:56:19,409] 메인 프로세스 : ../files_volume/ms_01225797226.csv read 완료 (DataFrame length: 21)
+[INFO|_main] [2020-09-02 15:56:19,414] 메인 프로세스 작업 완료
+[INFO|_main] [2020-09-02 15:56:19,414] subprocess가 아직 실행 중 입니다...
+[INFO|_produce] [2020-09-02 15:56:19,817] 데이터 처리 프로세스 (PID: 458)  Fieldname: GPS_LAT, length: 26185 처리중..
+[INFO|_produce] [2020-09-02 15:56:19,817] 데이터 처리 프로세스 (PID: 454)  Fieldname: GPS_LAT, length: 26184 처리중..
+[INFO|_produce] [2020-09-02 15:56:22,501] 데이터 처리 프로세스 (PID: 454)  Fieldname: GPS_LAT, length: 61425 처리중..
+[INFO|_produce] [2020-09-02 15:56:22,510] 데이터 처리 프로세스 (PID: 458)  Fieldname: GPS_LAT, length: 61425 처리중..
+[INFO|_produce] [2020-09-02 15:56:28,705] 데이터 처리 프로세스 (PID: 454)  Fieldname: GPS_LAT, length: 10 처리중..
+[INFO|_produce] [2020-09-02 15:56:28,708] 데이터 처리 프로세스 (PID : 454) 정상 종료
+[INFO|_produce] [2020-09-02 15:56:28,729] 데이터 처리 프로세스 (PID: 458)  Fieldname: GPS_LAT, length: 11 처리중..
+[INFO|_produce] [2020-09-02 15:56:28,732] 데이터 처리 프로세스 (PID : 458) 정상 종료
+[INFO|_consume] [2020-09-02 15:56:32,668] DB 전송 프로세스 (PID : 469) 정상 종료
+[INFO|_consume] [2020-09-02 15:56:32,670] DB 전송 프로세스 (PID : 465) 정상 종료
+[INFO|_main] [2020-09-02 15:56:32,755] total run time : 22.970491
+[INFO|_main] [2020-09-02 15:56:32,756] total processed lines : 175240

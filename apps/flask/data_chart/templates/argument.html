@@ -1,0 +1,45 @@
+<!-- CSS -->
+<link href="{{ url_for('static', filename='main.css') }}" rel="stylesheet">
+
+<head>
+    <script src="http://code.jquery.com/jquery.js"></script>
+    <script type="text/javascript">
+        $(function(){
+            $("#btn1").click(function(){
+            setInterval(function (){
+                $.ajax({
+                    type:"get",
+                    url: "./log",
+                    dataType: "text",
+                    //timeout:3000,
+                    success: function(data){
+                        $("#textView1").html(data);
+                    }
+                });
+            }, 1000);
+            });
+        });
+    </script>
+</head>
+
+<div id="formContent">
+    <h2 class="active"> ARGUMENT </h2>
+    <form method="GET" action="/">
+        <label for="input_path"> 입력파일경로 </label>
+        <input type="text" id="input_path" class="fadeIn second" name="input_path" placeholder="/home/keti/data">
+        <label for="output_path"> 출력파일경로 </label>
+        <input type="text" id="output_path" class="fadeIn second" name="output_path" placeholder="/home/keti/data">
+        <label for="rmfile"> 처리전 파일 삭제 여부 </label>
+        <input type="text" id="rmfile" class="fadeIn second" name="rmfile" placeholder="pre = 유지, rm = 삭제">
+        <input type="submit" class="fadeIn fourth" value="Exec">
+    </form>
+    <h2 class="active"> result </h2>
+
+    <!-- Input Form -->
+    <form method="GET" action="/result">
+        <input id="btn1" type="button" value="View log">
+        <div id="formlog">
+            <div id="textView1"></div>
+        </div>
+    </form>
+</div>

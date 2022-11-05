@@ -1,0 +1,63 @@
+<!-- CSS -->
+<link href="{{ url_for('static', filename='main.css') }}" rel="stylesheet">
+<head>
+    <script src="http://code.jquery.com/jquery.js"></script>
+    <script type="text/javascript">
+        $(function(){
+            $("#btn1").click(function(){
+            setInterval(function (){
+                $.ajax({
+                    type:"get",
+                    url: "./log",
+                    dataType: "text",
+                    //timeout:3000,
+                    success: function(data){
+                        $("#textView1").html(data);
+                    }
+                });
+            }, 1000);
+            });
+        });
+        </script>
+        
+</head>
+
+<div class="wrapper fadeInDown">
+  <header>
+    <div class="container">
+      <h1 class="logo">KETI</h1>
+    </div>
+  </header>
+  <div id="formContent">
+    <!-- Tabs Titles -->
+    <h2 class="active"> result </h2>
+
+    <!-- Input Form -->
+    <form method="GET" action="/result">
+        <input id="btn1" type="button" value="View log">
+        <div id="formlog">
+          <div id="textView1"></div>
+        </div>
+    </form>
+
+    <!-- Remind Passowrd -->
+    <div id="formFooter">
+      <!--
+      <a class="underlineHover" href="#">Status</a>
+      -->
+      <p>
+        {% if result == None %}
+            <h5> 인자값 전달 및 실행 전입니다. </h5>
+        {% else %}
+            <h5>  인자값을 전달했습니다. </h5>
+            <!--
+            <p>
+                <h5> result : {{result}} </h5>
+            </p>
+            -->
+        {% endif %}
+      </p>
+    </div>
+
+  </div>
+</div>

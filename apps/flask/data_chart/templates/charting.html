@@ -1,0 +1,14 @@
+<html>
+    {% if args %}
+        '파일 및 필드선택을 해주세요'
+    {% else %}
+        <body>
+            <button type="button" onclick="location.href='http://106.250.21.194:8306/chart_form' ">이전</button>
+            <br>
+            <br>
+            <center>
+            <img src="{{url_for('static', filename = '../static/output/output.png')}}" style="width: 800px; height:auto;"> <!--'../output/output.png'-->
+            </center>
+        </body>
+    {% endif %}
+</html>
