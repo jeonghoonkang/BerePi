@@ -14,8 +14,12 @@ if __name__=="__main__":
 
     conn = pymysql.connect(host=jdata["db_add"], user=jdata["id"], passwd=jdata["password"], db=jdata["db_name"], port=int(jdata["port"]))
 
-    sql = "INSERT INTO home_co2 (datetime, co2) VALUES (%s, %s)"
+    table_name = "home_co2"
+
+    sql = "INSERT INTO " + table_name + " (datetime, co2) VALUES (%s, %s)"
     time_now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print (time_now)
 
-    
+
+
+
