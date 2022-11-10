@@ -1,0 +1,6 @@
+CREATE TABLE temps3 (
+    device varchar(20) DEFAULT NULL, 
+    datetime datetime DEFAULT NULL,
+    temp float DEFAULT NULL,
+    hum float DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=***;

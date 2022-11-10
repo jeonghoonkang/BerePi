@@ -1,0 +1,23 @@
+
+
+insert_record(device,str(date),format(temp,'.2f'),format(hum,'.2f'))
+
+def insert_record( device, datetime, temp, hum ):
+	query = "INSERT INTO temps3 (device,datetime,temp,hum) " \
+                "VALUES (%s,%s,%s,%s)"
+    	args = (device,datetime,temp,hum)
+
+    	try:
+        	conn = MySQLdb.connect( host=hostname, user=username, passwd=password, db=database )
+		      cursor = conn.cursor()
+        	cursor.execute(query, args)
+		      conn.commit()
+
+    	except Exception as error:
+        	print(error)
+
+    	finally:
+        	cursor.close()
+        	conn.close()
+          
+          
