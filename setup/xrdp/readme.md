@@ -21,7 +21,16 @@ exec /bin/sh /usr/bin/startxfce4
 </pre>
 
 
-
+ubuntu 18 버전. 색상문제 (지속적 권한 입력)
+# sudo vim /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+<pre>
+[Allow Colord all Users]
+Identity=unix-user:*
+Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
+ResultAny=no
+ResultInactive=no
+ResultActive=yes
+</pre>
 
 
 Ubuntu 20.10 - xrdp/remote access
