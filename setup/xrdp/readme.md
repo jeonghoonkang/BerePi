@@ -21,8 +21,8 @@ exec /bin/sh /usr/bin/startxfce4
 </pre>
 
 
-ubuntu 18 버전. 색상문제 (지속적 권한 입력)
-# sudo vim /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+- ubuntu 18 버전. 색상문제 (지속적 권한 입력)
+  - sudo vim /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
 <pre>
 [Allow Colord all Users]
 Identity=unix-user:*
