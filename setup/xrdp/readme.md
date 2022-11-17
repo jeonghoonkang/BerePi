@@ -1,3 +1,9 @@
+## 로그인 되자마자 종료되는 경우
+- xrdp, ubuntu
+- 윈도우 원격데스크탑 실행 오류 문제
+  - https://github.com/neutrinolabs/xrdp/issues/2027
+  - sudo apt install ubuntu-gnome-desktop
+
 sudo nano /etc/xrdp/startwm.sh
 
 <pre>
