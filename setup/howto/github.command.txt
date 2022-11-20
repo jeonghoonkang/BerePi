@@ -40,7 +40,7 @@
 
 $ git config --global credential.helper store //--replace-all
   --> git directory에선 반영구적으로 인증 절차가 생략
-  --> git 인증 저장 생략 역구 저장 
+  --> git 인증 저장 생략 역구 저장 깃허브 아이디 
 
 
 
