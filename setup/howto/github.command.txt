@@ -39,7 +39,9 @@
 
 
 $ git config --global credential.helper store //--replace-all
---> git directory에선 반영구적으로 인증 절차가 생략
+  --> git directory에선 반영구적으로 인증 절차가 생략
+  --> git 인증 저장 생략 역구 저장 
+
 
 
 $ git config --global credential.helper 'cache --timeout 7200'
