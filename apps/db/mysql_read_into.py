@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #Author : jeonghoonkang, https://github.com/jeonghoonkang
 
-devel_dir="~/devel_opment"
+devel_dir="~/devel_opment" #modify on your condition
 tmp_dir=devel_dir+"/BerePi/apps"
 
 import datetime
@@ -86,6 +86,8 @@ def db_insert_from_log(table_name, file_name):
 
 if __name__=="__main__":
     
+    print ("Path")
+    print (tmp_dir)
     table_name = "home_co2"
     __r = parse_args()
     print (__r)
