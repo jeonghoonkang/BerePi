@@ -1,5 +1,6 @@
 ## Install
 - brew install barrier
+- https://github.com/debauchee/barrier/releases
 
 
 ## Issue
