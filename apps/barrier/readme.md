@@ -5,6 +5,9 @@
 ## Issue
 
 <pre>
+
+(error) ssl certificate doesn't exist: /Users/tinyos/Library/Application Support/barrier/SSL/Barrier.pem
+
 I had the exact same issue on macOS Monterey (12.0.1) today.
 
 Solved it by running the openssl command described in @4F2E4A2E post.
