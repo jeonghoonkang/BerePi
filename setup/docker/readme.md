@@ -1,18 +1,22 @@
 ## Docker Installation
 - ubuntu
   - 오래된 버전의 도커 삭제
-<pre>
+```bash
 sudo apt-get remove docker docker-engine docker.io
-</pre>
+```
   - 준비 및 설치 
-<pre>
+```bash
 sudo apt-get update && sudo apt-get install \
     apt-transport-https \
     ca-certificates \
     curl \
     software-properties-common
 sudo apt-get update && sudo apt-get install docker-ce
-</pre>    
+```
+  - 현재 사용자에게 권한 추가
+  ```bash
+  sudo usermod -aG docker $USER
+  ```
 
 ### 설치
   - www.docker.com
@@ -54,8 +58,8 @@ sudo apt-get update && sudo apt-get install docker-ce
   - docker stop 컨테이너 정지
   - docker start 컨테이너 다시 실행
   - docker restart 컨테이너 재가동
-  - docker rm 컨테이너 삭제
-  - docker rmi 이미지 삭제
+  - docker rm 컨테이너 삭제 (모든 컨테이너 삭제 `docker rm $(docker ps -a -q)` )
+  - docker rmi 이미지 삭제 (모든 이미지 삭제 `docker rmi $(docker images -q)` )
   - docker kill 컨테이너에게 SIGKILL을 보낸다. 이에 관련된 이슈가 있음
   - docker attach 실행중인 컨테이너에 접속
   - docker wait 컨테이너가 멈출 때까지 블럭
