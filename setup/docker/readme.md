@@ -40,6 +40,12 @@ sudo apt-get update && sudo apt-get install docker-ce
     - docker commit dtinyos python_tos:001
                     {실행중인 컨테이너} {생성할 이미지이름 : 태그}
   - 백업
+    - `docker export oracle_backup > /backup/oracle_xx.tar`
+  - 복원
+    - `docker import /backup/oracle_xx.tar`
+                    
+### 이미지 저장 및 백업, 배포
+  - 백업
     - docker save oracle_backup > /backup/oracle_xx.tar
                   {이미지이름:docker images로 확인되는 이름, commit하면 생성됨}
   - 복원
