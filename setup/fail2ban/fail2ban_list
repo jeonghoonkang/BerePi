@@ -1,0 +1,2 @@
+#!/bin/bash
+cat /var/log/fail2ban.log* | grep "] Ban" | awk '{print $NF}' | sort | uniq -c | sort -n
