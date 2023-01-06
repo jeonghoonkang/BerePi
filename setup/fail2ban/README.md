@@ -35,3 +35,6 @@ fail2ban_list
 ```
 
 <img src="https://user-images.githubusercontent.com/4587330/210972256-8eab6bba-3813-42d5-8fc9-4d9043f111a1.png" />
+
+- 120.25.171.85 IP 공격자가 1번 차단되었다.
+- 8.218.67.187 IP 공격자가 1번 차단되었다.
