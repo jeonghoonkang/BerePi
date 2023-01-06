@@ -30,9 +30,8 @@ wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/setup/fail2ba
 ```
 
 
-
 ```bash
 fail2ban_list
 ```
 
-
+<img src="https://user-images.githubusercontent.com/4587330/210972256-8eab6bba-3813-42d5-8fc9-4d9043f111a1.png" />
