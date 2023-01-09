@@ -7,6 +7,7 @@
 - Raspberry Pi 3B or 4B
   
   > (Raspberry Pi Zero W2 는 RAM 용량이 적어 제한적으로 사용 가능)
+
 - Raspbian Bullseye
   
   ```bash
@@ -22,6 +23,16 @@ curl -fsSL https://raw.githubusercontent.com/SensorsIot/IOTstack/master/install.
 cd ~/IOTstack
 sudo ./menu.sh
 ```
+
+- Build Stack > [x] wireguard
+
+- 설치 진행
+
+<img title="" src="https://user-images.githubusercontent.com/4587330/211264293-50299f86-7bd9-48c1-a7f7-c36c471b35fa.png" alt="" width="254">
+
+
+
+<img title="" src="https://user-images.githubusercontent.com/4587330/211264295-7b7cfe6f-ea8d-417c-828a-f90c4f95f2e2.png" alt="" width="411">
 
 
 
@@ -47,8 +58,6 @@ PEERS=laptop,PC,iphone,android
 #   - DNS 서버도 설정할 수 있음 ex) 8.8.8.8
 PEERDNS=auto
 ```
-
-
 
 ## 클라이언트 접속
 
