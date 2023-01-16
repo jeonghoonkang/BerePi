@@ -24,13 +24,13 @@ cd ~/IOTstack
 sudo ./menu.sh
 ```
 
-- Build Stack > [x] wireguard
-
-- 설치 진행
+- `Build Stack` 엔터
 
 <img title="" src="https://user-images.githubusercontent.com/4587330/211264293-50299f86-7bd9-48c1-a7f7-c36c471b35fa.png" alt="" width="254">
 
-
+- `wireguard` 스페이스
+- [Enter] 하면 설치 시작
+- 설치 진행
 
 <img title="" src="https://user-images.githubusercontent.com/4587330/211264295-7b7cfe6f-ea8d-417c-828a-f90c4f95f2e2.png" alt="" width="411">
 
