@@ -2,19 +2,17 @@
 
 오픈소스 하드웨어 OpenLog 를 사용하여, 마이크로SD 카드에 시리얼 로그를 저장한다.
 
+[OpenLog 소개](https://silky-sundial-174.notion.site/OPENLOG-1054fe19c62e499b837b049489d8066c)
+
 
 
 ## Hardware
 
 <img src="https://user-images.githubusercontent.com/4587330/213354776-15a24575-7202-44db-be2b-a65b826e6e16.png" />
 
-
-
 ## Software
 
 명령어`rpi_cpu_temp` 는 [Raspberry Pi Monitor]([BerePi/apps/raspberrypi_monitor at master · jeonghoonkang/BerePi · GitHub](https://github.com/jeonghoonkang/BerePi/tree/master/apps/raspberrypi_monitor)) 참고
-
-
 
 샘플코드
 
@@ -39,11 +37,4 @@ while 1:
         print(read_temp)
         ser.write(read_temp)
         time.sleep(10)
-
 ```
-
-
-
-
-
-
