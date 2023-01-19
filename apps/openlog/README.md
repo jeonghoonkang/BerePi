@@ -1,8 +1,10 @@
 # OPENLOG
 
-오픈소스 하드웨어 OpenLog 를 사용하여, 마이크로SD 카드에 시리얼 로그를 저장한다.
+- 소개 : **저렴한 가격**(메모리 포함 2만원 이내)으로 추가되는 **데이터로거** <br />
+         (2023년 기준, 알리 개당 4천원)
+- 기능 : 오픈소스 하드웨어 OpenLog 를 사용하여, 마이크로SD 카드에 시리얼 로그를 저장한다.
 
-[OpenLog 소개](https://silky-sundial-174.notion.site/OPENLOG-1054fe19c62e499b837b049489d8066c)
+- [OpenLog 정보](https://silky-sundial-174.notion.site/OPENLOG-1054fe19c62e499b837b049489d8066c) Notion 링크
 
 
 
