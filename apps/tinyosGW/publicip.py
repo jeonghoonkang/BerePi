@@ -128,13 +128,13 @@ if __name__ == '__main__':
     cmd1 = cmd + " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
     cmd2 = cmd + " %s " %logname + ' %s@%s:' %(id,ip) + '/var/www/html/server/%s' %FILENAME[:-4] + ".%s " %hostn
 #    cmd = 'scp'
-#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/'
+#    cmd += " %s " %fname + '%s@%s:' %(id,ip) + '/var/www/html/server/' #/var/www/webdav/hdd/server
     print (cmd1)
-    print (cmd2)
+#   print (cmd2)
     print ( 'return of os.system = ', os.system(cmd1) )
-    #print ( 'return of os.system = ', os.system(cmd2) )
+#   print ( 'return of os.system = ', os.system(cmd2) )
 
-    print ("finish ")
+    print ("...finish ")
 
 # ssh-keygen
 # cat ~/.ssh/id_rsa.pub | ssh -p xxxx pi@xxx.xxx.xxx 'cat >>
