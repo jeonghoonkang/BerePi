@@ -56,6 +56,7 @@ def checkifexist(fname):
     print (run_cmd(cmd))
 
 def writefile(_in, fn="ip.txt"):
+    _in = _in.decode()
     f = open(fn, 'w')
     f.write(_in)
     f.flush()
@@ -96,6 +97,7 @@ if __name__ == '__main__':
     i_ip, os_type = getiip()
     info = i_ip + p_ip 
     hostn = hostname()
+    hostn = hostn.decode()
     
     try : name = getpass.getuser()
     except :
