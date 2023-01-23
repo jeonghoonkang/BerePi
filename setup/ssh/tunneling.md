@@ -1,4 +1,4 @@
-## Tunneling SSH
+## Tunneling by SSH
 
 - Local Tunnel (-L 옵션)
   - 포워드 터널링
