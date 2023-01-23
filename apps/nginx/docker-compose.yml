@@ -1,0 +1,49 @@
+version: '3' 
+
+services:
+  reverse-proxy:
+    # The official v2 Traefik docker image
+    image: traefik:v2.6
+    # Enables the web UI and tells Traefik to listen to docker
+    command: #--api.insecure=true --providers.docker
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      #- "--log=true"
+      - "--log.level=DEBUG"
+      - "--log.filePath=/var/log/traefik.log"
+      - "--accesslog=true"
+      - "--accesslog.filePath=/var/log/access.log"
+      #- "--log.format=json"
+      #- "--tracing.servicename=tracing"
+    
+    environment: #command 와 evironment 둘중 하나 사용 
+      - TZ=KR/Seoul
+    
+    ports:
+      # The HTTP port
+      - "80:80"
+      # The Web UI (enabled by --api.insecure=true)
+      - "8080:8080"
+      - "52329:52329"
+
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /web/traefik/log/:/var/log/
+
+  nginxdemo:
+    # A container that exposes an API to show its IP address
+    image: nginxdemos/hello
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginxdemo.rule=Host(`URL`) && (Path(`/top`)) "
+      - "traefik.http.routers.nginxdemo.entrypoints=web"
+      - "traefik.http.routers.nginxdemo.middlewares=MYAUTH"
+      # echo $(htpasswd -nb user password) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.MYAUTH.basicauth.users=os:$$apr1$$nqgD3Ut3$$Er9r.bvxgtGxLwTufl63C.,keti:$$apr1$$gpQsH8EV$$GHZVLFhJ.Ikk06/F84lQb/
+      - {path_to_local}:/usr/share/nginx/html
+    
+    
+    
