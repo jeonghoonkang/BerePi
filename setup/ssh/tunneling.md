@@ -10,6 +10,16 @@
 
 ![tun](https://user-images.githubusercontent.com/4180063/214148347-39dc681c-be2a-4fd8-8bad-ec14e9acdba9.png)
 
+## Tunneling preparation
+- vim /etc/ssh/ssdh_config
+  - AllowTcpForwarding yes
+  - GatewayPorts yes 
+- 자동실행을 위해서는, ssh-keygen 으로 등록
+  - 
 
 ## Tunnel check
 - netstat -tulpn
+
+## Reference
+- 서비스 생성, 실행
+  - https://codex.so/ssh-tunnel-to-raspberry-pi
