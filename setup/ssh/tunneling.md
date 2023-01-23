@@ -15,7 +15,7 @@
   - AllowTcpForwarding yes
   - GatewayPorts yes 
 - 자동실행을 위해서는, ssh-keygen 으로 등록
-  - 
+  - https://github.com/jeonghoonkang/BerePi/blob/master/setup/ssh/readme.md
 
 ## Tunnel check
 - netstat -tulpn
