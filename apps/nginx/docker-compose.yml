@@ -51,3 +51,5 @@ services:
 
 # config
 # sudo docker cp default.conf {container name}:/etc/nginx/conf.d/default.conf 
+# mplayer -vo png -frames 10 tv://
+
