@@ -46,4 +46,5 @@ services:
       - {path_to_local}:/usr/share/nginx/html
     
     
-    
+# run docker nginx
+# docker run -p 80:80 -v {path}:/usr/share/nginx/html nginx
