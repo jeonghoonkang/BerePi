@@ -1,7 +1,7 @@
 ## nginx readme
 
 - configuration file
- - sudo docker cp nginx:/etc/nginx/conf.d/default.conf ./
+  - sudo docker cp nginx:/etc/nginx/conf.d/default.conf ./
 - to modify
 <pre>
 
