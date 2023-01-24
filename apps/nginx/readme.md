@@ -1,4 +1,4 @@
-## nginx readme
+# nginx run on docker
 
 - configuration file
   - sudo docker cp nginx:/etc/nginx/conf.d/default.conf ./
@@ -20,5 +20,5 @@
 - sudo docker run --name nginx -p 80:80 -v /web:/usr/share/nginx/html:ro nginx
 
 
-# passwd
+## passwd
 - sudo htpasswd /etc/nginx/.htpasswd another_user
