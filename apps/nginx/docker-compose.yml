@@ -47,4 +47,4 @@ services:
     
     
 # run docker nginx
-# docker run -p 80:80 -v {path}:/usr/share/nginx/html nginx
+# sudo docker run --name tinynginx -p 80:80 -v /home/tinyos/web:/usr/share/nginx/html:ro nginx
