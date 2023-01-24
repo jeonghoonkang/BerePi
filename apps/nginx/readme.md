@@ -20,5 +20,6 @@
 - sudo docker run --name nginx -p 80:80 -v /web:/usr/share/nginx/html:ro nginx
 
 
-## passwd
+## password for htpasswd
 - sudo htpasswd /etc/nginx/.htpasswd another_user
+- to install : sudo apt install apache2-utils
