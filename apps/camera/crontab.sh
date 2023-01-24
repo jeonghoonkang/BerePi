@@ -10,3 +10,4 @@
 # cam.sh
 # fswebcam -r 1280*960 /home/tinyos/web/png/image_$(date '+%Y-%m-%d_%H:%M:%S').jpg
 
+
