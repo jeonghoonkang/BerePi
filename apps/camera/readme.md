@@ -62,3 +62,9 @@
 
 ## 참고
 - rsync -avhzu --progress -e 'ssh -p 22' id@ip:webdav/bk_office /home/tinyos/work_win
+
+
+
+![image](https://user-images.githubusercontent.com/4180063/215370294-ad244eba-bec3-4ef8-a42c-c10ddbf30153.png)
+
+
