@@ -1,6 +1,8 @@
 #-*-coding:utf8-*-
 #!/usr/bin/python
 # Author : Jeonghoonkang, github.com/jeonghoonkang
+# using camera port - flat cable interface 
+
 
 import sys, os
 sys.path.insert(0, '/var/www/camera')
@@ -26,6 +28,8 @@ else:
 	pic = sys.argv[1]
 
 foto_cnt = 0
+
+# using camera port - flat cable interface 
 
 camera =  picamera.PiCamera() 
 camera.resolution = (1024, 768)
