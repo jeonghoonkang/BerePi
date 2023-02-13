@@ -26,6 +26,7 @@ mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] 
     ex) sudo docker inspect nextcloud_db_1 | grep IP 
 
 - mysqldump --single-transaction -v -h localhost -u** -p** nextcloud > /var/lib/mysql/**_nextcloud-sqlbkp_`date +"%Y%m%d"`.bak
+- 컨테이너 내부에서 mysqldump 하여 오류없이 백업함 
 
 </pre>
 
