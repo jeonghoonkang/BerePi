@@ -1,7 +1,7 @@
 ## ubuntu version update (if you have old version of Ubuntu which has error on apt-get update, apt update)
 
 ### backup your sources file
-- cp /etc/apt/sources.list /etc/apt/sources.list.bak 
+- sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak 
 
 ### replace the links with the archive address
 - sudo sed -i -re 's/([a-z]{2}.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
