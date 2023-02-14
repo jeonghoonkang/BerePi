@@ -38,12 +38,13 @@ rsync -Aax nextcloud-dirbkp/ nextcloud/
          sudo docker inspect {컨테어너명} | grep IP
 
 mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" 
-
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" 
 
 ## using UTF8
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
 mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak -v 
+
+mysql -h localhost -u nextcloud -p** nextcloud < db.bak -v
 
 sudo docker exec -it -u 33 {컨테이너 이름} php occ upgrade
 
