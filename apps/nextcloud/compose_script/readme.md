@@ -6,3 +6,9 @@
   - 파일위치 : ~~ {volume-nextcloud} ...config/config.php
   - 'forcessl' => true,
   - 'overwriteprotocol' => 'https',
+
+## 신규 설치 후, 수정해야 하는 부분
+- VIRTUAL_HOST ==> URL 입력
+- LESTSENCRYPT_HOST ==> URL 입력
+- LESTSENCRYPT_EMAIL ==> URL 입력
+
