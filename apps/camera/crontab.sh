@@ -3,13 +3,13 @@
 
 # 아래 실행 명령은 crontab 에서는 동작하지 않음
 # *.sh 파일로 저장하고 실행해야 함, 위 처럼, bash /home/tinyos/cam.sh 로 실행 
-# fswebcam -r 1280*960 /home/tinyos/web/png/image_$(date '+%Y-%m-%d_%H:%M:%S').jpg
+# fswebcam -r 1280*960 /home/.../web/png/image_$(date '+%Y-%m-%d_%H:%M:%S').jpg
 
 # cam.sh
 #
 #dest='{SRC}'
 #
-# fswebcam -r 1280*960 /home/tinyos/web/png/image_$(date '+%Y-%m-%d_%H:%M:%S').jpg
+# fswebcam -r 1280*960 /home/.../web/png/image_$(date '+%Y-%m-%d_%H:%M:%S').jpg
 # 
 # @hourly echo "password" | sudo -S rm somefile
 # sudo chowm www-data -R /home/.../web/png
