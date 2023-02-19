@@ -20,4 +20,5 @@
 #
 # sudo chown www-data -R /home/tinyos/devel_opment/nextcloud/volume/nextcloud_volume/data/tinyos/files/Photos/office
 # dest='/home/...id.../devel_opment/nextcloud/volume/nextcloud_volume/data/...id.../files/Photos'
+# (참고) rsync --rsh="sshpass -p myPassword ssh -l username" server.example.com:/var/www/html/ /backup/
 
