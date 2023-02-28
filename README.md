@@ -31,7 +31,7 @@
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi. Additionally, BerePi provides SSD storage which gives fast access spped and large storage with cloud computing capability. 
 BerePi project supports open software which using BerePi hardware modules. 
   - Self Data Machine 
-    - <img width="300" alt="image" src="https://user-images.githubusercontent.com/4180063/221742941-657e6240-818a-4c00-b5e8-f3b6f8d0b10d.png">  <img width="320" alt="image" src="https://user-images.githubusercontent.com/4180063/221743531-47abcc0f-6048-48d4-b4f5-cdda79568974.png">
+    - <img width="300" alt="image" src="https://user-images.githubusercontent.com/4180063/221742941-657e6240-818a-4c00-b5e8-f3b6f8d0b10d.png">  <img width="315" alt="image" src="https://user-images.githubusercontent.com/4180063/221743531-47abcc0f-6048-48d4-b4f5-cdda79568974.png">
   - Simple LED video 01 (YouTube : https://youtu.be/ygJ3qMiGQvw)
   - BereCO2 HW module   
   - BereCO2 update with enclosure
