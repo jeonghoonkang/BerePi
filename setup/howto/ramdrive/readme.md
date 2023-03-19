@@ -7,6 +7,12 @@
 
 - sudo mount -t tmpfs -o size=64M tmpfs /media/ramdisk
 
+- 마운트 체크
+  - sudo mount -av
+- 마운트 재시작 (R Only 문제해결)
+  -  mount -o remount,rw /
+  
+  
 <pre>
 >.  하나. 장치명을 레이블명으로 표현하기
 [root@os1 /]# cat /etc/fstab
