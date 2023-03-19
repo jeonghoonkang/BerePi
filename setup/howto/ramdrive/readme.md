@@ -16,6 +16,7 @@
   
 - fstab
   - ramdisk 	/media/ramdisk	tmpfs	rw,size=64M	0	0
+  - sudo cp /usr/sbin/shutdown /media/ramdisk
   
 
 
