@@ -7,12 +7,18 @@
 
 - sudo mount -t tmpfs -o size=64M tmpfs /media/ramdisk
 
-- 마운트 체크
+- 마운트 체크 후, 마운트
   - sudo mount -av
-- 마운트 재시작 (R Only 문제해결)
+
+- 마운트 재시작 
+  - Read-Only 문제 있느 경우 single mdoe 진입시 사용
   -  mount -o remount,rw /
   
+- fstab
+  - ramdisk 	/media/ramdisk	tmpfs	rw,size=64M	0	0
   
+
+
 <pre>
 >.  하나. 장치명을 레이블명으로 표현하기
 [root@os1 /]# cat /etc/fstab
