@@ -46,4 +46,7 @@ Please refer to LICENSE file for licensing information.
 
 */33 * * * * sshpass -p<PASS> scp -o StrictHostKeyChecking=no  /home/pi/devel/BerePi/logs/berelogger.log <ID>@<URL>:www/sensor/dust_home_sensor.log > /home/pi/devel/log/crontab.dust.cp.log 2>&1
 
+
+*/3 * * * * python3 /home/pi/devel/pir2pi/beating/telegram_report.py 30 > /home/pi/devel/pir2pi/beating/err.log 2>&1 
+
 </pre>
