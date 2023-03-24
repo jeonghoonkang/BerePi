@@ -47,3 +47,40 @@ services:
             - POSTGRES_USER=${POSTGRES_USER}
             - POSTGRES_PORT=${POSTGRES_PORT}
             - POSTGRES_HOST=db
+
+
+
+/*
+version: '3'
+
+services:
+    db:
+        image: postgres:13.4
+        volumes:
+            - ./data/postgres:/var/lib/postgresql/data
+        ports:
+            - "5432:5432"
+        restart: unless-stopped
+        environment:
+            - POSTGRES_PASSWORD=joplin
+            - POSTGRES_USER=joplin
+            - POSTGRES_DB=joplin
+            - TZ=Asia/Seoul
+    app:
+        image: joplin/server:latest
+        depends_on:
+            - db
+        ports:
+            - "22300:22300"
+        restart: unless-stopped
+        environment:
+            - APP_PORT=22300
+            - APP_BASE_URL=http://192.168.1.60:22300
+            - DB_CLIENT=pg
+            - POSTGRES_PASSWORD=joplin
+            - POSTGRES_DATABASE=joplin
+            - POSTGRES_USER=joplin
+            - POSTGRES_PORT=5432
+            - POSTGRES_HOST=db
+            - TZ=Asia/Seoul
+*/
