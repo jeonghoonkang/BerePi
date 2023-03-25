@@ -2,7 +2,7 @@
 1. 샤프
 2. 하니웰
 
-## 하니웨 드라이버
+## 하니웰 드라이버
 1. https://github.com/bfaliszek/Python-HPMA115S0/blob/master/Read.py
 
 ### Data Sheet
