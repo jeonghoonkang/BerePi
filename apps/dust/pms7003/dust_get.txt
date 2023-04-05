@@ -1,0 +1,24 @@
+# -*- coding: utf-8 -*-                                                                                                             
+# author : http://github.com/jeonghoonkang                                                                                          
+# author : http://github.com/sonnonet                                                                                                                                                                                                                                   
+                                                                                                                  
+import dust_chk                                                                                                                     
+import time                                                                                                                         
+import serial                                                                                                                       
+
+import sys                                                                                                                          sys.path.append("/home/tinyos/devel/BerePi/apps/logger")                                                                            
+import berepi_logger                                                                                                                                                                                                                                                                                                                                                                                        
+if __name__=="__main__" :                                                                                                                                                                                                                                                   
+try:                                                                                                                                    print("Starting")                                                                                                                   
+                                                                               
+while True:                                                                                                                             
+try:                                                                                                                                    
+dust_v = dust_chk.dustget()                                                                                                         berepi_logger.berelog(" PM2.5 Dust %d (50 is bad limit) ug/m3 " %(dust_v))                                                          
+exit(1)                                                                                                                         
+except serial.serialutil.SerialException as e:                                                                                          
+print ("dust PM2.5 exception", __file__)                                                                                            
+print (e)                                                                                                                           
+time.sleep(3)                                                                                                                       
+exit(1)                                                                                                                                                                                                                                              
+except KeyboardInterrupt:                                                                                                               
+print("program stopped") 
