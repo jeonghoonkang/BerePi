@@ -22,3 +22,7 @@ time.sleep(3)
 exit(1)                                                                                                                                                                                                                                              
 except KeyboardInterrupt:                                                                                                               
 print("program stopped") 
+
+
+python3 /home//devel/BerePi/apps/dust/pms7003/dust_get.py > /home//devel/log/crontab.dust_get.log 2>&1                
+python3 /home//devel/pir2/beating/telegram_report.py 15 > /home//devel/log/crontab.telegram.dust.log 2>&1
