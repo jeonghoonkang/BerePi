@@ -1,7 +1,8 @@
-## Install
+## Install for Mac OSX
 - brew install barrier
 - https://github.com/debauchee/barrier/releases
 
+- This SW for keyboard and mouse sharing beyond OS barrier
 
 ## Issue
 
