@@ -12,3 +12,16 @@ sudo find /var -size +200M -exec ls -sh {} +
  1.6G /var/log/ufw.log
 
 </pre>
+
+- sudo vim /etc/cron.daily/logrotate
+
+- sudo /usr/sbin/logrotate /etc/logrotate.conf
+
+- sudo vim /etc/logrotate.conf
+
+<pre>
+# see "man logrotate" for details
+# rotate log files weekly
+weekly
+maxsize 1G
+</pre>
