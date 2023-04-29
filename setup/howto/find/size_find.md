@@ -1,8 +1,10 @@
 
 ### Find file based on size
 
+
+- sudo find /var -size +200M -exec ls -sh {} +
+
 <pre>
-sudo find /var -size +200M -exec ls -sh {} +
 
  6.0G /var/log/auth.log
  3.7G /var/log/daemon.log
@@ -12,6 +14,8 @@ sudo find /var -size +200M -exec ls -sh {} +
  1.6G /var/log/ufw.log
 
 </pre>
+
+### and reduce size of log files
 
 - sudo vim /etc/cron.daily/logrotate
 
