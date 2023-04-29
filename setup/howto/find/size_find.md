@@ -1,5 +1,5 @@
 
-### Find file based on size
+### Find file by size
 
 
 - sudo find /var -size +200M -exec ls -sh {} +
