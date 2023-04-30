@@ -15,7 +15,7 @@
 
 </pre>
 
-### and reduce size of log files
+### and reduce size of log files, issue of Rasbian OS
 
 - sudo vim /etc/cron.daily/logrotate
 
