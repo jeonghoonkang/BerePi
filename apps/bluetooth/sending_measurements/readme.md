@@ -1,7 +1,8 @@
 
-To enable sending measurements Via Bluetooth on RaspberryPi
-from https://towardsdatascience.com/sending-data-from-a-raspberry-pi-sensor-unit-over-serial-bluetooth-f9063f3447af
+## To enable sending measurements Via Bluetooth on RaspberryPi
+#### from https://towardsdatascience.com/sending-data-from-a-raspberry-pi-sensor-unit-over-serial-bluetooth-f9063f3447af
 
+<pre>
 
 Installation and Setup
 Before we start there are a couple of changes required for the Bluetooth to work. These are outlined below.
@@ -100,3 +101,6 @@ Conclusions
 If we want to quickly check that our sensors are behaving whilst out in the field, we can make use of the Bluetooth capabilities of the Raspberry Pi. This is done by creating a Bluetooth serial port and sending data over it. Such methods are particularly useful if we do not wish to carry bulky laptops, or where a WiFi network is occupied or unavailable.
 
 More complex tasks such as sending commands to the Raspberry Pi, or even SSHing into it over Bluetooth are also possible but are beyond the scope of this tutorial.
+
+</pre>
+
