@@ -1,1 +1,7 @@
-PMS 7003
+## PMS 7003
+
+### installation
+- pip3 install pyserial
+
+### run
+- 
