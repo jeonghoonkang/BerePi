@@ -36,12 +36,12 @@ dust = PMS7003()
 # Baud Rate
 Speed = 9600
 
-# UART / USB Serial
 USB0 = '/dev/ttyUSB0'
 UART = '/dev/ttyAMA0'
 
 # USE PORT
-SERIAL_PORT = UART
+# Please select which, UART / USB Serial
+SERIAL_PORT = USB0 #UART
  
 #serial setting
 ser = serial.Serial(SERIAL_PORT, Speed, timeout = 1)
