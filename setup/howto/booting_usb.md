@@ -1,3 +1,6 @@
+
+## for RaspberryPi-4
+
 sudo rpi-eeprom-update
 
 sudo rpi-eeprom-update -a
