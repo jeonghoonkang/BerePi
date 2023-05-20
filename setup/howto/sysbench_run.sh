@@ -6,5 +6,10 @@ when=$START
 while true; do $order; echo ""; $s1; echo ""; $s2; 
 echo "---------- split line ----------  (info)"$PERIOD" secs peroid  "; 
 echo " first-shot run time:"; echo $when; echo " ----loop end---- "; 
-sleep $PERIOD; 
+echo " Raspi 3 - "
+echo " Raspi 4 - "
+
+sleep $PERIOD;
+
+
 done; 
