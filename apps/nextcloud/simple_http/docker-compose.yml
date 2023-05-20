@@ -1,32 +1,50 @@
-nextcloud:
-  container_name: nextcloud
-  image: nextcloud
-  restart: unless-stopped
-  environment:
+version: '3.6'
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+  nextcloud:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+
+services:
+  nextcloud:
+    container_name: nextcloud
+    image: nextcloud
+    restart: unless-stopped
+    environment:
     - MYSQL_HOST=nextcloud_db
-#    - MYSQL_PASSWORD=«user_password»
-    - MYSQL_PASSWORD=joyjoy
+    - MYSQL_PASSWORD=*****
     - MYSQL_DATABASE=nextcloud
     - MYSQL_USER=nextcloud
-  ports:
+    ports:
     - "9321:80"
-  volumes:
+    volumes:
     - ./volumes/nextcloud/html:/var/www/html
-  depends_on:
+    depends_on:
     - nextcloud_db
+    networks:
+    - default
+    - nextcloud
 
-nextcloud_db:
-  container_name: nextcloud_db
-  build: ./.templates/mariadb/.
-  restart: unless-stopped
-  environment:
+  nextcloud_db:
+    container_name: nextcloud_db
+    build: ./.templates/mariadb/.
+    restart: unless-stopped
+    environment:
     - TZ=Etc/UTC
     - PUID=1000
     - PGID=1000
-    - MYSQL_ROOT_PASSWORD=joyjoy
-    - MYSQL_PASSWORD=joyjoy
+    - MYSQL_ROOT_PASSWORD=*****
+    - MYSQL_PASSWORD=*****
     - MYSQL_DATABASE=nextcloud
     - MYSQL_USER=nextcloud
-  volumes:
+    volumes:
     - ./volumes/nextcloud/db:/config
     - ./volumes/nextcloud/db_backup:/backup
+    networks:
+    - nextcloud
