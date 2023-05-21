@@ -1,4 +1,4 @@
-## ubuntu version update (if you have old version of Ubuntu which has error on apt-get update, apt update)
+## ubuntu version update (if you have old version Ubuntu which has error on apt-get update, apt update)
 
 ### backup your sources file
 - sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak 
