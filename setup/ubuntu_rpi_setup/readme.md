@@ -24,3 +24,13 @@ http://kr.archive.ubuntu.com/ubuntu/dists/focal/restricted/
 
 deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 </pre>
+
+
+#### 실행 예
+
+<img width="860" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/39b4cbf9-abf9-4b49-b2be-a61d9fe12bb4">
+
+<img width="739" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/5c71bb25-6c83-4483-b6aa-4b06881a4243">
+
+<img width="759" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/123d7d29-aa9b-444f-9bb5-a6d63c5fb05f">
+
