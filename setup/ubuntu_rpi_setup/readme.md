@@ -8,6 +8,7 @@
 
 ### run update again
 - sudo apt-get update && sudo apt-get dist-upgrade
+- check URL : https://old-releases.ubuntu.com/ubuntu/dists/hirsute-updates/
 
 
 ### Please check , old repo 
