@@ -12,6 +12,13 @@
 
 ### Please check , old repo 
 - https://old-releases.ubuntu.com/ubuntu/dists/
-- <pre>deb http://old-releases.ubuntu.com/ubuntu/ hirsute-updates universe
+<pre>deb http://old-releases.ubuntu.com/ubuntu/ hirsute-updates universe
  </pre>
 - /etc/apt/sources.list 파일에 위 deb ~~~~ universe 와 동일하게 입력. dist 같은 중간 dir 없는 경우 있음 
+
+
+<pre>
+http://kr.archive.ubuntu.com/ubuntu/dists/focal/restricted/
+
+deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
+</pre>
