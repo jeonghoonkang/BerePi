@@ -1,6 +1,8 @@
 
 ### After UBUNTU 17.01
-
+- NetPlan
+- /etc/netplan/*.yaml
+- netplan apply
 
 ### before UBUNTU 17.01
 - /etc/network/interfaces
