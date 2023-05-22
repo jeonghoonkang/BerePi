@@ -19,3 +19,7 @@ iface eth0 inet static
   dns-nameserver 8.8.8.8
 iface eth1 inet dhcp
 </pre>
+
+
+#### 참조
+- joinc.co.kr/w/Site/System_management/NetworkConfiguration
