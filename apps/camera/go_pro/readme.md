@@ -6,6 +6,7 @@
 
 #### QR for Go Pro Hero11 quick setting & run
 - https://gopro.github.io/labs/control/motion/
+- https://gopro.github.io/labs/control/
 
 #### QR for motion shot when car parking
 
