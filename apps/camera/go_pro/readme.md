@@ -9,5 +9,7 @@
 - https://gopro.github.io/labs/control/
 
 #### QR for motion shot when car parking
+- ![image_2023-06-04_15-44-39](https://github.com/jeonghoonkang/BerePi/assets/4180063/9a3bcd8c-10d6-4572-8b4b-fa5d773f449c)
+
 
 
