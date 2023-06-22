@@ -10,15 +10,15 @@
 ### 1-2) USE wheel
 
   - get a fresh start
-  - `sudo apt-get update`
-  - `sudo apt-get upgrade`
+    - `sudo apt-get update`
+    - `sudo apt-get upgrade`
 
   - install the dependencies
-  - `sudo apt-get install -y python3-pip libjpeg-dev libopenblas-dev libopenmpi-dev libomp-dev`
+    - `sudo apt-get install -y python3-pip libjpeg-dev libopenblas-dev libopenmpi-dev libomp-dev`
 
   - above 58.3.0 you get version issues
-  - `sudo -H pip3 install setuptools==58.3.0`
-  - `sudo -H pip3 install Cython`
+    - `sudo -H pip3 install setuptools==58.3.0`
+    - `sudo -H pip3 install Cython`
 
   - install pyTorch 1.13.0 
 
