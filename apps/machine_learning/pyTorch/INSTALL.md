@@ -1,13 +1,13 @@
 # INSTALL
 
-## INSTALL pyTorch
+## 1. INSTALL pyTorch
 
-### Requirements
+### 1-1) Requirements
 
   - Raspbian **64bit**
   - python >3.8
 
-### USE wheel
+### 1-2) USE wheel
 
   - get a fresh start
   - `sudo apt-get update`
@@ -29,9 +29,9 @@
     - `sudo -H pip3 install ./whl/torch-1.13.0a0+git7c98e70-cp37-cp37m-linux_aarch64.whl`
 
 
-## INSATALL Whisper
+## 2. INSATALL Whisper
 
-### Install ffmpeg
+### 2-1) Install ffmpeg
 
   - `sudo apt-get install -y ffmpeg`
 
