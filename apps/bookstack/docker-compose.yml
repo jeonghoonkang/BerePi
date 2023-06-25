@@ -9,7 +9,7 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - APP_URL= #빈칸으로 동작함
+      - APP_URL= #빈칸으로 동작함 (최종 URL을 적어야 함. 같은 URL에 여러개 bookstack 6875 포트가 사용중이면, 다른 곳으로 연결됨)
       #APP_TIMEZONE=Asia/Seoul   ##/var/www/html/.env 파일 
       - DB_HOST=bookstack_db
       - DB_USER=bookstack
