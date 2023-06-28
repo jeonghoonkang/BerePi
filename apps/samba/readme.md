@@ -87,3 +87,7 @@ browseable = yes
 create mask = 0666
 directory mask = 0777       
 </pre>
+
+
+
+- sudo pdbedit -L -v
