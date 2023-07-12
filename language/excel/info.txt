@@ -1,0 +1,3 @@
+SUMIF(B:B="A",C:C) 
+COUNTIF(조건범위, "조건")
+COUNTIFS
