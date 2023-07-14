@@ -1,3 +1,4 @@
+- Ubuntu 사용 (since 2020)
 
 - Image 설치 : 2018년 5월 버전
   - Stretch 이미지
