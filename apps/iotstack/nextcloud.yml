@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       - MYSQL_HOST=nextcloud_db
-      - MYSQL_PASSWORD=nc4321
+      - MYSQL_PASSWORD=test4321
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
     ports:
@@ -27,8 +27,8 @@ services:
       - TZ=ASIA/SEOUL
       - PUID=1000
       - PGID=1000
-      - MYSQL_ROOT_PASSWORD=nc4321
-      - MYSQL_PASSWORD=nc4321
+      - MYSQL_ROOT_PASSWORD=test4321
+      - MYSQL_PASSWORD=test4321
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
     volumes:
