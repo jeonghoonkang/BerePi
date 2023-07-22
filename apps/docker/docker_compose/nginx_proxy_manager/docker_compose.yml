@@ -1,0 +1,20 @@
+version: "3"
+services:
+  app:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: proxy-manager
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+      - 81:81
+    volumes:
+      - /home/f***/nginxproxy_manager/vol/data:/data
+      - /home/***/nginxproxy_manager/vol/letsencrypt:/etc/letsencrypt
+    environment:
+      - TZ=Asia/Seoul
+    logging:
+        driver: "json-file"
+        options:
+          max-size: "10m"
+          max-file: "20"
