@@ -1,4 +1,4 @@
-
+##
 */30 * * * * bash /home/cam.sh > /home/.../.../log/crontab.camera.log 2>&1
 
 # 아래 실행 명령은 crontab 에서는 동작하지 않음
