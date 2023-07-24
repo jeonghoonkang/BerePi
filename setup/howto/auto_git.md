@@ -39,3 +39,7 @@ git push origin <<branch>>
 fswatch -0 <<file>> | xargs -0 -n 1 bash <<path/to/auto_commit_push.sh>>
 ```
 7. In a separate shell, do whatever you want and when monitored file is updated, it will automatically get committed and pushed (as long as the shell with the `fswatch` command is still active)
+
+
+##### days ago git
+- git commit --date " ## days ago"
