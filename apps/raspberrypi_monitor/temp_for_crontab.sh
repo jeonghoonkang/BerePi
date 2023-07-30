@@ -1,5 +1,8 @@
 #!/bin/bash
 
+wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/apps/raspberrypi_monitor/rpi_cpu_temp
+wget https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/apps/raspberrypi_monitor/rpi_gpu_temp
+  
 sudo chown pi:pi rpi_gpu_temp
 sudo chmod 775 rpi_gpu_temp
 sudo cp rpi_gpu_temp /usr/local/bin

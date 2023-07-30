@@ -12,7 +12,7 @@ then
   echo "not exist var SONNO_HOME"
   export SONNO_HOME=/home/tinyos/devel
 fi
-echo "SONNO_HOME = "$SONNO_HOME
+echo "setup by BerePi system fiel ... SONNO_HOME = "$SONNO_HOME
 
 # 환경변수 존재해야 로그 작성
 python3 $SONNO_HOME/BerePi/apps/logger/berepi_logger.py $1

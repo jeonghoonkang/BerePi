@@ -2,7 +2,7 @@
 1. 샤프
 2. 하니웰
 
-## 하니웨 드라이버
+## 하니웰 드라이버
 1. https://github.com/bfaliszek/Python-HPMA115S0/blob/master/Read.py
 
 ### Data Sheet
@@ -45,5 +45,8 @@ Please refer to LICENSE file for licensing information.
 */33 * * * * bash /home/pi/devel/BerePi/apps/tinyosGW/run_public_ip_rpi.sh <URL> <PORT> <ID> <PASS> > /home/pi/devel/log/crontab.gw.log 2>&1
 
 */33 * * * * sshpass -p<PASS> scp -o StrictHostKeyChecking=no  /home/pi/devel/BerePi/logs/berelogger.log <ID>@<URL>:www/sensor/dust_home_sensor.log > /home/pi/devel/log/crontab.dust.cp.log 2>&1
+
+
+*/3 * * * * python3 /home/pi/devel/pir2pi/beating/telegram_report.py 30 > /home/pi/devel/pir2pi/beating/err.log 2>&1 
 
 </pre>

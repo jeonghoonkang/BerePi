@@ -1,7 +1,7 @@
 # Nextcloud File Syncronization System
 
 ## Nextcloud server by docker-compose 
-- 설정
+- 설치 및 설정
   - https://github.com/jeonghoonkang/BerePi/tree/master/apps/docker/docker_compose/nextcloud
   - 도커 컴포즈를 이용한 웹 서비스 실행 
 
@@ -26,6 +26,7 @@ mysqldump --single-transaction -h [server] -u [username] -p[password] [db_name] 
     ex) sudo docker inspect nextcloud_db_1 | grep IP 
 
 - mysqldump --single-transaction -v -h localhost -u** -p** nextcloud > /var/lib/mysql/**_nextcloud-sqlbkp_`date +"%Y%m%d"`.bak
+- 컨테이너 내부에서 mysqldump 하여 오류없이 백업함 
 
 </pre>
 
@@ -37,10 +38,13 @@ rsync -Aax nextcloud-dirbkp/ nextcloud/
          sudo docker inspect {컨테어너명} | grep IP
 
 mysql -h [server] -u [username] -p[password] -e "DROP DATABASE nextcloud" 
-
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud" 
+
+## using UTF8
 mysql -h [server] -u [username] -p[password] -e "CREATE DATABASE nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
 mysql -h [server] -u [username] -p[password] [db_name] < nextcloud-sqlbkp.bak -v 
+
+mysql -h localhost -u nextcloud -p** nextcloud < db.bak -v
 
 sudo docker exec -it -u 33 {컨테이너 이름} php occ upgrade
 

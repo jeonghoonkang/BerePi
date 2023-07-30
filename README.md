@@ -1,14 +1,15 @@
-## BerePi (Bere + RaspberryPi) software for MIO computing 
-- Data collection and analytics software tool-kit based on RaspberryPi which is driven from IoT level computing system
+## BerePi (Bere+RaspberryPi) software for big data and auto intelligence computing 
+- Data collection and analytics software tool-kit based on RaspberryPi which is from IoT level computing system
 - Software stack for physical computing and intelligent SW service based on IoT data collection & processing (Big data)
-- is based on RaspberryPi distribution (hardware and software)
+- Based on RaspberryPi distribution (hardware and software)
 - supports Ubuntu64_ARM
   - previous version : Raspbian OS, Buster (ver 2019.09.12), with RaspBerryPi4 (input hangul mode, 한글모드)
+  - now you can use Ubuntu with SSD booting via USB
 
-##### Contribution
+##### By Contribution
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
 
-### DiskPi which is a new direction for secure pi computing
+### BerePi with SSD(Disk Pi) which is a new direction for secure pi computing
 - After 2021, not long ago, RaspberryPi started to support SSD/HDD Booting by USB link. It gives us a new approach which has a very quick booting speed and secure, nice non-breakable booting code, rather than beaten by electricity accident such as SD card crash.
 - more detail new hardware, please visit https://polarized-poppyseed-8e0.notion.site/0c68de4668d74bb58c526406ec78d47d
 
@@ -28,14 +29,16 @@
     - if you want to install Ubuntu 64-bit, follow the instruction, it needs 8G sd card.
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
-You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi.
-BerePi project opens software which using BerePi hardware modules. 
+You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi. Additionally, BerePi provides SSD storage which gives fast access spped and large storage with cloud computing capability. 
+BerePi project supports open software which using BerePi hardware modules. 
+  - Self Data Machine 
+    - <img width="300" alt="image" src="https://user-images.githubusercontent.com/4180063/221742941-657e6240-818a-4c00-b5e8-f3b6f8d0b10d.png">  <img width="315" alt="image" src="https://user-images.githubusercontent.com/4180063/221743531-47abcc0f-6048-48d4-b4f5-cdda79568974.png">
   - Simple LED video 01 (YouTube : https://youtu.be/ygJ3qMiGQvw)
   - BereCO2 HW module   
   - BereCO2 update with enclosure
-    - ![BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/CO2/CO2_inside_01.JPG)
-    - ![BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/CO2/CO2_inside_02.JPG)
-- [Previous Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png)
+    - [BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/CO2/CO2_inside_01.JPG)
+    - [BereCO2 Enclosure](https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/CO2/CO2_inside_02.JPG)
+- [Previous Enclosure](https://github.com/jeonghoonkang/BerePi/blob/master/files/RPi2_case.png )
   - BereCO2 update with SHT20 (KETI motes sensor board)
    - SHT20 board photo and connection : (https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/Raspi_temp_humi_sht20_keti_motes_bd_00.jpg), (https://raw.githubusercontent.com/jeonghoonkang/BerePi/master/files/Raspi_temp_humi_sht20_keti_motes_bd_01.jpg)
      

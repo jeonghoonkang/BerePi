@@ -1,3 +1,4 @@
+- Ubuntu 사용 (since 2020)
 
 - Image 설치 : 2018년 5월 버전
   - Stretch 이미지
@@ -24,9 +25,9 @@
 - sudo raspi-config 를 실행하여, 1) SD 메모리 저장 공간 확장을 실행해 줌
   - 용량 확인 `df -h` → 용량 확인  
   
-
-  First | Second 
------------- | -------------
-Content from cell 1 | Content from cell 2
-Content in the first column | Content in the second column
+#
+#  First | Second 
+#------------ | -------------
+#Content from cell 1 | Content from cell 2
+#Content in the first column | Content in the second column
 

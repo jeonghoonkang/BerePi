@@ -61,3 +61,7 @@ https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-
 - git stash
 - git stash list
 - git stash drop stash@{0}
+
+
+# branch 브랜치 다운로드 clone 
+git clone -b {branch_name} --single-branch {저장소 URL}

@@ -40,3 +40,6 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 
 # Copying camera capture files to SERVER
 - scp -P 22 -pr /var/lib/motion tinyos@IP:webdav/gw/cam
+
+# todo
+- Ubuntu use

@@ -1,8 +1,5 @@
-To github.com:jeonghoonkang/BerePi.git
- ! [rejected]          master -> master (non-fast-forward)
-error: 레퍼런스를 'github.com:jeonghoonkang/BerePi.git'에 푸시하는데 실패했습니다
-힌트: 현재 브랜치의 끝이 리모트 브랜치보다 뒤에 있으므로 업데이트가
-힌트: 거부되었습니다. 푸시하기 전에 ('git pull ...' 등 명령으로) 리모트
-힌트: 변경 사항을 포함하십시오.
-힌트: 자세한 정보는 'git push --help'의 "Note about fast-forwards' 부분을
-힌트: 참고하십시오.
+Host key verification failed.
+fatal: 리모트 저장소에서 읽을 수 없습니다
+
+올바른 접근 권한이 있는지, 그리고 저장소가 있는지
+확인하십시오.

@@ -1,0 +1,9 @@
+*/5 * * * * bash /home/tinyos/devel/BerePi/system/init_file/sonno_start.sh `sudo vcgencmd measure_temp` > /home/tinyos/devel/BerePi/logs/berepi_sys_log.log 2>&1   
+
+
+19,39,55 * * * * sudo docker exec -i bookstack_db sh -c 'mysqldump --defaults-extra-file=./my.cfg -u bookstack bookstackapp > /config/db_bk_bookstack.sql' > /home/crontab_err.log 2>&1      
+20,40,56 * * * * sudo docker exec -i bookstack sh -c 'tar -czvf /config/bookstck.bk.files.tar.gz /var/www/html/.env /var/www/html/public/uploads/images /var/www/html/storage/uploads' > /home/tinyos/crontab_err_tar.log 2>&1          
+
+
+21,41,57 * * * * sudo scp /root/devel/docker/bookstack/config/bookstck.bk.files.tar.gz /root/devel/docker/bookstack/config/db_bk_bookstack.sql /home/tinyos/devel/docker > /home/tinyos/devel/crontab_err_scp.log 2>&1        
+22,42,58 * * * * sshpass -vp'{PASSWD}' scp /home/tinyos/devel/docker/db_bk_bookstack.sql /home/tinyos/devel/docker/bookstck.bk.files.tar.gz tinyos@10.0.0.25:/home/tinyos/backup      

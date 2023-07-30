@@ -2,8 +2,8 @@
 #### 키 관리 방법, 자동 로그인
 
 1. ssh-keygen (ssh client)
-1. cat ~/.ssh/id_rsa.pub | ssh -p {포트번호} {USERNAME@IP-ADDRESS} 'cat >> /home/USER/.ssh/authorized_keys'
-   
+1. cat ~/.ssh/id_rsa.pub | ssh -p {포트번호} {USERNAME@IP-ADDRESS}    'cat >> /home/USER/.ssh/authorized_keys' (엔터옆 
+   키)
 
 <pre>
 tinyos:NUC:~$ssh-keygen
@@ -33,6 +33,7 @@ The key's randomart image is:
 ### 키 변경되었을 경우 (ssh -R) ssh key 변경 
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "[keties.iptime.org]:60000"
+- ssh key remove 
 
 ### 초기설치 후 에러
 - connection reset by 10.10.10.10 port 22 라고 나오는 경우
