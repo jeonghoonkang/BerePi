@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./data:/var/lib/grafana
+    environment:
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
