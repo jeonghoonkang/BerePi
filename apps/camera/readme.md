@@ -42,6 +42,7 @@
 
 ### camera module 설정
 - ''/boot/config.txt'' 에서 ''start_x=1''로 수정하고 재부팅
+- 보드 직접연결 케이블  
 
 - pi-cam_with_visionAPI.py 설명
 - 소스 코드 내에 pic 변수에 저장될 위치와 파일명으로 저장한다.
