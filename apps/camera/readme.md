@@ -22,7 +22,7 @@
       - 안정적인 데이터가 확보되지 않은 대부분의 중소기업은 인공지능 서비스를 시작하기 위해서는 자체적으로 데이터를 확보해야 함
       - 데이터 보유가 부족한 중소기업은 자신들이 데이터를 수집 확보해서, 이를 기반으로 신규서비스 구현 가능성을 증명해야 함
 
-## 연결방법
+## 카메라 케이블 연결방법
   - https://projects.raspberrypi.org/en/projects/getting-started-with-picamera/2
   - https://projects-static.raspberrypi.org/projects/getting-started-with-picamera/6ccd55ab3e8a4b995047c27cca0de847629e8eea/en/images/connect-camera.gif
 
