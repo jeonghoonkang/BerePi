@@ -22,8 +22,11 @@
       - 안정적인 데이터가 확보되지 않은 대부분의 중소기업은 인공지능 서비스를 시작하기 위해서는 자체적으로 데이터를 확보해야 함
       - 데이터 보유가 부족한 중소기업은 자신들이 데이터를 수집 확보해서, 이를 기반으로 신규서비스 구현 가능성을 증명해야 함
 
-## 카메라 동작  
+## 연결방법
+  - https://projects.raspberrypi.org/en/projects/getting-started-with-picamera/2
+  - https://projects-static.raspberrypi.org/projects/getting-started-with-picamera/6ccd55ab3e8a4b995047c27cca0de847629e8eea/en/images/connect-camera.gif
 
+## 카메라 동작  
 - 카메라 촬영, 스트리밍, 수신 영상 웹기반 표출의 기본기능 제공
 - 움직임(모션)이 발생한 경우 촬영 기능 
 - 웹으로 촬영 하거나, 자동 촬영되어 있는 파일을 브라우징 할 수 있는 갤러리
