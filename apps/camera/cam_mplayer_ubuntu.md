@@ -6,3 +6,10 @@
 
 - when error "package cache file is corrupted ubuntu"
   - use <code> $ sudo rm -rf /var/lib/apt/lists/* </code>
+
+# Setup for Camera Ubuntu
+- sudo dmesg | grep Logitech
+- sudo lsusb
+- sudo apt install v4l-utils 
+- sudo v4l2-ctl --list-formats
+- sudo v4l2-ctl --list-formats-ext
