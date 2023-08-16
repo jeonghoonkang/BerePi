@@ -13,7 +13,7 @@
 ## Nextcloud 서버 설정
 - ...volume/config/config.php 내용 확인해야 함
 - https://github.com/jeonghoonkang/BerePi/blob/0859bd0b6fe43aa6982d82b13f55e97919e72120/setup/howto/nextcloud_config_php.md
-  <pre>'overwrite.cli.url' => 'https://tinyos.mooo.com:xxxx',
+  <pre>'overwrite.cli.url' => 'https://***.***.***:***',
   'overwriteprotocol' => 'https', </pre>
 
 
