@@ -1,0 +1,43 @@
+### docker-compose for nextcloud
+### 여러개 nextcloud를 컨데이터로 실행할때, 아래처럼 name, location을 구분하면,
+### 여러개 nc 서비스를 구동할 수 있음
+ 
+services:
+  9322_nextcloud:                                     #2nd name
+    container_name: 9322_nextcloud #2nd name
+    image: nextcloud
+    restart: unless-stopped
+    environment:
+      - MYSQL_HOST=9322_nextcloud_db                  #2nd db indication
+      - MYSQL_PASSWORD=******
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    ports:
+      - "9322:80"
+    volumes:
+      - ./9322_volumes/nextcloud/html:/var/www/html   #2nd location
+    depends_on:
+      - 9322_nextcloud_db                             #2nd name
+    networks:
+      - default
+      - 9322_nextcloud                                #2nd name
+  9322_nextcloud_db:                                  #2nd name
+    container_name: 9322_nextcloud_db                 #2nd name
+    image: mariadb
+    restart: unless-stopped
+    environment:
+      - TZ=ASIA/SEOUL
+      - PUID=1000
+      - PGID=1000
+      - MYSQL_ROOT_PASSWORD=****
+      - MYSQL_PASSWORD=****
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    volumes:
+      - ./9322_volumes/nextcloud/db:/config         #2nd location
+      - ./9322_volumes/nextcloud/db_backup:/backup  #2nd location
+    networks:
+      - 9322_nextcloud                              #2nd name
+
+networks:
+  9322_nextcloud:                                   #2nd name
