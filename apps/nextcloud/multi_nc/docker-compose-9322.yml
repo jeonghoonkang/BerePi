@@ -4,7 +4,7 @@
  
 services:
   9322_nextcloud:                                     #2nd name
-    container_name: 9322_nextcloud #2nd name
+    container_name: 9322_nextcloud                    #2nd name
     image: nextcloud
     restart: unless-stopped
     environment:
@@ -33,6 +33,10 @@ services:
       - MYSQL_PASSWORD=****
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
+
+     # need to check of multi-using 
+     ports:
+      - "9322:80"
     volumes:
       - ./9322_volumes/nextcloud/db:/config         #2nd location
       - ./9322_volumes/nextcloud/db_backup:/backup  #2nd location
