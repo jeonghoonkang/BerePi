@@ -1,7 +1,7 @@
 # System 디렉토리
 - 시스템 운영에 대한 실행 및 설정 파일을 담고 있습니다
 - 부팅이후, 주기적인 실행은 crontab 에서 담당
-  - sudo crontab -l 과 crontab -l 로 확인해야 합니다
+  - sudo crontab -l 과 crontab -l 로 확인 
    
 ## 부팅 설정 파일
 - crontab 용 환경변수 파일
