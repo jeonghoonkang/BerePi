@@ -5,5 +5,5 @@
 `sudo sh get-docker.sh`
 
 
-## script for check
+## pretty check : docker ps 
 - docker ps --format "table {{.Image}}\t{{.Status}}\t{{.Ports}}"
