@@ -14,6 +14,7 @@
     </pre>
     - partition을 primary로 3701GB full로 설정 
   - (parted) mkpart primary 0 3701GB
+    - mkpart primary ext4 1363149s 100% 
   - (parted) print    
     <pre>                                                      
     Disk geometry for /dev/sdb: 0kB - 3701GB
