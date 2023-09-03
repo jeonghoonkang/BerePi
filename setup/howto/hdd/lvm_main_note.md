@@ -77,7 +77,7 @@
      
   - 참고 : https://devbrain.tistory.com/65
 
-### LVM  용량 추가 (하드디스크 하나 추가 pv를 새로 생성)
+### LVM  용량 추가 (하드디스크 하나 추가 pv를 새로 생성) 내부 명령이. LVM새로 생성과 확장이 섞여 있음 
 
   - fdisk 로 파티션 생성 (용량이 2T 이상인 경우 parted, gparted 로 생성) 
   - file 타입을 linux LVM (8e) 로 변경
