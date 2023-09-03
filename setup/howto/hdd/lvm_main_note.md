@@ -82,6 +82,8 @@
   - fdisk 로 파티션 생성 (용량이 2T 이상인 경우 parted, gparted 로 생성) 
   - file 타입을 linux LVM (8e) 로 변경
   - (예)parted /dev/sda
+    - mkpart primary ext4 0 800GB 
+
 
   - pvcreate /dev/sdc1
   - pvdisplay
@@ -91,7 +93,8 @@
 
   - lvresize -L 용량 (G,M,K) LV이름{형식:/dev/ubuntu-vg/root}
   - lvscan
-
+  - sudo mkfs.ext3 /dev/vg/lv{lv 경로}
+    
   - e2fsck -f LV이름
   - resize2fs LV이름
 
@@ -101,7 +104,7 @@
     - vgremove /dev/VG이름
     - pvremove /dev/sdb1 /dev/sdb2 /dev/sdc1
 
-  - 
+  
 <pre>
 sudo vgdisplay
 sudo vgremove /dev/vgubuntu                                                                                                                                         
