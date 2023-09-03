@@ -84,13 +84,16 @@
   - (예)parted /dev/sda
     - mkpart primary ext4 0 800GB 
 
-
   - pvcreate /dev/sdc1
   - pvdisplay
   
   - vgextend VG이름 /dev/sdc1
   - vgdisplay
 
+
+  - lvcreate -L 용량 (G,M,K) -n  LV이름 VG이름     <-- VG이름은 위에 vg 생성시 입력햇던 이름기입
+    - lvcreate -l 100%FREE -n [LV 이름] [VG 이름]
+      
   - lvresize -L 용량 (G,M,K) LV이름{형식:/dev/ubuntu-vg/root}
   - lvscan
   - sudo mkfs.ext3 /dev/vg/lv{lv 경로}
