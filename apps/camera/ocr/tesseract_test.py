@@ -3,6 +3,8 @@ import pytesseract
 # sudo apt update
 # sudo apt install tesseract-ocr
 # sudo apt install libtesseract-dev
+# brew install tesseract
+
 
 import cv2
 # pip3 install opencv-python
