@@ -21,6 +21,9 @@ print (text)
 
 ## info for Korean OCR
 ### https://github.com/yunwoong7/korean_ocr_using_pororo
+### pip install torch
+### pip install torchvision
+### pip install opencv-python
 
 
 ## try out the following
