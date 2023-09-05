@@ -1,3 +1,5 @@
+
+
 import easyocr
 from pprint import pprint
 
@@ -8,5 +10,5 @@ fpath='/home/tinyos/devel_opment/data/ocr/sample_receipt.png'
 reader = easyocr.Reader(['ko','en'])
 result = reader.readtext(fpath)
 
-pprint(result)
+pprint(result, depth=2, indent=4)
 
