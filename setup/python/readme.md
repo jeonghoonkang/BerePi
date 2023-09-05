@@ -1,4 +1,4 @@
-## python3.8 설치
+## python3.8 install
 - sudo apt update
 - sudo add-apt-repository ppa:deadsnakes/ppa
 - sudo apt install python3.8
