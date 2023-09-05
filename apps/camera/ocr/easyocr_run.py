@@ -1,4 +1,4 @@
-
+# have to use python3.8 
 
 import easyocr
 from pprint import pprint
