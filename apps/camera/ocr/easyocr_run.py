@@ -1,3 +1,4 @@
+# Author : https://github.com/jeonghoonkang
 # have to use python3.8 
 
 import easyocr
