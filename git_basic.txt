@@ -1,4 +1,5 @@
-# git for terminal
+# git for terminal use
 git config --list
 git config --unset --global credential.helper
 git config credential.helper store
+
