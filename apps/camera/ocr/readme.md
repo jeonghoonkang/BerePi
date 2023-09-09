@@ -1,4 +1,5 @@
 ## OCR application
-
 - open png file and run OCR
-- ~/devel/data/ocr/sample_receipt.png 
+### how to command
+- python3 easyocr_run.py -f sample.jpg -lang ko
+ 
