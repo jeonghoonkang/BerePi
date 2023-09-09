@@ -3,7 +3,7 @@
 - pip3 install telegram-send
 
 
-#### installation issue
+#### Installation issue
 
 - pip3 install --force-reinstall -v "python-telegram-bot==13.5"
   - to solve this error
