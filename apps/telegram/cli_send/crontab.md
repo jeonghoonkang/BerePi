@@ -2,6 +2,9 @@
 
 <pre>
 
+echo "help: bash {file.sh} 'tx' will send message to telegram"
+echo "argument 1-->" $1
+
 TOSPATH=/home/***/devel
 TARGET=$TOSPATH/__info.txt
 
@@ -14,13 +17,13 @@ df >> $TARGET
 echo " " >> $TARGET
 ifconfig >> $TARGET 
 
-if [$1 is "tx"] : 
-  telegram-send -f $TARGET
-
-echo "have sent msg for telegrma"
+if [ $1 = 'tx' ]
+then
+        telegram-send -f /home/tinyos/devel_opment/__info.txt
+        echo "send done"
+fi
   
 </pre>                                                    
-
 
 <pre>
 Operator	Description
