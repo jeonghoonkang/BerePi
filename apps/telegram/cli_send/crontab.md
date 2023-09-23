@@ -5,12 +5,17 @@
 TOSPATH=/home/***/devel
 TARGET=$TOSPATH/__info.txt
 
-sudo vcgencmd measure_temp > $TARGET  
+date > $TARGET  
+  
+echo "***" | suco -S vcgencmd measure_temp >> $TARGET  
 echo "" >> $TARGET 
+  
 df >> $TARGET
 echo " " >> $TARGET
 ifconfig >> $TARGET 
-telegram-send -f $TARGET
+
+if [$0 is "tx"] : 
+  telegram-send -f $TARGET
 
 echo "have sent msg for telegrma"
   
