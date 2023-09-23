@@ -14,7 +14,7 @@ df >> $TARGET
 echo " " >> $TARGET
 ifconfig >> $TARGET 
 
-if [$0 is "tx"] : 
+if [$1 is "tx"] : 
   telegram-send -f $TARGET
 
 echo "have sent msg for telegrma"
