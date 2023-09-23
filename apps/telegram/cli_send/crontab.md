@@ -1,7 +1,12 @@
-# crontab print out
+# crontab of remote node info print out
 
 <pre>
-df > /home/***/devel_opment/.df.txt
-ifconfig >> /home/***/devel_opment/.df.txt
-telegram-send -f /home/***/devel_opment/.df.txt
+
+PATH=/home/***/devel_opment
+  
+df > $PATH/__info.txt
+echo "" >> $PATH/__info.txt
+ifconfig >> $PATH/__info.txt
+telegram-send -f $PATH/__info.txt
+echo "have sent msg for telegrma"
 </pre>                                                    
