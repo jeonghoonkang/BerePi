@@ -39,3 +39,5 @@ INTEGER1 -lt INTEGER2	INTEGER1 is numerically less than INTEGER2
 -w FILE	FILE exists and the write permission is granted.
 -x FILE	FILE exists and the execute permission is granted.
 </pre>
+
+<img width="558" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/6bcab91f-3e4e-470d-85c5-286639d7327e">
