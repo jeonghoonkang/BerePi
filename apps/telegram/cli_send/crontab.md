@@ -22,7 +22,7 @@ echo "have sent msg for telegrma"
 </pre>                                                    
 
 
-
+<pre>
 Operator	Description
 ! EXPRESSION	The EXPRESSION is false.
 -n STRING	The length of STRING is greater than zero.
@@ -38,3 +38,4 @@ INTEGER1 -lt INTEGER2	INTEGER1 is numerically less than INTEGER2
 -s FILE	FILE exists and it's size is greater than zero (ie. it is not empty).
 -w FILE	FILE exists and the write permission is granted.
 -x FILE	FILE exists and the execute permission is granted.
+</pre>
