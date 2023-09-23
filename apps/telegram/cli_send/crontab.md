@@ -2,8 +2,8 @@
 
 <pre>
 
-PATH=/home/***/devel
-TARGET=$PATH/__info.txt
+TOSPATH=/home/***/devel
+TARGET=$TOSPATH/__info.txt
 
 sudo vcgencmd measure_temp > $TARGET  
 echo "" >> $TARGET 
