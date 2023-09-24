@@ -10,17 +10,19 @@ TARGET=$TOSPATH/__info.txt
 
 date > $TARGET  
   
-echo "***" | suco -S vcgencmd measure_temp >> $TARGET  
+echo "***" | sudo -S vcgencmd measure_temp >> $TARGET  
 echo "" >> $TARGET 
   
 df >> $TARGET
 echo " " >> $TARGET
 ifconfig >> $TARGET 
 
-if [ $1 = 'tx' ]
+if [[ $1 = 'tx' ]]
 then
         telegram-send -f /home/tinyos/devel_opment/__info.txt
         echo "send done"
+else
+        echo "send failed, please input 'tx'"
 fi
   
 </pre>                                                    
