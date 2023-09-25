@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  gitea-server:
+    container_name: gitea-server
+    image: kunde21/gitea-arm:v1.15.11-armv7
+    ports: 
+      - "3000:3000"
+      - "22:22"
+    volumes:
+      - ./data:/data
+    restart: always
+    networks:
+      - gitea
+    depends_on:
+      - db
+  db:
+    container_name: mariadb
+    image: jc21/mariadb-aria:latest-innodb
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=gitea
+      - MYSQL_USER=gitea
+      - MYSQL_PASSWORD=gitea
+      - MYSQL_DATABASE=gitea
+    volumes:
+      - ./db:/var/lib/mysql
+    networks:
+      - gitea
+networks:
+  gitea:
+    external: false
