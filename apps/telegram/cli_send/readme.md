@@ -2,6 +2,7 @@
 - https://steemit.com/utopian-io/@yuxid/how-to-send-text-and-files-to-other-devices-in-linux-command-line-via-telegram
 - installation
   - pip3 install telegram-send
+  - 에러발생시 다시 버전 정확히 설치 (2023.9.25)
 
 ### How to use
 - telegram-send -f FILENAME
