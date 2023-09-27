@@ -13,7 +13,7 @@ date > $TARGET
 echo "***" | sudo -S vcgencmd measure_temp >> $TARGET  
 echo "" >> $TARGET 
   
-df >> $TARGET
+df -h >> $TARGET
 echo " " >> $TARGET
 ifconfig >> $TARGET 
 
