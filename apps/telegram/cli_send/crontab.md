@@ -19,7 +19,7 @@ ifconfig >> $TARGET
 
 if [[ $1 = 'tx' ]]
 then
-        telegram-send -f /home/tinyos/devel_opment/__info.txt
+        telegram-send -f  $TARGET 
         echo "send done"
 else
         echo "send failed, please input 'tx'"
