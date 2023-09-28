@@ -8,6 +8,7 @@
 - 주의사항
   - crontab 에서 bash script 실행시 경로를 인식 못하는 경우가 있음. 설치시 경로 확인 필요
   - /home/tinyos/.local/bin/telegram-send
+  - 직접 인스톨 시도 필요 pip3 install telegram-send
 
 <pre>
 
