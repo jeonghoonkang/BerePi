@@ -1,5 +1,7 @@
 # crontab of remote node info print out
 
+- 30 */4 * * *	bash /home/***/***/crontab.sh tx > /home/***/***/err_crontab.err 2>&1
+
 - 주의사항
   - crontab 에서 bash script 실행시 경로를 인식 못하는 경우가 있음. 설치시 경로 확인 필요
   - /home/tinyos/.local/bin/telegram-send
