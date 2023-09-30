@@ -96,4 +96,4 @@ Filesystem Size Used Avail Use% Mounted on
 ```
 
 
-sudo ls -l /dev/disk/by-uuid/
+- sudo ls -l /dev/disk/by-uuid/
