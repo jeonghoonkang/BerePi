@@ -1,7 +1,11 @@
 
 ### 동작확인 
-- 'maintenance' => true,                                                                                                             
--'filelocking.enabled' => false,  
+- .env
+  - VOL_PATH 확인
+  - ~~config/config.php 에 아래 설정 입력하고 occ scan all 실행 
+- (동작안함) 'maintenance' => true,                                                                                                             
+- 'filelocking.enabled' => false,
+- sudo docker exec -i -u 33 {컨테이너 이름 _app_1 로 끝나는경우가 많음} php occ files:scan --all                                                                  
 
 ### 단순참고
 
