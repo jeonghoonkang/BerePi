@@ -1,17 +1,15 @@
 
-# Deep Learning - model execution SW
+# Deep Learning - model execution 
 
 ## Dark-net (YOLO)
 
 ### Object detection based on deep learning
 
 #### Run on RPI3 B+
-- 테스트 완료
-- 실행 코드 패키징 완료
+
 
 #### Run on Jetson Nano
-- 기본 동작 테스트 완료
-- 기능 추가 필요 
+
 
 ## TensorFlow
 
