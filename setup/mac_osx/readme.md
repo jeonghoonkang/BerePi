@@ -35,4 +35,6 @@
   - in the working terminal:
   - "sudo chown root:wheel /usr/bin/login"
   - "sudo chmod 4755 /usr/bin/login"
-- 아이클라우드 새롭게 로그인해야 리소스 문제 해결되는 경우 있음 
+- 아이클라우드 새롭게 로그인해야 리소스 문제 해결되는 경우 있음
+- 업그레이드 후 git 실행 안될때
+  - xcode-select --install 

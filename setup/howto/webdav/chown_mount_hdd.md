@@ -3,7 +3,8 @@ chown -h myuser:mygroup mysymbolic
 
 
 ### Ubuntu 14.04에 새로운 하드디스크 추가 및 포맷후 자동 마운트 설정
-Oct 3, 2015
+- Oct 3, 2015
+- hdd 추가, usb hdd
 
 우분투 머신에 하드디스크 추가 및 포맷 후 자동 마운트 설정하기
 
@@ -93,3 +94,6 @@ Filesystem Size Used Avail Use% Mounted on
 ...
 /dev/sdb1 470G 70M 446G 1% /ssd2
 ```
+
+
+- sudo ls -l /dev/disk/by-uuid/
