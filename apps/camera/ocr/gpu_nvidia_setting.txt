@@ -1,5 +1,37 @@
-그래픽카드 및 설치 가능한 드라이버 확인
+
+* 그래픽카드 및 설치 가능한 드라이버 확인
 ubuntu-drivers devices
-현재 사용중인 그래픽카드 확인 (gpu 확인)
+
+* 현재 사용중인 그래픽카드 확인 (gpu 확인)
 lshw -numeric -C display
 lspci | grep -i nvidia
+
+* 드라이버 설치 (4090)
+sudo add-apt-repository ppa:graphics-drivers/ppa
+sudo apt update
+sudo ubuntu-drivers autoinstall
+
+
+* 에러
+
+tinyos@keti-B760-AORUS-ELITE-DDR4:~/devel_opment/BerePi/apps/camera/ocr$ time python3 easyocr_run.py 
+./sample.jpg ko
+ko
+ja
+./sample.jpg ko
+['easyocr_run.py']
+Traceback (most recent call last):
+  File "easyocr_run.py", line 38, in <module>
+    result = reader.readtext(fpath)
+  File "/usr/local/lib/python3.8/dist-packages/easyocr/easyocr.py", line 468, in readtext
+    result = self.recognize(img_cv_grey, horizontal_list, free_list,\
+  File "/usr/local/lib/python3.8/dist-packages/easyocr/easyocr.py", line 383, in recognize
+    image_list, max_width = get_image_list(h_list, f_list, img_cv_grey, model_height = imgH)
+  File "/usr/local/lib/python3.8/dist-packages/easyocr/utils.py", line 613, in get_image_list
+    crop_img,ratio = compute_ratio_and_resize(crop_img,width,height,model_height)
+  File "/usr/local/lib/python3.8/dist-packages/easyocr/utils.py", line 576, in compute_ratio_and_resize
+    img = cv2.resize(img,(int(model_height*ratio),model_height),interpolation=Image.Resampling.LANCZOS)
+AttributeError: module 'PIL.Image' has no attribute 'Resampling'
+
+* 해결 
+sudo pip3 install git+https://github.com/JaidedAI/EasyOCR.git --force
