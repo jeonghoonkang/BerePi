@@ -14,7 +14,7 @@ sudo ubuntu-drivers autoinstall
 
 * 에러
 
-tinyos@keti-B760-AORUS-ELITE-DDR4:~/devel_opment/BerePi/apps/camera/ocr$ time python3 easyocr_run.py 
+>> ~/devel_opment/BerePi/apps/camera/ocr$ time python3 easyocr_run.py 
 ./sample.jpg ko
 ko
 ja
