@@ -101,7 +101,7 @@
   - e2fsck -f LV이름
   - resize2fs LV이름
 
-  - 참고. lvm 을 해하고자 하면 만든 순서의 반대로 진행
+  - 참고. lvm 을 해 하고자 하면 만든 순서의 반대로 진행
 
     - lvremove /dev/VG이름/LV이름
     - vgremove /dev/VG이름
