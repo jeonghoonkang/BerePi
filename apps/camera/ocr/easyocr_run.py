@@ -13,13 +13,14 @@ args = argparser.parse_args()
 
 file_name = args.file
 language = args.language
-print (file_name, language)
+print(language)
+print (file_name)
 
 reader = easyocr.Reader(['en',language]) #language is changing string
 
 chk_string = ["ko","ja"]
-for chk in chk_string:
-    print (chk)
+#for chk in chk_string:
+    #print (chk)
 
 if (not any( chk in language for chk in chk_string)): # if language is not in chk_string:
     print (language)
@@ -33,9 +34,9 @@ fpath = file_name
 
 reader = easyocr.Reader([language,'en']) #language
 
-print (sys.argv)
+#print (sys.argv)
 
 result = reader.readtext(fpath)
 
-pprint(result, depth=2, indent=4)
+pprint(result, depth=5, indent=4)
 
