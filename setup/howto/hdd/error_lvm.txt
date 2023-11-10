@@ -1,0 +1,8 @@
+
+pvscan -vvv
+
+
+
+
+lvm 에러 복구 방법
+https://lascrea.tistory.com/153
