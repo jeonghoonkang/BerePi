@@ -2,10 +2,12 @@
 pvscan -vvv
 
 
-
-
 lvm 에러 복구 방법
+
 https://lascrea.tistory.com/153
 
-
 https://blog.naver.com/PostView.naver?blogId=hymne&logNo=221239107090&parentCategoryNo=&categoryNo=197&viewDate=&isShowPopularPosts=false&from=postView
+
+
+https://www.golinuxcloud.com/fix-pvs-shows-unknown-device-redhat-linux/
+
