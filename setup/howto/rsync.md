@@ -6,6 +6,7 @@
 - Back copy, Back rsync, reverse rsync
   - #!/bin/bash
   - rsync -avhz --progress --bwlimit=5120 --partial -v -e 'ssh -p ****' tinyos@**.**.**.**:webdav/media/send/$1 /hdd2/
+    - **bwlimit 5120, 5 Mbps 의미  
 
 
 ### 특정 시간 이후(또는 특정월)의 파일만 sync하는 방법
