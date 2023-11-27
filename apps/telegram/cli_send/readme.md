@@ -13,3 +13,12 @@
   - to solve this error
 <pre> ImportError: cannot import name 'MAX_MESSAGE_LENGTH' from 'telegram.constants' (/home/user/.local/lib/python3.10/site-packages/telegram/constants.py) </pre>
 
+#### Python 3.8 Problem
+<pre>
+sudo apt-get remove python3.8
+sudo apt-get remove --auto-remove python3.8
+sudo apt-get purge python3.5
+sudo apt-get purge python3.8
+sudo apt-get purge --auto-remove python3.5
+sudo apt-get purge --auto-remove python3.8
+</pre>
