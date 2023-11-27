@@ -18,6 +18,5 @@
 sudo apt-get remove python3.8
 sudo apt-get remove --auto-remove python3.8
 sudo apt-get purge python3.8
-sudo apt-get purge --auto-remove python3.5
 sudo apt-get purge --auto-remove python3.8
 </pre>
