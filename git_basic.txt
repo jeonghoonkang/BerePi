@@ -2,6 +2,7 @@
 
 git config --list
 git config --unset --global credential.helper
+
 git config credential.helper store
 
 git status
