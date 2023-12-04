@@ -85,7 +85,9 @@ uuid 확인
 ...
 fstab 파일에 파티션 추가
 > sudo vi /etc/fstab
+(파일 내부에 작성)
 UUID=d2eac947-9407-40bb-96cb-acd22e9a57c3 /ssd2 ext4 defaults 0 0
+
 마운트 및 확인
 > sudo mkdir /ssd2
 > sudo mount -a
