@@ -11,3 +11,4 @@ services:
     user: root
     environment:
       - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+      - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app
