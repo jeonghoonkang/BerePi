@@ -6,7 +6,7 @@
 - DATABASE_USER=teslamate
 - DATABASE_HOST=database  #도커 이름
 - Crontab에 자동으로 백업하도록 진행
-  - (crontab * * * 5 *  docker-compose exec -T database pg_dump -U teslamate teslamate > /backuplocation/teslamate_backup_`date +"%Y%m%d"`.bak
+  - (crontab) <pre> * * * 5 *  docker-compose exec -T database pg_dump -U teslamate teslamate > /backuplocation/teslamate_backup_`date +"%Y%m%d"`.bak </pre>
 
 ## Restore DB
 <pre>
