@@ -1,10 +1,12 @@
 # Backup and Restore of Teslamate
 - refence : https://docs.teslamate.org/docs/maintenance/backup_restore/
-## DB Backup
-<pre> docker-compose exec -T database pg_dump -U teslamate teslamate > /backuplocation/teslamate.bck </pre>
+## DB Backup (테슬라메이트 도커 DB 백업)
+<pre> docker-compose exec -T database pg_dump -U teslamate teslamate > /backuplocation/teslamate.bck -v </pre>
 - DATABASE_NAME=teslamate
 - DATABASE_USER=teslamate
-- DATABASE_HOST=database
+- DATABASE_HOST=database  #도커 이름
+- Crontab에 자동으로 백업하도록 진행
+  - (crontab) <pre> * * * 5 *  docker-compose exec -T database pg_dump -U teslamate teslamate > /backuplocation/teslamate_backup_`date +"%Y%m%d"`.bak </pre>
 
 ## Restore DB
 <pre>

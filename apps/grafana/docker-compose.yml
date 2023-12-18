@@ -8,5 +8,7 @@ services:
       - '3000:3000'
     volumes:
       - ./data:/var/lib/grafana
+    user: root
     environment:
       - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+      - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app
