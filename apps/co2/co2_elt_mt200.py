@@ -33,7 +33,8 @@ def find_ppm(ins):
 
 
 def pass2file(ins):
-    print("...logging...")
+    print("...logging...", )
+    print(time.strftime("%Y-%m-%d %H:%M"),)  
     berepi_logger.berelog('co2 ppm', str(ins))
 
 if __name__ == "__main__":
