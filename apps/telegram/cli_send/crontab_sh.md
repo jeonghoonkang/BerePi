@@ -4,6 +4,7 @@
 /home/tinyos/devel/crontab.tinyos.sh: line 18: telegram-send: command not found 
 </pre>
 
+# sh script for crontab
 
 - 주의사항
   - crontab 에서 bash script 실행시 경로를 인식 못하는 경우가 있음. 설치시 경로 확인 필요
