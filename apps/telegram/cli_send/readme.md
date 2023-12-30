@@ -6,6 +6,7 @@
 
 ### How to use
 - telegram-send -f FILENAME
+- cat {file} | telegram-send --stdin
 
 #### Installation issue
 
