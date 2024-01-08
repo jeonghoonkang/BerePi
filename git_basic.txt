@@ -1,7 +1,6 @@
 # git for terminal use
 
 git config --list
-
 git config --unset --global credential.helper
 
 git config --global user.name "자신 github 아이디"
