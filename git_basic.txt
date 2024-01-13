@@ -6,6 +6,5 @@ git config --global user.name "자신 github 아이디"
 git config --global user.email "자신 github 연동 이메일"
 
 git config credential.helper store
-
 git status
 
