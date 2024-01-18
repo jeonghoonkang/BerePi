@@ -14,3 +14,4 @@
   will add NVMe (6) as first boot device (boot order is right to left) and will also reduce shutdown power consumption to around 0.01W
   PCIE_PROBE is required if using a non-HAT+ adapter
 </pre>
+
