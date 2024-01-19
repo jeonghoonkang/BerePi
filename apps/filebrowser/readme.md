@@ -4,8 +4,9 @@
   - I have forked it on https://github.com/jeonghoonkang/filebrowser    
 
 ## install
-- by just run shell command
+- just run shell command
   - curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+  
 ## run
   - bash 또는 shell 에서 아래 명령으로 실행
     - filebrowser -r /path/to/your/files
