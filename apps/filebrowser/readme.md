@@ -7,7 +7,7 @@
 - just run shell command
   - curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
   
-## run
+## run (실행)
   - bash 또는 shell 에서 아래 명령으로 실행
     - filebrowser -r /path/to/your/files
 ## configure
