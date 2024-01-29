@@ -32,7 +32,9 @@
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi. Additionally, BerePi provides SSD storage which gives fast access spped and large storage with cloud computing capability. 
 BerePi project supports open software which using BerePi hardware modules. 
-  - Self Data Machine 
+  - Self Data Machine
+  - ![image](https://github.com/jeonghoonkang/BerePi/assets/4180063/1f27193c-0f7f-40af-9641-17bc1f993adb)
+
     - <img width="300" alt="image" src="https://user-images.githubusercontent.com/4180063/221742941-657e6240-818a-4c00-b5e8-f3b6f8d0b10d.png">  <img width="315" alt="image" src="https://user-images.githubusercontent.com/4180063/221743531-47abcc0f-6048-48d4-b4f5-cdda79568974.png">
   - Simple LED video 01 (YouTube : https://youtu.be/ygJ3qMiGQvw)
   - BereCO2 HW module   
