@@ -30,7 +30,7 @@
     - if you want to install Ubuntu 64-bit, follow the instruction, it needs 8G sd card.
 
 #### Wireless Sensor Network (WSN) using RaspberryPi 
-You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi. Additionally, BerePi provides SSD storage which gives fast access spped and large storage with cloud computing capability. 
+You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi. Additionally, BerePi provides PCI-e and SSD storage which gives fast access spped and large storage with cloud computing capability. 
 BerePi project supports open software which using BerePi hardware modules. 
   - Self Data Machine
   - ![image](https://github.com/jeonghoonkang/BerePi/assets/4180063/1f27193c-0f7f-40af-9641-17bc1f993adb)
