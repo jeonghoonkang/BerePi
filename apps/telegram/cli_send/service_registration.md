@@ -17,7 +17,7 @@ ExecStart=/bin/bash /home/....절대경로/...sh tx
 ### 주의
 - sudo telegram-send --configure 가 설정 되어 있어야 함
 
-### check status
+### Check service status
 <pre>
 sudo systemctl status reboot.start.sw.service                                                                                                         
 ○ reboot.start.sw.service - Reboot telegram send  
