@@ -5,7 +5,8 @@
 <pre>
 [Unit]
 Description=Reboot telegram-send
-
+After=multi-user.target
+  
 [Service]
 ExecStart=/bin/bash /home/....절대경로/...sh tx 
 </pre>
