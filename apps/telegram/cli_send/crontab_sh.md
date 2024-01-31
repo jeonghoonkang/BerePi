@@ -33,7 +33,7 @@ ifconfig >> $TARGET
 if [[ $1 = 'tx' ]]
 then
         #telegram-send -f  $TARGET 
-        head -n70 $TARGET | grep -v 'inet6' | grep -v 'tmpfs' | grep -e dev -e temp -e inet | telegram-send --stdin
+        head -n70 $TARGET | grep -v 'inet6' | grep -v 'tmpfs' | grep -e dev -e temp -e inet -e KST | telegram-send --stdin
           echo "send done"
 else
         echo "send failed, please input 'tx'"
