@@ -111,7 +111,7 @@ if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
     . /etc/bash_completion
 fi
 
-export DISPLAY=:0
+#export DISPLAY=:0
 export LS_COLORS="di=00;36:fi=00;37"
-
+alias ipadd='ifconfig |grep -v inet6 | grep -e inet'    
 
