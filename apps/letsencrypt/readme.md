@@ -1,7 +1,7 @@
 # How to Let's Encrypt SSL
 ## 컨테이너를 활용한 SSL 실행, 갱신
   - https://velog.io/@wksmstkfka12/떠먹여주는-Nginx-Docker에-무료-SSL-적용
-  - Nginx, Let's encrypt를 활용한 SSL 갱신
+  - Nginx, Let's encrypt를 활용한 SSL 설정
     
 ## Portainer scheme
 - using linux server docker container image
