@@ -9,6 +9,7 @@
   - 0 3,17 1 * * /usr/bin/certbot renew.sh
 #### renw.sh
   - sudo docker exec nextcloud_letsencrypt-companion_1 /app/force_renew
+  - sudo docker exec {실행중인 lets encypt 컨테이너} /app/force_renew
 
 ## Portainer scheme
 - using linux server docker container image
