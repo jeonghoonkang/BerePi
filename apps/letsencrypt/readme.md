@@ -9,7 +9,7 @@
   - 0 3,17 1 * * /usr/bin/certbot renew.sh
   - https://telegram.me/home_8881_bot
 <pre>
-30 4 2 * * echo "tinyos12()" | sudo -S bash /home/tinyos/devel/docker/nextcloud/renew.sh > /home/tinyos/devel/log/renew.log 2>&1
+30 4 2 * * echo "****" | sudo -S bash /home/tinyos/devel/docker/nextcloud/renew.sh > /home/tinyos/devel/log/renew.log 2>&1
 31 4 2 * * cat /home/tinyos/devel/log/renew.log | telegram-send --stdin
 </pre>  
   
