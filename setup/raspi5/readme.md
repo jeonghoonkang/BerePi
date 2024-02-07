@@ -1,4 +1,4 @@
-# Raspi5 부팅 
+# Raspi5 nvme 부팅 
 - Raspi Imager 로 Rasbian OS 를 SD에 설치
 - SD 부팅후
 - sudo rpi-eeprom-update -a 로 확인
