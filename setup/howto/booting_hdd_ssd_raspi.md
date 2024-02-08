@@ -1,8 +1,9 @@
 
+## RaspberryPi 4 까지 적용, NVME RaspberryPi5 는 아래 링크로 이동하세요.
+
+
 
 https://m.blog.naver.com/emperonics/221979352174
-
-
 https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloader_config.md
 
 
