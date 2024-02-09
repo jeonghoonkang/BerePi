@@ -7,13 +7,13 @@
   
 <pre>
 [Unit]
-Description=Reboot telegram-send
+Description=telegram-send Reboot
 After=multi-user.target
   
 [Service]
 ExecStart=/bin/bash /home/....절대경로/crontab_sh.sh tx 
 #Restart=on-failure #restart 조건 (on-failure: 오류발생, 재시작, always: 항상)
-RestartSec=3600*6
+#RestartSec=3600*6
 
 [Install]
 WantedBy=multi-user.target
