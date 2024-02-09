@@ -48,6 +48,7 @@ WantedBy=multi-user.target
 - sudo telegram-send --configure 가 설정 되어 있어야 함
 
 ### Check service status
+
 <pre>
 
 서비스 상태
@@ -70,6 +71,8 @@ Jan 31 20:46:22 tinyos-rpi5 sudo[1856]: pam_unix(sudo:session): session opened f
 Jan 31 20:46:22 tinyos-rpi5 sudo[1856]: pam_unix(sudo:session): session closed for user root                                                                               Jan 31 20:46:24 tinyos-rpi5 bash[1853]: send done                                                                                                                           Jan 31 20:46:24 tinyos-rpi5 systemd[1]: reboot.start.sw.service: Deactivated successfully.    
 </pre>
 
+   
+
 <pre>
 
 Timer 상태
@@ -83,4 +86,5 @@ sudo systemctl status telegram.send.timer
    Triggers: ● telegram.send.service
 
  2월 09 16:59:03 selfmach-01 systemd[1]: Started telegram.send.timer - telegram send timer.  
+
 </pre>
