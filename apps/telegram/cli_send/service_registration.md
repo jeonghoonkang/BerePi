@@ -1,6 +1,7 @@
 
 ### System Daemon 추가 
-- sudo vi /etc/systemd/system/{서비스명}.service
+- sudo vim /etc/systemd/system/{서비스명}.service
+- sudo vim /etc/systemd/system/{서비스명}.timer
 - input text
 - 항상 root 권한으로 실행됨. 다른 user id에서 서비스 등록하더라도, root 로 실행해야 함
 - service 와 timer 두가지를 등록 실행해야 함 
