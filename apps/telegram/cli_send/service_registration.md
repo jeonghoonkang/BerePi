@@ -49,7 +49,11 @@ WantedBy=multi-user.target
 
 ### Check service status
 <pre>
-sudo systemctl status reboot.start.sw.service                                                                                                         
+
+서비스 상태
+
+sudo systemctl status reboot.start.sw.service
+  
 ○ reboot.start.sw.service - Reboot telegram send  
   Loaded: loaded (/etc/systemd/system/reboot.start.sw.service; enabled; preset: enabled)                                        
   Active: inactive (dead) since Wed 2024-01-31 20:46:24 KST; 793ms ago                                                                           
@@ -64,4 +68,19 @@ Jan 31 20:46:22 tinyos-rpi5 bash[1853]: argument 1--> tx
 Jan 31 20:46:22 tinyos-rpi5 sudo[1856]:     root : PWD=/ ; USER=root ; COMMAND=/usr/bin/vcgencmd measure_temp    
 Jan 31 20:46:22 tinyos-rpi5 sudo[1856]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=0)    
 Jan 31 20:46:22 tinyos-rpi5 sudo[1856]: pam_unix(sudo:session): session closed for user root                                                                               Jan 31 20:46:24 tinyos-rpi5 bash[1853]: send done                                                                                                                           Jan 31 20:46:24 tinyos-rpi5 systemd[1]: reboot.start.sw.service: Deactivated successfully.    
+</pre>
+
+<pre>
+
+Timer 상태
+  
+sudo systemctl status telegram.send.timer
+  
+● telegram.send.timer - telegram send timer
+     Loaded: loaded (/etc/systemd/system/telegram.send.timer; enabled; preset: enabled)
+     Active: active (waiting) since Fri 2024-02-09 16:59:03 KST; 37min ago
+    Trigger: Fri 2024-02-09 18:17:00 KST; 40min left
+   Triggers: ● telegram.send.service
+
+ 2월 09 16:59:03 selfmach-01 systemd[1]: Started telegram.send.timer - telegram send timer.  
 </pre>
