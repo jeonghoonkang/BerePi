@@ -6,6 +6,7 @@
 
   
 <pre>
+# 서비스. 
 [Unit]
 Description=telegram-send Reboot
 After=multi-user.target
@@ -29,8 +30,25 @@ systemctl enable service-name.service
 systemctl start service-name.service
 </pre>
 
+<pre>
+# 타이머
+[Unit]
+Description=telegram send timer
+
+[Timer]
+OnBootSec=20sec
+OnCalendar=0/6:27:00
+Unit=telegram.send.service
+
+[Install]
+WantedBy=multi-user.target
+</pre>
+
+
 ### Setup and Run service 
+- sudo systemctl daemon-reload
 - sudo systemctl enable /etc/systemd/system/{서비스명}.service
+- sudo systemctl start /etc/systemd/system/{서비스명}.service
 
 ### 주의
 - sudo telegram-send --configure 가 설정 되어 있어야 함
