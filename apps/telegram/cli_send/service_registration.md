@@ -33,7 +33,7 @@ Description=telegram send timer
 
 [Timer]
 OnBootSec=20sec
-OnCalendar=0/6:27:00
+OnCalendar=0/6:27:00  #6시간마다 27분에 실행, status 체크할때, trigger 시간 확인 가능 
 Unit=telegram.send.service
 
 [Install]
