@@ -12,6 +12,9 @@ ExecStart=/bin/bash /home/....절대경로/crontab_sh.sh tx
 #Restart=on-failure #restart 조건 (on-failure: 오류발생, 재시작, always: 항상)
 RestartSec=3600*6
 
+[Install]
+WantedBy=multi-user.target
+
 </pre>
 
 <pre>
