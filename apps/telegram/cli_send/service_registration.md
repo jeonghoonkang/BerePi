@@ -43,6 +43,8 @@ WantedBy=multi-user.target
 - sudo systemctl daemon-reload
 - sudo systemctl enable /etc/systemd/system/{서비스명}.service
 - sudo systemctl start /etc/systemd/system/{서비스명}.service
+-  sudo systemctl enable /etc/systemd/system/{서비스명}.timer
+- sudo systemctl start /etc/systemd/system/{서비스명}.timer
 
 ### 주의
 - sudo telegram-send --configure 가 설정 되어 있어야 함
