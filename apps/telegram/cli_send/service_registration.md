@@ -23,12 +23,6 @@ WantedBy=multi-user.target
 
 </pre>
 
-<pre>
-chmod 755 service-name.service
-systemctl daemon-reload
-systemctl enable service-name.service
-systemctl start service-name.service
-</pre>
 
 <pre>
 # 타이머
