@@ -15,3 +15,7 @@
   PCIE_PROBE is required if using a non-HAT+ adapter
 </pre>
 
+
+### 설정 확인 커맨드 
+- sudo vcgencmd get_throttled
+- sudo vcgencmd pmic_read_adc 
