@@ -1,5 +1,6 @@
 ## overview
 - nginx 프록시와 let's encrypt 를 연계하여 사용
+- 프록시는 reverse proxy 로 동작 
 - https://github.com/evertramos/docker-nextcloud-letsencrypt/tree/master
 - https://github.com/nextcloud/docker/tree/master/.examples
     
