@@ -4,6 +4,8 @@
 
 https://img1.daumcdn.net/thumb/R1280x0/?scode=mtistory2&fname=https%3A%2F%2Fblog.kakaocdn.net%2Fdn%2FbcNr4v%2Fbtr8ayv8XGv%2Fs3tbA5zC6ehKC2toy7gE4k%2Fimg.png![image](https://github.com/jeonghoonkang/BerePi/assets/4180063/4b786e66-b984-472e-9ec0-f9ac115a8329)
 
+<img width="391" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/6fc7f386-6cd1-41b2-b7dd-06fc2d0974f2">
+
 <code>
   
 </code>
