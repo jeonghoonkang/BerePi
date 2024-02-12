@@ -16,7 +16,7 @@ ex) location *~ /path
 ex) location /
 
 - 위 사용법에 따라 location을 작성하여 주면, nginx.conf에 설정한대로 reverse proxy가 동작한다. 만일 아래와 같이 작성하면, /api로 시작하는 요청은 5000번 포트로, 그 외에는 8080번 포트로 보내게 된다.
-
+<pre>
 location / {
     proxy_pass http://127.0.0.1:8080;
 }
@@ -24,6 +24,7 @@ location / {
 location /api {
     proxy_pass http://127.0.0.1:5000;
 }
+</pre>
 
 <pre>
 
