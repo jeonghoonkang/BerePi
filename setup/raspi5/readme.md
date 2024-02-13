@@ -1,4 +1,4 @@
-# Raspi5 부팅 
+# Raspi5 nvme 부팅 
 - Raspi Imager 로 Rasbian OS 를 SD에 설치
 - SD 부팅후
 - sudo rpi-eeprom-update -a 로 확인
@@ -15,3 +15,7 @@
   PCIE_PROBE is required if using a non-HAT+ adapter
 </pre>
 
+
+### 설정 확인 커맨드 
+- sudo vcgencmd get_throttled
+- sudo vcgencmd pmic_read_adc 

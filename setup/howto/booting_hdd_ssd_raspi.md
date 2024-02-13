@@ -1,8 +1,10 @@
 
+## RaspberryPi 4 까지 적용, 
+- NVME RaspberryPi5 는 아래 링크로 이동하세요
+- setup/raspi5
+
 
 https://m.blog.naver.com/emperonics/221979352174
-
-
 https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloader_config.md
 
 
@@ -14,7 +16,8 @@ https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloade
 - 부팅 순서 변경
   - sudo -E rpi-eeprom-config --edit
   - BOOT_ORDER=0xf41
-    - 0xf14 로 저장되어 있음. 이경우 변경해야 함   
+    - 0xf14 로 저장되어 있음. 이경우 변경해야 함
+    - NVME, Rpi5 인 경우는, F416 => (참조) setup/raspi5/readme.md
 
 - 확인 방법
   - vcgencmd bootloader_config

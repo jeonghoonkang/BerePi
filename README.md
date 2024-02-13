@@ -1,4 +1,4 @@
-## BerePi (Bere+RaspberryPi) software for automated computing 
+## BerePi (Bere+RaspberryPi) software for automation computing 
 - Big data collection and analytics software tools based on RaspberryPi which is from IoT level computing system
 - Software stack for physical computing and intelligent SW service based on IoT data collection & processing (Big data)
 - Based on RaspberryPi distribution (hardware and software)

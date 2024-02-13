@@ -1,6 +1,6 @@
 #!/bin/bash
 #Author : https://github.com/jeonghoonkang
 
-
-cp ~devel/BerePi/setup/.bashrc ~
-cp ~devel/BerePi/setup/.vimrc ~
+shpath='~/devel_opment'
+cp $shpath/BerePi/setup/.bashrc ~
+cp $shpath/BerePi/setup/.vimrc ~

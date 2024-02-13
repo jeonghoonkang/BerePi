@@ -114,4 +114,5 @@ fi
 #export DISPLAY=:0
 export LS_COLORS="di=00;36:fi=00;37"
 alias ipadd='ifconfig |grep -v inet6 | grep -e inet'    
+alias dockerps='sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
 
