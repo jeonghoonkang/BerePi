@@ -56,6 +56,10 @@
 ### USB Camera 설치 방법
 - 로지텍 카메라 설치 for 라즈베리파이
   - https://webnautes.tistory.com/909
+    - lsusb
+    - sudo apt install v4l-utils
+    - v4l2-ctl --list-formats
+    -  
   
 
 ## Too many files, 인수가 너무 길어지는 경우
