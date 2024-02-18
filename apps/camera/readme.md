@@ -59,7 +59,9 @@
     - lsusb
     - sudo apt install v4l-utils
     - v4l2-ctl --list-formats
-    - mplayer -vo png -frames 10 tv://  [[apps/camera/cam_mplayer_ubuntu.md]] 
+    - mplayer -vo png -frames 10 tv://  [apps/camera/cam_mplayer_ubuntu.md]
+      - echo "*****" | sudo -S mplayer -vo png -frames 4 tv://
+      - telegram-send -f *3.png *4.png 
   
 
 ## Too many files, 인수가 너무 길어지는 경우
