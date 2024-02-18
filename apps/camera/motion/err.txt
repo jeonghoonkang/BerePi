@@ -1,0 +1,12 @@
+
+systemd tends to screw up simple things
+
+Does /var/log/motion exist?
+What are the read/write permissions on /var/log/motion?
+Is there a conflicting /var/log/motion/motion.log? ( 'ls -la /var/log/motion/' can provide this )
+
+You may need to do:
+ sudo mkdir /var/log/motion
+ sudo chown motion /var/log/motion
+
+And verify that the /etc/logrotate.d/motion file contains your appropriate log rotation config.
