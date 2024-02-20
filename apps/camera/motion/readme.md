@@ -15,6 +15,8 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 
 ## run / start / stop / daemon
 - sudo systemctl status ( start / stop ) motion
+  - /var/lib/motion
+  - /var/log/motion/motion.log 
 - hostname
 - crontab for maintanance
   - 9 2 * * * /var/www/html/cam/motion/cleanup_file.sh > /home/pi/devel/BerePi/apps/debug/debug_motion.log 2>&1
