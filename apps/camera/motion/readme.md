@@ -12,6 +12,13 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 ## configuration 
 - /etc/modules
   - bcm2835-v4l2
+- /etc/motion/motion.conf
+  <pre>  
+############################################################      
+    # Picture output configuration parameters                                                                                                                                     ############################################################                                                                                                                             
+    # Output pictures when motion is detected                                                                                                                                     
+    picture_output on                                                                                                                                                                                             
+  </pre> 
 
 ## run / start / stop / daemon
 - sudo systemctl status ( start / stop ) motion
