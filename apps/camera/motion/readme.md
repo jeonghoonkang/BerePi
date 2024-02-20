@@ -13,12 +13,15 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - /etc/modules
   - bcm2835-v4l2
 - /etc/motion/motion.conf
-  <pre>  
+  - event_gap 단위는 초 
+  <pre>   
 ############################################################      
     # Picture output configuration parameters                                                                                                                                     ############################################################                                                                                                                             
     # Output pictures when motion is detected                                                                                                                                     
     picture_output on                                                                                                                                                                                             
   </pre> 
+
+- ls /var/lib/motion/ | wc -l | telegram-send --stdin 
 
 ## run / start / stop / daemon
 - sudo systemctl status ( start / stop ) motion
