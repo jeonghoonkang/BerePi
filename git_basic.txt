@@ -1,4 +1,4 @@
-# git for terminal use
+# git for terminal use, configuration
 
 git config --list
 git config --unset --global credential.helper
