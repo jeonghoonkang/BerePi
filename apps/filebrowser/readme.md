@@ -3,7 +3,7 @@
 - great software for file maintanace and sharing on simple and strait interface
   - I have forked it on https://github.com/jeonghoonkang/filebrowser    
 
-## install
+## Install
 - just run shell command
   - curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
   
