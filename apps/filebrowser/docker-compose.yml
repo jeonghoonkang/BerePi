@@ -10,4 +10,4 @@ services:
       - ./config/database.db:/database.db
       - /data:/srv
     ports:
-      - 8500:80
+      - 00:80
