@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 3:
         print ("Usage: webdav_client.py {upload or download} {remote_dir_name} {local_dir_name}")
-        print (" for your reliabe code, webdav remote filename and download targer file name should exist")
+        print (" for your reliabe code, webdav remote filename and download target file name should exist")
         sys.exit(1)
 
     
