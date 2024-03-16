@@ -8,7 +8,7 @@ https://m.blog.naver.com/emperonics/221979352174
 https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711_bootloader_config.md
 
 
-### 라즈베리파이4 확인 방법
+### 라즈베리파이5 확인 방법
 - 업데이트
   - sudo rpi-eeprom-update
   - sudo rpi-eeprom-update -a
