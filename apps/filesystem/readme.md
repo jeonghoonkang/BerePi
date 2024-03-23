@@ -1,3 +1,11 @@
+# Filesystem
+- 디렉토리, 파일 처리 기능
+
+### scan_new_file
+- 주기적 스캔으로 새로운 파일 검색
+- 확장명 지정
+- scan_new_file.py
+
 #### Check directory
      - 쉘 기능을 구현
      - 다양한 디렉토리, 파일 기능
