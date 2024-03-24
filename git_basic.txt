@@ -1,4 +1,3 @@
-
 # git for terminal use, configuration
 
 git config --list
