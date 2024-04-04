@@ -12,8 +12,7 @@
 ### BerePi with SSD(Disk Pi) which is a new direction for secure pi computing
 - After 2021, not long ago, RaspberryPi started to support SSD/HDD Booting by USB link. It gives us a new approach which has a very quick booting speed and secure, nice non-breakable booting code, rather than beaten by electricity accident such as SD card crash.
 - more detail new hardware, please visit https://polarized-poppyseed-8e0.notion.site/0c68de4668d74bb58c526406ec78d47d
-### Old document which is still valid.
-
+### Old document which is still valid
 #### Wiki doc
   - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspberyypi Sensor System
