@@ -28,7 +28,18 @@ sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 
 |머신|cpu 속도| 추가 |
 |------|---|---|
-|RaspberryPi4 |1488.30 ev/sec |* |
+|RaspberryPi5, Cortex-A76, 4core | 2724.77 ev/sec | * |
+|RaspberryPi4 | 1488.30 ev/sec | * |
+|i5 | 1392.58 ev/sec | * |
+|MSI | 5043 ev/sec | * |
+|fit-let      | 1178.88 ev/sec | * |
+|RaspberryPi Zero   | 26  ev/sec | * |
+|DELL P-Edge R230   | 1140 ev/sec | * |
+|NUC-i7       | 1354.22   ev/sec | * |
+|ACERPC MINI       | 698.18   ev/sec | * |
+|Fit pc home  | 13343    ev/sec | * |
+|iMAC       | 352.99 ev/sec | * |
+
 
 
 <pre>
