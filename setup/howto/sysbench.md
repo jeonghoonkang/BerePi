@@ -38,7 +38,7 @@ sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 |NUC-i7       | 1354.22   ev/sec | * |
 |ACERPC MINI       | 698.18   ev/sec | * |
 |Fit pc home  | 13343    ev/sec | * |
-|iMAC       | 3810686.73 ev/sec | Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz |
+|iMAC       | 3810686.73 ev/sec | Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz (by sysctl -a) |
 
 
 
