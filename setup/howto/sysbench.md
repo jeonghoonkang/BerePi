@@ -25,6 +25,12 @@ sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 </pre>
 
 
+
+|머신|cpu 속도| 추가 |
+|------|---|---|
+|RaspberryPi4 |1488.30 ev/sec |* |
+
+
 <pre>
 RaspberryPi4 4G RAM with SSD
 tinyos@rpuntu-001:~$ sysbench --test=cpu run
