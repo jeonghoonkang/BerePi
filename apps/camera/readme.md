@@ -1,5 +1,5 @@
 
-## 개발 목표
+## 목표
 
 - 라즈베리파이 카메라로 촬영한 사진을 AI 영상 인식 기능 S/W에 입력하여 인식 및 판단 결과를 리턴 받음 
 - Google Vision API에 입력하고, 해당 인식 결과를 JSON 으로 회신 받아, 원하는 데이터 필드를 TSDB에 입력한다
@@ -43,7 +43,7 @@
     - https://youtu.be/40riCqvRoMs
 
 
-### camera module 설정
+### camera module 설정 (라즈베리파이3, 4)
 - ''/boot/config.txt'' 에서 ''start_x=1''로 수정하고 재부팅
 - 보드 직접연결 케이블  
 
@@ -63,6 +63,20 @@
       - echo "*****" | sudo -S mplayer -vo png:prefix="`date +"%Y%m%d_%H%M%S"`_" -frames 4 tv://
       - telegram-send -f *3.png *4.png 
   
+
+## 오래된 파일 삭제
+<pre>
+# @hourly echo "password" | sudo -S rm somefile
+# sudo chowm www-data -R /home/.../web/png
+# sudo find /home/.../web/png -name image_* -mtime +14 -delete
+# sudo rsync -avhz --partial --progress /home/.../web/png $dest
+# sleep 30
+# sudo docker exec -i -u 33 ..._app_1 php occ files:scan --all
+#
+# sudo chown www-data -R /home/tinyos/devel_opment/nextcloud/volume/nextcloud_volume/data/tinyos/files/Photos/office
+# dest='/home/...id.../devel_opment/nextcloud/volume/nextcloud_volume/data/...id.../files/Photos'
+# (참고) rsync --rsh="sshpass -p myPassword ssh -l username" server.example.com:/var/www/html/ /backup/
+</pre>
 
 ## Too many files, 인수가 너무 길어지는 경우
 <pre> find /home/pi/cam_data/ -name "*.jpg" -print0 | xargs -0 ls
