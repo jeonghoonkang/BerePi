@@ -64,7 +64,7 @@
       - telegram-send -f *3.png *4.png 
   
 
-## 오래된 파일 삭제
+## 오래된 파일 삭제 (카메라 촬영 파일 삭제, 오래된 날짜)
 <pre>
 # @hourly echo "password" | sudo -S rm somefile
 # sudo chowm www-data -R /home/.../web/png
