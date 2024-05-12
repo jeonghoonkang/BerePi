@@ -68,7 +68,7 @@
 <pre>
 # @hourly echo "password" | sudo -S rm somefile
 # sudo chowm www-data -R /home/.../web/png
-# sudo find /home/.../web/png -name image_* -mtime +14 -delete
+# sudo find /home/.../web/png -iname image_* -o -iname video_* -mtime +14 -delete
 # sudo rsync -avhz --partial --progress /home/.../web/png $dest
 # sleep 30
 # sudo docker exec -i -u 33 ..._app_1 php occ files:scan --all
