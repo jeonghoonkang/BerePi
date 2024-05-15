@@ -20,8 +20,8 @@ services:
         # 호스트포트 : 컨테이너포트 
         - 3307:3306
       environment:
-      - MYSQL_ROOT_PASSWORD=1234
-      - MYSQL_PASSWORD=1234
+      - MYSQL_ROOT_PASSWORD=
+      - MYSQL_PASSWORD=
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
     #healthcheck:
