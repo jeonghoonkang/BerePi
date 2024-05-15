@@ -10,7 +10,7 @@ services:
       - /home/tinyos/devel/docker/mariadb_volume:/var/lib/mysql
 #     - db:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=1234
+      - MYSQL_ROOT_PASSWORD=
     env_file:
       - db.env
 
@@ -22,9 +22,9 @@ services:
       - /home/tinyos/devel/docker/nextcloud_volume:/var/www/html      
 #      - nextcloud:/var/www/html
     environment:
-      - VIRTUAL_HOST=keties.iptime.org
-      - LETSENCRYPT_HOST=keties.iptime.org
-      - LETSENCRYPT_EMAIL=gadin.kang@gmail.com
+      - VIRTUAL_HOST=iptime.org
+      - LETSENCRYPT_HOST=iptime.org
+      - LETSENCRYPT_EMAIL=@gmail.com
       - MYSQL_HOST=db
     env_file:
       - db.env
