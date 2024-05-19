@@ -13,7 +13,9 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - /etc/modules
   - bcm2835-v4l2
 - /etc/motion/motion.conf
-  - event_gap 단위는 초 
+  - event_gap 단위는 초
+- 파일 저장 경로 /var/lib/motion
+   
  <pre>   
 ############################################################
        # Picture output configuration parameters
