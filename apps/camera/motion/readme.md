@@ -20,6 +20,9 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 ############################################################
     # Output pictures when motion is detected         
     picture_output on    
+
+    movie_filename %Y%m%d%H%M%S-%qA
+       
  </pre> 
 
 - ls /var/lib/motion/ | wc -l | telegram-send --stdin 
