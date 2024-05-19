@@ -1,6 +1,6 @@
 # Motion detection S/W installation (Project : Motion)
 
-## command
+## 설치 command 
 - sudo apt-get installl motion
 
 ## requirements
