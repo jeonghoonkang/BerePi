@@ -12,7 +12,7 @@
 ### BerePi with SSD(Disk Pi) which is a new direction for secure pi computing
 - After 2021, not long ago, RaspberryPi started to support SSD/HDD Booting by USB link. It gives us a new approach which has a very quick booting speed and secure, nice non-breakable booting code, rather than beaten by electricity accident such as SD card crash.
 - more detail new hardware, please visit https://polarized-poppyseed-8e0.notion.site/0c68de4668d74bb58c526406ec78d47d
-### Old document which is still valid
+### Old document but which is still valid
 #### Wiki doc
   - RaspberryPi OS installation and setup to run the SDH sensors
   - It shows basic installation process for Raspberyypi Sensor System
@@ -29,7 +29,7 @@
 #### Wireless Sensor Network (WSN) using RaspberryPi 
 You can connect wireless sensors to your cyber space easily, just trying to add BerePi module sensor, to your RaspberryPi. Additionally, BerePi provides PCI-e and SSD storage which gives fast access spped and large storage with cloud computing capability. 
 BerePi project supports open software which using BerePi hardware modules. 
-  - Self Data Machine
+  - Self Data Cloud Machine
   - ![image](https://github.com/jeonghoonkang/BerePi/assets/4180063/1f27193c-0f7f-40af-9641-17bc1f993adb)
   - Simple LED video 01 (YouTube : https://youtu.be/ygJ3qMiGQvw)
   - BereCO2 HW module   
