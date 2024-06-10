@@ -24,6 +24,9 @@
 - 확인
   - nvidia-smi
   - 상시 모니터링 : watch -d -n 0.5 nvidia-smi
+- Like htop : nvtop
+  - sudo add-apt-repository ppa:flexiondotorg/nvtop
+  - sudo apt install nvtop 
 
 ## NVIDIA 삭제 후 드라이버 재설치 
 - dpkg -l | grep -i nvidia
