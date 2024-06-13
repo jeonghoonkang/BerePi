@@ -23,7 +23,7 @@ then
     echo " *** end script run for PYTHON *** "
     exit 0
 else
-    echo "info.ini 파일이 존재하지 않습니다."
-    echo "info.ini 파일을 생성해 주세요."
+    echo "info.ini 파일이 존재하지 않습니다. no ini file"
+    echo "info.ini 파일을 생성해 주세요. should make info.ini file"
     exit 0
 fi
