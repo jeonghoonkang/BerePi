@@ -14,7 +14,7 @@ This is a simple OCR (Optical Character Recognition) application that is designe
 To install and run the OCR Name Card Application, follow these steps:
 
 1. Python3
-2. ocr reader package
+2. ocr reader source code of this repo 
  
 
 ## Usage
