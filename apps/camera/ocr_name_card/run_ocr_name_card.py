@@ -83,6 +83,11 @@ def merge_json_files(file_list, save_path):
         json.dump(json_data, json_file, indent=2)
 
 if __name__=='__main__':
+    #exit("for the first run test") # for the first step to run this code
+
+    if (sys.argv is None) or (len(sys.argv) < 3):
+        print("Usage: (입력 인자를 추가해 주세요) python run_ocr_name_card.py [scan_name_card] [save_description]")
+        sys.exit(1) 
 
     parser = argparse.ArgumentParser(description='명함 문자 인식', usage='bash run.sh')
     parser.add_argument('scan_name_card', type=str, help='명함 스캔 이미지 파일이 있는 디렉토리 경로')
@@ -100,6 +105,7 @@ if __name__=='__main__':
 
     start_time = time.time()
 
+    exit("### tinyos ### on the test check for good here ") # for the on the step to run this code
     
     recursive_search_dir(dir_path, file_list)
 
