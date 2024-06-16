@@ -29,9 +29,13 @@ Created symlink /etc/systemd/system/hybrid-sleep.target → /dev/null.
 
 ## Before setup disable sleep
 <pre>
-$ sudo systemctl status sleep.target
+pu$ sudo systemctl status sleep.target
 ○ sleep.target - Sleep
      Loaded: loaded (/lib/systemd/system/sleep.target; static)
      Active: inactive (dead)
        Docs: man:systemd.special(7)
 </pre>
+
+
+#### ref
+- https://www.unixtutorial.org/disable-sleep-on-ubuntu-server/
