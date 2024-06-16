@@ -2,10 +2,11 @@
 
 ## After setup disable sleep 
 <pre>
-$ sudo systemctl status hybrid-sleep.target
-○ hybrid-sleep.target
-     Loaded: masked (Reason: Unit hybrid-sleep.target is masked.)
+$ sudo systemctl status sleep.target
+○ sleep.target - Sleep
+     Loaded: loaded (/lib/systemd/system/sleep.target; static)
      Active: inactive (dead)
+       Docs: man:systemd.special(7)
      
 $ sudo systemctl status suspend.target
 ○ suspend.target
