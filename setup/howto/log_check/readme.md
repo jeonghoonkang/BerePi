@@ -1,4 +1,4 @@
-# How to check log of ubuntu system
+# How to check log of ubuntu /var/log system
 <pre>
 journalctl --since "2 days ago"  
 journalctl --since "today"
