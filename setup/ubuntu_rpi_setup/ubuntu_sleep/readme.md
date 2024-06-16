@@ -6,15 +6,17 @@ $ sudo systemctl status hybrid-sleep.target
 ○ hybrid-sleep.target
      Loaded: masked (Reason: Unit hybrid-sleep.target is masked.)
      Active: inactive (dead)
+     
 $ sudo systemctl status suspend.target
 ○ suspend.target
      Loaded: masked (Reason: Unit suspend.target is masked.)
      Active: inactive (dead)
-$ sudo systemctl status sleep.target
-
-○ sleep.target
-     Loaded: masked (Reason: Unit sleep.target is masked.)
-     Active: inactive (dead) 
+     
+$ sudo systemctl status hybrid-sleep.target
+○ hybrid-sleep.target - Hybrid Suspend+Hibernate
+     Loaded: loaded (/lib/systemd/system/hybrid-sleep.target; static)
+     Active: inactive (dead)
+       Docs: man:systemd.special(7)
 </pre>
 
 ## How to disable sleep in ubuntu
