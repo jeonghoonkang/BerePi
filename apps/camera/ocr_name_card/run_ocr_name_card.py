@@ -7,6 +7,7 @@ import torch    #sudo pip3 install torch
 import json
 import time
 import argparse
+import easyocr
 
 def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐색
     
@@ -81,6 +82,43 @@ def merge_json_files(file_list, save_path):
     
     with open(save_path, 'w') as json_file:
         json.dump(json_data, json_file, indent=2)
+
+
+def ocr():
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('-lang', '--language', help='language, ko, ja', default='ko')
+    argparser.add_argument('-f', '--file', help='file name', default='./sample.jpg')
+    args = argparser.parse_args()
+
+    file_name = args.file
+    language = args.language
+    print(language)
+    print (file_name)
+
+    reader = easyocr.Reader(['en',language]) #language is changing string
+
+    chk_string = ["ko","ja"]
+    #for chk in chk_string:
+        #print (chk)
+
+    if (not any( chk in language for chk in chk_string)): # if language is not in chk_string:
+        print (language)
+        print ("language is not in ko, ja")
+        sys.exit("language mismatch")
+        
+    print (file_name, language)
+    fpath = file_name
+
+    #fpath='/home/tinyos/devel_opment/data/ocr/sample_receipt.png'
+
+    reader = easyocr.Reader([language,'en']) #language
+
+    #print (sys.argv)
+
+    result = reader.readtext(fpath)
+
+    pprint(result, depth=5, indent=4)
+
 
 if __name__=='__main__':
     #exit("for the first run test") # for the first step to run this code
