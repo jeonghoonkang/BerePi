@@ -11,7 +11,8 @@ http://dobiho.com/691/
   - <key>60</key>을 찾아서 item2 <integer>131072</integer>로 변경하고 파일을 저장. (기존 깂 262144)
 - 저장 후에 맥을 재시동하거나 사용자 계정에 다시 로그인하면 변경사항이 적용됩니다.
 - Mac 에서 windows 로 원격 데스크탑 연결을 사용할때, 설정해 놓으면 편합니다
-  - 편집기 https://www.fatcatsoftware.com/plisteditpro/PlistEditPro.zip 
+  - 편집도구 다운로드 : https://www.fatcatsoftware.com/plisteditpro/PlistEditPro.zip
+  - Xcode 는 시간이 오래 걸림 
 
 
 #### 스크린샷
