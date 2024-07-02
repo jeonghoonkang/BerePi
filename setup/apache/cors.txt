@@ -1,3 +1,5 @@
+
+
 Apache
 Enabling CORS on apache is a two-step process. First you must create a file with the name .htaccess and add it to the directory where your cross-domain-friendly files are. We recommend you create a new directory for this. The file must contain the following code, (lines 2 and 3 may be optional):
 
