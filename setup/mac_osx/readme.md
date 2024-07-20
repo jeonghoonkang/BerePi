@@ -10,9 +10,9 @@
 - https://blog.boxcorea.com/wp/archives/1718
 
 #### Ubuntu Server 에서 SSH 설정을 해주어야 함 
-sudo vim /etc/ssh/sshd_config
-XForwarding = yes 를 주석을 풀어서, 실행 가능하도록 설정
- X11Forwarding yes 
+- sudo vim /etc/ssh/sshd_config
+- 주석을 풀어서, 실행 가능하도록 설정
+  - <code> X11Forwarding yes </code>
 
 
 ### Home Brew installation
