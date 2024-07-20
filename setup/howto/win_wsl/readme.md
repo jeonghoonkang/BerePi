@@ -1,6 +1,6 @@
 # Xserver for windows
 
-## Setup for Ubuntu Server SSH
+## Setup for Ubuntu SSH Server
 - sudo vim /etc/ssh/sshd_config
   - XForwarding = yes 를 주석을 풀어서, 실행 가능하도록 설정
   - <code> X11Forwarding yes </code>
