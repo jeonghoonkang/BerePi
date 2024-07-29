@@ -24,6 +24,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
     picture_output on    
 
     movie_filename %Y%m%d%H%M%S-%qA
+    # %출력설명, https://motion-project.github.io/4.1/motion_guide.html#conversion_specifiers
        
  </pre> 
 
