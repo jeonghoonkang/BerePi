@@ -61,5 +61,12 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 # Copying camera capture files to SERVER
 - scp -P 22 -pr /var/lib/motion tinyos@IP:webdav/gw/cam
 
-# todo
-- Ubuntu use
+# check file by telegram-send
+<pre>  
+  # 0 : device num
+  # event
+  # time
+  telegram-send -f /var/lib/motion/0-*-20240730_0203*.mkv  
+  # jpg file name :  20240719_074929-11.jpg
+
+</pre>
