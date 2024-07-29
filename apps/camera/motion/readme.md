@@ -77,3 +77,5 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 ### addition
 - sudo command without asking password
   - https://www.baeldung.com/linux/sudo-non-interactive-mode
+- find mtime
+  - https://inpa.tistory.com/entry/LINUX-%F0%9F%93%9A-find-%EB%AA%85%EB%A0%B9-mtime-ctime-atime-%EC%98%B5%EC%85%98-n-n-%EA%B0%9C%EB%85%90-%EC%A0%95%EB%A6%AC#find_-mtime_n_%EA%B0%9C%EB%85%90_%EC%9D%B5%ED%9E%88%EA%B8%B0 
