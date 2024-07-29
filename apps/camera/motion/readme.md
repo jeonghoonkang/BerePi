@@ -46,9 +46,9 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - One day in office 
   - light change effect : less 5 time or slightly more
 - 70 days office : 3/1 ~ 5/10
-  - 123 GB, 1 day aboud 2 GB  
-- ** days : **
-  - 190 GB, 
+  - 123 GB, 1 day about 2 GB  
+- 160 days : 2/20 ~ 7/30
+  - 190 GB, 1 day about 1.2 GB
 
 # Resource
 ## Source code
