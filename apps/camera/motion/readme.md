@@ -73,3 +73,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
   # jpg file name :  20240719_074929-11.jpg
   # date "+%Y%m%d"
 </pre>
+
+### addition
+- sudo command without asking password
+  - https://www.baeldung.com/linux/sudo-non-interactive-mode
