@@ -68,5 +68,5 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
   # time
   telegram-send -f /var/lib/motion/0-*-20240730_0203*.mkv  
   # jpg file name :  20240719_074929-11.jpg
-
+  # date "+%Y%m%d"
 </pre>
