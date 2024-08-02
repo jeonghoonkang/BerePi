@@ -24,6 +24,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
     picture_output on    
 
     movie_filename %Y%m%d%H%M%S-%qA
+    # %출력설명, https://motion-project.github.io/4.1/motion_guide.html#conversion_specifiers
        
  </pre> 
 
@@ -45,7 +46,9 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 - One day in office 
   - light change effect : less 5 time or slightly more
 - 70 days office : 3/1 ~ 5/10
-  - 123 GB, 1 day aboud 2 GB  
+  - 123 GB, 1 day about 2 GB  
+- 160 days : 2/20 ~ 7/30
+  - 190 GB, 1 day about 1.2 GB
 
 # Resource
 ## Source code
@@ -61,5 +64,18 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 # Copying camera capture files to SERVER
 - scp -P 22 -pr /var/lib/motion tinyos@IP:webdav/gw/cam
 
-# todo
-- Ubuntu use
+# check file by telegram-send
+<pre>  
+  # 0 : device num
+  # event
+  # time
+  telegram-send -f /var/lib/motion/0-*-20240730_0203*.mkv  
+  # jpg file name :  20240719_074929-11.jpg
+  # date "+%Y%m%d"
+</pre>
+
+### addition
+- sudo command without asking password
+  - https://www.baeldung.com/linux/sudo-non-interactive-mode
+- find mtime
+  - https://inpa.tistory.com/entry/LINUX-%F0%9F%93%9A-find-%EB%AA%85%EB%A0%B9-mtime-ctime-atime-%EC%98%B5%EC%85%98-n-n-%EA%B0%9C%EB%85%90-%EC%A0%95%EB%A6%AC#find_-mtime_n_%EA%B0%9C%EB%85%90_%EC%9D%B5%ED%9E%88%EA%B8%B0 

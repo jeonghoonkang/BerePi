@@ -24,8 +24,6 @@ done;
 sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 </pre>
 
-
-
 |머신|cpu 속도| 추가 정보  |
 |------|---|---|
 |RaspberryPi5 | 2724.77 ev/sec | Cortex-A76, 4core |

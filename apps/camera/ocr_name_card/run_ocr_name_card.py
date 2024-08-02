@@ -7,6 +7,7 @@ import torch    #sudo pip3 install torch
 import json
 import time
 import argparse
+import easyocr
 
 def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐색
     
@@ -82,7 +83,49 @@ def merge_json_files(file_list, save_path):
     with open(save_path, 'w') as json_file:
         json.dump(json_data, json_file, indent=2)
 
+
+def ocr():
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('-lang', '--language', help='language, ko, ja', default='ko')
+    argparser.add_argument('-f', '--file', help='file name', default='./sample.jpg')
+    args = argparser.parse_args()
+
+    file_name = args.file
+    language = args.language
+    print(language)
+    print (file_name)
+
+    reader = easyocr.Reader(['en',language]) #language is changing string
+
+    chk_string = ["ko","ja"]
+    #for chk in chk_string:
+        #print (chk)
+
+    if (not any( chk in language for chk in chk_string)): # if language is not in chk_string:
+        print (language)
+        print ("language is not in ko, ja")
+        sys.exit("language mismatch")
+        
+    print (file_name, language)
+    fpath = file_name
+
+    #fpath='/home/tinyos/devel_opment/data/ocr/sample_receipt.png'
+
+    reader = easyocr.Reader([language,'en']) #language
+
+    #print (sys.argv)
+
+    result = reader.readtext(fpath)
+
+    pprint(result, depth=5, indent=4)
+
+
 if __name__=='__main__':
+    #exit("for the first run test") # for the first step to run this code
+
+    if (sys.argv is None) or (len(sys.argv) < 3):
+        print("Usage: (입력 인자를 추가해 주세요) python run_ocr_name_card.py [scan_name_card] [save_description]")
+        sys.exit(1) 
 
     parser = argparse.ArgumentParser(description='명함 문자 인식', usage='bash run.sh')
     parser.add_argument('scan_name_card', type=str, help='명함 스캔 이미지 파일이 있는 디렉토리 경로')
@@ -100,6 +143,7 @@ if __name__=='__main__':
 
     start_time = time.time()
 
+    exit("### tinyos ### on the test check for good here ") # for the on the step to run this code
     
     recursive_search_dir(dir_path, file_list)
 

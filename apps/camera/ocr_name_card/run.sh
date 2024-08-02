@@ -1,25 +1,27 @@
 #!/bin/bash
 
+INIFILE=ocr_name_card.ini
+
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     python3 run_ocr_name_card.py {scan_image_path} {save_description_path}
     exit 0
 fi
 
-if [ -f 'info.ini' ]
+if [ -f $INIFILE ]
 then
 
     keyword=$1
-    source info.ini
+    source $INIFILE
 
     echo ""
     echo ">>===================================================="
     echo "실행 관련 주요 정보(run.sh)"
-    echo "scan_image_path       : "$scan_image_path : from info.ini
-    echo "save_description_path : "$save_description_path : from info.ini
+    echo "scan_image_path       : "$scan_image_path : from $INIFILE
+    echo "save_description_path : "$save_description_path : from $INIFILE
     echo "====================================================<<"
 
-    #arg         [0]                   [1]         [2]
-    time python3 run_ocr_name_card.py  $dir_path   $save_path
+    #arg         [0]                   [1]              [2]
+    time python3 run_ocr_name_card.py  $scan_image_path $save_description_path
     echo " *** end script run for PYTHON *** "
     exit 0
 else
