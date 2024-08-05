@@ -4,7 +4,7 @@
 - 현재 사용중인 그래픽카드 확인 (gpu 확인)
   - lshw -numeric -C display
   - lspci | grep -i nvidia
-- watch -n 1 nvida-smi 
+
 ## 드라이버 설치
 - sudo ubuntu-drivers autoinstall
 - (수동) sudo apt install nvidia-driver-450
@@ -25,6 +25,7 @@
   - nvidia-smi
   - nvidia-smi -q
   - 상시 모니터링 : watch -d -n 0.5 nvidia-smi
+  - watch -n 1 nvida-smi 
 - Like htop : nvtop
   - sudo add-apt-repository ppa:flexiondotorg/nvtop
   - sudo apt install nvtop 
