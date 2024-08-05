@@ -38,3 +38,8 @@
     - sudo apt-get autoremove
     - sudo apt-get update
 
+## WSL 설치
+- 설치방법
+  - https://velog.io/@jaehyeong/WSL2-%EC%B4%88%EA%B0%84%EB%8B%A8-%EC%84%A4%EC%B9%98-%EB%B0%8F-CUDAGPU-%EC%84%A4%EC%A0%95-%EB%B0%A9%EB%B2%95
+- 주의
+  - sudo cp apt_pkg.cpython-36m-aarch64-linux-gnu.so apt_pkg.so    
