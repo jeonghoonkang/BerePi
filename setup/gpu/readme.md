@@ -23,6 +23,7 @@
   - sudo apt install nvidia-driver-xxx
 - 확인
   - nvidia-smi
+  - nvidia-smi -q
   - 상시 모니터링 : watch -d -n 0.5 nvidia-smi
 - Like htop : nvtop
   - sudo add-apt-repository ppa:flexiondotorg/nvtop
