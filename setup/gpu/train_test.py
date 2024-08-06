@@ -49,7 +49,7 @@ def evaluate_gpu_performance(device):
 
     # Measure time for forward and backward pass
     start_time = time.time()
-    for _ in range(100):
+    for _ in range(1000):
         outputs = model(inputs)
         loss = criterion(outputs, targets)
         optimizer.zero_grad()
@@ -58,7 +58,7 @@ def evaluate_gpu_performance(device):
     end_time = time.time()
 
     elapsed_time = end_time - start_time
-    print(f"Elapsed time for 100 iterations: {elapsed_time:.2f} seconds")
+    print(f"Elapsed time for 1000 iterations: {elapsed_time:.2f} seconds")
 
 # Check if GPU is available and run the evaluation
 if __name__ == "__main__":
