@@ -2,7 +2,7 @@
 - 그래픽카드 및 설치 가능한 드라이버 확인
   - ubuntu-drivers devices
   - ![image](https://github.com/user-attachments/assets/c5cdfca2-9a9e-46c0-9ad5-c540fb183704)
-  - <img src="https://github.com/user-attachments/assets/c5cdfca2-9a9e-46c0-9ad5-c540fb183704" width="800" >
+  - <img src="https://github.com/user-attachments/assets/c5cdfca2-9a9e-46c0-9ad5-c540fb183704" >
 - 현재 사용중인 그래픽카드 확인 (gpu 확인)
   - lshw -numeric -C display
   - lspci | grep -i nvidia
