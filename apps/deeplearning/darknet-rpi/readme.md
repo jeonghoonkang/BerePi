@@ -10,7 +10,7 @@
 - 안면인식 가능 여부 테스트
 
 ### 하드웨어
-&nbsp; RPI, PIR <br>
+ RPI, PIR <br>
 
 ### 소프트웨어
 YOLO, Python,  <br>
@@ -55,18 +55,18 @@ PIR, RPI, Server, Web, App<br>
   
 #### 오류 리포트
   1. -- 정면은 잘 찾음<br>
-  &nbsp; <img width="600" src="./images/error_predictions2.jpg"></img><br>
-  &nbsp; -- 현재 24개월 유아는 옆모습은 못찾음<br>
-  &nbsp; <img width="600" src="./images/error_predictions3.jpg"></img><br>
-  &nbsp; -- 1<br>
-  &nbsp; <img width="600" src="./images/error/0616_1.jpg"></img><br>
-  &nbsp; -- 2<br>
-  &nbsp; <img width="600" src="./images/error/0616_2.jpg"></img><br>
-  &nbsp; -- 3<br>
-  &nbsp; <img width="600" src="./images/error/0616_3.jpg"></img><br>
-  &nbsp; -- 4<br>
-  &nbsp; <img width="600" src="./images/error/0616_4.jpg"></img><br>
-  &nbsp; -- 5<br>
-  &nbsp; <img width="600" src="./images/error/0616_5.jpg"></img><br>
+  <img width="600" src="./images/error_predictions2.jpg"></img><br>
+  -- 현재 24개월 유아는 옆모습은 못찾음
+  <img width="600" src="./images/error_predictions3.jpg"></img><br>
+   -- 1<br>
+   <img width="600" src="./images/error/0616_1.jpg"></img><br>
+   -- 2<br>
+   <img width="600" src="./images/error/0616_2.jpg"></img><br>
+   -- 3<br>
+   <img width="600" src="./images/error/0616_3.jpg"></img><br>
+   -- 4<br>
+   <img width="600" src="./images/error/0616_4.jpg"></img><br>
+   -- 5<br>
+   <img width="600" src="./images/error/0616_5.jpg"></img><br>
     
 #### 기타 
