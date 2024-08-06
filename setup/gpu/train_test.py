@@ -10,7 +10,7 @@ class SimpleCNN(nn.Module):
         self.conv1 = nn.Conv2d(3, 16, 3, 1)
         self.conv2 = nn.Conv2d(16, 32, 3, 1)
         self.conv3 = nn.Conv2d(32, 64, 3, 1)
-        self.fc1 = nn.Linear(64*6*6, 128)
+        self.fc1 = nn.Linear(64*2*2, 128)
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
