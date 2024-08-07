@@ -13,18 +13,18 @@
 &nbsp; RPI, PIR <br>
 
 ### 소프트웨어
-&nbsp; YOLO, Python,  <br>
+YOLO, Python,  <br>
 
 ### 데이터 모니터
-&nbsp; 데이터 분석 : 그라파다
-&nbsp; 안드로이드앱 <br>
+데이터 분석 : 그라파다
+ 안드로이드앱 <br>
 
 ### 시스템 구성
-&nbsp; PIR, RPI, Server, Web, App<br>
+PIR, RPI, Server, Web, App<br>
 
 ### 기타 
-&nbsp; 최신 사진을 서버로 보내서 App에서 확인
-&nbsp; 서버에서 YOLO분석 가능 테스트
+최신 사진을 서버로 보내서 App에서 확인
+서버에서 YOLO분석 가능 테스트
 
 <br><br>
 # RPI 3B+ install Darknet-nnpack 
@@ -36,14 +36,14 @@
   
 ## YOLO와 Camera 연동
   ### Test 환경<br>
-  &nbsp; <img width="600" src="./images/testenv.png"></img><br>
+  <img width="600" src="./images/testenv.png"></img><br>
   ### run_dc.py program flow<br>
-  &nbsp; <img width="600" src="./images/flow.png"></img><br>
+  <img width="600" src="./images/flow.png"></img><br>
   
 ## DB 구축
   ## Server 환경
-  &nbsp; ssh ID@10.10.10.10 -p 7771<br>
-  &nbsp; [MySQL 설치 방법](./MySQL_Install.md)<br>
+  ssh ID@10.10.10.10 -p 7771<br>
+  [MySQL 설치 방법](./MySQL_Install.md)<br>
   
   
 ## 설치 설명 파일
