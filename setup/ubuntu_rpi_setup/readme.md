@@ -26,7 +26,8 @@ deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 </pre>
 
 #### VI editor command
-- <pre> :%s/ports.ubuntu.com\/ubuntu-ports/old-releases.ubuntu.com\/ubuntu\/dists/gc </pre>
+- 주의 : URL에서 dists 빼고 입력해야 동작함 (2024.8.15)
+- <pre> :%s/ports.ubuntu.com\/ubuntu-ports/old-releases.ubuntu.com\/ubuntu\//gc </pre>
 
 
 #### 실행 예
