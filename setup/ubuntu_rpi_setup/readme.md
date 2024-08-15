@@ -25,6 +25,9 @@ http://kr.archive.ubuntu.com/ubuntu/dists/focal/restricted/
 deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 </pre>
 
+#### VI editor command
+- <pre> :%s/ports.ubuntu.com\/ubuntu-ports/old-release.ubuntu.com\/ubuntu\/dists/gc </pre>
+
 
 #### 실행 예
 
