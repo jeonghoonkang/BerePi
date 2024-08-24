@@ -40,6 +40,6 @@ deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 <img width="759" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/123d7d29-aa9b-444f-9bb5-a6d63c5fb05f">
 
 
-## Ubuntu distro upgrade
+## Ubuntu distro upgrade, which takes much time
 - sudo do-release-upgrade
 - sudo apt-get dist-upgrade
