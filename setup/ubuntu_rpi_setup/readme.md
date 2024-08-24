@@ -1,3 +1,4 @@
+
 ## ubuntu version update (if you have old version Ubuntu which has error on apt-get update, apt update)
 
 ### backup your sources file
@@ -38,3 +39,7 @@ deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 
 <img width="759" alt="image" src="https://github.com/jeonghoonkang/BerePi/assets/4180063/123d7d29-aa9b-444f-9bb5-a6d63c5fb05f">
 
+
+## Ubuntu distro upgrade
+- sudo do-release-upgrade
+- sudo apt-get dist-upgrade
