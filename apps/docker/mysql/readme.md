@@ -2,10 +2,10 @@
 Docker MySQL
 
 <pre>
-docker run --name my-mysql-container \
--e MYSQL_ROOT_PASSWORD=my-secret-pw \
+docker run --name mysql-test-container \
+-e MYSQL_ROOT_PASSWORD=1234 \
 -e MYSQL_USER=myuser \
--e MYSQL_PASSWORD=myuserpassword \
--e MYSQL_DATABASE=mydatabase \
--d mysql:latest
+-e MYSQL_PASSWORD=1234 \
+-e MYSQL_DATABASE=mydb \
+-d maridadb
 </pre>
