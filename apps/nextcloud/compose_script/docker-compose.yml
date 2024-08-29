@@ -1,4 +1,5 @@
 # Author : Jeonghoon Kang, https://github.com/jeonghoonkang
+
 version: '2' #3 사용 가능, 기존은 Ver 3. 일부 Ubuntu 에서 실행이 안되며, Ver 2로 낮춰야 문제가 발생하지 않음
 
 services:
