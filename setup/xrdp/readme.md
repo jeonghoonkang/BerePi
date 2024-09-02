@@ -60,7 +60,7 @@ Remote login, after 'apt install xrdp', gives a static grey screen. The followin
 
 
 
-# disable sleep hibernate / re-enable
+# disable sleep hibernate / re-enable (시스템 shutdown 방지)
 - On Ubuntu 16.04 LTS, I successfully used the following to disable suspend:
   - sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 - re-enable  
