@@ -6,3 +6,10 @@
 keti@keti-desktop:~$ cd New_Project/apps/tests/save_all_json/
 keti@keti-desktop:~/New_Project/apps/tests/save_all_json$ bash run.sh
 </code>
+
+<pre>
+  <code id="myCode">
+    console.log('Hello, world!');
+  </code>
+  <button id="copyButton">Copy</button>
+</pre>
