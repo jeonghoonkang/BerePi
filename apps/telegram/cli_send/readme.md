@@ -15,7 +15,8 @@
 <pre> ImportError: cannot import name 'MAX_MESSAGE_LENGTH' from 'telegram.constants' (/home/user/.local/lib/python3.10/site-packages/telegram/constants.py) </pre>
 
 - python 3.11 외부 설정 문제
-  - EXTERNALLY-MANAGED 이슈 나오면서, 설치가 안되는 경우가 있음. 아래처럼 변경하였음 
+  - EXTERNALLY-MANAGED 이슈 나오면서, 설치가 안되는 경우가 있음. 아래처럼 변경하였음
+    - externally-managed-environment 
   - sudo mv /usr/lib/python3.11/EXTERNALLY-MANAGED /usr/lib/python3.11/EXTERNALLY-MANAGED_OLD
 
 
