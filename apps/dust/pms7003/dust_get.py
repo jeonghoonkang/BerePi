@@ -23,9 +23,13 @@ if __name__=="__main__" :
         #hpma115S0 = HPMA115S0.HPMA115S0("/dev/serial0")
         while True:
             try:
-                dust_v = dust_chk.dustget()
-                berepi_logger.berelog(" PM2.5 Dust %d (50 is bad limit) ug/m3 " %(dust_v))
-                exit(1)
+                dust_v01, dust_v25, dust_v10 = dust_chk.dustget()
+                #dust_chk.continuous_dustget()
+                berepi_logger.berelog(" PM0.1 Dust %d  ug/m3 " %(dust_v01))
+                berepi_logger.berelog(" PM2.5 Dust %d (50 is bad limit) ug/m3 " %(dust_v25))
+                berepi_logger.berelog(" PM10 Dust %d (100 is bad limit) ug/m3 " %(dust_v10))
+                exit(1)              
+                
             except serial.serialutil.SerialException as e: 
                 print ("dust PM2.5 exception", __file__)
                 print (e)
