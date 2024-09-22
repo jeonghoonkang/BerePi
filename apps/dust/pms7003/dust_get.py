@@ -16,7 +16,7 @@ import berepi_logger
 
 if __name__=="__main__" :
         
-    DB_SERVER_IP_ADD = '125.140.110.217'
+    DB_SERVER_IP_ADD = '***'
     try:
         print("Starting")
         #hpma115S0 = HPMA115S0.HPMA115S0("/dev/ttyAMA0")
