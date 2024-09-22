@@ -61,3 +61,69 @@ else:
     print ("data read Err")
 
 ser.close()
+
+def openbuff():
+    ser = serial.Serial(SERIAL_PORT, Speed, timeout = 1)
+    #ser.flushInput()
+    buf = ser.read(1024)
+
+    if(dust.protocol_chk(buffer)):
+        data = dust.unpack_data(buffer)
+
+        print ("PMS 7003 dust data")
+        print ("PM 1.0 : %s" % (data[dust.DUST_PM1_0_ATM]))
+        pm25 = (data[dust.DUST_PM2_5_ATM])
+        print ("PM 2.5 : %s" % (data[dust.DUST_PM2_5_ATM]))
+        print ("PM 10.0 : %s" % (data[dust.DUST_PM10_0_ATM]))
+
+    else:
+        print ("data read Err")
+
+    ser.close()
+    return buf
+    
+
+def dustget():
+    ser = serial.Serial(SERIAL_PORT, Speed, timeout = 1)
+    buf = ser.read(1024)
+
+    if(dust.protocol_chk(buffer)):
+        data = dust.unpack_data(buffer)
+
+        print ("PMS 7003 dust data")
+        pm01 = (data[dust.DUST_PM1_0_ATM])
+        pm25 = (data[dust.DUST_PM2_5_ATM])
+        pm10 = (data[dust.DUST_PM10_0_ATM])
+        print ("PM 1.0 : %s" % pm01)
+        print ("PM 2.5 : %s" % pm25)
+        print ("PM 10.0 : %s" % pm10)
+
+    else:
+        print ("data read Err")
+
+    ser.close()
+    return pm01, pm25, pm10
+
+
+def continuous_dustget():
+    
+    while (True):
+
+        buffer = openbuff()
+        print (dust.print_serial(buffer))
+
+        if(dust.protocol_chk(buffer)):
+            data = dust.unpack_data(buffer)
+            pm01 = (data[dust.DUST_PM1_0_ATM])
+            pm25 = (data[dust.DUST_PM2_5_ATM])
+            pm10 = (data[dust.DUST_PM10_0_ATM])
+            print ("PM 1.0 : %s" % pm01)
+            print ("PM 2.5 : %s" % pm25)
+            print ("PM 10.0 : %s" % pm10)
+        else:
+            print ("data read Err")
+
+        buffer = None
+        time.sleep(15)
+
+    return buf
