@@ -7,6 +7,8 @@ python3 -m venv hailo_env
 source hailo_env/bin/activate
 pip install hailo-sdk </code> 
 
+#### example
+
 <pre>
 import hailo_sdk
 import cv2
