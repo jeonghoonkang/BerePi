@@ -1,3 +1,4 @@
+# old release 복구 방법
 
 ## ubuntu version update (if you have old version Ubuntu which has error on apt-get update, apt update)
 
