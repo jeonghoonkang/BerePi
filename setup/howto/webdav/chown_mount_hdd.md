@@ -6,7 +6,8 @@ chown -h myuser:mygroup mysymbolic
 - Oct 3, 2015
 - hdd 추가, usb hdd
 - Oct, 2024 수정, mount 방법
-  - blkid 로 UUID 확인  
+  - blkid 로 UUID 확인
+  - lsblk 으로 마운트 상태 확인 (LVM 포함) 
 
 우분투 머신에 하드디스크 추가 및 포맷 후 자동 마운트 설정하기
 
