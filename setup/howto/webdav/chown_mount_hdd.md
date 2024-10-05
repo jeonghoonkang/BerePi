@@ -5,6 +5,8 @@ chown -h myuser:mygroup mysymbolic
 ### Ubuntu 14.04에 새로운 하드디스크 추가 및 포맷후 자동 마운트 설정
 - Oct 3, 2015
 - hdd 추가, usb hdd
+- Oct, 2024 수정, mount 방법
+  - blkid 로 UUID 확인  
 
 우분투 머신에 하드디스크 추가 및 포맷 후 자동 마운트 설정하기
 
