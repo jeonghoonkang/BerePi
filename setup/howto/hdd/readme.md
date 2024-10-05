@@ -1,6 +1,31 @@
 ## LVM 개요
 - 하나의 버추얼 하드디스크로 용량을 통합하여 사용
 - 물리 하드디스크의 용량을 연속 연결하여, 하나의 논리 드라이브로 사용
+- lsblk 으로 물리 드라이브의 마운트 위치 확인 가능
+<pre>
+NAME                  MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
+sdd                     8:48   0   1.8T  0 disk 
+├─sdd2                  8:50   0   1.8T  0 part 
+│ ├─vgubuntu-root     253:2    0   1.8T  0 lvm  
+│ └─vgubuntu-swap_1   253:3    0   976M  0 lvm  
+└─sdd1                  8:49   0   512M  0 part 
+sdb                     8:16   0   3.7T  0 disk 
+├─sdb2                  8:18   0   3.7T  0 part 
+│ └─ubuntu--vg-root   253:0    0   4.5T  0 lvm  /
+└─sdb1                  8:17   0   512M  0 part 
+sr0                    11:0    1  1024M  0 rom  
+sdc                     8:32   0   1.8T  0 disk 
+├─sdc2                  8:34   0     2G  0 part 
+├─sdc5                  8:37   0   1.8T  0 part 
+├─sdc3                  8:35   0     1K  0 part 
+└─sdc1                  8:33   0   2.4G  0 part 
+sda                     8:0    0 931.5G  0 disk 
+├─sda2                  8:2    0     1K  0 part 
+├─sda5                  8:5    0   931G  0 part 
+│ ├─ubuntu--vg-swap_1 253:1    0  23.9G  0 lvm  [SWAP]
+│ └─ubuntu--vg-root   253:0    0   4.5T  0 lvm  /
+└─sda1                  8:1    0   487M  0 part /boot
+</pre>
 
 ## 설치 방법
 - 우분투 설치시에 LVM 옵션 선택으로 설치 가능
