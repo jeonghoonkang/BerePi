@@ -119,6 +119,12 @@ sudo resize2fs /dev/ubuntu-vg/root
 df -h                                                                                                                                                            
 </pre>
 
+## LVM 삭제, 다시 구성방법
+- sudo lvremove /dev/my_vg/my_lv
+- sudo vgchange -an my_vg (비활성화)
+- sudo vgremove my_vg
+- sudo pvremove /dev/sdX
+
 ## 
 - https://dinggur.tistory.com/30
 
