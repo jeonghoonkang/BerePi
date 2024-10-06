@@ -23,7 +23,7 @@
     1       17kB    3701GB  3701GB                                    
     </pre>
   - (parted) quit                                                            
-  
+  - 요약 : 파티션 => parted 실행 mklabel gpt, mkpart primary 0 4001GB 
   - pv 생성 및 확인 
     - pvcreate /dev/sdb1
     - pvcreate /dev/sdb2
