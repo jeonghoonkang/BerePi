@@ -1,7 +1,7 @@
 # HDD 추가하기
 - /mnt 
 ## 파티션 만들기
-- fdisk
+- fdisk 실행후, n 명령 
 - 2T 사이즈가 넘을때는, gpt 로 파티션 생성 해야함
 - sudo parted /dev/sdh mklabel gpt
 - gpt 경우는 sudo parted -a optimal /dev/sdh mkpart primary ext4 0% 100%
