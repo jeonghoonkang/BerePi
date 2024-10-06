@@ -1,7 +1,7 @@
 ## LVM 개요
 - 하나의 버추얼 하드디스크로 용량을 통합하여 사용
 - 물리 하드디스크의 용량을 연속 연결하여, 하나의 논리 드라이브로 사용
-- lsblk 으로 물리 드라이브의 마운트 위치 확인 가능
+- lsblk 으로 물리 드라이브의 마운트 위치 확인 가능 (주요 명령, lsblk, blkid)
 <pre>
 NAME                  MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
 sdd                     8:48   0   1.8T  0 disk 
