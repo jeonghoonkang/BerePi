@@ -1,3 +1,3 @@
 # Labeling SW
-## for windows
+## for windows system
 - https://github.com/tzutalin/labelImg
