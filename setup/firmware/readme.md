@@ -1,2 +1,2 @@
 ## Fimrware update 
-sudo rpi-update
+- sudo rpi-update
