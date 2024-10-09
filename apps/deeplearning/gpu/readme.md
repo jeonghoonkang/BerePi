@@ -1,4 +1,7 @@
-## Halo 
+## Hailo AI
+
+- https://ubuntu.com/blog/hackers-guide-to-the-raspberry-pi-ai-kit-on-ubuntu
+- https://datarootlabs.com/blog/hailo-ai-kit-raspberry-pi-5-setup-and-computer-vision-pipelines
 
 #### Check list 
 <code> sudo dpkg -i hailo-sdk-<version>.deb
