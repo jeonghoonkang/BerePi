@@ -3,14 +3,12 @@
 - https://ubuntu.com/blog/hackers-guide-to-the-raspberry-pi-ai-kit-on-ubuntu
 - https://datarootlabs.com/blog/hailo-ai-kit-raspberry-pi-5-setup-and-computer-vision-pipelines
 - https://github.com/hailo-ai/hailo-rpi5-examples/blob/main/doc/install-raspberry-pi5.md#software
+
+
   
 #### Check list 
-<code> sudo dpkg -i hailo-sdk-<version>.deb
- sudo apt-get install python3-venv
- python3 -m venv hailo_env
- source hailo_env/bin/activate
- pip install hailo-sdk </code> 
-
+- sudo python3 -m pip install torch
+  
 #### Example
 
 <pre>
