@@ -9,5 +9,6 @@
 ### setup Mac OSX
 - use control panel to setup sharing Internet
 - Backbone : wifi, Client : apple USB adapter
-- <img width="450" alt="image" src="https://github.com/user-attachments/assets/dd9cfb8f-8c52-4422-b7b3-13b634747bf3">
+<img width="450" alt="image" src="https://github.com/user-attachments/assets/dd9cfb8f-8c52-4422-b7b3-13b634747bf3">
+ 
  
