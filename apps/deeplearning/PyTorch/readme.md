@@ -1,6 +1,11 @@
 ## PyTorch
-### install
-- pip3 install torch torchvision
+
+### Performance
+#### Hailo AI
+- Average inference time per batch: 0.000357 seconds
+### check version
+#### Hailo AI
+- source ./hailo-rpi5-examples/setup_env.sh
 
 ### performance test
 <pre>
