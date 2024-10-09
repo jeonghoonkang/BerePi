@@ -7,6 +7,7 @@
 
   
 #### Check list 
+- source ./hailo-rpi5-examples/setup_env.sh
 - sudo python3 -m pip install torch
   
 #### Example
