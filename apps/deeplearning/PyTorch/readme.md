@@ -2,7 +2,9 @@
 
 ### Performance
 #### Hailo AI
-- Average inference time per batch: 0.000357 seconds
+- Average inference time per batch: 0.000357 seconds (Hailo Rpi5)
+- Average inference time per batch: 0.000454 seconds (i7-desktop)
+  
 ### check version
 #### Hailo AI
 - source ./hailo-rpi5-examples/setup_env.sh
