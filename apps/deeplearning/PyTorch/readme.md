@@ -8,7 +8,7 @@
 - Average inference time per batch: 0.000257 seconds (Xeon - 2 CPU)
   
 ### check version
-#### Hailo AI
+#### Hailo AI environment
 - source ./hailo-rpi5-examples/setup_env.sh
 
 ### performance test
