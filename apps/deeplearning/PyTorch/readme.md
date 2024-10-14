@@ -1,7 +1,7 @@
 ## PyTorch
 
 ### Performance
-#### Hailo AI
+#### Various system
 - Average inference time per batch: 0.000357 seconds (Hailo Rpi5)
 - Average inference time per batch: 0.000454 seconds (i7-desktop)
 - Average inference time per batch: 0.000109 seconds (Xeon 1.4GHz)
