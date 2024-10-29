@@ -19,7 +19,6 @@ from pytz import timezone
 
 LOG_PATH="/home/tinyos/devel/BerePi/logs/berelogger.log"
 
-
 def get_ip_address(ifname):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     info = fcntl.ioctl (s.fileno(), 0x8915,
