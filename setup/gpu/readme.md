@@ -5,10 +5,13 @@
 - 현재 사용중인 그래픽카드 확인 (gpu 확인)
   - lshw -numeric -C display
   - lspci | grep -i nvidia
+  - nvidia-smi
+  
 
 ## 드라이버 설치
 - sudo ubuntu-drivers autoinstall
 - (수동) sudo apt install nvidia-driver-450
+  
 ### PPA 저장소 사용 설치
 - sudo add-apt-repository ppa:graphics-drivers/ppa
 
