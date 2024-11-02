@@ -1,3 +1,6 @@
+## 참고
+- https://aeong-dev.tistory.com/1
+
 ## GPU (NVIDIA)
 - 그래픽카드 및 설치 가능한 드라이버 확인
   - ubuntu-drivers devices
