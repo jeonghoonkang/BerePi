@@ -1,3 +1,7 @@
+# USE test code 
+- python3 perfornamce_tst.py
+- python3 train_tsst.py
+
 ## 참고
 - https://aeong-dev.tistory.com/1
 
