@@ -1,4 +1,4 @@
-# USE test code 
+# Use test code 
 - python3 perfornamce_tst.py
 - python3 train_tsst.py
 
