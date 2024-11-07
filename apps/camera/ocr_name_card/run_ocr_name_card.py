@@ -8,6 +8,7 @@ import json
 import time
 import argparse
 import easyocr
+import pytesseract
 
 def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐색
     
@@ -56,7 +57,8 @@ def analysis(file, model):
 
     return json_data
 
-def save_image(file, model, save_path):
+# 객체 탐색
+def save_image(file, model, save_path): 
 
     img = cv2.imread(file)
     results = model(img)
@@ -120,6 +122,19 @@ def ocr():
     pprint(result, depth=5, indent=4)
 
 
+def test_func(file):
+    oem = 3
+    psm = 11
+    #custom_config = '--oem' + str(oem) + '--psm' + str(psm) 
+    custom_config = '--oem' + str(oem) + '--psm' + str(psm) + '--preserve_interword_spaces 1'
+    namecard_img = cv2.imread(file)
+    gray = cv2.cvtColor(namecard_img, cv2.COLOR_BGR2GRAY)
+    gray = cv2.medianBlur(gray, 3)
+    txt = pytesseract.image_to_string(gray, lang='kor+eng', config=custom_config)
+
+    print (txt) 
+    return txt
+
 if __name__=='__main__':
     #exit("for the first run test") # for the first step to run this code
 
@@ -143,7 +158,6 @@ if __name__=='__main__':
 
     start_time = time.time()
 
-    exit("### tinyos ### on the test check for good here ") # for the on the step to run this code
     
     recursive_search_dir(dir_path, file_list)
 
@@ -153,10 +167,12 @@ if __name__=='__main__':
     for file in file_list:
         cnt += 1
         printProgressBar(cnt, len(file_list))
+        print ("processing", file)
+        print ("### to do: code more")
+        test_func(file)
+        #save_image(file, model, save_path)  #객체 탐색
 
-        #save_image(file, model, save_path)
-
-    print('\n파일 객체 탐지 및 객체 탐지 내용을 포함한 JSON 파일 생성 중...')
+    exit("### tinyos ### on the test check for good here ") # for the on the step to run this code
 
     dir_list = []
     file_list = []
