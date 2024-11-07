@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html class="ng-csp" data-placeholder-focus="false" lang="en" data-locale="en" translate="no" >
+<head data-requesttoken="IeyhYeX6qNq8MAuxe0mN5nC0/PWuoAPSSoMuonzLHzU=:eISOKdeb8paXakrbCGb0oyXmybHCyGm6As5I6D2OZ1M=">
+	<meta charset="utf-8">
+	<title>
+		Good Movement	</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+		<meta name="apple-itunes-app" content="app-id=1125420102">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black">
+	<meta name="apple-mobile-web-app-title" content="Good Movement">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="theme-color" content="#0082c9">
+	<link rel="icon" href="/apps/theming/favicon?v=0ade7c2c">
+	<link rel="apple-touch-icon" href="/apps/theming/icon?v=0ade7c2c">
+	<link rel="apple-touch-icon-precomposed" href="/apps/theming/icon?v=0ade7c2c">
+	<link rel="mask-icon" sizes="any" href="/core/img/favicon-mask.svg" color="#0082c9">
+	<link rel="manifest" href="/apps/theming/manifest?v=0ade7c2c">
+	<link rel="stylesheet" href="/core/css/server.css?v=6267a64f-9">
+<link rel="stylesheet" href="/custom_apps/music/css/../dist/webpack.files_music_player.55e436a9cd8d6ade423c.css?v=9b816b35-9">
+<link rel="stylesheet" href="/apps/files_sharing/css/publicView.css?v=f2442450-9">
+<link rel="stylesheet" href="/apps/files_rightclick/css/app.css?v=ca9f0d77-9">
+<link rel="stylesheet" href="/custom_apps/files_readmemd/css/style.css?v=47354877-9">
+<link rel="stylesheet" href="/custom_apps/files_readmemd/css/content.css?v=47354877-9">
+<link rel="stylesheet" href="/apps/theming/css/default.css?v=34e90de1-9">
+	<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/core/js/oc.js?v=6267a64f"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/core/js/public/publicpage.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/dist/core-common.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/dist/core-main.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/dist/core-files_fileinfo.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/dist/core-files_client.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/js/core/merged-template-prepend.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/core/js/backgroundjobs.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/dist/files_sharing-main.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_sharing/js/public.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_sharing/js/templates.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_sharing/js/files_drop.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_sharing/js/public_note.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/custom_apps/music/js/../dist/webpack.files_music_player.52178565e4fdfab71f94.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files/js/semaphore.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files/js/file-upload.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files/js/fileactions.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files/js/fileactionsmenu.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files/js/jquery.fileupload.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/dist/files-reference-files.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/viewer/js/viewer-main.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/custom_apps/files_3dmodelviewer/js/files_3dmodelviewer.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_pdfviewer/js/files_pdfviewer-main.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_pdfviewer/js/files_pdfviewer-public.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/text/js/text-viewer.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/text/js/text-public.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/custom_apps/sketch_picker/js/sketch_picker-reference.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/custom_apps/tables/js/tables-reference.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_rightclick/js/script.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/files_rightclick/js/files.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/custom_apps/files_readmemd/js/files_readmemd-main.js?v=6267a64f-9"></script>
+<script nonce="SWV5aFllWDZxTnE4TUF1eGUwbU41bkMwL1BXdW9BUFNTb011b256TEh6VT06ZUlTT0tkZWI4cGFYYWtyYkNHYjBveVhteWJIQ3lHbTZBczVJNkQyT1oxTT0=" defer src="/apps/theming/js/theming.js?v=6267a64f-9"></script>
+	<meta property="og:title" content="20240627_142347.jpg"/><meta property="og:description" content="Good Movement - Self data machine"/><meta property="og:site_name" content="Good Movement"/><meta property="og:url" content="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF"/><meta property="og:type" content="object"/><meta property="og:image" content="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/preview"/><link rel="stylesheet" media="" href="/apps/theming/theme/default.css?plain=1&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="(prefers-color-scheme: light)" href="/apps/theming/theme/light.css?plain=1&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="(prefers-color-scheme: dark)" href="/apps/theming/theme/dark.css?plain=1&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="(prefers-contrast: more)" href="/apps/theming/theme/light-highcontrast.css?plain=1&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="(prefers-color-scheme: dark) and (prefers-contrast: more)" href="/apps/theming/theme/dark-highcontrast.css?plain=1&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="" href="/apps/theming/theme/light.css?plain=0&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="" href="/apps/theming/theme/dark.css?plain=0&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="" href="/apps/theming/theme/light-highcontrast.css?plain=0&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="" href="/apps/theming/theme/dark-highcontrast.css?plain=0&amp;v=0ade7c2c" class="theme"/><link rel="stylesheet" media="" href="/apps/theming/theme/opendyslexic.css?plain=0&amp;v=0ade7c2c" class="theme"/><meta name="robots" content="noindex, nofollow"/></head>
+<body id="body-public">
+<noscript>
+	<div id="nojavascript">
+		<div>
+			This application requires JavaScript for correct operation. Please <a href="https://www.enable-javascript.com/" target="_blank" rel="noreferrer noopener">enable JavaScript</a> and reload the page.		</div>
+	</div>
+</noscript>
+	<input type="hidden" id="initial-state-core-reference-provider-list" value="W3siaWQiOiJza2V0Y2hfcGlja2VyLWRyYXciLCJ0aXRsZSI6IkRyYXcgYSBza2V0Y2giLCJpY29uX3VybCI6Imh0dHBzOlwvXC9rZXRpZXMubW9vby5jb206MjI0NDNcL2N1c3RvbV9hcHBzXC9za2V0Y2hfcGlja2VyXC9pbWdcL2FwcC1kYXJrLnN2ZyIsIm9yZGVyIjoxMH0seyJpZCI6InRhYmxlcy1yZWYtdGFibGVzIiwidGl0bGUiOiJOZXh0Y2xvdWQgdGFibGVzIiwiaWNvbl91cmwiOiJodHRwczpcL1wva2V0aWVzLm1vb28uY29tOjIyNDQzXC9jdXN0b21fYXBwc1wvdGFibGVzXC9pbWdcL2FwcC1kYXJrLnN2ZyIsIm9yZGVyIjoxMCwic2VhcmNoX3Byb3ZpZGVyc19pZHMiOlsidGFibGVzLXNlYXJjaC10YWJsZXMiXX0seyJpZCI6ImZpbGVzIiwidGl0bGUiOiJGaWxlcyIsImljb25fdXJsIjoiXC9hcHBzXC9maWxlc1wvaW1nXC9mb2xkZXIuc3ZnIiwib3JkZXIiOjB9XQ==">
+	<input type="hidden" id="initial-state-core-reference-provider-timestamps" value="W10=">
+	<input type="hidden" id="initial-state-core-projects_enabled" value="ZmFsc2U=">
+	<input type="hidden" id="initial-state-core-config" value="eyJhdXRvX2xvZ291dCI6ZmFsc2UsImJsYWNrbGlzdF9maWxlc19yZWdleCI6IlxcLihwYXJ0fGZpbGVwYXJ0KSQiLCJsb2dsZXZlbCI6MiwibG9zdF9wYXNzd29yZF9saW5rIjpudWxsLCJtb2RSZXdyaXRlV29ya2luZyI6dHJ1ZSwibm9fdW5zdXBwb3J0ZWRfYnJvd3Nlcl93YXJuaW5nIjpmYWxzZSwic2Vzc2lvbl9rZWVwYWxpdmUiOnRydWUsInNlc3Npb25fbGlmZXRpbWUiOjE0NDAsInNoYXJpbmcubWF4QXV0b2NvbXBsZXRlUmVzdWx0cyI6MjUsInNoYXJpbmcubWluU2VhcmNoU3RyaW5nTGVuZ3RoIjowLCJ2ZXJzaW9uIjoiMjcuMC4xLjIiLCJ2ZXJzaW9uc3RyaW5nIjoiMjcuMC4xIn0=">
+	<input type="hidden" id="initial-state-core-capabilities" value="eyJjb3JlIjp7InBvbGxpbnRlcnZhbCI6NjAsIndlYmRhdi1yb290IjoicmVtb3RlLnBocFwvd2ViZGF2IiwicmVmZXJlbmNlLWFwaSI6dHJ1ZSwicmVmZXJlbmNlLXJlZ2V4IjoiKFxcc3xcXG58XikoaHR0cHM/OlxcXC9cXFwvKSgoPzpbLUEtWjAtOStfXStcXC4pK1stQS1aXSsoPzpcXFwvWy1BLVowLTkrJkAjJT89fl98ITosLjsoKV0qKSopKFxcc3xcXG58JCkifSwibWV0YWRhdGFBdmFpbGFibGUiOnsic2l6ZSI6WyJcL2ltYWdlXFxcLyhwbmd8anBlZ3xoZWlmfHdlYnB8dGlmZilcLyJdLCJncHMiOlsiXC9pbWFnZVxcXC8ocG5nfGpwZWd8aGVpZnx3ZWJwfHRpZmYpXC8iXX0sImZpbGVzIjp7ImJpZ2ZpbGVjaHVua2luZyI6dHJ1ZSwiYmxhY2tsaXN0ZWRfZmlsZXMiOlsiLmh0YWNjZXNzIl0sImNvbW1lbnRzIjp0cnVlLCJ1bmRlbGV0ZSI6dHJ1ZSwidmVyc2lvbmluZyI6dHJ1ZSwidmVyc2lvbl9sYWJlbGluZyI6dHJ1ZSwidmVyc2lvbl9kZWxldGlvbiI6dHJ1ZX0sImFjdGl2aXR5Ijp7ImFwaXYyIjpbImZpbHRlcnMiLCJmaWx0ZXJzLWFwaSIsInByZXZpZXdzIiwicmljaC1zdHJpbmdzIl19LCJjaXJjbGVzIjp7InZlcnNpb24iOiIyNy4wLjEiLCJzdGF0dXMiOnsiZ2xvYmFsU2NhbGUiOmZhbHNlfSwic2V0dGluZ3MiOnsiZnJvbnRlbmRFbmFibGVkIjp0cnVlLCJhbGxvd2VkQ2lyY2xlcyI6MjYyMTQzLCJhbGxvd2VkVXNlclR5cGVzIjozMSwibWVtYmVyc0xpbWl0IjotMX0sImNpcmNsZSI6eyJjb25zdGFudHMiOnsiZmxhZ3MiOnsiMSI6IlNpbmdsZSIsIjIiOiJQZXJzb25hbCIsIjQiOiJTeXN0ZW0iLCI4IjoiVmlzaWJsZSIsIjE2IjoiT3BlbiIsIjMyIjoiSW52aXRlIiwiNjQiOiJKb2luIFJlcXVlc3QiLCIxMjgiOiJGcmllbmRzIiwiMjU2IjoiUGFzc3dvcmQgUHJvdGVjdGVkIiwiNTEyIjoiTm8gT3duZXIiLCIxMDI0IjoiSGlkZGVuIiwiMjA0OCI6IkJhY2tlbmQiLCI0MDk2IjoiTG9jYWwiLCI4MTkyIjoiUm9vdCIsIjE2Mzg0IjoiQ2lyY2xlIEludml0ZSIsIjMyNzY4IjoiRmVkZXJhdGVkIiwiNjU1MzYiOiJNb3VudCBwb2ludCJ9LCJzb3VyY2UiOnsiY29yZSI6eyIxIjoiTmV4dGNsb3VkIEFjY291bnQiLCIyIjoiTmV4dGNsb3VkIEdyb3VwIiwiNCI6IkVtYWlsIEFkZHJlc3MiLCI4IjoiQ29udGFjdCIsIjE2IjoiQ2lyY2xlIiwiMTAwMDAiOiJOZXh0Y2xvdWQgQXBwIn0sImV4dHJhIjp7IjEwMDAxIjoiQ2lyY2xlcyBBcHAiLCIxMDAwMiI6IkFkbWluIENvbW1hbmQgTGluZSJ9fX0sImNvbmZpZyI6eyJjb3JlRmxhZ3MiOlsxLDIsNF0sInN5c3RlbUZsYWdzIjpbNTEyLDEwMjQsMjA0OF19fSwibWVtYmVyIjp7ImNvbnN0YW50cyI6eyJsZXZlbCI6eyIxIjoiTWVtYmVyIiwiNCI6Ik1vZGVyYXRvciIsIjgiOiJBZG1pbiIsIjkiOiJPd25lciJ9fSwidHlwZSI6eyIwIjoic2luZ2xlIiwiMSI6InVzZXIiLCIyIjoiZ3JvdXAiLCI0IjoibWFpbCIsIjgiOiJjb250YWN0IiwiMTYiOiJjaXJjbGUiLCIxMDAwMCI6ImFwcCJ9fX0sIm9jbSI6eyJlbmFibGVkIjp0cnVlLCJhcGlWZXJzaW9uIjoiMS4wLXByb3Bvc2FsMSIsImVuZFBvaW50IjoiaHR0cHM6XC9cL2tldGllcy5tb29vLmNvbToyMjQ0M1wvb2NtIiwicmVzb3VyY2VUeXBlcyI6W3sibmFtZSI6ImZpbGUiLCJzaGFyZVR5cGVzIjpbInVzZXIiLCJncm91cCJdLCJwcm90b2NvbHMiOnsid2ViZGF2IjoiXC9wdWJsaWMucGhwXC93ZWJkYXZcLyJ9fV19LCJkYXYiOnsiY2h1bmtpbmciOiIxLjAiLCJidWxrdXBsb2FkIjoiMS4wIn0sImZpbGVzX3NoYXJpbmciOnsiYXBpX2VuYWJsZWQiOnRydWUsInB1YmxpYyI6eyJlbmFibGVkIjp0cnVlLCJwYXNzd29yZCI6eyJlbmZvcmNlZCI6ZmFsc2UsImFza0Zvck9wdGlvbmFsUGFzc3dvcmQiOmZhbHNlfSwiZXhwaXJlX2RhdGUiOnsiZW5hYmxlZCI6ZmFsc2V9LCJtdWx0aXBsZV9saW5rcyI6dHJ1ZSwiZXhwaXJlX2RhdGVfaW50ZXJuYWwiOnsiZW5hYmxlZCI6ZmFsc2V9LCJleHBpcmVfZGF0ZV9yZW1vdGUiOnsiZW5hYmxlZCI6ZmFsc2V9LCJzZW5kX21haWwiOmZhbHNlLCJ1cGxvYWQiOnRydWUsInVwbG9hZF9maWxlc19kcm9wIjp0cnVlfSwicmVzaGFyaW5nIjp0cnVlLCJ1c2VyIjp7InNlbmRfbWFpbCI6ZmFsc2UsImV4cGlyZV9kYXRlIjp7ImVuYWJsZWQiOnRydWV9fSwiZ3JvdXBfc2hhcmluZyI6dHJ1ZSwiZ3JvdXAiOnsiZW5hYmxlZCI6dHJ1ZSwiZXhwaXJlX2RhdGUiOnsiZW5hYmxlZCI6dHJ1ZX19LCJkZWZhdWx0X3Blcm1pc3Npb25zIjozMSwiZmVkZXJhdGlvbiI6eyJvdXRnb2luZyI6dHJ1ZSwiaW5jb21pbmciOnRydWUsImV4cGlyZV9kYXRlIjp7ImVuYWJsZWQiOnRydWV9LCJleHBpcmVfZGF0ZV9zdXBwb3J0ZWQiOnsiZW5hYmxlZCI6dHJ1ZX19LCJzaGFyZWUiOnsicXVlcnlfbG9va3VwX2RlZmF1bHQiOmZhbHNlLCJhbHdheXNfc2hvd191bmlxdWUiOnRydWV9LCJzaGFyZWJ5bWFpbCI6eyJlbmFibGVkIjp0cnVlLCJzZW5kX3Bhc3N3b3JkX2J5X21haWwiOnRydWUsInVwbG9hZF9maWxlc19kcm9wIjp7ImVuYWJsZWQiOnRydWV9LCJwYXNzd29yZCI6eyJlbmFibGVkIjp0cnVlLCJlbmZvcmNlZCI6ZmFsc2V9LCJleHBpcmVfZGF0ZSI6eyJlbmFibGVkIjp0cnVlLCJlbmZvcmNlZCI6ZmFsc2V9fX0sIm5vdGlmaWNhdGlvbnMiOnsib2NzLWVuZHBvaW50cyI6WyJsaXN0IiwiZ2V0IiwiZGVsZXRlIiwiZGVsZXRlLWFsbCIsImljb25zIiwicmljaC1zdHJpbmdzIiwiYWN0aW9uLXdlYiIsInVzZXItc3RhdHVzIiwiZXhpc3RzIl0sInB1c2giOlsiZGV2aWNlcyIsIm9iamVjdC1kYXRhIiwiZGVsZXRlIl0sImFkbWluLW5vdGlmaWNhdGlvbnMiOlsib2NzIiwiY2xpIl19LCJwYXNzd29yZF9wb2xpY3kiOnsibWluTGVuZ3RoIjoxMCwiZW5mb3JjZU5vbkNvbW1vblBhc3N3b3JkIjp0cnVlLCJlbmZvcmNlTnVtZXJpY0NoYXJhY3RlcnMiOmZhbHNlLCJlbmZvcmNlU3BlY2lhbENoYXJhY3RlcnMiOmZhbHNlLCJlbmZvcmNlVXBwZXJMb3dlckNhc2UiOmZhbHNlLCJhcGkiOnsiZ2VuZXJhdGUiOiJodHRwczpcL1wva2V0aWVzLm1vb28uY29tOjIyNDQzXC9vY3NcL3YyLnBocFwvYXBwc1wvcGFzc3dvcmRfcG9saWN5XC9hcGlcL3YxXC9nZW5lcmF0ZSIsInZhbGlkYXRlIjoiaHR0cHM6XC9cL2tldGllcy5tb29vLmNvbToyMjQ0M1wvb2NzXC92Mi5waHBcL2FwcHNcL3Bhc3N3b3JkX3BvbGljeVwvYXBpXC92MVwvdmFsaWRhdGUifX0sInByb3Zpc2lvbmluZ19hcGkiOnsidmVyc2lvbiI6IjEuMTcuMCIsIkFjY291bnRQcm9wZXJ0eVNjb3Blc1ZlcnNpb24iOjIsIkFjY291bnRQcm9wZXJ0eVNjb3Blc0ZlZGVyYXRlZEVuYWJsZWQiOnRydWUsIkFjY291bnRQcm9wZXJ0eVNjb3Blc1B1Ymxpc2hlZEVuYWJsZWQiOnRydWV9LCJ0YWJsZXMiOnsiZW5hYmxlZCI6dHJ1ZSwidmVyc2lvbiI6IjAuNS4xIiwiYXBpVmVyc2lvbnMiOlsiMS4wIl0sImNvbHVtbl90eXBlcyI6WyJ0ZXh0LWxpbmUiLCJ0ZXh0LXJpY2giLCJ0ZXh0LWxpbmsiLCJudW1iZXIiLCJudW1iZXItc3RhcnMiLCJudW1iZXItcHJvZ3Jlc3MiLCJzZWxlY3Rpb24iLCJzZWxlY3Rpb24tbXVsdGkiLCJzZWxlY3Rpb24tY2hlY2siLCJkYXRldGltZSIsImRhdGV0aW1lLWRhdGUiLCJkYXRldGltZS10aW1lIl19LCJ0aGVtaW5nIjp7Im5hbWUiOiJHb29kIE1vdmVtZW50IiwidXJsIjoiaHR0cHM6XC9cL25leHRjbG91ZC5jb20iLCJzbG9nYW4iOiJTZWxmIGRhdGEgbWFjaGluZSIsImNvbG9yIjoiIzAwODJjOSIsImNvbG9yLXRleHQiOiIjZmZmZmZmIiwiY29sb3ItZWxlbWVudCI6IiMwMDgyYzkiLCJjb2xvci1lbGVtZW50LWJyaWdodCI6IiMwMDgyYzkiLCJjb2xvci1lbGVtZW50LWRhcmsiOiIjMDA4MmM5IiwibG9nbyI6Imh0dHBzOlwvXC9rZXRpZXMubW9vby5jb206MjI0NDNcL2FwcHNcL3RoZW1pbmdcL2ltYWdlXC9sb2dvP3VzZVN2Zz0xJnY9OSIsImJhY2tncm91bmQiOiJodHRwczpcL1wva2V0aWVzLm1vb28uY29tOjIyNDQzXC9hcHBzXC90aGVtaW5nXC9pbWFnZVwvYmFja2dyb3VuZD92PTkiLCJiYWNrZ3JvdW5kLXBsYWluIjpmYWxzZSwiYmFja2dyb3VuZC1kZWZhdWx0IjpmYWxzZSwibG9nb2hlYWRlciI6Imh0dHBzOlwvXC9rZXRpZXMubW9vby5jb206MjI0NDNcL2FwcHNcL3RoZW1pbmdcL2ltYWdlXC9sb2dvP3VzZVN2Zz0xJnY9OSIsImZhdmljb24iOiJodHRwczpcL1wva2V0aWVzLm1vb28uY29tOjIyNDQzXC9hcHBzXC90aGVtaW5nXC9pbWFnZVwvbG9nbz91c2VTdmc9MSZ2PTkifSwidXNlcl9zdGF0dXMiOnsiZW5hYmxlZCI6dHJ1ZSwicmVzdG9yZSI6dHJ1ZSwic3VwcG9ydHNfZW1vamkiOnRydWV9LCJ3ZWF0aGVyX3N0YXR1cyI6eyJlbmFibGVkIjp0cnVlfX0=">
+	<input type="hidden" id="initial-state-core-versionHash" value="IjYyNjdhNjRmIg==">
+	<input type="hidden" id="initial-state-text-workspace_available" value="dHJ1ZQ==">
+	<input type="hidden" id="initial-state-text-workspace_enabled" value="dHJ1ZQ==">
+	<input type="hidden" id="initial-state-text-default_file_extension" value="Im1kIg==">
+	<input type="hidden" id="initial-state-text-rich_editing_enabled" value="dHJ1ZQ==">
+	<input type="hidden" id="initial-state-text-translation_can_detect" value="ZmFsc2U=">
+	<input type="hidden" id="initial-state-text-translation_languages" value="W10=">
+	<input type="hidden" id="initial-state-text-file_id" value="MjE3NjMz">
+	<input type="hidden" id="initial-state-viewer-enabled_preview_providers" value="WyJcL2FwcGxpY2F0aW9uXFxcL3ZuZC5vYXNpcy5vcGVuZG9jdW1lbnQuKlwvIiwiXC9hcHBsaWNhdGlvblxcXC94LWtyaXRhXC8iLCJcL3RleHRcXFwvKHgtKT9tYXJrZG93blwvIiwiXC9pbWFnZVxcXC94LXhiaXRtYXBcLyIsIlwvYXVkaW9cXFwvbXBlZ1wvIiwiXC9pbWFnZVxcXC93ZWJwXC8iLCJcL2ltYWdlXFxcL2pwZWdcLyIsIlwvdGV4dFxcXC9wbGFpblwvIiwiXC9pbWFnZVxcXC9ibXBcLyIsIlwvaW1hZ2VcXFwvZ2lmXC8iLCJcL2ltYWdlXFxcL3BuZ1wvIl0=">
+	<input type="hidden" id="initial-state-theming-data" value="eyJuYW1lIjoiR29vZCBNb3ZlbWVudCIsInVybCI6Imh0dHBzOlwvXC9uZXh0Y2xvdWQuY29tIiwic2xvZ2FuIjoiU2VsZiBkYXRhIG1hY2hpbmUiLCJjb2xvciI6IiMwMDgyYzkiLCJkZWZhdWx0Q29sb3IiOiIjMDA4MmM5IiwiaW1wcmludFVybCI6IiIsInByaXZhY3lVcmwiOiIiLCJpbnZlcnRlZCI6ZmFsc2UsImNhY2hlQnVzdGVyIjoiMGFkZTdjMmMiLCJlbmFibGVkVGhlbWVzIjpbXX0=">
+	<input type="hidden" id="initial-state-comments-maxAutoCompleteResults" value="MTA=">
+	<div id="skip-actions">
+		<a href="#content" class="button primary skip-navigation skip-content">Skip to main content</a>			</div>
+
+	<header id="header">
+		<div class="header-left">
+			<div class="logo logo-icon svg"></div>
+			<span id="nextcloud" class="header-appname">
+									20240627_142347.jpg							</span>
+					</div>
+
+		<div class="header-right">
+					<span id="header-primary-action" class="">
+				<a href="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/download/20240627_142347.jpg" class="primary button">
+					<span>Download</span>
+				</a>
+			</span>
+						<div id="header-secondary-action">
+				<button id="header-actions-toggle" class="menutoggle icon-more-white"></button>
+				<div id="header-actions-menu" class="popovermenu menu">
+					<ul>
+						<li id="download"><a href="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/download/20240627_142347.jpg"><span class="icon icon-download"></span>Download &nbsp;<span class="download-size">(1.1 MB)</span></a></li><li><a id="directLink-container"><span class="icon icon-public"></span><label for="directLink">Direct link</label></a></li><li><span class="menuitem"><input id="directLink" type="text" readonly="" value="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/preview"></span></li><li>    <button id="save-external-share" class="icon icon-external" data-protected="false" data-owner-display-name="" data-owner="" data-name="20240627_142347.jpg">Add to your Nextcloud</button></li><li id="external-share-menu-item" class="hidden">    <span class="menuitem">        <form class="save-form" action="#">            <input type="text" id="remote_address" placeholder="user@yourNextcloud.org">            <input type="submit" value=" " id="save-button-confirm" class="icon-confirm" disabled="disabled"></button>        </form>    </span></li>					</ul>
+				</div>
+			</div>
+							</div>
+	</header>
+	<main id="content" class="app-files_sharing">
+		<h1 class="hidden-visually">
+							20240627_142347.jpg					</h1>
+		<div id="app-content" tabindex="0">
+	<link rel="image_src" href="https://keties.mooo.com:22443/apps/files_sharing/publicpreview/ce7q2Cqcto7isiF?file=/20240627_142347.jpg&amp;x=200&amp;y=200" />
+
+<input type="hidden" id="sharingUserId" value="">
+<input type="hidden" id="filesApp" name="filesApp" value="1">
+<input type="hidden" id="isPublic" name="isPublic" value="1">
+	<input type="hidden" name="downloadURL" value="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/download/20240627_142347.jpg" id="downloadURL">
+<input type="hidden" name="previewURL" value="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/preview" id="previewURL">
+<input type="hidden" name="sharingToken" value="ce7q2Cqcto7isiF" id="sharingToken">
+<input type="hidden" name="filename" value="20240627_142347.jpg" id="filename">
+<input type="hidden" name="mimetype" value="image/jpeg" id="mimetype">
+<input type="hidden" name="previewSupported" value="true" id="previewSupported">
+<input type="hidden" name="mimetypeIcon" value="/apps/theming/img/core/filetypes/image.svg?v=0ade7c2c" id="mimetypeIcon">
+<input type="hidden" name="hideDownload" value="false" id="hideDownload">
+<input type="hidden" id="disclaimerText" value="">
+<input type="hidden" name="maxFilesizeUpload" value="536870912" id="maxFilesizeUpload">
+
+	<input type="hidden" name="filesize" value="1128259" id="filesize">
+<input type="hidden" name="maxSizeAnimateGif" value="10" id="maxSizeAnimateGif">
+
+	<!-- ONLY if this is a folder, we show the grid toggle button -->
+	
+	<!-- files listing -->
+	<div id="files-public-content">
+		<div id="preview">
+							<!-- preview frame to open file in with viewer -->
+				<div id="imgframe"></div>
+									<div class="directDownload">
+						<div>
+							20240627_142347.jpg (1.1 MB)
+						</div>
+													<a href="https://keties.mooo.com:22443/s/ce7q2Cqcto7isiF/download/20240627_142347.jpg" id="downloadFile" class="button">
+								<span class="icon icon-download"></span>
+								Download							</a>
+											</div>
+									</div>
+	</div>
+
+	<div class="hiddenuploadfield">
+		<input type="file" id="file_upload_start" class="hiddenuploadfield" name="files[]"
+			   data-url="/files/ajax/upload.php" />
+	</div>
+</div>
+	</main>
+		<footer>
+		<p><a href="https://nextcloud.com" target="_blank" rel="noreferrer noopener" class="entity-name">Good Movement</a> – Self data machine</p>
+					<p>
+				<a href="https://nextcloud.com/signup/" target="_blank" rel="noreferrer noopener">
+					Get your own free account				</a>
+			</p>
+				</footer>
+	
+</body>
+</html>
