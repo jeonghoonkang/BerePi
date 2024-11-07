@@ -1,3 +1,10 @@
+# Use test code 
+- python3 perfornamce_tst.py
+- python3 train_tsst.py
+
+## 참고
+- https://aeong-dev.tistory.com/1
+
 ## GPU (NVIDIA)
 - 그래픽카드 및 설치 가능한 드라이버 확인
   - ubuntu-drivers devices
@@ -5,10 +12,13 @@
 - 현재 사용중인 그래픽카드 확인 (gpu 확인)
   - lshw -numeric -C display
   - lspci | grep -i nvidia
+  - nvidia-smi
+  
 
 ## 드라이버 설치
 - sudo ubuntu-drivers autoinstall
 - (수동) sudo apt install nvidia-driver-450
+  
 ### PPA 저장소 사용 설치
 - sudo add-apt-repository ppa:graphics-drivers/ppa
 

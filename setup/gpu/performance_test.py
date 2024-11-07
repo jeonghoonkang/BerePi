@@ -27,7 +27,8 @@ x = torch.rand(1, 3, 128, 128).cuda()
 model = ProfileTargetModule(3, 8, True, True).cuda()
 out, s = model(x)
 
-with profiler.profile(with_stack=True, use_cuda=True, profile_memory=True) as prof:
+with profiler.profile(with_stack=True, use_device = 'cuda',profile_memory=True) as prof: 
+    # use_cuda=True, 
     out, s = model(x)
     
 print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))

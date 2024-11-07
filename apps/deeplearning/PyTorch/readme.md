@@ -6,6 +6,7 @@
 - Average inference time per batch: 0.000454 seconds (i7-desktop)
 - Average inference time per batch: 0.000109 seconds (Xeon 1.4GHz)
 - Average inference time per batch: 0.000257 seconds (Xeon - 2 CPU)
+- Average inference time per batch: 0.000128 seconds (2way 4090)
   
 ### check devel environment
 #### Hailo AI environment
