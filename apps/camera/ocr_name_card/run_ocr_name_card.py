@@ -8,7 +8,10 @@ import json
 import time
 import argparse
 import easyocr
-import pytesseract
+import pytesseract  # check out language pack for tesseract 
+                    # tesseract --list-langs # dir: /usr/local/share/tessdata
+                    # https://cjsal95.tistory.com/25
+import inspect
 
 def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐색
     
@@ -123,10 +126,12 @@ def ocr():
 
 
 def test_func(file):
+    print(inspect.getfile(pytesseract))
+    
     oem = 3
-    psm = 11
-    #custom_config = '--oem' + str(oem) + '--psm' + str(psm) 
-    custom_config = '--oem' + str(oem) + '--psm' + str(psm) + '--preserve_interword_spaces 1'
+    psm = 4
+    custom_config = ' --oem ' + str(oem) + ' --psm ' + str(psm) 
+    #custom_config = ' --oem ' + str(oem) + ' --psm ' + str(psm) + ' -c --preserve_interword_spaces=1 '
     namecard_img = cv2.imread(file)
     gray = cv2.cvtColor(namecard_img, cv2.COLOR_BGR2GRAY)
     gray = cv2.medianBlur(gray, 3)
