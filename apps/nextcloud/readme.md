@@ -64,6 +64,12 @@ sudo docker exec -it -u 33 {컨테이너 이름} php occ upgrade
 - 참고 : https://docs.nextcloud.com/server/15/admin_manual/configuration_server/occ_command.html#apps-commands
   
 
+## rysnc 이후 file scan
+- sudo docker exec -it -uroot nextcloud /bin/bash
+  - apt update, apt install vim
+  - vim ./config/config.php
+  - add line " 'filelocking.enabled' => false, " 
+- sudo docker exec -it -u 33 nextcloud php occ files:scan --all
 
 
 
