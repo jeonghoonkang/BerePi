@@ -1,9 +1,8 @@
+# Author: Jeonghhoon Kang (https://github.com/jeonghoonkang)
+# source sine/bin/activate # deactivate 
+# python3 sine_wave.py
+
 import numpy as np
-
-
-#from numpy import VisibleDeprecationWarning
-
-#print(np.__version__)
 print(np.__version__)
 
 import matplotlib.pyplot as plt
@@ -32,6 +31,6 @@ plt.xlabel('x values')
 plt.ylabel('sin(x)')
 
 # Show the plot
-#plt.show()
+# plt.show()
 # Save the plot as a PNG file
-#plt.savefig('/Users/tinyos/devel/BerePi/apps/school_math/sine_wave.png')
+# plt.savefig('/Users/tinyos/devel/BerePi/apps/school_math/sine_wave.png')
