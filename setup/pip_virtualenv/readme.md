@@ -5,7 +5,10 @@
 - python3 get-pip.py
   - externelly managed issue
     - sudo mv /usr/lib/python3.11/EXTERNALLY-MANAGED /usr/lib/python3.11/EXTERNALLY-MANAGED_OLD
-  
+  - venv
+    - python3 -m venv "이름"
+    - source "이름"/bin/activate
+    - python3 -m pip install "패키지이름"  
 
 - easy_install은 Python Setuptools에 포함되어 있기 때문에 이를 설치하면 사용할 수 있다. 다음과 같은 명령을 실행하여 easy_install을 설치하자.
 
