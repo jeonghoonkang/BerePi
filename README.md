@@ -4,7 +4,7 @@
 - Based on RaspberryPi distribution (hardware and software)
 - supports Ubuntu64_ARM
   - previous version : Raspbian OS, Buster (ver 2019.09.12), with RaspBerryPi4 (input hangul mode, 한글모드)
-  - now you can use Ubuntu with SSD booting via USB 
+  - you can use Ubuntu with SSD booting via USB 
 
 ##### By Contribution
   - Jeonghoon Kang(https://github.com/jeonghoonkang), Philman Jeong(https://github.com/ipmstyle), Sukun Kim(https://github.com/sukunkim)
