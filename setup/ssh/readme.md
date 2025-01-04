@@ -30,10 +30,11 @@ The key's randomart image is:
 </pre>
 
 
-### 키 변경되었을 경우 (ssh -R) ssh key 변경 
+### 키 변경되었을 경우 (ssh -R) ssh key 변경 (Mac OSX)
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "[keties.iptime.org]:60000"
-- ssh key remove 
+- ssh key remove
+- '-f' 옵션 output 파일 '-R' 옵션은 삭제할 문자, "따옴표" 사용 필요 
 
 ### 초기설치 후 에러
 - connection reset by 10.10.10.10 port 22 라고 나오는 경우
