@@ -29,6 +29,7 @@ sysbench --test=cpu run && ioping -q -c 10 -s 8k -W .
 |RaspberryPi5 | 2724.77 ev/sec | Cortex-A76, 4core |
 |RaspberryPi4 | 1488.30 ev/sec | aarch64, Cortex-A72, 4core |
 |Ryzen 5 | 4841.66 ev/sec | AMD Ryzen 5 5600G with Radeon Graphics, x86_64, 12core |
+|Ryzen 7 | 5062 ev/sec | AMD Ryzen 7 세잔 5700G 8core, 16thread, 3.8GHz |
 |MSI ryzen | 5043 ev/sec | * |
 |fit-let      | 1178.88 ev/sec | * |
 |RaspberryPi Zero   | 26  ev/sec | * |

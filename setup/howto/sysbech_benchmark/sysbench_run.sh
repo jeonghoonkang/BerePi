@@ -8,6 +8,7 @@ echo "---------- split line ----------  (info)"$PERIOD" secs peroid  ";
 echo " first-shot run time:"; echo $when; echo " ----loop end---- "; 
 echo " Raspi 3 - CPU speed events per second:  22.71"
 echo " Raspi 4 - CPU speed events per second:  1749.76 "
+echo " Raspi 5 - CPU speed events per second:  2724.77 "
 
 sleep $PERIOD;
 
