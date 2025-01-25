@@ -50,7 +50,7 @@ vim docker-compose.yml
 TZ=Asia/Seoul
 
 # Domain 설정 (DDNS 사용할 경우, DDNS 도메인 사용)
-SERVERURL=ipmstyle.duckdns.org
+SERVERURL=***.duckdns.org
 
 # cient 장치 설정 (숫자 "PEERS=n" 도 가능하나, 취약점 때문에 비추)
 PEERS=laptop,PC,iphone,android
