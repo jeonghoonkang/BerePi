@@ -4,7 +4,15 @@
 - pip3 install pyserial
 
 ### run
-
+python3 /home/***/***/BerePi/apps/dust/pms7003/dust_get.py
+output : 
+<pre>
+PMS 7003 dust data
+PM 1.0 : 5
+PM 2.5 : 8
+PM 10.0 : 9
+logging to /home/tinyos/devel_opment/BerePi/logs/berelogger.log log file name
+</pre>
 
 ### crontab 
 
