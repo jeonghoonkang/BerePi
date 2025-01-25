@@ -1,7 +1,8 @@
 ## IoTStack
 
 - IoT 서비스에 필요한 다양한 컨테이너 실행을 관리할 수 있음
-- 대표 리포 : https://github.com/SensorsIot/IOTstack
+- 메인 리포 : https://github.com/SensorsIot/IOTstack
+- https://sensorsiot.github.io/IOTstack/Basic_setup/Default-Configs/
 
 ## 준비
 
