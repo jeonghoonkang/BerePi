@@ -2,7 +2,7 @@
 ## berelogger import 방법 
 <pre>
 import sys
-sys.path.append("/home/tinyos/devel/BerePi/apps/logger")
+sys.path.append("/home/***/devel/BerePi/apps/logger")
 import berepi_logger
 </pre>
 ## 파일 사이즈 limit 지원
