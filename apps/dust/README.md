@@ -50,3 +50,9 @@ Please refer to LICENSE file for licensing information.
 */3 * * * * python3 /home/pi/devel/pir2pi/beating/telegram_report.py 30 > /home/pi/devel/pir2pi/beating/err.log 2>&1 
 
 </pre>
+
+
+
+<pre>2025-01-27 06:21:02 [INFO]  PM0.1 Dust 4  ug/m3 
+2025-01-27 06:21:02 [INFO]  PM2.5 Dust 6 (50 is bad limit) ug/m3 
+2025-01-27 06:21:02 [INFO]  PM10 Dust 7 (100 is bad limit) ug/m3 </pre>
