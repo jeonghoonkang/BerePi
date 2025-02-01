@@ -26,7 +26,7 @@
      - http://eltsensor.co.kr/2012/eng/pdf/T-110/DS_T-110-3V_ver1.210.pdf
   1. RaspberryPi Pin out
      - http://www.raspberrypi-spy.co.uk/2012/06/simple-guide-to-the-rpi-gpio-header-and-pins
-  3. Winsen CO2 센서
+  3. Winsen CO2 센서 (모델: MH-Z19B)
      - https://www.realtopint.com/_files/ugd/a158b3_2dc8585358804413bf693a10880e244f.pdf
           
 
