@@ -6,3 +6,6 @@ git config --global user.name "자신 github 아이디"
 git config --global user.email "자신 github 연동 이메일"
 git status
 git config --global credential.helper store //--replace-all
+
+# pull and rebase, 로컬 코드로 main 적용 하기 
+git pull --rebase origin main
