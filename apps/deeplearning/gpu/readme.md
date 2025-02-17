@@ -8,6 +8,10 @@
   
 #### Check list 
 - source ./hailo-rpi5-examples/setup_env.sh
+
+- cd hailo-rpi5-examples/
+  - sudo python3 basic_pipelines/detection.py --input /dev/video0
+
 - sudo python3 -m pip install torch
   
 #### Example
