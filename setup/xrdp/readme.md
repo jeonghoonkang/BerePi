@@ -1,3 +1,11 @@
+## macOS 에서 사용하는 방법
+### 1 step
+
+
+### 2 step
+### 3 step
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/46161c89-e4a6-411a-939d-449b55411926" />
+
 ## 로그인 되자마자 종료되는 경우
 - xrdp, ubuntu
 - 윈도우 원격데스크탑 실행 오류 문제
