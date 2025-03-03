@@ -72,5 +72,10 @@ sudo docker exec -it -u 33 {컨테이너 이름} php occ upgrade
   - add line " 'filelocking.enabled' => false, " 
 - sudo docker exec -it -u 33 nextcloud php occ files:scan --all
 
+## docker 명령어
+- docker exec --it {컨테이너 이름} /bin/bash 
+- docker stats {컨테이너 이름}
+
+
 
 
