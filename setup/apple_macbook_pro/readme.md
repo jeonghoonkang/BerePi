@@ -1,5 +1,6 @@
 ### Apple Metal에서 python pytorch 설치 방법
-- M1 이상의 애플실리콘 사용 모델 
+- M1 이상의 애플실리콘 사용 모델
+#### 설치방법 
 - brew install python3
 - 이후 pip3 install {pkg} 는 에러 발생
   - EXTERNALLY MANAGED
