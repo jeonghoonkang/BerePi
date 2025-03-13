@@ -9,3 +9,6 @@ git config --global credential.helper store //--replace-all
 
 # pull and rebase, 로컬 코드로 main 적용 하기 
 git pull --rebase origin main
+
+# commit 취소하기 
+git reset --soft HEAD~1
