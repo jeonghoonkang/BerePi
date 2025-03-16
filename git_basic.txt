@@ -12,3 +12,19 @@ git pull --rebase origin main
 
 # commit 취소하기 
 git reset --soft HEAD~1
+
+
+
+# 1. 새로운 작업 디렉토리 생성
+git worktree add ../other-branch-dir other-branch
+
+# 2. 새로운 작업 디렉토리로 이동
+cd ../other-branch-dir
+
+# 3. 변경 사항을 스테이징하고 커밋
+git add .
+git commit -m "Your commit message"
+
+# 4. 작업 디렉토리 정리 (옵션)
+cd ../original-dir
+git worktree remove ../other-branch-dir
