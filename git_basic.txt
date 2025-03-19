@@ -13,6 +13,7 @@ git pull --rebase origin main
 # commit 취소하기 
 git reset --soft HEAD~1
 
+
 worktree list
 
 # 1. 새로운 작업 디렉토리 생성
