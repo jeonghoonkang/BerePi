@@ -14,7 +14,7 @@ http://dobiho.com/691/
 - 저장 후에 맥을 재시동하거나 사용자 계정에 다시 로그인하면 변경사항이 적용됩니다.
 - Mac 에서 windows 로 원격 데스크탑 연결을 사용할때, 설정해 놓으면 편합니다
   - 편집도구 다운로드 : https://www.fatcatsoftware.com/plisteditpro/PlistEditPro.zip
-  - Xcode 는 시간이 오래 걸림 
+  - Xcode 는 다운로드 시간이 오래 걸림 
 
 
 #### 스크린샷
