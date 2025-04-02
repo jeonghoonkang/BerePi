@@ -1,5 +1,6 @@
 How to download the model
 Visit the Llama repository in GitHub where instructions can be found in the Llama README.
+
 1
 Install the Llama CLI
 In your preferred environment run the command below:
