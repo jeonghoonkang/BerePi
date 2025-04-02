@@ -1,3 +1,6 @@
+
+https://www.llama.com/llama-downloads/
+
 How to download the model
 Visit the Llama repository in GitHub where instructions can be found in the Llama README.
 
