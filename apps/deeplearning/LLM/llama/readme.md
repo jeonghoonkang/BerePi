@@ -40,6 +40,11 @@ Instruct weights: These weights are for the models that have been fine-tuned and
 Trust and safety model: Our models offer a collection of specialized models tailored to specific development needs.
 Available models for download include:
 
+
+https://llama3-2-multimodal.llamameta.net/*?Policy=eyJTdGF0ZW1lbnQiOlt7InVuaXF1ZV9oYXNoIjoiM3E3eGdkcm55c3VtY3dieXRxbWN2ZmxqIiwiUmVzb3VyY2UiOiJodHRwczpcL1wvbGxhbWEzLTItbXVsdGltb2RhbC5sbGFtYW1ldGEubmV0XC8qIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzQzNzI3NTI5fX19XX0_&Signature=GEC2YhOPhXery2JfZf6LU7LgvVytFNL3zrGuYYskY2tBycjY52UFk9EVKBySjTa6-ihnsjM5qIO4o5NOjETx5uWL0dfrVbEW8xN0lieINm-bZHEcBlTYmgQMrIouqw538mIMP6YYtPEynGbKBNAglh3as%7EavGmxm45D9WPhDJiTG3HG-jCwD0M2s9UZMPM8lLsPIKN1OdMnaaePIcix3wZDZtK4doXHTu69kBrZMgWR17F1MqGaterAW-QsPCh8w0LL4xKnbwqQRr0Lc8fm941NzJjuszJAl96DlYffPkxF3KzYg855ATSI4p2CVB7etXKnt4UK7A7%7EM7Bqkm%7EXVpg__&Key-Pair-Id=K15QRJLYKIFSLZ&Download-Request-ID=1798107580769777
+
+
+
 Pretrained:
 Llama-3.2-11B-Vision
 Llama-3.2-90B-Vision
