@@ -8,7 +8,6 @@ git config --global credential.helper store //--replace-all
 
 git pull --ff-only
 
-
 # pull and rebase, 로컬 코드로 main 적용 하기 
 git pull --rebase origin main
 
