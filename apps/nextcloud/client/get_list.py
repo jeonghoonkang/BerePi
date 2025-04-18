@@ -85,7 +85,7 @@ def get_file_list(conf):
         "PROPFIND",
         url,
         auth=HTTPBasicAuth(USERNAME, PASSWORD),
-        headers={"Depth": "2"}
+        headers={"Depth": "2"} #서브디렉토리 포함, 깊이는 2로 설정
     )
     
     if response.status_code != 207:
