@@ -5,12 +5,15 @@ import os
 import time
 import json
 import requests
+
 from PIL import Image
 import pytesseract
+
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from urllib.parse import unquote_plus
 import urllib.parse
+from webdav3.client import Client
 
 
 # def __init__(self, config_path="tmp_config.json"):
@@ -42,6 +45,12 @@ import urllib.parse
     
 debug_prefix = "  "
 
+options = {
+    'webdav_hostname': None,
+    'webdav_login': None,
+    'webdav_password': None
+}
+
 def load_config(config_path):
     """설정 파일 로드"""
     try:
@@ -69,6 +78,10 @@ def load_config(config_path):
 
 def __init__(config_path="tmp_config.json"):
     config = load_config(config_path)
+    options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
+    options['webdav_login'] = config['nextcloud']['username']
+    options['webdav_password'] = config['nextcloud']['password']
+
     return config
 
 
@@ -147,45 +160,47 @@ def create_folders(down_dir):
 # 파일 다운로드
 def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg"
     
+    filename = filename.lstrip("/")
     url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
 
     #url = f"{NEXTCLOUD_URL}/remote.php/dav/files/{USERNAME}{remote_path}"
-
-
-
     remote_path = f"{url}/{filename}"
-    local_path = f"{conf['local']['download_folder']}{filename}"
+    path_file = f"{conf['nextcloud']['remote_folder']}/{filename}"
+
+    local_path = f"{conf['local']['download_folder']}/{filename}"
 
     local_path_dir = os.path.join(conf['local']['download_folder'], filename)
-    print (f"local path dir: {local_path_dir}")
-    os.makedirs(os.path.dirname(local_path_dir.lstrip("/")), exist_ok=True)
-    
-    exit()
+    dir_name = os.path.dirname(local_path_dir.lstrip("/"))
+    dir_name = conf['local']['download_folder'] +'/' + dir_name
+    os.makedirs(dir_name, exist_ok=True)
 
-    #local_path = local_path.lstrip("/")
-    print (f"{debug_prefix} filename: {filename}")
-    print (f"{debug_prefix} local_path: {local_path}")
+    #print (f"{debug_prefix} local_path: {local_path}")
 
     username = conf['nextcloud']['username']
     password = conf['nextcloud']['password']
 
-    print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+    client = Client(options)
+    print (f"{debug_prefix} path: {path_file}")
+    print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
+    client.download_file(path_file, local_path)
 
-    #exit(f"exit download")
 
-    response = requests.get(
-        url,
-        auth=HTTPBasicAuth(username, password)
-    )
+    # response = requests.get(
+    #     url,
+    #     auth=HTTPBasicAuth(username, password),
+    #     allow_redirects=True
+    # )
     
-    if response.status_code == 200:
-        with open(local_path, 'wb') as f:
-            f.write(response.content)
-        print(f"Downloaded: {filename}")
-        return local_path
-    else:
-        print(f"Failed to download {filename}: {response.status_code}")
-        return None
+    # if response.status_code == 200:
+    #     print(response.headers['Content-Type'])  # 반환된 데이터의 MIME 타입 확인
+    #     print(response.text[:200])  # 응답 내용 일부 출력 (텍스트 데이터인 경우)
+    #     with open(local_path, 'wb') as f:
+    #         f.write(response.content)
+    #     print(f"Downloaded: {filename}")
+    #     return local_path
+    # else:
+    #     print(f"Failed to download {filename}: {response.status_code}")
+    #     return None
 
 
 # 주기적 실행 함수
@@ -210,8 +225,8 @@ def run_periodically(conf, interval_minutes=60):
         #             save_to_json(filename, ocr_text)
         
         # 대기
-        exit(" run periodically") 
-        print(f"Waiting for {interval_minutes} minutes...")
+        exit(" run through crontab") 
+
         time.sleep(interval_minutes * 60)
 
 
