@@ -158,49 +158,24 @@ def create_folders(down_dir):
         os.makedirs(down_dir)
 
 # 파일 다운로드
-def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg"
+def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg" 좌측 / 주의 
     
     filename = filename.lstrip("/")
     url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
 
-    #url = f"{NEXTCLOUD_URL}/remote.php/dav/files/{USERNAME}{remote_path}"
-    remote_path = f"{url}/{filename}"
     path_file = f"{conf['nextcloud']['remote_folder']}/{filename}"
-
     local_path = f"{conf['local']['download_folder']}/{filename}"
 
     local_path_dir = os.path.join(conf['local']['download_folder'], filename)
     dir_name = os.path.dirname(local_path_dir.lstrip("/"))
     dir_name = conf['local']['download_folder'] +'/' + dir_name
+    #make dir #subdir 이 깊이가 있을 경우는 확인해야함 (현재는 1 depth 만 확인함)
     os.makedirs(dir_name, exist_ok=True)
 
-    #print (f"{debug_prefix} local_path: {local_path}")
-
-    username = conf['nextcloud']['username']
-    password = conf['nextcloud']['password']
-
     client = Client(options)
-    print (f"{debug_prefix} path: {path_file}")
+    print (f"{debug_prefix} remote dav path: {path_file}")
     print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
     client.download_file(path_file, local_path)
-
-
-    # response = requests.get(
-    #     url,
-    #     auth=HTTPBasicAuth(username, password),
-    #     allow_redirects=True
-    # )
-    
-    # if response.status_code == 200:
-    #     print(response.headers['Content-Type'])  # 반환된 데이터의 MIME 타입 확인
-    #     print(response.text[:200])  # 응답 내용 일부 출력 (텍스트 데이터인 경우)
-    #     with open(local_path, 'wb') as f:
-    #         f.write(response.content)
-    #     print(f"Downloaded: {filename}")
-    #     return local_path
-    # else:
-    #     print(f"Failed to download {filename}: {response.status_code}")
-    #     return None
 
 
 # 주기적 실행 함수
