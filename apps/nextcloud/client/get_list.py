@@ -1,4 +1,3 @@
-
 #-*- coding: utf-8 -*-
 #Author: https://github.com/jeonghoonkang
 
@@ -10,7 +9,8 @@ from PIL import Image
 import pytesseract
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
-
+from urllib.parse import unquote_plus
+import urllib.parse
 
 
 # def __init__(self, config_path="tmp_config.json"):
@@ -40,6 +40,7 @@ from requests.auth import HTTPBasicAuth
     #     except json.JSONDecodeError:
     #         raise ValueError(f"Invalid JSON in config file: {config_path}")
     
+debug_prefix = "  "
 
 def load_config(config_path):
     """설정 파일 로드"""
@@ -75,9 +76,16 @@ def __init__(config_path="tmp_config.json"):
 
 
 # Nextcloud에서 파일 목록 가져오기
-def get_file_list(conf):
-    url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
-    print (f"URL: {url}")
+def get_file_list_recursive(conf, current_path="", depth=0):
+    
+    debug_prefix = "  " * depth
+    print(f"{debug_prefix}↳ Scanning: {current_path or 'root'} (depth {depth})")
+
+    url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}{current_path}"
+    #using current path to check sub-dir 
+
+    print(f"{debug_prefix}  URL: {url}")  # Debug URL
+    
     USERNAME = conf['nextcloud']['username']
     PASSWORD = conf['nextcloud']['password']
     
@@ -85,9 +93,13 @@ def get_file_list(conf):
         "PROPFIND",
         url,
         auth=HTTPBasicAuth(USERNAME, PASSWORD),
-        headers={"Depth": "2"} #서브디렉토리 포함, 깊이는 2로 설정
+        headers={"Depth": "1"},
+        timeout = 10
     )
-    
+
+    #print (f"Response: {response.content}")
+    #</d:response><d:response><d:href>/remote.php/dav/files/tinyos/Photos/biz_card/2023/%ec%82%ac%ec%a7%84%2023-09-01%2000-36-40%203799.jpg
+
     if response.status_code != 207:
         print(f"Error accessing Nextcloud: {response.status_code}")
         return []
@@ -96,22 +108,84 @@ def get_file_list(conf):
     tree = ElementTree.fromstring(response.content)
     files = []
     
-    for response in tree.findall("{DAV:}response"):
-        href = response.find("{DAV:}href").text
-        if href.endswith("/"):
-            continue  # 폴더는 건너뜁니다
+    for response_buff in tree.findall("{DAV:}response"):
         
+        uhref = response_buff.find("{DAV:}href").text
+        relative_path = uhref.replace(f"/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}", "").lstrip("/")
+        print (f"{debug_prefix}  Found uhref: {uhref}")
+        print (f"{debug_prefix}  relative_path: {relative_path}")
+       
+        href = urllib.parse.unquote_plus(uhref)
+        decoded_path = urllib.parse.unquote_plus(relative_path)
+        #print (f"decoded_path: {decoded_path}")
+
+        if not relative_path: #current dir skip
+            print(f"{debug_prefix}  Skipping current directory")
+            continue
+
+        print(f"{debug_prefix} Check href  : {href}")
+        if href.endswith("/") and relative_path != current_path.lstrip("/"):
+            print(f"{debug_prefix}  relative_path : {relative_path}")
+            print(f"{debug_prefix}  current_path : {current_path}")
+            files.extend(get_file_list_recursive(conf, f"/{relative_path}", depth+1))
+            continue  
+
         # 파일명만 추출
         filename = href.split("/")[-1]
         if filename.lower().endswith(('.jpg', '.jpeg')):
-            files.append(filename)
-    
+            files.append(current_path+filename)
+
+    #print (f"files: {files}")
+
     return files
 
 def create_folders(down_dir):
     print (f"Creating folders if not exist: {down_dir}")
     if not os.path.exists(down_dir):
         os.makedirs(down_dir)
+
+# 파일 다운로드
+def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg"
+    
+    url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
+
+    #url = f"{NEXTCLOUD_URL}/remote.php/dav/files/{USERNAME}{remote_path}"
+
+
+
+    remote_path = f"{url}/{filename}"
+    local_path = f"{conf['local']['download_folder']}{filename}"
+
+    local_path_dir = os.path.join(conf['local']['download_folder'], filename)
+    print (f"local path dir: {local_path_dir}")
+    os.makedirs(os.path.dirname(local_path_dir.lstrip("/")), exist_ok=True)
+    
+    exit()
+
+    #local_path = local_path.lstrip("/")
+    print (f"{debug_prefix} filename: {filename}")
+    print (f"{debug_prefix} local_path: {local_path}")
+
+    username = conf['nextcloud']['username']
+    password = conf['nextcloud']['password']
+
+    print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+
+    #exit(f"exit download")
+
+    response = requests.get(
+        url,
+        auth=HTTPBasicAuth(username, password)
+    )
+    
+    if response.status_code == 200:
+        with open(local_path, 'wb') as f:
+            f.write(response.content)
+        print(f"Downloaded: {filename}")
+        return local_path
+    else:
+        print(f"Failed to download {filename}: {response.status_code}")
+        return None
 
 
 # 주기적 실행 함수
@@ -124,19 +198,19 @@ def run_periodically(conf, interval_minutes=60):
         print(f"\nChecking for new files at {datetime.now()}")
         
         # 파일 목록 가져오기
-        files = get_file_list(conf)
+        files = get_file_list_recursive(conf) # 서브디렉토리 포함 
         print(f"Found {len(files)} JPG files in Nextcloud")
         print (f"files: {files}")
         # # 각 파일 처리
-        # for filename in files:
-        #     local_path = download_file(filename)
+        for filename in files:
+            local_path = download_file(conf, filename)
         #     if local_path:
         #         ocr_text = process_ocr(local_path)
         #         if ocr_text:
         #             save_to_json(filename, ocr_text)
         
         # 대기
-        exit("test  ")
+        exit(" run periodically") 
         print(f"Waiting for {interval_minutes} minutes...")
         time.sleep(interval_minutes * 60)
 
