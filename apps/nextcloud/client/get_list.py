@@ -173,9 +173,15 @@ def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 
     os.makedirs(dir_name, exist_ok=True)
 
     client = Client(options)
-    print (f"{debug_prefix} remote dav path: {path_file}")
-    print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
-    client.download_file(path_file, local_path)
+#    print (f"{debug_prefix} remote dav path: {path_file}")
+#    print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
+
+    client.download_sync(f"{conf['nextcloud']['remote_folder']}", f"{local_path}")
+
+
+    exit(f"{conf['nextcloud']['remote_folder']}" f"{local_path}")
+
+    #client.download_file(path_file, local_path)
 
 
 # 주기적 실행 함수
