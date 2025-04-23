@@ -5,4 +5,3 @@ PASSWORD = "your-password"                         # Nextcloud 비밀번호
 REMOTE_FOLDER = "/path/to/remote/folder"           # Nextcloud에서 다운로드할 폴더 경로
 DOWNLOAD_FOLDER = "downloaded_images"              # 로컬 다운로드 폴더
 RESULT_JSON = "ocr_results.json"                   # 결과 저장 JSON 파일
-
