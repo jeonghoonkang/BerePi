@@ -1,15 +1,47 @@
+# Authoer: BerePi
 !/bin/bash
 
-# 설정 부분
-SEARCH_DIR="/path/to/your/videos"  # 검색할 최상위 디렉토리
-LOG_DIR="/var/log/video_converter"  # 로그 저장 디렉토리
-LOCK_FILE="/tmp/video_converter.lock"  # 중복 실행 방지용 락 파일
-MAIN_LOG="$LOG_DIR/conversion.log"  # 전체 작업 로그
-FILE_LIST_LOG="$LOG_DIR/file_list.log"  # 변환 대상 파일 목록
-CONVERTED_LOG="$LOG_DIR/converted.log"  # 성공한 변환 기록 (파일 크기 포함)
+# 기본 설정으로 실행
+# ./video_converter.sh
+# 다른 설정 파일 지정 (옵션)
+# CONFIG_FILE="/path/to/custom.conf" ./video_converter.sh
+
+# 설정 파일 로드
+CONFIG_FILE="${BASH_SOURCE%.*}.conf"  # 스크립트와 동일한 이름의 .conf 파일 사용
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "설정 파일을 찾을 수 없습니다: $CONFIG_FILE" >&2
+    exit 1
+fi
+
+# INI 파서 함수
+parse_ini() {
+    while IFS='= ' read -r key value; do
+        if [[ $key == \[*] ]]; then
+            section=${key#\[}; section=${section%\]}
+        elif [[ $value ]] && [[ $section ]]; then
+            eval "${section}_${key}=\${value}"
+        fi
+    done < "$1"
+}
+
+parse_ini "$CONFIG_FILE"
+
+# 변수 할당
+SEARCH_DIR="$directories_SEARCH_DIR"
+LOG_DIR="$directories_LOG_DIR"
+FFMPEG_THREADS="$ffmpeg_THREADS"
+FFMPEG_PRESET="$ffmpeg_PRESET"
+FFMPEG_CRF="$ffmpeg_CRF"
+FFMPEG_AUDIO_BITRATE="$ffmpeg_AUDIO_BITRATE"
+MAIN_LOG="$LOG_DIR/$logging_MAIN_LOG"
+FILE_LIST_LOG="$LOG_DIR/$logging_FILE_LIST_LOG"
+CONVERTED_LOG="$LOG_DIR/$logging_CONVERTED_LOG"
+LOCK_FILE="$options_LOCK_FILE"
+SKIP_EXISTING="$options_SKIP_EXISTING"
+
 
 # 디렉토리 생성
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" || exit 1
 
 # 중복 실행 방지
 if [ -f "$LOCK_FILE" ]; then
@@ -61,7 +93,14 @@ while IFS= read -r file; do
 
     # 변환 시도
     log "변환 시작: $file (크기: $original_size_human) → $output"
-    if ffmpeg -i "$file" -c:v libx264 -crf 23 -preset fast -c:a aac -b:a 192k "$output" >/dev/null 2>&1; then
+    if ffmpeg -i "$file" \
+        -threads "$FFMPEG_THREADS" \
+        -c:v libx264 \
+        -crf "$FFMPEG_CRF" \
+        -preset "$FFMPEG_PRESET" \
+        -c:a aac \
+        -b:a "$FFMPEG_AUDIO_BITRATE" \
+        "$output" >/dev/null 2>&1; then
         # 변환된 파일 크기 확인
         converted_size=$(stat -c %s "$output" 2>/dev/null)
         converted_size_human=$(format_size "$converted_size")
@@ -79,3 +118,4 @@ log "=== 변환 작업 완료 ==="
 
 # 락 파일 제거
 rm -f "$LOCK_FILE"
+
