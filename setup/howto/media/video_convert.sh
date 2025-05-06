@@ -13,19 +13,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# INI 파서 함수
-parse_ini() {
-    while IFS='= ' read -r key value; do
-        if [[ $key == \[*] ]]; then
-            section=${key#\[}; section=${section%\]}
-        elif [[ $value ]] && [[ $section ]]; then
-            eval "${section}_${key}=\${value}"
-        fi
-    done < "$1"
-}
-
-#parse_ini "$CONFIG_FILE"
-
+#옵션 로드, 변수
 source $CONFIG_FILE
 
 # 변수 할당
@@ -61,15 +49,11 @@ if [ -f "$LOCK_FILE" ]; then
     fi
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Lock File을 만듭니다. " >> "$MAIN_LOG"
+#echo "[$(date '+%Y-%m-%d %H:%M:%S')] Lock File을 만듭니다. " >> "$MAIN_LOG"
 echo "$LOCK_FILE"
 
 #touch "$LOCK_FILE"
 #LOCK_FILE="/tmp/lock.lock"
-
-LOCK_F=$LOCK_FILE
-
-touch "$LOCK_F" 
 
 touch $MAIN_LOG
 
@@ -111,9 +95,38 @@ log "=== 변환 작업 시작 ==="
 # 1. 변환 대상 파일 목록 생성 (MKV, AVI, FLV)
 find "$SEARCH_DIR" -type f \( -name "*.mkv" -o -name "*.avi" -o -name "*.flv" \) > "$FILE_LIST_LOG"
 
+#break_point for test run
+#cat "$FILE_LIST_LOG" > "file_list_devel_opment.txt"
+#while IFS= read -r file; do echo $file; done < file_list_devel_opment.txt;
+processed=0
+success=0
+skipped=0
+failed=0
+
+
+declare -a files_to_convert
+while IFS= read -r file || [[ -n "$file" ]]; do 
+    output="${file%.*}.mp4" 
+    if [ ! -f "$output" ]; then 
+        files_to_convert+=("$file") 
+        ((processed++)) 
+    else 
+        log "건너뜀: $file MP4가 이미 존재" 
+        ((skipped++)) 
+    fi 
+done < "$FILE_LIST_LOG"
 
 # 2. 파일별 변환 실행
-while IFS= read -r file; do
+log "변환 시작: 총 ${#files_to_convert[@]}개 파일"
+
+echo ${files_to_convert[@]}
+
+exit 1
+
+for file in "${files_to_convert[@]}"; do
+    ((processed++))
+    echo "#### For IF Loop ##### processed "$processed" skipped "$skipped
+    echo "#### 현재처리중인 파일: $file"
     dir=$(dirname "$file")
     filename=$(basename "$file")
     output="$dir/${filename%.*}.mp4"
@@ -121,6 +134,7 @@ while IFS= read -r file; do
     # MP4가 이미 있으면 건너뜀
     if [ -f "$output" ]; then
         log "건너뜀: $file MP4가 이미 존재"
+        ((skipped++))
         continue
     fi
 
@@ -140,6 +154,7 @@ while IFS= read -r file; do
         -b:a "$AUDIO_BITRATE" \
         -strict -2 \
         "$output" >/dev/null 2>&1; then
+        #"$output"; then
         # 변환된 파일 크기 확인
         converted_size=$(stat -c %s "$output" 2>/dev/null)
         converted_size_human=$(format_size "$converted_size")
@@ -150,11 +165,12 @@ while IFS= read -r file; do
     else
         log "실패: $file ffmpeg 오류"
     fi
+#done < file_list_devel_opment.txt
 done < "$FILE_LIST_LOG"
 
 # 종료 로그
-#log "=== 변환 작업 완료 ==="
+log "=== 변환 작업 완료 ==="
 
 # 락 파일 제거
-rm -f $LOCK_FILE
+rm $LOCK_FILE
 flock -u 9
