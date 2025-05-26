@@ -154,8 +154,10 @@ def get_file_list_recursive(conf, current_path="", depth=0):
 
 def create_folders(down_dir):
     print (f"Creating folders if not exist: {down_dir}")
-    if not os.path.exists(down_dir):
-        os.makedirs(down_dir)
+    # if not os.path.exists(down_dir):
+    #     os.makedirs(down_dir)
+    os.makedirs(down_dir, exist_ok=True)
+
 
 # 파일 다운로드
 def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg" 좌측 / 주의 
@@ -163,27 +165,37 @@ def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 
     filename = filename.lstrip("/")
     url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
 
-    path_file = f"{conf['nextcloud']['remote_folder']}/{filename}"
-    path_file = f"{conf['nextcloud']['remote_folder']}"
-    local_path = f"{conf['local']['download_folder']}/{filename}"
+    path_file = f"{conf['nextcloud']['remote_folder']}/{filename}" # /Photos/biz_card/2023/***.jpg
+    path_file = f"{conf['nextcloud']['remote_folder']}"            # /Photos/biz_card
+    
+    local_path = f"{conf['local']['download_folder']}/{filename}"  #  down_images/2023/강정훈_명함_KETI.jpg
 
-    local_path_dir = os.path.join(conf['local']['download_folder'], filename)
-    dir_name = os.path.dirname(local_path_dir.lstrip("/"))
-    dir_name = conf['local']['download_folder'] +'/' + dir_name
+    remote_path = os.path.join(conf['nextcloud']['remote_folder'], filename)    
+    local_path = os.path.join(conf['local']['download_folder'], filename)
+    #dir_name = os.path.dirname(local_path_dir.lstrip("/"))
+    #dir_name = conf['local']['download_folder'] +'/' + dir_name
     #make dir #subdir 이 깊이가 있을 경우는 확인해야함 (현재는 1 depth 만 확인함)
     #os.makedirs(dir_name, exist_ok=True)
 
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+
     client = Client(options)
-    print (f"{debug_prefix} remote dav path: {path_file}")
-    print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
-    client.download_sync(f"{conf['nextcloud']['remote_folder']}", f"{local_path_dir}")
+    #print (f"{debug_prefix} remote dav path: {path_file}")
+    #print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
+    #client.download_sync(f"{conf['nextcloud']['remote_folder']}", f"{local_path_dir}")
+
+    print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+    client.download_sync(remote_path, local_path)
+
+
 
 
 # 주기적 실행 함수
 def run_periodically(conf, interval_minutes=60):
     print (f"config: {conf}")
     print (f"config: {conf['local']['download_folder']}")
-    #create_folders(conf.get('local',{}).get('download_folder',{}))
+    create_folders(conf.get('local',{}).get('download_folder',''))
     
     while True:
         print(f"\nChecking for new files at {datetime.now()}")
