@@ -61,6 +61,7 @@ def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐
     for _dir in dir_list: # dir_list에 있는 디렉토리에 대해 재귀적으로 탐색
             recursive_search_dir(_dir, _filelist)
 
+
 def printProgressBar(iteration, total, prefix = 'Progress', suffix = 'Complete',\
                       decimals = 1, length = 50, fill = '█'): 
     # 작업의 진행상황을 표시
@@ -91,6 +92,7 @@ def analysis(file, model):
 
     return json_data
 
+
 # 객체 탐색
 def save_image(file, model, save_path): 
 
@@ -111,13 +113,22 @@ def save_image(file, model, save_path):
 
 def merge_json_files(file_list, save_path):
     json_data = []
-    for file in file_list:
-        with open(file, 'r') as json_file:
-            data = json.load(json_file)
-            json_data.append(data)
+
+    print(file_list, save_path)
     
-    with open(save_path, 'w') as json_file:
-        json.dump(json_data, json_file, indent=2)
+    for file in file_list:
+        with open(file, 'r',  encoding='utf-8') as json_file:
+            data = json.load(json_file)
+        # data가 리스트인 경우와 단일 객체인 경우를 구분하여 처리
+        if isinstance(data, list):
+            json_data.extend(data)  # 리스트 병합
+        else:
+            json_data.append(data)  # 단일 객체 추가
+    
+    print ("  ####  json_data", json_data)
+
+    with open(save_path, 'w',  encoding='utf-8') as json_file:
+        json.dump(json_data, json_file, ensure_ascii=False, indent=2)
 
 
 def ocr():
@@ -196,6 +207,7 @@ if __name__=='__main__':
 
     file_list = []
     json_data = []
+    json_file_list = []
     cnt = 0
 
     start_time = time.time()
@@ -210,11 +222,39 @@ if __name__=='__main__':
         cnt += 1
         printProgressBar(cnt, len(file_list))
         print ("processing", file)
-        print ("### to do: code more")
-        test_func(file)
-        #save_image(file, model, save_path)  #객체 탐색
+        #print ("### to do: code more")
+        buff = test_func(file)
+        #test
+        filename = file.split('/')[-1]         # 파일명
+        filepath = save_path + '/' + filename  # 파일경로
+        ctime = os.path.getctime(file)         # 생성시간
+        json_file_path = os.path.splitext(filepath)[0] + '.json'
 
-    exit("### tinyos ### on the test check for good here ") # for the on the step to run this code
+        ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S') # 생성시간 datetime으로 변환
+        # 원본이미지 파일 경로도 저장
+        original_filepath = dir_path + '/' + filename
+        data = {
+            'filename' : json_file_path.split('/')[-1], # json 파일명
+            'filepath' : json_file_path,
+            'ctime' : ctime,
+            'original_filepath' : original_filepath,
+            'ocr' : buff,
+            'name' : "",
+            'company' : "",
+            'email' : "",
+            'cellphone' : "",
+            'phone' : "",
+        }
+
+        with open(json_file_path, 'w',  encoding='utf-8') as json_file:
+            json.dump(data, json_file, ensure_ascii=False, indent=2)
+
+        json_file_list.append(json_file_path)
+
+    file_path = save_path + '/file_list.json'
+    merge_json_files(json_file_list, file_path)
+
+    exit("### exit tinyos ### on the test check for good here ") # for the on the step to run this code
 
     dir_list = []
     file_list = []
@@ -252,12 +292,16 @@ if __name__=='__main__':
 
         with open(json_file_path, 'w') as json_file:
             json.dump(data, json_file, indent=2)
+            print (data)
     
         json_file_list.append(json_file_path)
 
     file_path = save_path + '/file_list.json'
 
     merge_json_files(json_file_list, file_path)
+
+
+
 
     result_cnt = 0
 
@@ -267,7 +311,8 @@ if __name__=='__main__':
         for data in json_data:
             if data['result'] is not None:
                 result_cnt += 1
-    
+
+
     print("\n객체 탐지 결과가 있는 이미지 파일 개수 : %d" % result_cnt)
     print("객체 탐지 결과가 없는 이미지 파일 개수 : %d" % (len(file_list) - result_cnt))
 
@@ -292,8 +337,11 @@ if __name__=='__main__':
     # 현재 디렉토리
     now_dir = os.getcwd()
     class_cnt_path = now_dir + '/search_keyword/class_cnt.json'
+    print ("\n객체 이름과 개수를 저장할 JSON 파일 경로 : ", class_cnt_path)
+    
     with open(class_cnt_path, 'w') as json_file:
         json.dump(class_cnt, json_file, indent=2)
+        print(class_cnt)
 
     print("\n객체 이름과 개수를 저장한 JSON 파일 생성 완료")
 
