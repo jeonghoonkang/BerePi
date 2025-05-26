@@ -7,11 +7,42 @@ import torch    #sudo pip3 install torch
 import json
 import time
 import argparse
+import configparser
+
 import easyocr
 import pytesseract  # check out language pack for tesseract 
                     # tesseract --list-langs # dir: /usr/local/share/tessdata
                     # https://cjsal95.tistory.com/25
 import inspect
+
+
+def load_config(config_path):
+    """Load default paths from an ini file."""
+
+    defaults = {
+        'scan_image_path': './scan_name_card',
+        'save_description_path': './save_description'
+    }
+
+    if not os.path.isfile(config_path):
+        return defaults
+
+    parser = configparser.ConfigParser()
+    with open(config_path, 'r') as cfg:
+        content = cfg.read()
+    # ocr_name_card.ini does not have a section header. Prepend a default one.
+    parser.read_string('[DEFAULT]\n' + content)
+    cfg_defaults = parser['DEFAULT']
+
+    defaults['scan_image_path'] = cfg_defaults.get(
+        'scan_image_path', defaults['scan_image_path']
+    ).strip("\"'")
+    defaults['save_description_path'] = cfg_defaults.get(
+        'save_description_path', defaults['save_description_path']
+    ).strip("\"'")
+
+    return defaults
+
 
 def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐색
     
@@ -143,18 +174,24 @@ def test_func(file):
 if __name__=='__main__':
     #exit("for the first run test") # for the first step to run this code
 
-    if (sys.argv is None) or (len(sys.argv) < 3):
-        print("Usage: (입력 인자를 추가해 주세요) python run_ocr_name_card.py [scan_name_card] [save_description]")
-        sys.exit(1) 
+    # if (sys.argv is None) or (len(sys.argv) < 3):
+    #     print("Usage: (입력 인자를 추가해 주세요) python run_ocr_name_card.py [scan_name_card] [save_description]")
+    #     sys.exit(1) 
 
     parser = argparse.ArgumentParser(description='명함 문자 인식', usage='bash run.sh')
-    parser.add_argument('scan_name_card', type=str, help='명함 스캔 이미지 파일이 있는 디렉토리 경로')
-    parser.add_argument('save_description', type=str, help='결과 내용 저장할 디렉토리 경로')
+    # parser.add_argument('scan_name_card', type=str, help='명함 스캔 이미지 파일이 있는 디렉토리 경로')
+    # parser.add_argument('save_description', type=str, help='결과 내용 저장할 디렉토리 경로')
+    parser.add_argument('scan_name_card', nargs='?', help='명함 스캔 이미지 파일이 있는 디렉토리 경로')
+    parser.add_argument('save_description', nargs='?', help='결과 내용 저장할 디렉토리 경로')
+    parser.add_argument('-c', '--config', default='ocr_name_card.ini', help='초기 설정 파일 경로')
     args = parser.parse_args()
 
-    dir_path = sys.argv[1]
+    #dir_path = sys.argv[1]
+    config = load_config(args.config)
+    dir_path = args.scan_name_card or config['scan_image_path']
     dir_path = os.path.abspath(dir_path)    # 절대경로로 변환
-    save_path = sys.argv[2]
+    #save_path = sys.argv[2]
+    save_path = args.save_description or config['save_description_path']
     save_path = os.path.abspath(save_path)  # 절대경로로 변환
 
     file_list = []
