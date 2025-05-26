@@ -32,4 +32,5 @@ To run the OCR Name Card Application, follow these steps:
     1. 각 json은 단독 파일에 하나의 json field
 1. 여러개 json을 포함한 dir에 대해서
     1. 모든 json 읽어서, 통합 json으로 생성
-1. 메뉴얼 작업으로, 인식한 ocr 문자의 오류를 확인
+1. 메뉴얼 작업으로, 인식한 ocr 문자의 오류를 확인하여 필드에 정확히 작성
+1. 메뉴얼 수정한 통합 json와, 새롭게 생성되는 통합 json을 비교하여, 메뉴얼 작업이 지워지지 않도록 체크 
