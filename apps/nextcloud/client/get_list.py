@@ -15,6 +15,9 @@ from urllib.parse import unquote_plus
 import urllib.parse
 from webdav3.client import Client
 
+from email.utils import parsedate_to_datetime
+
+
 
 # def __init__(self, config_path="tmp_config.json"):
 #     self.config = self.load_config(config_path)
@@ -145,10 +148,31 @@ def get_file_list_recursive(conf, current_path="", depth=0):
 
         # 파일명만 추출
         filename = href.split("/")[-1]
-        if filename.lower().endswith(('.jpg', '.jpeg')):
-            files.append(current_path+filename)
 
-    #print (f"files: {files}")
+        lastmod_elem = response_buff.find("{DAV:}getlastmodified")
+        lastmod_text = lastmod_elem.text if lastmod_elem is not None else ""
+        if filename.lower().endswith((".jpg", ".jpeg")):
+            prop = response_buff.find("{DAV:}propstat/{DAV:}prop")
+            last_modified = None
+            size = None
+            if prop is not None:
+                lm = prop.find("{DAV:}getlastmodified")
+                if lm is not None:
+                    last_modified = lm.text
+                cl = prop.find("{DAV:}getcontentlength")
+                if cl is not None:
+                    try:
+                        size = int(cl.text)
+                    except (TypeError, ValueError):
+                        size = None
+
+            files.append({
+                'path': current_path + filename,
+                'last_modified': last_modified,
+                'size': size
+            })
+
+
 
     return files
 
@@ -160,30 +184,36 @@ def create_folders(down_dir):
 
 
 # 파일 다운로드
-def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg" 좌측 / 주의 
-    
-    filename = filename.lstrip("/")
+def download_file(conf, file_info): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg" 좌측 / 주의 # file_info dict contains path, last_modified, size
+
+    filename = file_info['path'].lstrip("/")
+    remote_last_modified = file_info.get('last_modified')
+    remote_size = file_info.get('size')
+
     url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
 
-    path_file = f"{conf['nextcloud']['remote_folder']}/{filename}" # /Photos/biz_card/2023/***.jpg
-    path_file = f"{conf['nextcloud']['remote_folder']}"            # /Photos/biz_card
+    remote_path = os.path.join(conf['nextcloud']['remote_folder'], filename)  # /Photos/biz_card/2023/***.jpg  
+    local_path = os.path.join(conf['local']['download_folder'], filename)     #  down_images/2023/강정훈_명함_KETI.jpg
     
-    local_path = f"{conf['local']['download_folder']}/{filename}"  #  down_images/2023/강정훈_명함_KETI.jpg
+    local_path_dir = local_path
 
-    remote_path = os.path.join(conf['nextcloud']['remote_folder'], filename)    
-    local_path = os.path.join(conf['local']['download_folder'], filename)
-    #dir_name = os.path.dirname(local_path_dir.lstrip("/"))
-    #dir_name = conf['local']['download_folder'] +'/' + dir_name
-    #make dir #subdir 이 깊이가 있을 경우는 확인해야함 (현재는 1 depth 만 확인함)
-    #os.makedirs(dir_name, exist_ok=True)
+    # Skip download if file already exists and modification date matches
+    if os.path.exists(local_path_dir):
+        local_mtime = os.path.getmtime(local_path_dir)
+        local_size = os.path.getsize(local_path_dir)
+        remote_ts = None
+        if remote_last_modified:
+            try:
+                remote_ts = parsedate_to_datetime(remote_last_modified).timestamp()
+            except Exception:
+                remote_ts = None
 
-    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        if remote_ts is not None and remote_ts <= local_mtime and remote_size == local_size:
+            print(f"{debug_prefix} Local file {local_path_dir} newer or same as server; skipping download")
+            return local_path_dir
 
 
     client = Client(options)
-    #print (f"{debug_prefix} remote dav path: {path_file}")
-    #print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
-    #client.download_sync(f"{conf['nextcloud']['remote_folder']}", f"{local_path_dir}")
 
     print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
     client.download_sync(remote_path, local_path)
@@ -204,9 +234,9 @@ def run_periodically(conf, interval_minutes=60):
         files = get_file_list_recursive(conf) # 서브디렉토리 포함 
         print(f"Found {len(files)} JPG files in Nextcloud")
         print (f"files: {files}")
-        # # 각 파일 처리
-        for filename in files:
-            local_path = download_file(conf, filename)
+        # 각 파일 처리
+        for file_info in files:
+            local_path = download_file(conf, file_info)
         #     if local_path:
         #         ocr_text = process_ocr(local_path)
         #         if ocr_text:
