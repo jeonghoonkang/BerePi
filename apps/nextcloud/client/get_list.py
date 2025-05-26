@@ -18,33 +18,6 @@ from webdav3.client import Client
 from email.utils import parsedate_to_datetime
 
 
-
-# def __init__(self, config_path="tmp_config.json"):
-#     self.config = self.load_config(config_path)
-
-    # def load_config(self, config_path):
-    #     """설정 파일 로드"""
-    #     try:
-    #         with open(config_path, 'r', encoding='utf-8') as f:
-    #             config = json.load(f)
-            
-    #         # 필수 설정 확인
-    #         required_keys = [
-    #             'nextcloud/url', 'nextcloud/username', 'nextcloud/password',
-    #             'local/download_folder', 'local/result_json'
-    #         ]
-            
-    #         for key in required_keys:
-    #             section, item = key.split('/')
-    #             if item not in config.get(section, {}):
-    #                 raise ValueError(f"Missing required config: {key}")
-            
-    #         return config
-        
-    #     except FileNotFoundError:
-    #         raise FileNotFoundError(f"Config file not found: {config_path}")
-    #     except json.JSONDecodeError:
-    #         raise ValueError(f"Invalid JSON in config file: {config_path}")
     
 debug_prefix = "  "
 
