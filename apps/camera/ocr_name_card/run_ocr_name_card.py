@@ -112,6 +112,7 @@ def save_image(file, model, save_path):
     cv2.imwrite(save_path, img)
 
 def merge_json_files(file_list, save_path):
+
     json_data = []
 
     print(file_list, save_path)
@@ -127,8 +128,35 @@ def merge_json_files(file_list, save_path):
     
     print ("  ####  json_data", json_data)
 
-    with open(save_path, 'w',  encoding='utf-8') as json_file:
-        json.dump(json_data, json_file, ensure_ascii=False, indent=2)
+    # Load existing data if the output file already exists
+    if os.path.isfile(save_path):
+        try:
+            with open(save_path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+                if isinstance(existing, list):
+                    json_data.extend(existing)
+                else:
+                    json_data.append(existing)
+        except json.JSONDecodeError:
+            pass
+
+    merged = {}
+    for item in json_data:
+        key = item.get('filepath') or item.get('filename')
+        if key is None:
+            continue
+        if key not in merged:
+            merged[key] = item
+            continue
+
+        # Combine fields without overwriting existing non-empty values
+        for k, v in item.items():
+            if k not in merged[key] or not merged[key][k]:
+                merged[key][k] = v
+
+    with open(save_path, 'w', encoding='utf-8') as json_file:
+        json.dump(list(merged.values()), json_file, ensure_ascii=False, indent=2)
+
 
 
 def ocr():
@@ -272,7 +300,7 @@ if __name__=='__main__':
         ctime = os.path.getctime(file)         # 생성시간
         ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S') # 생성시간 datetime으로 변환
 
-        #result = analysis(file, model)
+        # result = analysis(file, model)
         # 원본이미지 파일 경로도 저장
         original_filepath = dir_path + '/' + filename
 
