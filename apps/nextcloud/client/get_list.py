@@ -52,7 +52,7 @@ def load_config(config_path):
         raise ValueError(f"Invalid JSON in config file: {config_path}")
 
 
-def __init__(config_path="tmp_config.json"):
+def __init__(config_path="tmp_config.json"): ### INIT CHECK ### You should check if using config.json 
     config = load_config(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
@@ -168,12 +168,15 @@ def download_file(conf, file_info): #filename = "/2023/09/01/2023-09-01 00-36-40
     remote_path = os.path.join(conf['nextcloud']['remote_folder'], filename)  # /Photos/biz_card/2023/***.jpg  
     local_path = os.path.join(conf['local']['download_folder'], filename)     #  down_images/2023/강정훈_명함_KETI.jpg
     
-    local_path_dir = local_path
+    # Ensure local directory exists when dealing with sub-folders
+    local_path_dir = os.path.dirname(local_path)
+    if local_path_dir:
+        os.makedirs(local_path_dir, exist_ok=True)
 
     # Skip download if file already exists and modification date matches
-    if os.path.exists(local_path_dir):
-        local_mtime = os.path.getmtime(local_path_dir)
-        local_size = os.path.getsize(local_path_dir)
+    if os.path.exists(local_path):
+        local_mtime = os.path.getmtime(local_path)
+        local_size = os.path.getsize(local_path)
         remote_ts = None
         if remote_last_modified:
             try:
@@ -182,8 +185,8 @@ def download_file(conf, file_info): #filename = "/2023/09/01/2023-09-01 00-36-40
                 remote_ts = None
 
         if remote_ts is not None and remote_ts <= local_mtime and remote_size == local_size:
-            print(f"{debug_prefix} Local file {local_path_dir} newer or same as server; skipping download")
-            return local_path_dir
+            print(f"{debug_prefix} Local file {local_path} newer or same as server; skipping download")
+            return local_path
 
 
     client = Client(options)
