@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 INIFILE=ocr_name_card.ini
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
