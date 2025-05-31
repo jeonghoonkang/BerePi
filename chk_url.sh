@@ -31,6 +31,6 @@ diff_days=$(( (end_ts - current_ts) / 86400 ))
 if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
     echo "SSL certificate for $URL expires in $diff_days days (within 2 weeks)"
 else
-    echo "SSL certificate for $URL expires in $diff_days days" | telegram-send --stdin
+    echo "SSL certificate for $URL expires in $diff_days days" | telegram-send --stdin # should check telegram-send is working or not
 fi
 
