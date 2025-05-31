@@ -13,7 +13,10 @@ import easyocr
 import pytesseract  # check out language pack for tesseract 
                     # tesseract --list-langs # dir: /usr/local/share/tessdata
                     # https://cjsal95.tistory.com/25
-                    
+                    # for m1 mac, https://simmigyeong.tistory.com/3
+                    # brew install tesseract
+                    # brew install tesseract-lang # for language pack
+                    # tesseract --list-langs # check installed language pack
 
                     
 import inspect
