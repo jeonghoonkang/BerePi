@@ -13,6 +13,9 @@ import easyocr
 import pytesseract  # check out language pack for tesseract 
                     # tesseract --list-langs # dir: /usr/local/share/tessdata
                     # https://cjsal95.tistory.com/25
+                    
+
+                    
 import inspect
 
 
