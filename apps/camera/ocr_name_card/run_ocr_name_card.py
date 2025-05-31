@@ -151,13 +151,24 @@ def merge_json_files(file_list, save_path):
         key = item.get('filepath') or item.get('filename')
         if key is None:
             continue
+
+        # 새로운 키가 없으면 추가
         if key not in merged:
             merged[key] = item
             continue
 
         # Combine fields without overwriting existing non-empty values
         for k, v in item.items():
-            if k not in merged[key] or not merged[key][k]:
+           # If the current item has a non-empty value, always use it
+            if v:
+                merged[key][k] = v
+                continue
+
+            # When the new value is empty but an old value exists,
+            # keep the old value and propagate it to the current item
+            if k in merged[key] and merged[key][k]:
+                item[k] = merged[key][k]
+            else:
                 merged[key][k] = v
 
     merged_values = list(merged.values())
