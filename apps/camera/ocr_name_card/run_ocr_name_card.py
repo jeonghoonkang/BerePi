@@ -2,21 +2,23 @@ import cv2     #sudo pip3 install opencv-python
 import numpy as np
 import os
 import sys
-from datetime import datetime
 import torch    #sudo pip3 install torch
 import json
 import time
 import argparse
 import configparser
+from datetime import datetime, timedelta
+import re
+
 
 import easyocr
 import pytesseract  # check out language pack for tesseract 
                     # tesseract --list-langs # dir: /usr/local/share/tessdata
                     # https://cjsal95.tistory.com/25
                     # for m1 mac, https://simmigyeong.tistory.com/3
-                    # brew install tesseract
-                    # brew install tesseract-lang # for language pack
-                    # tesseract --list-langs # check installed language pack
+                      # brew install tesseract
+                      # brew install tesseract-lang # for language pack
+                      # tesseract --list-langs # check installed language pack
 
                     
 import inspect
@@ -183,7 +185,29 @@ def merge_json_files(file_list, save_path):
     with open(timestamped_path, 'w', encoding='utf-8') as json_file:
         json.dump(merged_values, json_file, ensure_ascii=False, indent=2)
 
+    remove_old_timestamped_files(save_path)
 
+
+def remove_old_timestamped_files(save_path, months=3):
+    """Delete timestamped JSON files older than the given number of months."""
+    base_dir = os.path.dirname(save_path)
+    base_name, ext = os.path.splitext(os.path.basename(save_path))
+    pattern = re.compile(rf"{re.escape(base_name)}_(\d{{8}}_\d{{6}}){re.escape(ext)}$")
+    cutoff = datetime.now() - timedelta(days=30 * months)
+
+    for fname in os.listdir(base_dir):
+        match = pattern.match(fname)
+        if not match:
+            continue
+        try:
+            file_time = datetime.strptime(match.group(1), "%Y%m%d_%H%M%S")
+        except ValueError:
+            continue
+        if file_time < cutoff:
+            try:
+                os.remove(os.path.join(base_dir, fname))
+            except OSError:
+                pass
 
 def ocr():
     argparser = argparse.ArgumentParser()
