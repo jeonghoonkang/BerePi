@@ -5,6 +5,7 @@ import os
 import time
 import json
 import requests
+import sys
 
 from PIL import Image
 import pytesseract
@@ -99,13 +100,16 @@ def get_file_list_recursive(conf, current_path="", depth=0):
     for response_buff in tree.findall("{DAV:}response"):
         
         uhref = response_buff.find("{DAV:}href").text
-        relative_path = uhref.replace(f"/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}", "").lstrip("/")
-        print (f"{debug_prefix}  Found uhref: {uhref}")
-        print (f"{debug_prefix}  relative_path: {relative_path}")
-       
-        href = urllib.parse.unquote_plus(uhref)
-        decoded_path = urllib.parse.unquote_plus(relative_path)
-        #print (f"decoded_path: {decoded_path}")
+        href = urllib.parse.unquote(uhref)
+        relative_path = href.replace(
+            f"/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}",
+            "",
+        ).lstrip("/")
+        print(f"{debug_prefix}  Found uhref: {uhref}")
+        print(f"{debug_prefix}  Decoded href: {href}")
+        print(f"{debug_prefix}  relative_path: {relative_path}")
+
+        decoded_path = urllib.parse.unquote(relative_path)
 
         if not relative_path: #current dir skip
             print(f"{debug_prefix}  Skipping current directory")
@@ -167,6 +171,29 @@ def download_file(conf, file_info): #filename = "/2023/09/01/2023-09-01 00-36-40
     remote_path = os.path.join(conf['nextcloud']['remote_folder'], filename)  # /Photos/biz_card/2023/***.jpg  
     local_path = os.path.join(conf['local']['download_folder'], filename)     #  down_images/2023/강정훈_명함_KETI.jpg
     
+    # Decode any escaped characters so remote_path supports unicode
+    remote_path = urllib.parse.unquote(remote_path)
+    local_path = urllib.parse.unquote(local_path)
+
+    # # Prefix './' on macOS or Linux when using relative paths
+    # if sys.platform.startswith('darwin') or sys.platform.startswith('linux'):
+    #     if not os.path.isabs(local_path) and not local_path.startswith('./'):
+    #         local_path = f"./{local_path}"
+
+
+    # Ensure we work with plain strings for file paths
+    if not isinstance(local_path, str):
+        if isinstance(local_path, bytes):
+            local_path = local_path.decode()
+        else:
+            local_path = str(local_path)
+
+    if not isinstance(remote_path, str):
+        if isinstance(remote_path, bytes):
+            remote_path = remote_path.decode()
+        else:
+            remote_path = str(remote_path)
+
     # Ensure local directory exists when dealing with sub-folders
     local_path_dir = os.path.dirname(local_path)
     if local_path_dir:
@@ -190,10 +217,22 @@ def download_file(conf, file_info): #filename = "/2023/09/01/2023-09-01 00-36-40
 
     client = Client(options)
 
-    print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
-    client.download_sync(remote_path, local_path)
+    #print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+    #client.download_sync(remote_path, local_path)
 
+    # Encode remote path to handle spaces or non-ASCII characters
+    encoded_remote_path = urllib.parse.quote(remote_path, safe="/")
 
+    print(f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+
+    try:
+        client.download_sync(remote_path=str(remote_path),
+                             local_path=str(local_path))
+    except Exception as e:
+        print(f"{debug_prefix} Failed to download {remote_path}: {e}")
+        return None
+
+    return local_path
 
 
 # 주기적 실행 함수
