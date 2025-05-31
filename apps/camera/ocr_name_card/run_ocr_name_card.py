@@ -160,8 +160,17 @@ def merge_json_files(file_list, save_path):
             if k not in merged[key] or not merged[key][k]:
                 merged[key][k] = v
 
+    merged_values = list(merged.values())
+
     with open(save_path, 'w', encoding='utf-8') as json_file:
-        json.dump(list(merged.values()), json_file, ensure_ascii=False, indent=2)
+        json.dump(merged_values, json_file, ensure_ascii=False, indent=2)
+
+    # Save an additional file with a timestamp in the filename
+    time_suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
+    base, ext = os.path.splitext(save_path)
+    timestamped_path = f"{base}_{time_suffix}{ext}"
+    with open(timestamped_path, 'w', encoding='utf-8') as json_file:
+        json.dump(merged_values, json_file, ensure_ascii=False, indent=2)
 
 
 
@@ -290,53 +299,10 @@ if __name__=='__main__':
 
     exit("### exit tinyos ### on the test check for good here ") # for the on the step to run this code
 
-    dir_list = []
-    file_list = []
-    json_file_list = []
-    cnt = 0
-
-    recursive_search_dir(save_path, file_list)
-
-    for file in file_list:
-        cnt += 1
-        printProgressBar(cnt, len(file_list))
-
-        filename = file.split('/')[-1]         # 파일명
-        filepath = save_path + '/' + filename  # 파일경로
-        ctime = os.path.getctime(file)         # 생성시간
-        ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S') # 생성시간 datetime으로 변환
-
-        # result = analysis(file, model)
-        # 원본이미지 파일 경로도 저장
-        original_filepath = dir_path + '/' + filename
-
-        # result가 없다면, 해당 result를 None으로 변환
-        if not result:
-            result = None
-
-        data = {
-            'filename' : filename,
-            'filepath' : filepath,
-            'ctime' : ctime,
-            'result' : result,
-            'original_filepath' : original_filepath
-        }
-
-        json_file_path = os.path.splitext(filepath)[0]+ '.json'
-
-        with open(json_file_path, 'w') as json_file:
-            json.dump(data, json_file, indent=2)
-            print (data)
-    
-        json_file_list.append(json_file_path)
-
-    file_path = save_path + '/file_list.json'
-
-    merge_json_files(json_file_list, file_path)
 
 
 
-
+#   # 객체 탐지 모델 로드
     result_cnt = 0
 
     with open(file_path, 'r') as json_file:
