@@ -4,7 +4,6 @@
 
 # URL="****.com"; echo $URL; FURL=$URL":8881"; openssl s_client -connect $FURL -servername $URL 2>/dev/null | openssl x509 -noout -dates
 
-
 #!/bin/bash
 # Check if SSL certificate expires within 2 weeks
 URL="$1"
