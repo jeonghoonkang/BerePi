@@ -9,7 +9,7 @@ import argparse
 import configparser
 from datetime import datetime, timedelta
 import re
-
+import shutil
 
 import easyocr
 import pytesseract  # check out language pack for tesseract 
@@ -23,13 +23,15 @@ import pytesseract  # check out language pack for tesseract
                     
 import inspect
 
+NEXTCLOUD_PHOTOS_DIR = None
 
 def load_config(config_path):
     """Load default paths from an ini file."""
 
     defaults = {
         'scan_image_path': './scan_name_card',
-        'save_description_path': './save_description'
+        'save_description_path': './save_description',
+        'nextcloud_photo_dir' : '/Photos',
     }
 
     if not os.path.isfile(config_path):
@@ -42,13 +44,17 @@ def load_config(config_path):
     parser.read_string('[DEFAULT]\n' + content)
     cfg_defaults = parser['DEFAULT']
 
-    defaults['scan_image_path'] = cfg_defaults.get(
-        'scan_image_path', defaults['scan_image_path']
-    ).strip("\"'")
-    defaults['save_description_path'] = cfg_defaults.get(
-        'save_description_path', defaults['save_description_path']
-    ).strip("\"'")
+    defaults['scan_image_path'] = cfg_defaults.get('scan_image_path', defaults['scan_image_path']).strip("\"'")
+    defaults['save_description_path'] = cfg_defaults.get('save_description_path', defaults['save_description_path']).strip("\"'")
+    defaults['nextcloud_photo_dir'] = cfg_defaults.get('nextcloud_photo_dir', defaults['nextcloud_photo_dir']).strip("\"'")
+    
+    global NEXTCLOUD_PHOTOS_DIR
+    NEXTCLOUD_PHOTOS_DIR = defaults['nextcloud_photo_dir']
 
+
+    #print (NEXTCLOUD_PHOTOS_DIR)
+    #exit()
+    
     return defaults
 
 
@@ -186,6 +192,9 @@ def merge_json_files(file_list, save_path):
         json.dump(merged_values, json_file, ensure_ascii=False, indent=2)
 
     remove_old_timestamped_files(save_path)
+    
+    # Copy the resulting files to Nextcloud if configured
+    copy_to_nextcloud([save_path, timestamped_path], NEXTCLOUD_PHOTOS_DIR)
 
 
 def remove_old_timestamped_files(save_path, months=3):
@@ -208,6 +217,33 @@ def remove_old_timestamped_files(save_path, months=3):
                 os.remove(os.path.join(base_dir, fname))
             except OSError:
                 pass
+
+def copy_to_nextcloud(paths, dest_dir): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
+    """Copy given file paths to a Nextcloud directory if configured."""
+    if not dest_dir:
+        print("No destination directory provided for Nextcloud.")
+        return
+
+    with open("nocommit_url.ini", "r", encoding='utf-8') as f:
+        for line in f:
+            if line.strip().startswith('URL'):
+                dest_dir = line.split('=',1)[1].strip()
+                break
+    dest_dir = os.path.join(dest_dir, 'Photos')  # Ensure we are copying to the Photos directory
+    print(f"Copying files to Nextcloud directory: {dest_dir}")
+    #os.makedirs(dest_dir, exist_ok=True)
+
+    for src in paths:
+        if not src:
+            continue
+        try:
+            shutil.copy2(src, dest_dir)
+        except OSError as e:
+            print(f"Failed to copy {src} to {dest_dir}: {e}")
+
+    exit("### exit tinyos ### on the copy to nextcloud") # for the on the step to run this code
+
+    return dest_dir
 
 def ocr():
     argparser = argparse.ArgumentParser()
@@ -245,7 +281,14 @@ def ocr():
     pprint(result, depth=5, indent=4)
 
 
-def test_func(file):
+def test_func(file, run_flag=True):
+
+    if run_flag == False:
+        print("### NO run test_func ###")
+        print ("test_func is not running")
+        return None
+
+
     print(inspect.getfile(pytesseract))
     
     oem = 3
@@ -257,7 +300,7 @@ def test_func(file):
     gray = cv2.medianBlur(gray, 3)
     txt = pytesseract.image_to_string(gray, lang='kor+eng', config=custom_config)
 
-    print (txt) 
+    #print (txt) 
     return txt
 
 if __name__=='__main__':
@@ -287,13 +330,13 @@ if __name__=='__main__':
     json_data = []
     json_file_list = []
     cnt = 0
-
     start_time = time.time()
-
     
     recursive_search_dir(dir_path, file_list)
 
     print("\n명함 파일 개수 : %d" % len(file_list))
+
+    run_flag = False # test_func를 실행할지 여부
 
     
     for file in file_list:
@@ -301,7 +344,7 @@ if __name__=='__main__':
         printProgressBar(cnt, len(file_list))
         print ("processing", file)
         #print ("### to do: code more")
-        buff = test_func(file)
+        buff = test_func(file, run_flag)
         #test
         filename = file.split('/')[-1]         # 파일명
         filepath = save_path + '/' + filename  # 파일경로
@@ -333,7 +376,6 @@ if __name__=='__main__':
     merge_json_files(json_file_list, file_path)
 
     exit("### exit tinyos ### on the test check for good here ") # for the on the step to run this code
-
 
 
 
