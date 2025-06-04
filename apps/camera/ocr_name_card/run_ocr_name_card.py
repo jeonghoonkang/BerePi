@@ -25,6 +25,47 @@ import inspect
 
 NEXTCLOUD_PHOTOS_DIR = None
 
+options = {
+    'webdav_hostname': None,
+    'webdav_login': None,
+    'webdav_password': None
+}
+
+def __init__(config_path="nocommit_url.ini"): ### INIT CHECK ### You should check if using config.json 
+    config = load_config(config_path)
+    options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
+    options['webdav_login'] = config['nextcloud']['username']
+    options['webdav_password'] = config['nextcloud']['password']
+
+    return config
+
+
+def load_config(config_path):
+    """설정 파일 로드"""
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        # 필수 설정 확인
+        required_keys = [
+            'nextcloud/url', 'nextcloud/username', 'nextcloud/password',
+            'local/download_folder', 'local/result_json'
+        ]
+        
+        for key in required_keys:
+            section, item = key.split('/')
+            if item not in config.get(section, {}):
+                raise ValueError(f"Missing required config: {key}")
+        
+        return config
+    
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    except json.JSONDecodeError:
+        raise ValueError(f"Invalid JSON in config file: {config_path}")
+
+
+
 def load_config(config_path):
     """Load default paths from an ini file."""
 
@@ -125,7 +166,7 @@ def save_image(file, model, save_path):
 
     cv2.imwrite(save_path, img)
 
-def merge_json_files(file_list, save_path):
+def merge_json_files(file_list, save_path, conf):
 
     json_data = []
 
@@ -194,7 +235,7 @@ def merge_json_files(file_list, save_path):
     remove_old_timestamped_files(save_path)
     
     # Copy the resulting files to Nextcloud if configured
-    copy_to_nextcloud([save_path, timestamped_path], NEXTCLOUD_PHOTOS_DIR)
+    copy_to_nextcloud([save_path, timestamped_path], conf)
 
 
 def remove_old_timestamped_files(save_path, months=3):
@@ -218,28 +259,40 @@ def remove_old_timestamped_files(save_path, months=3):
             except OSError:
                 pass
 
-def copy_to_nextcloud(paths, dest_dir): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
+def copy_to_nextcloud(paths, conf): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
     """Copy given file paths to a Nextcloud directory if configured."""
-    if not dest_dir:
+    if not conf:
         print("No destination directory provided for Nextcloud.")
         return
 
-    with open("nocommit_url.ini", "r", encoding='utf-8') as f:
-        for line in f:
-            if line.strip().startswith('URL'):
-                dest_dir = line.split('=',1)[1].strip()
-                break
-    dest_dir = os.path.join(dest_dir, 'Photos')  # Ensure we are copying to the Photos directory
     print(f"Copying files to Nextcloud directory: {dest_dir}")
     #os.makedirs(dest_dir, exist_ok=True)
 
-    for src in paths:
-        if not src:
-            continue
+    #options['webdav_hostname']
+    #options['webdav_login']
+    #options['webdav_password']
+
+    if options['webdav_hostname'] and options['webdav_login'] and options['webdav_password']:
         try:
-            shutil.copy2(src, dest_dir)
-        except OSError as e:
-            print(f"Failed to copy {src} to {dest_dir}: {e}")
+            from webdav3.client import Client  # type: ignore
+
+            client = Client(options)
+            client.verify = True
+
+            for src in paths:
+                if not src:
+                    continue
+
+                remote_path = os.path.join(dest_dir, os.path.basename(src))
+                
+                try:
+                    client.upload_sync(remote_path=remote_path, local_path=src)
+                except Exception as e:  # noqa: BLE001
+                    print(f"Failed to upload {src} to {remote_path}: {e}")
+            return
+        except Exception as e:  # noqa: BLE001
+            print(f"WebDAV upload failed: {e}; falling back to local copy")
+
 
     exit("### exit tinyos ### on the copy to nextcloud") # for the on the step to run this code
 
@@ -271,11 +324,9 @@ def ocr():
     fpath = file_name
 
     #fpath='/home/tinyos/devel_opment/data/ocr/sample_receipt.png'
-
     reader = easyocr.Reader([language,'en']) #language
 
     #print (sys.argv)
-
     result = reader.readtext(fpath)
 
     pprint(result, depth=5, indent=4)
@@ -317,6 +368,9 @@ if __name__=='__main__':
     parser.add_argument('save_description', nargs='?', help='결과 내용 저장할 디렉토리 경로')
     parser.add_argument('-c', '--config', default='ocr_name_card.ini', help='초기 설정 파일 경로')
     args = parser.parse_args()
+
+    conf = __init__()
+
 
     #dir_path = sys.argv[1]
     config = load_config(args.config)
