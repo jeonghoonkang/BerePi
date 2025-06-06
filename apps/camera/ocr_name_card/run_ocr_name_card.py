@@ -32,7 +32,7 @@ options = {
 }
 
 def __init__(config_path="nocommit_url.ini"): ### INIT CHECK ### You should check if using config.json 
-    config = load_config(config_path)
+    config = load_nextcloud_value(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
     options['webdav_password'] = config['nextcloud']['password']
@@ -40,7 +40,7 @@ def __init__(config_path="nocommit_url.ini"): ### INIT CHECK ### You should chec
     return config
 
 
-def load_config(config_path):
+def load_nextcloud_value(config_path):
     """설정 파일 로드"""
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
