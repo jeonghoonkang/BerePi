@@ -28,14 +28,18 @@ NEXTCLOUD_PHOTOS_DIR = None
 options = {
     'webdav_hostname': None,
     'webdav_login': None,
-    'webdav_password': None
+    'webdav_password': None,
 }
 
-def __init__(config_path="nocommit_url.ini"): ### INIT CHECK ### You should check if using config.json 
+dest_dir = None
+
+def init(config_path="nocommit_url.ini"): ### INIT CHECK ### You should check if using config.json 
     config = load_nextcloud_value(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
     options['webdav_password'] = config['nextcloud']['password']
+    global dest_dir
+    dest_dir = config['local']['up_path']  # Optional, specify a default upload path
 
     return config
 
@@ -48,12 +52,14 @@ def load_nextcloud_value(config_path):
         
         # 필수 설정 확인
         required_keys = [
-            'nextcloud/url', 'nextcloud/username', 'nextcloud/password',
-            'local/download_folder', 'local/result_json'
+            'nextcloud/url', 'nextcloud/webdav_hostname',
+            'nextcloud/username', 'nextcloud/password',
+            'local/up_path', 'local/download_path'
         ]
         
         for key in required_keys:
             section, item = key.split('/')
+            print (f"Checking config for {section}/{item}")
             if item not in config.get(section, {}):
                 raise ValueError(f"Missing required config: {key}")
         
@@ -166,7 +172,7 @@ def save_image(file, model, save_path):
 
     cv2.imwrite(save_path, img)
 
-def merge_json_files(file_list, save_path, conf):
+def merge_json_files(file_list, save_path):
 
     json_data = []
 
@@ -235,7 +241,7 @@ def merge_json_files(file_list, save_path, conf):
     remove_old_timestamped_files(save_path)
     
     # Copy the resulting files to Nextcloud if configured
-    copy_to_nextcloud([save_path, timestamped_path], conf)
+    copy_to_nextcloud([save_path, timestamped_path])
 
 
 def remove_old_timestamped_files(save_path, months=3):
@@ -259,40 +265,40 @@ def remove_old_timestamped_files(save_path, months=3):
             except OSError:
                 pass
 
-def copy_to_nextcloud(paths, conf): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
+def copy_to_nextcloud(paths): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
     """Copy given file paths to a Nextcloud directory if configured."""
-    if not conf:
-        print("No destination directory provided for Nextcloud.")
-        return
-
-    print(f"Copying files to Nextcloud directory: {dest_dir}")
-    #os.makedirs(dest_dir, exist_ok=True)
 
     #options['webdav_hostname']
     #options['webdav_login']
     #options['webdav_password']
 
+    from webdav3.client import Client  # type: ignore
+
+    client = Client(options)
+    client.verify = True
+    print("")
+    print("dest_dir", dest_dir)
+    #print(client.list('/Photos'))  # List files in the Nextcloud Photos directory
+
     if options['webdav_hostname'] and options['webdav_login'] and options['webdav_password']:
         try:
-            from webdav3.client import Client  # type: ignore
-
-            client = Client(options)
-            client.verify = True
 
             for src in paths:
                 if not src:
                     continue
-
+                remote_path = dest_dir
                 remote_path = os.path.join(dest_dir, os.path.basename(src))
                 
                 try:
                     client.upload_sync(remote_path=remote_path, local_path=src)
+
                 except Exception as e:  # noqa: BLE001
                     print(f"Failed to upload {src} to {remote_path}: {e}")
             return
         except Exception as e:  # noqa: BLE001
             print(f"WebDAV upload failed: {e}; falling back to local copy")
 
+    print(client.list('/Photos'))  # List files in the Nextcloud Photos directory
 
     exit("### exit tinyos ### on the copy to nextcloud") # for the on the step to run this code
 
@@ -369,7 +375,7 @@ if __name__=='__main__':
     parser.add_argument('-c', '--config', default='ocr_name_card.ini', help='초기 설정 파일 경로')
     args = parser.parse_args()
 
-    conf = __init__()
+    conf = init()
 
 
     #dir_path = sys.argv[1]
