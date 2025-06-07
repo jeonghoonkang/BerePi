@@ -187,7 +187,7 @@ def merge_json_files(file_list, save_path):
         else:
             json_data.append(data)  # 단일 객체 추가
     
-    print ("  ####  json_data", json_data)
+    #print ("  ####  json_data", json_data)
 
     # Load existing data if the output file already exists
     if os.path.isfile(save_path):
@@ -344,9 +344,7 @@ def test_func(file, run_flag=True):
         print("### NO run test_func ###")
         print ("test_func is not running")
         return None
-
-
-    print(inspect.getfile(pytesseract))
+    #print(inspect.getfile(pytesseract))
     
     oem = 3
     psm = 4
@@ -396,7 +394,7 @@ if __name__=='__main__':
 
     print("\n명함 파일 개수 : %d" % len(file_list))
 
-    run_flag = False # test_func를 실행할지 여부
+    run_flag = True # test_func를 실행할지 여부, 여기서 결정해야 함 ### 매우 중요 
 
     
     for file in file_list:
