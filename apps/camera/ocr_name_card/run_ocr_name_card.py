@@ -439,49 +439,49 @@ if __name__=='__main__':
 
 
 
-#   # 객체 탐지 모델 로드
-    result_cnt = 0
+# #   # 객체 탐지 모델 로드
+#     result_cnt = 0
 
-    with open(file_path, 'r') as json_file:
-        json_data = json.load(json_file)
-        # 만약에 result가 None이 아니라면, result_cnt를 1 증가
-        for data in json_data:
-            if data['result'] is not None:
-                result_cnt += 1
+#     with open(file_path, 'r') as json_file:
+#         json_data = json.load(json_file)
+#         # 만약에 result가 None이 아니라면, result_cnt를 1 증가
+#         for data in json_data:
+#             if data['result'] is not None:
+#                 result_cnt += 1
 
 
-    print("\n객체 탐지 결과가 있는 이미지 파일 개수 : %d" % result_cnt)
-    print("객체 탐지 결과가 없는 이미지 파일 개수 : %d" % (len(file_list) - result_cnt))
+#     print("\n객체 탐지 결과가 있는 이미지 파일 개수 : %d" % result_cnt)
+#     print("객체 탐지 결과가 없는 이미지 파일 개수 : %d" % (len(file_list) - result_cnt))
 
-    # 객체 이름을 출력하고 개수를 출력(result에 여러 개의 동일 객체 이름은 하나로 취급)
-    class_cnt = {}
-    for data in json_data:
-        if data['result']:
-            for result in data['result']:
-                # result 내에 값을 통해 객체 이름에 대한 딕셔너리 생성
-                obj_name = []
-                # 1개 이상의 객체 이름이 있는 경우에 대해 한개만 추가
-                if result['name'] not in obj_name:
-                    obj_name.append(result['name'])
-                # class_cnt에 해당 내용을 추가
-            for name in obj_name:
-                if name in class_cnt:
-                    class_cnt[name] += 1
-                else:
-                    class_cnt[name] = 1
+#     # 객체 이름을 출력하고 개수를 출력(result에 여러 개의 동일 객체 이름은 하나로 취급)
+#     class_cnt = {}
+#     for data in json_data:
+#         if data['result']:
+#             for result in data['result']:
+#                 # result 내에 값을 통해 객체 이름에 대한 딕셔너리 생성
+#                 obj_name = []
+#                 # 1개 이상의 객체 이름이 있는 경우에 대해 한개만 추가
+#                 if result['name'] not in obj_name:
+#                     obj_name.append(result['name'])
+#                 # class_cnt에 해당 내용을 추가
+#             for name in obj_name:
+#                 if name in class_cnt:
+#                     class_cnt[name] += 1
+#                 else:
+#                     class_cnt[name] = 1
     
-    # 해당 내용을 json 파일로 저장
-    # 현재 디렉토리
-    now_dir = os.getcwd()
-    class_cnt_path = now_dir + '/search_keyword/class_cnt.json'
-    print ("\n객체 이름과 개수를 저장할 JSON 파일 경로 : ", class_cnt_path)
+#     # 해당 내용을 json 파일로 저장
+#     # 현재 디렉토리
+#     now_dir = os.getcwd()
+#     class_cnt_path = now_dir + '/search_keyword/class_cnt.json'
+#     print ("\n객체 이름과 개수를 저장할 JSON 파일 경로 : ", class_cnt_path)
     
-    with open(class_cnt_path, 'w') as json_file:
-        json.dump(class_cnt, json_file, indent=2)
-        print(class_cnt)
+#     with open(class_cnt_path, 'w') as json_file:
+#         json.dump(class_cnt, json_file, indent=2)
+#         print(class_cnt)
 
-    print("\n객체 이름과 개수를 저장한 JSON 파일 생성 완료")
+#     print("\n객체 이름과 개수를 저장한 JSON 파일 생성 완료")
 
-    end_time = time.time()
+#     end_time = time.time()
 
-    print("\n걸린 시간 : ", end_time - start_time)
+#     print("\n걸린 시간 : ", end_time - start_time)
