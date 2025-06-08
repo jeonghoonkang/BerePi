@@ -23,7 +23,7 @@ To run the OCR Name Card Application, follow these steps:
 ## Usage
 
 1. Launch the application.
-2. Upload an image of a name card.
+2. specify name card images path 
 
 
 ## 실행 구조
