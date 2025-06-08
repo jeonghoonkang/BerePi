@@ -23,7 +23,10 @@ To run the OCR Name Card Application, follow these steps:
 ## Usage
 
 1. Launch the application.
-2. specify name card images path 
+2. specify name card images path
+
+   ## how to run
+   - bash run.sh
 
 
 ## 실행 구조
