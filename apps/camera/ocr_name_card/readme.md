@@ -41,4 +41,4 @@ To run the OCR Name Card Application, follow these steps:
     1. 모든 json 읽어서, 통합 json으로 하나의 파일로 통합 생성
       1. 검색 및 확인을 위한 파일을 만드는 것임 
 
-1. 메뉴얼 수정한 통합 json와, 새롭게 생성되는 통합 json을 비교하여, 메뉴얼 작업이 지워지지 않도록 체크 
+1. 메뉴얼 수정한 통합 json과, 새롭게 생성되는 통합 json을 비교하여, 메뉴얼 작업이 지워지지 않도록 체크 
