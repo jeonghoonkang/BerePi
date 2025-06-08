@@ -33,7 +33,7 @@ options = {
 
 dest_dir = None
 
-def init(config_path="nocommit_url.ini"): ### INIT CHECK ### You should check if using config.json 
+def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json 
     config = load_nextcloud_value(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
@@ -387,6 +387,7 @@ if __name__=='__main__':
     file_list = []
     json_data = []
     json_file_list = []
+
     cnt = 0
     start_time = time.time()
     
@@ -408,6 +409,7 @@ if __name__=='__main__':
         filepath = save_path + '/' + filename  # 파일경로
         ctime = os.path.getctime(file)         # 생성시간
         json_file_path = os.path.splitext(filepath)[0] + '.json'
+
 
         ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S') # 생성시간 datetime으로 변환
         # 원본이미지 파일 경로도 저장
@@ -446,7 +448,6 @@ if __name__=='__main__':
 #         for data in json_data:
 #             if data['result'] is not None:
 #                 result_cnt += 1
-
 
 #     print("\n객체 탐지 결과가 있는 이미지 파일 개수 : %d" % result_cnt)
 #     print("객체 탐지 결과가 없는 이미지 파일 개수 : %d" % (len(file_list) - result_cnt))
