@@ -28,19 +28,23 @@ NEXTCLOUD_PHOTOS_DIR = None
 options = {
     'webdav_hostname': None,
     'webdav_login': None,
-    'webdav_password': None
+    'webdav_password': None,
 }
 
-def __init__(config_path="nocommit_url.ini"): ### INIT CHECK ### You should check if using config.json 
-    config = load_config(config_path)
+dest_dir = None
+
+def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json 
+    config = load_nextcloud_value(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
     options['webdav_password'] = config['nextcloud']['password']
+    global dest_dir
+    dest_dir = config['local']['up_path']  # Optional, specify a default upload path
 
     return config
 
 
-def load_config(config_path):
+def load_nextcloud_value(config_path):
     """설정 파일 로드"""
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -48,12 +52,14 @@ def load_config(config_path):
         
         # 필수 설정 확인
         required_keys = [
-            'nextcloud/url', 'nextcloud/username', 'nextcloud/password',
-            'local/download_folder', 'local/result_json'
+            'nextcloud/url', 'nextcloud/webdav_hostname',
+            'nextcloud/username', 'nextcloud/password',
+            'local/up_path', 'local/download_path'
         ]
         
         for key in required_keys:
             section, item = key.split('/')
+            print (f"Checking config for {section}/{item}")
             if item not in config.get(section, {}):
                 raise ValueError(f"Missing required config: {key}")
         
@@ -166,7 +172,7 @@ def save_image(file, model, save_path):
 
     cv2.imwrite(save_path, img)
 
-def merge_json_files(file_list, save_path, conf):
+def merge_json_files(file_list, save_path):
 
     json_data = []
 
@@ -181,7 +187,7 @@ def merge_json_files(file_list, save_path, conf):
         else:
             json_data.append(data)  # 단일 객체 추가
     
-    print ("  ####  json_data", json_data)
+    #print ("  ####  json_data", json_data)
 
     # Load existing data if the output file already exists
     if os.path.isfile(save_path):
@@ -235,7 +241,7 @@ def merge_json_files(file_list, save_path, conf):
     remove_old_timestamped_files(save_path)
     
     # Copy the resulting files to Nextcloud if configured
-    copy_to_nextcloud([save_path, timestamped_path], conf)
+    copy_to_nextcloud([save_path, timestamped_path])
 
 
 def remove_old_timestamped_files(save_path, months=3):
@@ -259,40 +265,40 @@ def remove_old_timestamped_files(save_path, months=3):
             except OSError:
                 pass
 
-def copy_to_nextcloud(paths, conf): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
+def copy_to_nextcloud(paths): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTOS_DIR
     """Copy given file paths to a Nextcloud directory if configured."""
-    if not conf:
-        print("No destination directory provided for Nextcloud.")
-        return
-
-    print(f"Copying files to Nextcloud directory: {dest_dir}")
-    #os.makedirs(dest_dir, exist_ok=True)
 
     #options['webdav_hostname']
     #options['webdav_login']
     #options['webdav_password']
 
+    from webdav3.client import Client  # type: ignore
+
+    client = Client(options)
+    client.verify = True
+    print("")
+    print("dest_dir", dest_dir)
+    #print(client.list('/Photos'))  # List files in the Nextcloud Photos directory
+
     if options['webdav_hostname'] and options['webdav_login'] and options['webdav_password']:
         try:
-            from webdav3.client import Client  # type: ignore
-
-            client = Client(options)
-            client.verify = True
 
             for src in paths:
                 if not src:
                     continue
-
+                remote_path = dest_dir
                 remote_path = os.path.join(dest_dir, os.path.basename(src))
                 
                 try:
                     client.upload_sync(remote_path=remote_path, local_path=src)
+
                 except Exception as e:  # noqa: BLE001
                     print(f"Failed to upload {src} to {remote_path}: {e}")
             return
         except Exception as e:  # noqa: BLE001
             print(f"WebDAV upload failed: {e}; falling back to local copy")
 
+    print(client.list('/Photos'))  # List files in the Nextcloud Photos directory
 
     exit("### exit tinyos ### on the copy to nextcloud") # for the on the step to run this code
 
@@ -338,9 +344,7 @@ def test_func(file, run_flag=True):
         print("### NO run test_func ###")
         print ("test_func is not running")
         return None
-
-
-    print(inspect.getfile(pytesseract))
+    #print(inspect.getfile(pytesseract))
     
     oem = 3
     psm = 4
@@ -369,7 +373,7 @@ if __name__=='__main__':
     parser.add_argument('-c', '--config', default='ocr_name_card.ini', help='초기 설정 파일 경로')
     args = parser.parse_args()
 
-    conf = __init__()
+    conf = init()
 
 
     #dir_path = sys.argv[1]
@@ -383,6 +387,7 @@ if __name__=='__main__':
     file_list = []
     json_data = []
     json_file_list = []
+
     cnt = 0
     start_time = time.time()
     
@@ -390,7 +395,7 @@ if __name__=='__main__':
 
     print("\n명함 파일 개수 : %d" % len(file_list))
 
-    run_flag = False # test_func를 실행할지 여부
+    run_flag = True # test_func를 실행할지 여부, 여기서 결정해야 함 ### 매우 중요 
 
     
     for file in file_list:
@@ -404,6 +409,7 @@ if __name__=='__main__':
         filepath = save_path + '/' + filename  # 파일경로
         ctime = os.path.getctime(file)         # 생성시간
         json_file_path = os.path.splitext(filepath)[0] + '.json'
+
 
         ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S') # 생성시간 datetime으로 변환
         # 원본이미지 파일 경로도 저장
@@ -433,49 +439,48 @@ if __name__=='__main__':
 
 
 
-#   # 객체 탐지 모델 로드
-    result_cnt = 0
+# #   # 객체 탐지 모델 로드
+#     result_cnt = 0
 
-    with open(file_path, 'r') as json_file:
-        json_data = json.load(json_file)
-        # 만약에 result가 None이 아니라면, result_cnt를 1 증가
-        for data in json_data:
-            if data['result'] is not None:
-                result_cnt += 1
+#     with open(file_path, 'r') as json_file:
+#         json_data = json.load(json_file)
+#         # 만약에 result가 None이 아니라면, result_cnt를 1 증가
+#         for data in json_data:
+#             if data['result'] is not None:
+#                 result_cnt += 1
 
+#     print("\n객체 탐지 결과가 있는 이미지 파일 개수 : %d" % result_cnt)
+#     print("객체 탐지 결과가 없는 이미지 파일 개수 : %d" % (len(file_list) - result_cnt))
 
-    print("\n객체 탐지 결과가 있는 이미지 파일 개수 : %d" % result_cnt)
-    print("객체 탐지 결과가 없는 이미지 파일 개수 : %d" % (len(file_list) - result_cnt))
-
-    # 객체 이름을 출력하고 개수를 출력(result에 여러 개의 동일 객체 이름은 하나로 취급)
-    class_cnt = {}
-    for data in json_data:
-        if data['result']:
-            for result in data['result']:
-                # result 내에 값을 통해 객체 이름에 대한 딕셔너리 생성
-                obj_name = []
-                # 1개 이상의 객체 이름이 있는 경우에 대해 한개만 추가
-                if result['name'] not in obj_name:
-                    obj_name.append(result['name'])
-                # class_cnt에 해당 내용을 추가
-            for name in obj_name:
-                if name in class_cnt:
-                    class_cnt[name] += 1
-                else:
-                    class_cnt[name] = 1
+#     # 객체 이름을 출력하고 개수를 출력(result에 여러 개의 동일 객체 이름은 하나로 취급)
+#     class_cnt = {}
+#     for data in json_data:
+#         if data['result']:
+#             for result in data['result']:
+#                 # result 내에 값을 통해 객체 이름에 대한 딕셔너리 생성
+#                 obj_name = []
+#                 # 1개 이상의 객체 이름이 있는 경우에 대해 한개만 추가
+#                 if result['name'] not in obj_name:
+#                     obj_name.append(result['name'])
+#                 # class_cnt에 해당 내용을 추가
+#             for name in obj_name:
+#                 if name in class_cnt:
+#                     class_cnt[name] += 1
+#                 else:
+#                     class_cnt[name] = 1
     
-    # 해당 내용을 json 파일로 저장
-    # 현재 디렉토리
-    now_dir = os.getcwd()
-    class_cnt_path = now_dir + '/search_keyword/class_cnt.json'
-    print ("\n객체 이름과 개수를 저장할 JSON 파일 경로 : ", class_cnt_path)
+#     # 해당 내용을 json 파일로 저장
+#     # 현재 디렉토리
+#     now_dir = os.getcwd()
+#     class_cnt_path = now_dir + '/search_keyword/class_cnt.json'
+#     print ("\n객체 이름과 개수를 저장할 JSON 파일 경로 : ", class_cnt_path)
     
-    with open(class_cnt_path, 'w') as json_file:
-        json.dump(class_cnt, json_file, indent=2)
-        print(class_cnt)
+#     with open(class_cnt_path, 'w') as json_file:
+#         json.dump(class_cnt, json_file, indent=2)
+#         print(class_cnt)
 
-    print("\n객체 이름과 개수를 저장한 JSON 파일 생성 완료")
+#     print("\n객체 이름과 개수를 저장한 JSON 파일 생성 완료")
 
-    end_time = time.time()
+#     end_time = time.time()
 
-    print("\n걸린 시간 : ", end_time - start_time)
+#     print("\n걸린 시간 : ", end_time - start_time)
