@@ -16,3 +16,4 @@ alias sr='screen'
 #sudo sh /home/pi/devel/BerePi/startup_sw.sh
 #exit0
 ####
+
