@@ -358,6 +358,64 @@ def test_func(file, run_flag=True):
     #print (txt) 
     return txt
 
+def _date_from_filename(fname):
+    """Return a datetime extracted from *fname* or ``None``."""
+    name = os.path.basename(fname)
+    m = re.search(r"20\d{2}\D?\d{2}\D?\d{2}", name)
+    if not m:
+        return None
+    digits = re.sub(r"\D", "", m.group(0))
+    try:
+        return datetime.strptime(digits, "%Y%m%d")
+    except ValueError:
+        return None
+
+
+def print_oldest_newest(json_path):
+    """Print oldest and newest image names based on dates in filenames."""
+    if not os.path.isfile(json_path):
+        print(f"file not found: {json_path}")
+        return
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        print(f"invalid json: {json_path}")
+        return
+
+    dated = []
+    for item in data:
+        path = item.get("original_filepath") or item.get("filepath")
+        if not path:
+            continue
+        dt = _date_from_filename(path)
+        if dt:
+            dated.append((dt, os.path.basename(path)))
+
+    if not dated:
+        print("no dated filenames found in file_list.json")
+        return
+
+    dated.sort(key=lambda x: x[0])
+    print(f"가장 오래된 파일명: {dated[0][1]}")
+    print(f"가장 최근 파일명: {dated[-1][1]}")
+
+
+def load_processed_list(txt_path):
+    """Return a set of file paths stored in ``txt_path``."""
+    if not os.path.isfile(txt_path):
+        return set()
+    with open(txt_path, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f if line.strip())
+
+
+def save_processed_list(txt_path, items):
+    """Write ``items`` (an iterable of paths) to ``txt_path`` one per line."""
+    with open(txt_path, "w", encoding="utf-8") as f:
+        for path in sorted(items):
+            f.write(path + "\n")
+
+
 if __name__=='__main__':
     #exit("for the first run test") # for the first step to run this code
 
@@ -395,12 +453,21 @@ if __name__=='__main__':
 
     print("\n명함 파일 개수 : %d" % len(file_list))
 
+    processed_txt = os.path.join(save_path, 'processed_files.txt')
+    processed_set = load_processed_list(processed_txt)
+
+    new_files = [f for f in file_list if f not in processed_set]
+    if not new_files:
+        print("새로 처리할 파일이 없습니다")
+    else:
+        print(f"신규 파일 개수 : {len(new_files)}")
+
     run_flag = True # test_func를 실행할지 여부, 여기서 결정해야 함 ### 매우 중요 
 
     
-    for file in file_list:
+    for file in new_files:
         cnt += 1
-        printProgressBar(cnt, len(file_list))
+        printProgressBar(cnt, len(new_files))
         print ("processing", file)
         #print ("### to do: code more")
         buff = test_func(file, run_flag)
@@ -431,9 +498,14 @@ if __name__=='__main__':
             json.dump(data, json_file, ensure_ascii=False, indent=2)
 
         json_file_list.append(json_file_path)
+        processed_set.add(file)
 
     file_path = save_path + '/file_list.json'
     merge_json_files(json_file_list, file_path)
+
+    print_oldest_newest(file_path)
+    save_processed_list(processed_txt, processed_set)
+
 
     exit("### exit tinyos ### on the test check for good here ") # for the on the step to run this code
 
