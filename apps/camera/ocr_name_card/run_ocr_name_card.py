@@ -10,6 +10,8 @@ import configparser
 from datetime import datetime, timedelta
 import re
 import shutil
+from rich import print as rprint
+
 
 import easyocr
 import pytesseract  # check out language pack for tesseract 
@@ -397,9 +399,8 @@ def print_oldest_newest(json_path):
         return
 
     dated.sort(key=lambda x: x[0])
-    print(f"가장 오래된 파일명: {dated[0][1]}")
-    print(f"가장 최근 파일명: {dated[-1][1]}")
-
+    rprint(f"가장 오래된 파일명: {dated[0][1]}")
+    rprint(f" :tada: 가장 최근 파일명: {dated[-1][1]} ")
 
 def load_processed_list(txt_path):
     """Return a set of file paths stored in ``txt_path``."""
@@ -475,7 +476,7 @@ if __name__=='__main__':
 
     new_files = [f for f in file_list if f not in processed_set]
     if not new_files:
-        print("새로 처리할 파일이 없습니다")
+        print("새로 처리할 파일이 없습니다. skip all file. no new files")
     else:
         print(f"신규 파일 개수 : {len(new_files)}")
 
