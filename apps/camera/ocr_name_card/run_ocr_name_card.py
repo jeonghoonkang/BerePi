@@ -11,6 +11,11 @@ from datetime import datetime, timedelta
 import re
 import shutil
 from rich import print as rprint
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, BarColumn, TextColumn
+from rich.live import Live
+from rich.layout import Layout
 
 
 import easyocr
@@ -34,6 +39,8 @@ options = {
 }
 
 dest_dir = None
+console = Console()
+
 
 def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json 
     config = load_nextcloud_value(config_path)
@@ -125,16 +132,7 @@ def recursive_search_dir(_nowDir, _filelist): # 재귀적으로 디렉토리 탐
             recursive_search_dir(_dir, _filelist)
 
 
-def printProgressBar(iteration, total, prefix = 'Progress', suffix = 'Complete',\
-                      decimals = 1, length = 50, fill = '█'): 
-    # 작업의 진행상황을 표시
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' %(prefix, bar, percent, suffix), end='\r')
-    sys.stdout.flush()
-    if iteration == total:
-        print()
+
 
 def ctime_to_datetime(ctime): # 생성시간을 datetime으로 변환
     return datetime.fromtimestamp(ctime)
@@ -178,7 +176,7 @@ def merge_json_files(file_list, save_path):
 
     json_data = []
 
-    print(file_list, save_path)
+    #print(file_list, save_path)
     
     for file in file_list:
         with open(file, 'r',  encoding='utf-8') as json_file:
@@ -300,10 +298,10 @@ def copy_to_nextcloud(paths): #(savePath, timestamped_path)  and NEXTCLOUD_PHOTO
         except Exception as e:  # noqa: BLE001
             print(f"WebDAV upload failed: {e}; falling back to local copy")
 
-    print(client.list('/Photos'))  # List files in the Nextcloud Photos directory
-
-    exit("### exit tinyos ### on the copy to nextcloud") # for the on the step to run this code
-
+    try:
+        print(client.list('/Photos'))  # List files in the Nextcloud Photos directory
+    except Exception as e:  # noqa: BLE001
+        print(f"Failed to list remote directory: {e}")
     return dest_dir
 
 def ocr():
@@ -447,6 +445,7 @@ if __name__=='__main__':
     parser.add_argument('scan_name_card', nargs='?', help='명함 스캔 이미지 파일이 있는 디렉토리 경로')
     parser.add_argument('save_description', nargs='?', help='결과 내용 저장할 디렉토리 경로')
     parser.add_argument('-c', '--config', default='ocr_name_card.ini', help='초기 설정 파일 경로')
+    parser.add_argument('-a', '--force-all', action='store_true', help='기존 처리 여부와 상관없이 모든 파일을 처리')
     args = parser.parse_args()
 
     conf = init()
@@ -464,7 +463,6 @@ if __name__=='__main__':
     json_data = []
     json_file_list = []
 
-    cnt = 0
     start_time = time.time()
     
     recursive_search_dir(dir_path, file_list)
@@ -474,49 +472,74 @@ if __name__=='__main__':
     processed_txt = os.path.join(save_path, 'processed_files.txt')
     processed_set = load_processed_list(processed_txt)
 
-    new_files = [f for f in file_list if f not in processed_set]
-    if not new_files:
-        print("새로 처리할 파일이 없습니다. skip all file. no new files")
+    # new_files = [f for f in file_list if f not in processed_set]
+    # if not new_files:
+    #     console.print(Panel(" :x: 새로 처리할 파일이 없습니다. skip all file. no new files"))
+    # else:
+    #     console.print(f"신규 파일 개수 : {len(new_files)}")
+
+    if args.force_all:
+        rprint("[yellow]강제 모드: 모든 파일을 처리합니다[/yellow]")
+        new_files = file_list
     else:
-        print(f"신규 파일 개수 : {len(new_files)}")
+        new_files = [f for f in file_list if f not in processed_set]
+        if not new_files:
+            console.print(Panel("새로 처리할 파일이 없습니다"))
+        else:
+            print(f"신규 파일 개수 : {len(new_files)}")
 
-    run_flag = True # test_func를 실행할지 여부, 여기서 결정해야 함 ### 매우 중요 
+    run_flag = True  # test_func를 실행할지 여부, 여기서 결정해야 함 ### 매우 중요
 
-    
-    for file in new_files:
-        cnt += 1
-        printProgressBar(cnt, len(new_files))
-        print ("processing", file)
-        #print ("### to do: code more")
-        buff = test_func(file, run_flag)
-        #test
-        filename = file.split('/')[-1]         # 파일명
-        filepath = save_path + '/' + filename  # 파일경로
-        ctime = os.path.getctime(file)         # 생성시간
-        json_file_path = os.path.splitext(filepath)[0] + '.json'
+    logs = []
+    progress = Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total}"),
+        console=console,
+        transient=True,
+    )
+
+    layout = Layout()
+    layout.split_column(
+        Layout(progress, name="bar"),
+        Layout(Panel("", title="Logs <차리 파일이 없으면 공란 입니다> "), name="log"),
+    )    
 
 
-        ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S') # 생성시간 datetime으로 변환
-        # 원본이미지 파일 경로도 저장
-        original_filepath = dir_path + '/' + filename
-        data = {
-            'filename' : json_file_path.split('/')[-1], # json 파일명
-            'filepath' : json_file_path,
-            'ctime' : ctime,
-            'original_filepath' : original_filepath,
-            'ocr' : buff,
-            'name' : "",
-            'company' : "",
-            'email' : "",
-            'cellphone' : "",
-            'phone' : "",
-        }
+    with Live(layout, console=console, refresh_per_second=10):
+        task = progress.add_task("Processing", total=len(new_files))
+        for file in new_files:
+            logs.append(f"processing {file}")
+            layout["log"].update(Panel("\n".join(logs), title="차리 파일"))
 
-        with open(json_file_path, 'w',  encoding='utf-8') as json_file:
-            json.dump(data, json_file, ensure_ascii=False, indent=2)
+            buff = test_func(file, run_flag)
 
-        json_file_list.append(json_file_path)
-        processed_set.add(file)
+            filename = file.split('/')[-1]
+            filepath = save_path + '/' + filename
+            ctime = os.path.getctime(file)
+            json_file_path = os.path.splitext(filepath)[0] + '.json'
+
+            ctime = ctime_to_datetime(ctime).strftime('%Y-%m-%d %H:%M:%S')
+            original_filepath = dir_path + '/' + filename
+            data = {
+                'filename': json_file_path.split('/')[-1],
+                'filepath': json_file_path,
+                'ctime': ctime,
+                'original_filepath': original_filepath,
+                'ocr': buff,
+                'name': "",
+                'company': "",
+                'email': "",
+                'cellphone': "",
+                'phone': "",
+            }
+
+            with open(json_file_path, 'w', encoding='utf-8') as json_file:
+                json.dump(data, json_file, ensure_ascii=False, indent=2)
+
+            json_file_list.append(json_file_path)
+            processed_set.add(file)
+            progress.update(task, advance=1)
 
     file_path = save_path + '/file_list.json'
     merge_json_files(json_file_list, file_path)
@@ -524,7 +547,6 @@ if __name__=='__main__':
     print_oldest_newest(file_path)
     save_processed_list(processed_txt, processed_set)
     copy_to_nextcloud([processed_txt])
-
 
     exit("### exit tinyos ### on the test check for good here ") # for the on the step to run this code
 
