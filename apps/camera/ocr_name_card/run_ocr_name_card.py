@@ -405,16 +405,33 @@ def load_processed_list(txt_path):
     """Return a set of file paths stored in ``txt_path``."""
     if not os.path.isfile(txt_path):
         return set()
+    paths = set()
     with open(txt_path, "r", encoding="utf-8") as f:
-        return set(line.strip() for line in f if line.strip())
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            paths.add(line)
 
+    return paths
 
 def save_processed_list(txt_path, items):
     """Write ``items`` (an iterable of paths) to ``txt_path`` one per line."""
+    dates = []
+    for path in items:
+        dt = _date_from_filename(path)
+        if dt:
+            dates.append(dt)
+
+    oldest = min(dates).strftime("%Y-%m-%d") if dates else None
+    newest = max(dates).strftime("%Y-%m-%d") if dates else None
+
     with open(txt_path, "w", encoding="utf-8") as f:
         for path in sorted(items):
             f.write(path + "\n")
-
+        if oldest and newest:
+            f.write(f"# oldest_date {oldest}\n")
+            f.write(f"# newest_date {newest}\n")
 
 if __name__=='__main__':
     #exit("for the first run test") # for the first step to run this code
@@ -505,6 +522,7 @@ if __name__=='__main__':
 
     print_oldest_newest(file_path)
     save_processed_list(processed_txt, processed_set)
+    copy_to_nextcloud([processed_txt])
 
 
     exit("### exit tinyos ### on the test check for good here ") # for the on the step to run this code
