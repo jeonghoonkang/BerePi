@@ -119,3 +119,13 @@ http://okky.kr/article/322237
 ### influxDB 데이터 검색
   - show databases, use {DB명}
   - https://docs.influxdata.com/influxdb/v0.9/query_language/schema_exploration/
+
+## csv_to_influx.py 사용법
+
+`csv_to_influx.py` 스크립트를 이용하면 CSV 파일을 간단히 InfluxDB 로 입력할 수 있습니다.
+
+```
+./csv_to_influx.py 데이터.csv --url http://localhost:8086 --token <TOKEN> --org <ORG> --bucket <BUCKET>
+```
+
+CSV 파일은 `name,time,Power` 형식을 따르며 `time` 값은 나노초 단위의 타임스탬프입니다.
