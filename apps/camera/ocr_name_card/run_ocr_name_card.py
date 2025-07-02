@@ -18,6 +18,8 @@ from rich.live import Live
 from rich.layout import Layout
 
 
+
+
 import easyocr
 import pytesseract  # check out language pack for tesseract 
                     # tesseract --list-langs # dir: /usr/local/share/tessdata
@@ -347,7 +349,7 @@ def test_func(file, run_flag=True):
     #print(inspect.getfile(pytesseract))
     
     oem = 3
-    psm = 4
+    psm = 6
     custom_config = ' --oem ' + str(oem) + ' --psm ' + str(psm) 
     #custom_config = ' --oem ' + str(oem) + ' --psm ' + str(psm) + ' -c --preserve_interword_spaces=1 '
     namecard_img = cv2.imread(file)
