@@ -109,14 +109,15 @@ HEADERS = {
 def search_file(client: Client, dir_path: str, target: str, current_path="", depth=0):
     """Recursively search for target in Nextcloud directory"""
 
-    print(f"Searching for '{target}' in {dir_path}")
+    search_dir = os.path.join(dir_path, current_path.lstrip("/")).rstrip("/")
+    print(f"Searching for '{target}' in {search_dir}")
 
     response = requests.request(
         "PROPFIND",
-        WEBDAV_ENDPOINT + dir_path,
+        WEBDAV_ENDPOINT + search_dir,
         auth=HTTPBasicAuth(nc_user, nc_pass),
         headers={"Depth": "1"},
-        timeout = 10
+        timeout=10
     )
 
     if response.status_code != 207:
@@ -128,11 +129,11 @@ def search_file(client: Client, dir_path: str, target: str, current_path="", dep
     files = []
 
     for response_buff in tree.findall("{DAV:}response"):
-        
+
         uhref = response_buff.find("{DAV:}href").text
         href = urllib.parse.unquote(uhref)
         relative_path = href.replace(
-            f"/remote.php/dav/files/{nc_user}{dir_path}",
+            f"/remote.php/dav/files/{nc_user}{search_dir}",
             "",
         ).lstrip("/")
         #print(f"{debug_prefix}  Found uhref: {uhref}")
@@ -146,11 +147,12 @@ def search_file(client: Client, dir_path: str, target: str, current_path="", dep
             continue
 
         print(f"{debug_prefix} Check href  : {href}")
-        if href.endswith("/") and relative_path != current_path.lstrip("/"):
+        if href.endswith("/"):
             print(f"{debug_prefix}  relative_path : {relative_path}")
             print(f"{debug_prefix}  current_path : {current_path}")
-            files.extend(search_file(client, dir_path, target, f"/{relative_path}", depth+1))
-            continue  
+            next_path = os.path.join(current_path, relative_path)
+            files.extend(search_file(client, dir_path, target, next_path, depth+1))
+            continue
 
         # 파일명만 추출
         filename = href.split("/")[-1]
@@ -174,7 +176,7 @@ def search_file(client: Client, dir_path: str, target: str, current_path="", dep
                         size = None
 
             files.append({
-                'path': current_path + filename,
+                'path': os.path.join(current_path, filename),
                 'last_modified': last_modified,
                 'size': size
             })
