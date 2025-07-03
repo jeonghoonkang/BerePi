@@ -106,81 +106,50 @@ HEADERS = {
 # Nextcloud WebDAV SEARCH는 파일 이름/속성 검색에 특화되어 있으며,
 # 파일 내부 텍스트 검색(Full-text search)은 별도의 앱(FullTextSearch)을 설치해야 합니다.
 
-def search_file(client: Client, dir_path: str, target: str, current_path="", depth=0):
-    """Recursively search for target in Nextcloud directory"""
+def search_file(client: Client, dir_path: str, target: str, current_path=""):
+    """Recursively search for a file named ``target`` and return its path."""
 
-    print(f"Searching for '{target}' in {dir_path}")
+    search_dir = os.path.join(dir_path, current_path.lstrip("/")).rstrip("/")
+    print(f"Searching for '{target}' in {search_dir}")
 
     response = requests.request(
         "PROPFIND",
-        WEBDAV_ENDPOINT + dir_path,
+        WEBDAV_ENDPOINT + search_dir,
         auth=HTTPBasicAuth(nc_user, nc_pass),
         headers={"Depth": "1"},
-        timeout = 10
+        timeout=10,
     )
 
     if response.status_code != 207:
         print(f"Error accessing Nextcloud: {response.status_code}")
-        return []
-    
+        return None
+
     from xml.etree import ElementTree
     tree = ElementTree.fromstring(response.content)
-    files = []
 
     for response_buff in tree.findall("{DAV:}response"):
-        
         uhref = response_buff.find("{DAV:}href").text
         href = urllib.parse.unquote(uhref)
         relative_path = href.replace(
-            f"/remote.php/dav/files/{nc_user}{dir_path}",
+            f"/remote.php/dav/files/{nc_user}{search_dir}",
             "",
         ).lstrip("/")
-        #print(f"{debug_prefix}  Found uhref: {uhref}")
-        #print(f"{debug_prefix}  Decoded href: {href}")
-        #print(f"{debug_prefix}  relative_path: {relative_path}")
 
-        decoded_path = urllib.parse.unquote(relative_path)
-
-        if not relative_path: #current dir skip
-            print(f"{debug_prefix}  Skipping current directory")
+        if not relative_path:  # skip current directory
             continue
 
-        print(f"{debug_prefix} Check href  : {href}")
-        if href.endswith("/") and relative_path != current_path.lstrip("/"):
-            print(f"{debug_prefix}  relative_path : {relative_path}")
-            print(f"{debug_prefix}  current_path : {current_path}")
-            files.extend(search_file(client, dir_path, target, f"/{relative_path}", depth+1))
-            continue  
+        if href.endswith("/"):
+            next_path = os.path.join(current_path, relative_path)
+            found = search_file(client, dir_path, target, next_path)
+            if found:
+                return found
+            continue
 
-        # 파일명만 추출
         filename = href.split("/")[-1]
-        print(f"{debug_prefix}  Found file: {filename}")
+        if filename == target:
+            return os.path.join(search_dir, filename)
 
-        lastmod_elem = response_buff.find("{DAV:}getlastmodified")
-        lastmod_text = lastmod_elem.text if lastmod_elem is not None else ""
-        if filename.lower().endswith((".jpg", ".jpeg")):
-            prop = response_buff.find("{DAV:}propstat/{DAV:}prop")
-            last_modified = None
-            size = None
-            if prop is not None:
-                lm = prop.find("{DAV:}getlastmodified")
-                if lm is not None:
-                    last_modified = lm.text
-                cl = prop.find("{DAV:}getcontentlength")
-                if cl is not None:
-                    try:
-                        size = int(cl.text)
-                    except (TypeError, ValueError):
-                        size = None
-
-            files.append({
-                'path': current_path + filename,
-                'last_modified': last_modified,
-                'size': size
-            })
-
-    print (files)
-    return files
+    return None
 
 def search_nextcloud_files(client: Client, dir_path: str, target: str):
 
