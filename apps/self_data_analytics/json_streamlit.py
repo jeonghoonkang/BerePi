@@ -144,7 +144,6 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
             found = search_file(client, dir_path, target, next_path)
             if found:
                 return found
-
             continue
 
         filename = href.split("/")[-1]
@@ -340,8 +339,10 @@ if st.button("이미지 검색"):
 
             if found_path:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                    client.download_sync(remote_path=found_path, local_path=tmp.name)
-                    st.image(tmp.name, caption=os.path.basename(found_path))
+                    local_tmp = tmp.name
+                    client.download_sync(remote_path=found_path, local_path=local_tmp)
+                st.image(local_tmp, caption=os.path.basename(found_path))
+                st.write(f"다운로드 경로: {local_tmp}")
             else:
                 st.warning("파일을 찾을 수 없습니다.")
         except Exception as e:
