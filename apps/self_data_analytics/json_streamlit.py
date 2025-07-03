@@ -1,6 +1,9 @@
 import streamlit as st
 import json
 import os
+import tempfile
+from webdav3.client import Client
+
 
 # 기본 파일 이름 설정
 file_path = st.text_input("JSON 파일 경로", value="file_list.json")
@@ -51,10 +54,64 @@ if edited_json_string:
                 with open(file_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
                 st.success(f"{file_path} 파일로 저장했습니다.")
-
                 st.write(f"저장 경로: {os.path.abspath(file_path)}")
             except Exception as e:
                 st.error(f"파일을 저장할 수 없습니다: {e}")
-
     except json.JSONDecodeError as e:
         st.error(f"JSON 구문 오류: {e}")
+
+# ---------------------------------------------------------------------------
+# Nextcloud 이미지 검색 기능
+# ---------------------------------------------------------------------------
+
+st.header("Nextcloud 이미지 검색")
+
+# Nextcloud 서버 정보 입력
+nc_url = st.text_input("Nextcloud 서버 URL")
+nc_user = st.text_input("Nextcloud 사용자명")
+nc_pass = st.text_input("Nextcloud 비밀번호", type="password")
+
+# 검색할 JPG 파일명 입력
+jpg_name = st.text_input("검색할 JPG 파일명")
+
+
+def search_file(client: Client, dir_path: str, target: str):
+    """Recursively search for target in Nextcloud directory"""
+    try:
+        items = client.list(dir_path, get_info=True)
+    except Exception:
+        return None
+    for item in items:
+        path = item.get('path')
+        if item.get('isdir'):
+            found = search_file(client, path, target)
+            if found:
+                return found
+        else:
+            if os.path.basename(path) == target:
+                return path
+    return None
+
+
+if st.button("이미지 검색"):
+    if not (nc_url and nc_user and nc_pass and jpg_name):
+        st.warning("모든 입력 값을 채워주세요.")
+    else:
+        options = {
+            'webdav_hostname': nc_url,
+            'webdav_login': nc_user,
+            'webdav_password': nc_pass,
+        }
+        try:
+            client = Client(options)
+            client.verify = True
+            found_path = search_file(client, "/", jpg_name)
+            if found_path:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                    client.download_sync(remote_path=found_path, local_path=tmp.name)
+                    st.image(tmp.name, caption=os.path.basename(found_path))
+            else:
+                st.warning("파일을 찾을 수 없습니다.")
+        except Exception as e:
+            st.error(f"Nextcloud 접근 실패: {e}")
+
