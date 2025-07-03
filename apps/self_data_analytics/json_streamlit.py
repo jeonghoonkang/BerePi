@@ -128,6 +128,7 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
     tree = ElementTree.fromstring(response.content)
 
     for response_buff in tree.findall("{DAV:}response"):
+
         uhref = response_buff.find("{DAV:}href").text
         href = urllib.parse.unquote(uhref)
         relative_path = href.replace(
@@ -143,9 +144,11 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
             found = search_file(client, dir_path, target, next_path)
             if found:
                 return found
+
             continue
 
         filename = href.split("/")[-1]
+
         if filename == target:
             return os.path.join(search_dir, filename)
 
