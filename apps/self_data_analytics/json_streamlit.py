@@ -1,17 +1,30 @@
 import streamlit as st
 import json
+import os
 
 # 기본 파일 이름 설정
 file_path = st.text_input("JSON 파일 경로", value="file_list.json")
 
-# 파일 열기 버튼
-if st.button("오픈"):
-    try:
-        with open(file_path, "r") as f:
-            data = json.load(f)
-        st.session_state['json_string'] = json.dumps(data, indent=2, ensure_ascii=False)
-    except Exception as e:
-        st.error(f"파일을 열 수 없습니다: {e}")
+data = None
+if os.path.exists(file_path):
+    # 기본 파일이 존재하면 버튼 하나로 바로 열 수 있게 함
+    if st.button("오픈"):
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
+            st.session_state['json_string'] = json.dumps(data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            st.error(f"파일을 열 수 없습니다: {e}")
+else:
+    st.warning(f"{file_path} 파일이 존재하지 않습니다. 다른 파일을 선택하세요.")
+    uploaded_file = st.file_uploader("JSON 파일을 업로드하세요", type="json")
+    if uploaded_file is not None:
+        try:
+            data = json.load(uploaded_file)
+            st.session_state['json_string'] = json.dumps(data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            st.error(f"업로드된 파일을 읽을 수 없습니다: {e}")
+
 
 # 세션 상태에 저장된 JSON 문자열을 가져와서 편집 가능하도록 표시
 json_string = st.session_state.get('json_string', '')
