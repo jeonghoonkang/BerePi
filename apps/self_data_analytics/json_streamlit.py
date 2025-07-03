@@ -45,5 +45,15 @@ if edited_json_string:
             else:
                 results = "지원되지 않는 JSON 구조입니다."
             st.write("검색 결과:", results)
+
+        # 편집된 JSON 데이터를 파일로 저장
+        if st.button("저장"):
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                st.success(f"{file_path} 파일로 저장했습니다.")
+            except Exception as e:
+                st.error(f"파일을 저장할 수 없습니다: {e}")
+
     except json.JSONDecodeError as e:
         st.error(f"JSON 구문 오류: {e}")
