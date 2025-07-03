@@ -51,8 +51,10 @@ if edited_json_string:
                 with open(file_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
                 st.success(f"{file_path} 파일로 저장했습니다.")
+
                 st.write(f"저장 경로: {os.path.abspath(file_path)}")
             except Exception as e:
                 st.error(f"파일을 저장할 수 없습니다: {e}")
+
     except json.JSONDecodeError as e:
         st.error(f"JSON 구문 오류: {e}")
