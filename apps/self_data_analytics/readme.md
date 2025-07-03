@@ -1,5 +1,9 @@
 
-Self Data Analytics
+# Self Data Analytics
+
+
+## 실행 방법
+- streamlit run json_streamlit.py --server.headless true 
 
 https://kanaries.net/
 
