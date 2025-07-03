@@ -25,6 +25,7 @@ else:
         except Exception as e:
             st.error(f"업로드된 파일을 읽을 수 없습니다: {e}")
 
+
 # 세션 상태에 저장된 JSON 문자열을 가져와서 편집 가능하도록 표시
 json_string = st.session_state.get('json_string', '')
 edited_json_string = st.text_area("JSON 데이터 편집", value=json_string, height=300)
