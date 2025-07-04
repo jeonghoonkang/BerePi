@@ -333,8 +333,12 @@ if st.button("이미지 검색"):
                 jpg_name += '.jpg'
             st.write(f"'{jpg_name}' 파일을 검색 중...")
 
+            #listtmp = client.list("/Photos/biz_card")  # 기본 폴더 확인, it is working, if client is connected by https://****:443/remote.php/webdav
+            #st.write(f"기본 폴더 목록: {listtmp}")
+
             # 파일 검색
-            found_path = search_file(client, "/Photos/biz_card", jpg_name)
+            found_path = search_file(client, "/Photos/biz_card/2025", jpg_name)
+
             #found_path = search_nextcloud_files(client, "/", jpg_name)
             st.write(f"검색 결과: {found_path if found_path else '파일을 찾을 수 없습니다.'}")
 
