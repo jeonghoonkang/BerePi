@@ -111,19 +111,35 @@ HEADERS = {
 # Nextcloud WebDAV SEARCH는 파일 이름/속성 검색에 특화되어 있으며,
 # 파일 내부 텍스트 검색(Full-text search)은 별도의 앱(FullTextSearch)을 설치해야 합니다.
 
+
+#curl -u jeonghoon:mypassword -X PROPFIND https://cloud.example.com/remote.php/dav/files/jeonghoon/
+
 def search_file(client: Client, dir_path: str, target: str, current_path=""):
     """Recursively search for a file named ``target`` and return its path."""
 
     search_dir = os.path.join(dir_path, current_path.lstrip("/")).rstrip("/")
     print(f"Searching for '{target}' in {search_dir}")
 
-    response = requests.request(
-        "PROPFIND",
-        WEBDAV_ENDPOINT + search_dir,
-        auth=HTTPBasicAuth(nc_user, nc_pass),
-        headers={"Depth": "1"},
-        timeout=10,
-    )
+    tmp_url = nc_url + "/remote.php/dav/files/" + nc_user + search_dir + "/"
+    if not tmp_url.endswith("/"):
+        tmp_url += "/"
+
+    print(f"WebDAV URL: {tmp_url}")
+
+    try:
+        response = requests.request(
+            "PROPFIND",
+            #WEBDAV_ENDPOINT + search_dir,
+            tmp_url,
+            auth=HTTPBasicAuth(nc_user, nc_pass),
+            headers={"Depth": "1"},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"Error during PROPFIND request: {e}")
+        traceback.print_exc()
+        return None
+    print(f"Response status code: {response.status_code}")
 
     if response.status_code != 207:
         console.print(f"[red]Error accessing Nextcloud: {response.status_code}[/red]")
@@ -221,34 +237,9 @@ def search_nextcloud_files(client: Client, dir_path: str, target: str):
     </D:searchrequest>
     """
 
-    try:
-        print(f"Nextcloud URL: {nc_url}")
-        print(f"Searching for files containing: '{target}' in {WEBDAV_ENDPOINT}")
 
-        # remote_client.list()는 PROPFIND 요청을 보냅니다.
-        # remote_path에 지정된 경로의 내용을 나열합니다.
-        # depth는 기본적으로 1 (현재 폴더와 바로 아래 파일/폴더)입니다.
-        # 더 깊게 탐색하려면 depth=infinity 또는 다른 숫자를 지정할 수 있습니다.
-        # 그러나 깊은 depth는 성능에 영향을 줄 수 있습니다.
-        items = client.list("/remote.php/webdav/tinyos/")
-
-        if items:
-            print("\n--- Contents of the folder ---")
-            for item in items:
-                # 'item'은 딕셔너리 형태로 파일/폴더의 속성을 담고 있습니다.
-                # 예: {'name': 'file.txt', 'size': 123, 'modified': '...', 'isdir': False, 'etag': '...'}
-                name = item.get('name')
-                is_dir = item.get('isdir')
-                size = item.get('size')
-                modified = item.get('modified')
-
-                if is_dir:
-                    print(f"[Folder] {name}/")
-                else:
-                    print(f"[File]   {name} ({size} bytes, Last Modified: {modified})")
-            print("-" * 30)
-        else:
-            print(f"Folder '{TARGET_PATH}' is empty or does not exist.")
+def search_files(client: Client, dir_path: str, target: str):
+    """Search ``dir_path`` and all sub directories for ``target``.
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -349,12 +340,13 @@ def search_nextcloud_files(client: Client, dir_path: str, target: str):
     #     print(f"Raw response content: {response.content.decode('utf-8')}")
 
 
+
 if st.button("이미지 검색"):
     if not (nc_url and nc_user and nc_pass and jpg_name):
         st.warning("모든 입력 값을 채워주세요.")
     else:
         options = {
-            'webdav_hostname': nc_url,
+            'webdav_hostname': nc_url+ '/remote.php/dav/files/' + nc_user + '/',
             'webdav_login': nc_user,
             'webdav_password': nc_pass,
         }
@@ -374,12 +366,19 @@ if st.button("이미지 검색"):
             found_path = search_files(client, "/Photos/biz_card/2025", jpg_name)
 
             #found_path = search_nextcloud_files(client, "/", jpg_name)
+
             st.write(f"검색 결과: {found_path if found_path else '파일을 찾을 수 없습니다.'}")
 
             if found_path:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                     local_tmp = tmp.name
                 try:
+                    found_path = found_path[1:]
+                    print (f"Downloading file from Nextcloud: {found_path} to {local_tmp}")
+                    print ("## Check /", client.list("/"))
+                    print ("## Check /Photos", client.list("/Photos/"))
+                    print (client.list("/Photos/biz_card/"))
+                    print (client.check(found_path))
                     client.download_sync(
                         remote_path=str(found_path),
                         local_path=str(local_tmp)
