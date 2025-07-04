@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 from webdav3.client import Client
+import traceback
 import requests
 import xml.etree.ElementTree as ET
 from requests.auth import HTTPBasicAuth
@@ -340,9 +341,19 @@ if st.button("이미지 검색"):
             if found_path:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                     local_tmp = tmp.name
-                    client.download_sync(remote_path=found_path, local_path=local_tmp)
-                st.image(local_tmp, caption=os.path.basename(found_path))
-                st.write(f"다운로드 경로: {local_tmp}")
+                try:
+                    client.download_sync(
+                        remote_path=str(found_path),
+                        local_path=str(local_tmp)
+                    )
+                    st.image(local_tmp, caption=os.path.basename(found_path))
+                    st.write(f"다운로드 경로: {local_tmp}")
+                except Exception as e:
+                    error_details = traceback.format_exc()
+                    st.error(
+                        f"파일 다운로드 실패: 원격 경로 '{found_path}'\n{e}\n{error_details}"
+                    )
+                    print(f"Download error for '{found_path}': {e}\n{error_details}")
             else:
                 st.warning("파일을 찾을 수 없습니다.")
         except Exception as e:
