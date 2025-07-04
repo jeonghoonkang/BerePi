@@ -107,23 +107,35 @@ HEADERS = {
 # Nextcloud WebDAV SEARCH는 파일 이름/속성 검색에 특화되어 있으며,
 # 파일 내부 텍스트 검색(Full-text search)은 별도의 앱(FullTextSearch)을 설치해야 합니다.
 
+
+#curl -u jeonghoon:mypassword -X PROPFIND https://cloud.example.com/remote.php/dav/files/jeonghoon/
+
 def search_file(client: Client, dir_path: str, target: str, current_path=""):
     """Recursively search for a file named ``target`` and return its path."""
 
     search_dir = os.path.join(dir_path, current_path.lstrip("/")).rstrip("/")
     print(f"Searching for '{target}' in {search_dir}")
 
-    tmp_url = nc_url + "/remote.php/dav/files/" + nc_user + search_dir
+    tmp_url = nc_url + "/remote.php/dav/files/" + nc_user + search_dir + "/"
+    if not tmp_url.endswith("/"):
+        tmp_url += "/"
+
     print(f"WebDAV URL: {tmp_url}")
 
-    response = requests.request(
-        "PROPFIND",
-        #WEBDAV_ENDPOINT + search_dir,
-        tmp_url,
-        auth=HTTPBasicAuth(nc_user, nc_pass),
-        headers={"Depth": "1"},
-        timeout=10,
-    )
+    try:
+        response = requests.request(
+            "PROPFIND",
+            #WEBDAV_ENDPOINT + search_dir,
+            tmp_url,
+            auth=HTTPBasicAuth(nc_user, nc_pass),
+            headers={"Depth": "1"},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"Error during PROPFIND request: {e}")
+        traceback.print_exc()
+        return None
+    print(f"Response status code: {response.status_code}")
 
     if response.status_code != 207:
         print(f"Error accessing Nextcloud: {response.status_code}")
@@ -185,7 +197,7 @@ if st.button("이미지 검색"):
         st.warning("모든 입력 값을 채워주세요.")
     else:
         options = {
-            'webdav_hostname': nc_url,
+            'webdav_hostname': nc_url+ '/remote.php/dav/files/' + nc_user + '/',
             'webdav_login': nc_user,
             'webdav_password': nc_pass,
         }
@@ -202,7 +214,7 @@ if st.button("이미지 검색"):
             #st.write(f"기본 폴더 목록: {listtmp}")
 
             # 파일 검색
-            found_path = search_files(client, "/Photos/biz_card", jpg_name)
+            found_path = search_files(client, "/Photos/biz_card/", jpg_name)
             st.write(f"검색 결과: {found_path if found_path else '파일을 찾을 수 없습니다.'}")
 
             if found_path:
@@ -211,6 +223,10 @@ if st.button("이미지 검색"):
                 try:
                     found_path = found_path[1:]
                     print (f"Downloading file from Nextcloud: {found_path} to {local_tmp}")
+                    print ("## Check /", client.list("/"))
+                    print ("## Check /Photos", client.list("/Photos/"))
+                    print (client.list("/Photos/biz_card/"))
+                    print (client.check(found_path))
                     client.download_sync(
                         remote_path=str(found_path),
                         local_path=str(local_tmp)
