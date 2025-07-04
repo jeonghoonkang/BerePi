@@ -113,9 +113,13 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
     search_dir = os.path.join(dir_path, current_path.lstrip("/")).rstrip("/")
     print(f"Searching for '{target}' in {search_dir}")
 
+    tmp_url = nc_url + "/remote.php/dav/files/" + nc_user + search_dir
+    print(f"WebDAV URL: {tmp_url}")
+
     response = requests.request(
         "PROPFIND",
-        WEBDAV_ENDPOINT + search_dir,
+        #WEBDAV_ENDPOINT + search_dir,
+        tmp_url,
         auth=HTTPBasicAuth(nc_user, nc_pass),
         headers={"Depth": "1"},
         timeout=10,
@@ -175,166 +179,6 @@ def search_files(client: Client, dir_path: str, target: str):
 
     return search_file(client, dir_path, target, "")
 
-def search_nextcloud_files(client: Client, dir_path: str, target: str):
-
-    SEARCH_XML_BODY = f"""<?xml version="1.0" encoding="utf-8" ?>
-    <D:searchrequest xmlns:D="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
-    <D:basicsearch>
-        <D:select>
-        <D:prop>
-            <D:displayname />
-            <D:getcontenttype />
-            <D:getlastmodified />
-            <D:getcontentlength />
-            <oc:fileid />
-            <oc:ownerid />
-            <oc:tags />
-            <oc:favorite />
-        </D:prop>
-        </D:select>
-        <D:from>
-        <D:scope>
-            <D:href>{WEBDAV_ENDPOINT}</D:href>
-            <D:depth>infinity</D:depth>
-        </D:scope>
-        </D:from>
-        <D:where>
-        <D:or>
-            <D:contains xml:lang="en-US">
-            <D:prop>
-                <D:displayname />
-            </D:prop>
-            <D:literal>{target}</D:literal>
-            </D:contains>
-            </D:or>
-        </D:where>
-    </D:basicsearch>
-    </D:searchrequest>
-    """
-
-    try:
-        print(f"Nextcloud URL: {nc_url}")
-        print(f"Searching for files containing: '{target}' in {WEBDAV_ENDPOINT}")
-
-        # remote_client.list()는 PROPFIND 요청을 보냅니다.
-        # remote_path에 지정된 경로의 내용을 나열합니다.
-        # depth는 기본적으로 1 (현재 폴더와 바로 아래 파일/폴더)입니다.
-        # 더 깊게 탐색하려면 depth=infinity 또는 다른 숫자를 지정할 수 있습니다.
-        # 그러나 깊은 depth는 성능에 영향을 줄 수 있습니다.
-        items = client.list("/remote.php/webdav/tinyos/")
-
-        if items:
-            print("\n--- Contents of the folder ---")
-            for item in items:
-                # 'item'은 딕셔너리 형태로 파일/폴더의 속성을 담고 있습니다.
-                # 예: {'name': 'file.txt', 'size': 123, 'modified': '...', 'isdir': False, 'etag': '...'}
-                name = item.get('name')
-                is_dir = item.get('isdir')
-                size = item.get('size')
-                modified = item.get('modified')
-
-                if is_dir:
-                    print(f"[Folder] {name}/")
-                else:
-                    print(f"[File]   {name} ({size} bytes, Last Modified: {modified})")
-            print("-" * 30)
-        else:
-            print(f"Folder '{TARGET_PATH}' is empty or does not exist.")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        # 인증 오류, 연결 문제 등 다양한 예외가 발생할 수 있습니다.
-        if "401 Unauthorized" in str(e):
-            print("Authentication failed. Check your username and password/app token.")
-        elif "404 Not Found" in str(e):
-            print(f"The path '{TARGET_PATH}' might not exist on the server.")
-        elif "HTTPSConnectionPool" in str(e) and "CERTIFICATE_VERIFY_FAILED" in str(e):
-            print("SSL Certificate verification failed. Consider setting verify=False (with caution) or fixing the certificate.")
-        elif "500 Internal Server Error" in str(e):
-             print("Server internal error. Check Nextcloud server logs for more details.")
-
-
-
-
-    #     response = requests.request(
-    #         "SEARCH",
-    #         WEBDAV_ENDPOINT,
-    #         headers=HEADERS,
-    #         data=SEARCH_XML_BODY.encode('utf-8'),
-    #         auth=(nc_user, nc_pass),
-    #         verify=True # SSL 인증서 유효성 검사. 로컬/사설 서버는 False로 설정할 수도 있음.
-    #     )
-
-    #     response.raise_for_status() # HTTP 오류 발생 시 예외 throw
-
-    #     # 응답 XML 파싱
-    #     # XML 네임스페이스 처리를 위해 {네임스페이스}태그명 형식으로 접근
-    #     root = ET.fromstring(response.content)
-
-    #     # WebDAV 응답의 네임스페이스
-    #     ns = {
-    #         'D': 'DAV:',
-    #         'oc': 'http://owncloud.org/ns',
-    #         'nc': 'http://nextcloud.org/ns'
-    #     }
-
-    #     found_files = []
-    #     for response_node in root.findall('D:response', ns):
-    #         href = response_node.find('D:href', ns).text
-    #         propstat = response_node.find('D:propstat', ns)
-    #         if propstat is not None:
-    #             prop = propstat.find('D:prop', ns)
-    #             if prop is not None:
-    #                 displayname = prop.find('D:displayname', ns).text if prop.find('D:displayname', ns) is not None else 'N/A'
-    #                 contenttype = prop.find('D:getcontenttype', ns).text if prop.find('D:getcontenttype', ns) is not None else 'N/A'
-    #                 lastmodified = prop.find('D:getlastmodified', ns).text if prop.find('D:getlastmodified', ns) is not None else 'N/A'
-    #                 contentlength = prop.find('D:getcontentlength', ns).text if prop.find('D:getcontentlength', ns) is not None else 'N/A'
-    #                 fileid = prop.find('oc:fileid', ns).text if prop.find('oc:fileid', ns) is not None else 'N/A'
-    #                 favorite = prop.find('oc:favorite', ns).text if prop.find('oc:favorite', ns) is not None else 'false'
-
-    #                 # 파일만 표시 (폴더 제외)
-    #                 # WebDAV 응답에서 iscollection 속성은 D:resourcetype/D:collection 으로 표현됩니다.
-    #                 # D:getcontenttype이 없거나 'httpd/unix-directory'가 아니면 파일로 간주
-    #                 if contenttype != 'httpd/unix-directory' and not href.endswith('/'):
-    #                      found_files.append({
-    #                         "name": displayname,
-    #                         "path": href,
-    #                         "type": contenttype,
-    #                         "last_modified": lastmodified,
-    #                         "size": contentlength,
-    #                         "file_id": fileid,
-    #                         "favorite": favorite == '1'
-    #                     })
-
-    #     if found_files:
-    #         print("\n--- Found Files ---")
-    #         for file_info in found_files:
-    #             print(f"Name: {file_info['name']}")
-    #             print(f"  Path: {file_info['path']}")
-    #             print(f"  Type: {file_info['type']}")
-    #             print(f"  Last Modified: {file_info['last_modified']}")
-    #             print(f"  Size: {file_info['size']} bytes")
-    #             print(f"  File ID: {file_info['file_id']}")
-    #             print(f"  Favorite: {file_info['favorite']}")
-    #             print("-" * 20)
-    #     else:
-    #         print("\nNo files found matching the criteria.")
-
-    #     return found_files
-
-    # except requests.exceptions.HTTPError as e:
-    #     print(f"HTTP Error: {e}")
-    #     print(f"Response Content: {response.content.decode('utf-8')}")
-    # except requests.exceptions.ConnectionError as e:
-    #     print(f"Connection Error: {e}")
-    # except requests.exceptions.Timeout as e:
-    #     print(f"Timeout Error: {e}")
-    # except requests.exceptions.RequestException as e:
-    #     print(f"An error occurred: {e}")
-    # except ET.ParseError as e:
-    #     print(f"Error parsing XML response: {e}")
-    #     print(f"Raw response content: {response.content.decode('utf-8')}")
-
 
 if st.button("이미지 검색"):
     if not (nc_url and nc_user and nc_pass and jpg_name):
@@ -358,15 +202,15 @@ if st.button("이미지 검색"):
             #st.write(f"기본 폴더 목록: {listtmp}")
 
             # 파일 검색
-            found_path = search_files(client, "/Photos/biz_card/2025", jpg_name)
-
-            #found_path = search_nextcloud_files(client, "/", jpg_name)
+            found_path = search_files(client, "/Photos/biz_card", jpg_name)
             st.write(f"검색 결과: {found_path if found_path else '파일을 찾을 수 없습니다.'}")
 
             if found_path:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                     local_tmp = tmp.name
                 try:
+                    found_path = found_path[1:]
+                    print (f"Downloading file from Nextcloud: {found_path} to {local_tmp}")
                     client.download_sync(
                         remote_path=str(found_path),
                         local_path=str(local_tmp)
