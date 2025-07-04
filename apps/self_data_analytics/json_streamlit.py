@@ -154,6 +154,27 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
 
     return None
 
+
+def search_files(client: Client, dir_path: str, target: str):
+    """Search ``dir_path`` and all sub directories for ``target``.
+
+    Parameters
+    ----------
+    client : Client
+        Initialized WebDAV client.
+    dir_path : str
+        Directory path on the server to start searching from.
+    target : str
+        Filename to look for.
+
+    Returns
+    -------
+    str or None
+        Path of the first found file. ``None`` if not found.
+    """
+
+    return search_file(client, dir_path, target, "")
+
 def search_nextcloud_files(client: Client, dir_path: str, target: str):
 
     SEARCH_XML_BODY = f"""<?xml version="1.0" encoding="utf-8" ?>
@@ -337,7 +358,7 @@ if st.button("이미지 검색"):
             #st.write(f"기본 폴더 목록: {listtmp}")
 
             # 파일 검색
-            found_path = search_file(client, "/Photos/biz_card/2025", jpg_name)
+            found_path = search_files(client, "/Photos/biz_card/2025", jpg_name)
 
             #found_path = search_nextcloud_files(client, "/", jpg_name)
             st.write(f"검색 결과: {found_path if found_path else '파일을 찾을 수 없습니다.'}")
