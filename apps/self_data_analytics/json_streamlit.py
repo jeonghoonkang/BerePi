@@ -7,6 +7,10 @@ import traceback
 import requests
 import xml.etree.ElementTree as ET
 from requests.auth import HTTPBasicAuth
+from rich import print as rprint
+from rich.console import Console
+
+console = Console()
 
 from urllib.parse import unquote_plus
 import urllib.parse
@@ -122,7 +126,12 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
     )
 
     if response.status_code != 207:
-        print(f"Error accessing Nextcloud: {response.status_code}")
+        console.print(f"[red]Error accessing Nextcloud: {response.status_code}[/red]")
+        if response.status_code == 401:
+            console.print(f"[yellow]Response status code: 401[/yellow]")
+            console.print(f"[cyan]URL: {nc_url}[/cyan]")
+            console.print(f"[cyan]ID: {nc_user}[/cyan]")
+            console.print(f"[cyan]PASSWORD: {nc_pass}[/cyan]")
         return None
 
     from xml.etree import ElementTree
@@ -153,6 +162,27 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
             return os.path.join(search_dir, filename)
 
     return None
+
+
+def search_files(client: Client, dir_path: str, target: str):
+    """Search ``dir_path`` and all sub directories for ``target``.
+
+    Parameters
+    ----------
+    client : Client
+        Initialized WebDAV client.
+    dir_path : str
+        Directory path on the server to start searching from.
+    target : str
+        Filename to look for.
+
+    Returns
+    -------
+    str or None
+        Path of the first found file. ``None`` if not found.
+    """
+
+    return search_file(client, dir_path, target, "")
 
 def search_nextcloud_files(client: Client, dir_path: str, target: str):
 
@@ -224,6 +254,10 @@ def search_nextcloud_files(client: Client, dir_path: str, target: str):
         print(f"An error occurred: {e}")
         # 인증 오류, 연결 문제 등 다양한 예외가 발생할 수 있습니다.
         if "401 Unauthorized" in str(e):
+            console.print("[yellow]Response status code: 401[/yellow]")
+            console.print(f"[cyan]URL: {nc_url}[/cyan]")
+            console.print(f"[cyan]ID: {nc_user}[/cyan]")
+            console.print(f"[cyan]PASSWORD: {nc_pass}[/cyan]")
             print("Authentication failed. Check your username and password/app token.")
         elif "404 Not Found" in str(e):
             print(f"The path '{TARGET_PATH}' might not exist on the server.")
@@ -337,7 +371,7 @@ if st.button("이미지 검색"):
             #st.write(f"기본 폴더 목록: {listtmp}")
 
             # 파일 검색
-            found_path = search_file(client, "/Photos/biz_card/2025", jpg_name)
+            found_path = search_files(client, "/Photos/biz_card/2025", jpg_name)
 
             #found_path = search_nextcloud_files(client, "/", jpg_name)
             st.write(f"검색 결과: {found_path if found_path else '파일을 찾을 수 없습니다.'}")
@@ -362,4 +396,9 @@ if st.button("이미지 검색"):
                 st.warning("파일을 찾을 수 없습니다.")
         except Exception as e:
             st.error(f"Nextcloud 접근 실패: {e}")
+            if "401" in str(e):
+                console.print("[yellow]Response status code: 401[/yellow]")
+                console.print(f"[cyan]URL: {nc_url}[/cyan]")
+                console.print(f"[cyan]ID: {nc_user}[/cyan]")
+                console.print(f"[cyan]PASSWORD: {nc_pass}[/cyan]")
 
