@@ -27,6 +27,7 @@ sudo apt-get install exiftool
 Run the script with Python 3. Progress for each directory will be printed to
 the console:
 
+
 ```bash
 # default uses Pillow for EXIF
 python3 nc_photo_list.py

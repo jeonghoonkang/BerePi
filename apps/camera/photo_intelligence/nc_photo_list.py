@@ -12,12 +12,12 @@ import time
 import re
 
 
+
 def get_env(key, default=None):
     val = os.getenv(key)
     if val is None:
         return default
     return val
-
 
 
 def validate_env():
@@ -30,7 +30,6 @@ def validate_env():
             'NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set'
         )
     return url, user, password, photo_dir
-
 
 def parse_exif_pillow(data):
     """Return shooting date and location from image bytes."""
@@ -139,6 +138,7 @@ def list_photos(
     measure_speed : bool
         If True, timings for both methods are recorded in the result.
     """
+
     root_prefix = f"/remote.php/dav/files/{username}{photo_dir}"
     queue = ["/"]
     seen = set()
@@ -247,6 +247,7 @@ def list_photos(
                 entry.update(timing)
             files.append(entry)
 
+
     return files
 
 
@@ -263,10 +264,10 @@ def main():
             exif_method=exif_method,
             measure_speed=measure_speed,
         )
+
         print(json.dumps(photos, indent=2, ensure_ascii=False))
     except Exception:
         traceback.print_exc()
-
 
 if __name__ == '__main__':
     main()
