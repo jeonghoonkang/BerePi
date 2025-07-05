@@ -143,8 +143,8 @@ def search_file(client: Client, dir_path: str, target: str, current_path=""):
 
     if response.status_code != 207:
         console.print(f"[red]Error accessing Nextcloud: {response.status_code}[/red]")
-        if response.status_code == 401:
-            console.print(f"[yellow]Response status code: 401[/yellow]")
+        if (response.status_code == 400 or response.status_code == 401) :  # 400 Bad Request or 401 Unauthorized
+            console.print("[yellow]Authentication failed or bad request. 401, 400[/yellow]")
             console.print(f"[cyan]URL: {nc_url}[/cyan]")
             console.print(f"[cyan]ID: {nc_user}[/cyan]")
             console.print(f"[cyan]PASSWORD: {nc_pass}[/cyan]")
@@ -237,9 +237,27 @@ def search_nextcloud_files(client: Client, dir_path: str, target: str):
     </D:searchrequest>
     """
 
+    try:
+        # 그러나 깊은 depth는 성능에 영향을 줄 수 있습니다.
+        items = client.list("/remote.php/webdav/tinyos/")
 
-def search_files(client: Client, dir_path: str, target: str):
-    """Search ``dir_path`` and all sub directories for ``target``.
+        if items:
+            print("\n--- Contents of the folder ---")
+            for item in items:
+                # 'item'은 딕셔너리 형태로 파일/폴더의 속성을 담고 있습니다.
+                # 예: {'name': 'file.txt', 'size': 123, 'modified': '...', 'isdir': False, 'etag': '...'}
+                name = item.get('name')
+                is_dir = item.get('isdir')
+                size = item.get('size')
+                modified = item.get('modified')
+
+                if is_dir:
+                    print(f"[Folder] {name}/")
+                else:
+                    print(f"[File]   {name} ({size} bytes, Last Modified: {modified})")
+            print("-" * 30)
+        else:
+            print(f"Folder '{TARGET_PATH}' is empty or does not exist.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -260,87 +278,7 @@ def search_files(client: Client, dir_path: str, target: str):
 
 
 
-    #     response = requests.request(
-    #         "SEARCH",
-    #         WEBDAV_ENDPOINT,
-    #         headers=HEADERS,
-    #         data=SEARCH_XML_BODY.encode('utf-8'),
-    #         auth=(nc_user, nc_pass),
-    #         verify=True # SSL 인증서 유효성 검사. 로컬/사설 서버는 False로 설정할 수도 있음.
-    #     )
-
-    #     response.raise_for_status() # HTTP 오류 발생 시 예외 throw
-
-    #     # 응답 XML 파싱
-    #     # XML 네임스페이스 처리를 위해 {네임스페이스}태그명 형식으로 접근
-    #     root = ET.fromstring(response.content)
-
-    #     # WebDAV 응답의 네임스페이스
-    #     ns = {
-    #         'D': 'DAV:',
-    #         'oc': 'http://owncloud.org/ns',
-    #         'nc': 'http://nextcloud.org/ns'
-    #     }
-
-    #     found_files = []
-    #     for response_node in root.findall('D:response', ns):
-    #         href = response_node.find('D:href', ns).text
-    #         propstat = response_node.find('D:propstat', ns)
-    #         if propstat is not None:
-    #             prop = propstat.find('D:prop', ns)
-    #             if prop is not None:
-    #                 displayname = prop.find('D:displayname', ns).text if prop.find('D:displayname', ns) is not None else 'N/A'
-    #                 contenttype = prop.find('D:getcontenttype', ns).text if prop.find('D:getcontenttype', ns) is not None else 'N/A'
-    #                 lastmodified = prop.find('D:getlastmodified', ns).text if prop.find('D:getlastmodified', ns) is not None else 'N/A'
-    #                 contentlength = prop.find('D:getcontentlength', ns).text if prop.find('D:getcontentlength', ns) is not None else 'N/A'
-    #                 fileid = prop.find('oc:fileid', ns).text if prop.find('oc:fileid', ns) is not None else 'N/A'
-    #                 favorite = prop.find('oc:favorite', ns).text if prop.find('oc:favorite', ns) is not None else 'false'
-
-    #                 # 파일만 표시 (폴더 제외)
-    #                 # WebDAV 응답에서 iscollection 속성은 D:resourcetype/D:collection 으로 표현됩니다.
-    #                 # D:getcontenttype이 없거나 'httpd/unix-directory'가 아니면 파일로 간주
-    #                 if contenttype != 'httpd/unix-directory' and not href.endswith('/'):
-    #                      found_files.append({
-    #                         "name": displayname,
-    #                         "path": href,
-    #                         "type": contenttype,
-    #                         "last_modified": lastmodified,
-    #                         "size": contentlength,
-    #                         "file_id": fileid,
-    #                         "favorite": favorite == '1'
-    #                     })
-
-    #     if found_files:
-    #         print("\n--- Found Files ---")
-    #         for file_info in found_files:
-    #             print(f"Name: {file_info['name']}")
-    #             print(f"  Path: {file_info['path']}")
-    #             print(f"  Type: {file_info['type']}")
-    #             print(f"  Last Modified: {file_info['last_modified']}")
-    #             print(f"  Size: {file_info['size']} bytes")
-    #             print(f"  File ID: {file_info['file_id']}")
-    #             print(f"  Favorite: {file_info['favorite']}")
-    #             print("-" * 20)
-    #     else:
-    #         print("\nNo files found matching the criteria.")
-
-    #     return found_files
-
-    # except requests.exceptions.HTTPError as e:
-    #     print(f"HTTP Error: {e}")
-    #     print(f"Response Content: {response.content.decode('utf-8')}")
-    # except requests.exceptions.ConnectionError as e:
-    #     print(f"Connection Error: {e}")
-    # except requests.exceptions.Timeout as e:
-    #     print(f"Timeout Error: {e}")
-    # except requests.exceptions.RequestException as e:
-    #     print(f"An error occurred: {e}")
-    # except ET.ParseError as e:
-    #     print(f"Error parsing XML response: {e}")
-    #     print(f"Raw response content: {response.content.decode('utf-8')}")
-
-
-
+    
 if st.button("이미지 검색"):
     if not (nc_url and nc_user and nc_pass and jpg_name):
         st.warning("모든 입력 값을 채워주세요.")
