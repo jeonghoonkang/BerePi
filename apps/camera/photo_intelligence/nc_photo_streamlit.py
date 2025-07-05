@@ -11,6 +11,8 @@ def main():
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     photo_dir = st.text_input("Photo directory", value="/Photos")
+    method = st.selectbox("EXIF method", ["pillow", "exiftool"], index=0)
+    measure_speed = st.checkbox("측정 모드 (두 방법 속도 비교)")
 
     if st.button("Fetch"):
         if not (url and username and password):
@@ -23,13 +25,19 @@ def main():
             with st.spinner("이미지 정보를 가져오는 중..."):
                 try:
                     photos = list_photos(
-                        url, username, password, photo_dir, progress_cb=cb
+
+                        url,
+                        username,
+                        password,
+                        photo_dir,
+                        progress_cb=cb,
+                        exif_method=method,
+                        measure_speed=measure_speed,
                     )
                     progress_text.write("완료")
                     st.json(photos)
                 except Exception:
                     st.error(traceback.format_exc())
-
 
 
 if __name__ == "__main__":

@@ -6,7 +6,11 @@ from io import BytesIO
 from xml.etree import ElementTree
 from requests.auth import HTTPBasicAuth
 from PIL import Image, ExifTags
+import subprocess
 import traceback
+import time
+import re
+
 
 
 def get_env(key, default=None):
@@ -27,9 +31,7 @@ def validate_env():
         )
     return url, user, password, photo_dir
 
-
-
-def parse_exif(data):
+def parse_exif_pillow(data):
     """Return shooting date and location from image bytes."""
     try:
         img = Image.open(BytesIO(data))
@@ -69,8 +71,74 @@ def parse_exif(data):
     return date_taken, location
 
 
-def list_photos(nc_url, username, password, photo_dir="/Photos", progress_cb=None):
-    """Iteratively walk the photo directory and return metadata for JPEG files."""
+def _deg_to_float(coord):
+    """Convert exiftool coordinate string to float degrees."""
+    if coord is None:
+        return None
+    if isinstance(coord, (int, float)):
+        return float(coord)
+    if isinstance(coord, str):
+        m = re.match(r"([0-9.]+) deg ([0-9.]+)' ([0-9.]+)\" ([NSEW])", coord)
+        if m:
+            d, m_val, s, ref = m.groups()
+            deg = float(d)
+            minutes = float(m_val)
+            sec = float(s)
+            sign = -1 if ref in ['S', 'W'] else 1
+            return sign * (deg + minutes / 60.0 + sec / 3600.0)
+        try:
+            return float(coord)
+        except Exception:
+            return None
+    return None
+
+
+def parse_exif_exiftool(data):
+    """Return shooting date and location using exiftool CLI."""
+    try:
+        result = subprocess.run(
+            ["exiftool", "-j", "-"],
+            input=data,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        info = json.loads(result.stdout.decode("utf-8", errors="ignore"))[0]
+    except Exception:
+        return None, None
+
+    date_taken = (
+        info.get("DateTimeOriginal")
+        or info.get("CreateDate")
+        or info.get("ModifyDate")
+    )
+    lat = _deg_to_float(info.get("GPSLatitude"))
+    lon = _deg_to_float(info.get("GPSLongitude"))
+    location = None
+    if lat is not None and lon is not None:
+        location = {"latitude": lat, "longitude": lon}
+    return date_taken, location
+
+
+def list_photos(
+    nc_url,
+    username,
+    password,
+    photo_dir="/Photos",
+    progress_cb=None,
+    exif_method="pillow",
+    measure_speed=False,
+):
+    """Iteratively walk the photo directory and return metadata for JPEG files.
+
+    Parameters
+    ----------
+    exif_method : str
+        Either ``"pillow"`` or ``"exiftool"`` to select the metadata parser.
+    measure_speed : bool
+        If True, timings for both methods are recorded in the result.
+    """
+
     root_prefix = f"/remote.php/dav/files/{username}{photo_dir}"
     queue = ["/"]
     seen = set()
@@ -142,33 +210,64 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", progress_cb=Non
 
             date_taken = None
             location = None
+            timing = {}
             if image_data:
-                date_taken, location = parse_exif(image_data)
+                if measure_speed:
+                    start = time.perf_counter()
+                    dt_pillow, loc_pillow = parse_exif_pillow(image_data)
+                    pillow_time = time.perf_counter() - start
 
-            files.append(
-                {
-                    "path": relative,
-                    "last_modified": last_mod,
-                    "size": size,
-                    "date_taken": date_taken,
-                    "location": location,
-                }
-            )
+                    start = time.perf_counter()
+                    dt_tool, loc_tool = parse_exif_exiftool(image_data)
+                    tool_time = time.perf_counter() - start
+
+                    timing = {
+                        "pillow_ms": round(pillow_time * 1000, 3),
+                        "exiftool_ms": round(tool_time * 1000, 3),
+                        "diff_ms": round((tool_time - pillow_time) * 1000, 3),
+                    }
+                    if exif_method == "exiftool":
+                        date_taken, location = dt_tool, loc_tool
+                    else:
+                        date_taken, location = dt_pillow, loc_pillow
+                else:
+                    if exif_method == "exiftool":
+                        date_taken, location = parse_exif_exiftool(image_data)
+                    else:
+                        date_taken, location = parse_exif_pillow(image_data)
+
+            entry = {
+                "path": relative,
+                "last_modified": last_mod,
+                "size": size,
+                "date_taken": date_taken,
+                "location": location,
+            }
+            if measure_speed and timing:
+                entry.update(timing)
+            files.append(entry)
 
 
     return files
 
 
 def main():
-
     url, user, password, photo_dir = validate_env()
+    exif_method = get_env("EXIF_METHOD", "pillow").lower()
+    measure_speed = get_env("COMPARE_SPEED", "0") == "1"
     try:
-        photos = list_photos(url, user, password, photo_dir)
+        photos = list_photos(
+            url,
+            user,
+            password,
+            photo_dir,
+            exif_method=exif_method,
+            measure_speed=measure_speed,
+        )
+
         print(json.dumps(photos, indent=2, ensure_ascii=False))
     except Exception:
         traceback.print_exc()
-
-
 
 if __name__ == '__main__':
     main()
