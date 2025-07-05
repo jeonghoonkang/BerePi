@@ -6,7 +6,6 @@ script connects to a Nextcloud server via WebDAV and lists information about all
 modified and size) is printed along with EXIF information (shooting date and
 GPS location) as JSON.
 
-
 Set the following environment variables before running the script:
 
 - `NEXTCLOUD_URL` - base URL of the Nextcloud server
@@ -14,14 +13,22 @@ Set the following environment variables before running the script:
 - `NEXTCLOUD_PASSWORD` - your password
 - `NEXTCLOUD_PHOTO_DIR` (optional) - remote directory path, defaults to `/Photos`
 
-
 Install the [Pillow](https://python-pillow.org/) package to enable EXIF processing:
 
 ```bash
 pip install pillow
 ```
+
 Run the script with Python 3:
 
 ```bash
 python3 nc_photo_list.py
+```
+
+For an interactive interface using [Streamlit](https://streamlit.io/) install the
+extra dependency and run the Streamlit app:
+
+```bash
+pip install streamlit pillow
+python3 -m streamlit run nc_photo_streamlit.py
 ```

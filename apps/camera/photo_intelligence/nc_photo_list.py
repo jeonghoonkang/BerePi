@@ -8,7 +8,6 @@ from requests.auth import HTTPBasicAuth
 from PIL import Image, ExifTags
 
 
-
 def get_env(key, default=None):
     val = os.getenv(key)
     if val is None:
@@ -16,13 +15,17 @@ def get_env(key, default=None):
     return val
 
 
-NEXTCLOUD_URL = get_env('NEXTCLOUD_URL')
-NEXTCLOUD_USER = get_env('NEXTCLOUD_USERNAME')
-NEXTCLOUD_PASSWORD = get_env('NEXTCLOUD_PASSWORD')
-PHOTO_DIR = get_env('NEXTCLOUD_PHOTO_DIR', '/Photos')
+def validate_env():
+    url = get_env('NEXTCLOUD_URL')
+    user = get_env('NEXTCLOUD_USERNAME')
+    password = get_env('NEXTCLOUD_PASSWORD')
+    photo_dir = get_env('NEXTCLOUD_PHOTO_DIR', '/Photos')
+    if not all([url, user, password]):
+        raise RuntimeError(
+            'NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set'
+        )
+    return url, user, password, photo_dir
 
-if not all([NEXTCLOUD_URL, NEXTCLOUD_USER, NEXTCLOUD_PASSWORD]):
-    raise RuntimeError('NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set')
 
 
 def parse_exif(data):
@@ -65,12 +68,13 @@ def parse_exif(data):
     return date_taken, location
 
 
-def list_photos(current_path=""):
-    url = f"{NEXTCLOUD_URL}/remote.php/dav/files/{NEXTCLOUD_USER}{PHOTO_DIR}{current_path}"
+def list_photos(nc_url, username, password, photo_dir="/Photos", current_path=""):
+    url = f"{nc_url}/remote.php/dav/files/{username}{photo_dir}{current_path}"
     response = requests.request(
         "PROPFIND",
         url,
-        auth=HTTPBasicAuth(NEXTCLOUD_USER, NEXTCLOUD_PASSWORD),
+        auth=HTTPBasicAuth(username, password),
+
         headers={"Depth": "1"},
         timeout=10,
     )
@@ -84,7 +88,8 @@ def list_photos(current_path=""):
     for resp in tree.findall('{DAV:}response'):
         href = urllib.parse.unquote(resp.find('{DAV:}href').text)
         relative = href.replace(
-            f"/remote.php/dav/files/{NEXTCLOUD_USER}{PHOTO_DIR}",
+            f"/remote.php/dav/files/{username}{photo_dir}",
+
             "",
         ).lstrip('/')
 
@@ -92,7 +97,10 @@ def list_photos(current_path=""):
             continue
 
         if href.endswith('/'):
-            files.extend(list_photos(f"/{relative}"))
+            files.extend(
+                list_photos(nc_url, username, password, photo_dir, f"/{relative}")
+            )
+
             continue
 
         if not relative.lower().endswith(('.jpg', '.jpeg')):
@@ -109,12 +117,16 @@ def list_photos(current_path=""):
             if cl is not None and cl.text and cl.text.isdigit():
                 size = int(cl.text)
 
-        file_url = f"{NEXTCLOUD_URL}/remote.php/dav/files/{NEXTCLOUD_USER}{PHOTO_DIR}/{relative}"
+        file_url = (
+            f"{nc_url}/remote.php/dav/files/{username}{photo_dir}/{relative}"
+        )
+
         image_data = None
         try:
             get_resp = requests.get(
                 file_url,
-                auth=HTTPBasicAuth(NEXTCLOUD_USER, NEXTCLOUD_PASSWORD),
+
+                auth=HTTPBasicAuth(username, password),
                 timeout=10,
             )
             if get_resp.status_code == 200:
@@ -140,7 +152,10 @@ def list_photos(current_path=""):
 
 
 def main():
-    photos = list_photos()
+
+    url, user, password, photo_dir = validate_env()
+    photos = list_photos(url, user, password, photo_dir)
+
     print(json.dumps(photos, indent=2, ensure_ascii=False))
 
 
