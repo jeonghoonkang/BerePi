@@ -8,6 +8,7 @@ from requests.auth import HTTPBasicAuth
 from PIL import Image, ExifTags
 
 
+
 def get_env(key, default=None):
     val = os.getenv(key)
     if val is None:
@@ -132,6 +133,7 @@ def list_photos(current_path=""):
             'size': size,
             'date_taken': date_taken,
             'location': location,
+
         })
 
     return files
