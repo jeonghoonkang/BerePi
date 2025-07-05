@@ -16,7 +16,6 @@ def get_env(key, default=None):
     return val
 
 
-
 def validate_env():
     url = get_env('NEXTCLOUD_URL')
     user = get_env('NEXTCLOUD_USERNAME')
@@ -27,6 +26,7 @@ def validate_env():
             'NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set'
         )
     return url, user, password, photo_dir
+
 
 
 def parse_exif(data):
@@ -155,16 +155,19 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", progress_cb=Non
                 }
             )
 
+
     return files
 
 
 def main():
+
     url, user, password, photo_dir = validate_env()
     try:
         photos = list_photos(url, user, password, photo_dir)
         print(json.dumps(photos, indent=2, ensure_ascii=False))
     except Exception:
         traceback.print_exc()
+
 
 
 if __name__ == '__main__':
