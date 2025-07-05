@@ -15,7 +15,6 @@ def get_env(key, default=None):
     return val
 
 
-
 def validate_env():
     url = get_env('NEXTCLOUD_URL')
     user = get_env('NEXTCLOUD_USERNAME')
@@ -26,6 +25,7 @@ def validate_env():
             'NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set'
         )
     return url, user, password, photo_dir
+
 
 
 def parse_exif(data):
@@ -74,6 +74,7 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", current_path=""
         "PROPFIND",
         url,
         auth=HTTPBasicAuth(username, password),
+
         headers={"Depth": "1"},
         timeout=10,
     )
@@ -88,6 +89,7 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", current_path=""
         href = urllib.parse.unquote(resp.find('{DAV:}href').text)
         relative = href.replace(
             f"/remote.php/dav/files/{username}{photo_dir}",
+
             "",
         ).lstrip('/')
 
@@ -98,6 +100,7 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", current_path=""
             files.extend(
                 list_photos(nc_url, username, password, photo_dir, f"/{relative}")
             )
+
             continue
 
         if not relative.lower().endswith(('.jpg', '.jpeg')):
@@ -117,10 +120,12 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", current_path=""
         file_url = (
             f"{nc_url}/remote.php/dav/files/{username}{photo_dir}/{relative}"
         )
+
         image_data = None
         try:
             get_resp = requests.get(
                 file_url,
+
                 auth=HTTPBasicAuth(username, password),
                 timeout=10,
             )
@@ -140,14 +145,17 @@ def list_photos(nc_url, username, password, photo_dir="/Photos", current_path=""
             'size': size,
             'date_taken': date_taken,
             'location': location,
+
         })
 
     return files
 
 
 def main():
+
     url, user, password, photo_dir = validate_env()
     photos = list_photos(url, user, password, photo_dir)
+
     print(json.dumps(photos, indent=2, ensure_ascii=False))
 
 
