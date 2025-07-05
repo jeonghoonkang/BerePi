@@ -19,14 +19,18 @@ Install the [Pillow](https://python-pillow.org/) package to enable EXIF processi
 pip install pillow
 ```
 
-Run the script with Python 3:
+Run the script with Python 3. Progress for each directory will be printed to
+the console:
+
 
 ```bash
 python3 nc_photo_list.py
 ```
 
 For an interactive interface using [Streamlit](https://streamlit.io/) install the
-extra dependency and run the Streamlit app:
+extra dependency and run the Streamlit app. The current directory being scanned
+is displayed as the script runs:
+
 
 ```bash
 pip install streamlit pillow
