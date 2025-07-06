@@ -13,6 +13,7 @@ import re
 import argparse
 
 
+
 def get_env(key, default=None):
     val = os.getenv(key)
     if val is None:
@@ -140,6 +141,7 @@ def list_photos(
     measure_speed : bool
         If True, timings for both methods are recorded in the result.
     """
+
     root_prefix = f"/remote.php/dav/files/{username}{photo_dir}"
     queue = ["/"]
     seen = set()
@@ -248,6 +250,7 @@ def list_photos(
                 entry.update(timing)
             files.append(entry)
 
+
     return files
 
 
@@ -276,6 +279,7 @@ def main():
     )
     measure_speed = args.compare_speed or get_env("COMPARE_SPEED", "0") == "1"
 
+
     try:
         photos = list_photos(
             url,
@@ -293,6 +297,7 @@ def main():
             print(result)
     except Exception:
         traceback.print_exc()
+
 
 
 if __name__ == '__main__':

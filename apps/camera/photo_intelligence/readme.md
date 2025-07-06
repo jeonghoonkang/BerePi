@@ -9,6 +9,7 @@ GPS location) as JSON.
 Set the following environment variables before running the script. Command line
 options can override the EXIF parser and enable speed measurement:
 
+
 - `NEXTCLOUD_URL` - base URL of the Nextcloud server
 - `NEXTCLOUD_USERNAME` - your Nextcloud username
 - `NEXTCLOUD_PASSWORD` - your password
@@ -28,6 +29,7 @@ sudo apt-get install exiftool
 Run the script with Python 3. Progress for each directory will be printed to
 the console. Command line options allow selecting the EXIF parser and writing
 results to a JSON file:
+
 
 ```bash
 # default uses Pillow for EXIF
