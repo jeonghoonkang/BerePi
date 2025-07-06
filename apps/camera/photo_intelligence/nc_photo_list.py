@@ -13,6 +13,7 @@ import re
 import argparse
 
 
+
 def get_env(key, default=None):
     val = os.getenv(key)
     if val is None:
@@ -131,6 +132,7 @@ def list_photos(
     exif_method="pillow",
     measure_speed=False,
     processed_log=None,
+
 ):
     """Iteratively walk the photo directory and return metadata for JPEG files.
 
@@ -141,6 +143,7 @@ def list_photos(
     measure_speed : bool
         If True, timings for both methods are recorded in the result.
     """
+
     root_prefix = f"/remote.php/dav/files/{username}{photo_dir}"
     queue = ["/"]
     seen = set()
@@ -263,6 +266,7 @@ def list_photos(
                     with open(processed_log, "a", encoding="utf-8") as f:
                         f.write(relative + "\n")
 
+
     return files
 
 
@@ -287,6 +291,7 @@ def main():
         "--processed-log",
         help="file to track processed JPEGs when using exiftool",
     )
+
     args = parser.parse_args()
 
     url, user, password, photo_dir = validate_env()
@@ -295,6 +300,7 @@ def main():
     )
     measure_speed = args.compare_speed or get_env("COMPARE_SPEED", "0") == "1"
     processed_log = args.processed_log or get_env("PROCESSED_LOG")
+
 
     try:
         photos = list_photos(
@@ -305,6 +311,7 @@ def main():
             exif_method=exif_method,
             measure_speed=measure_speed,
             processed_log=processed_log,
+
         )
         result = json.dumps(photos, indent=2, ensure_ascii=False)
         if args.output:
@@ -314,7 +321,6 @@ def main():
             print(result)
     except Exception:
         traceback.print_exc()
-
 
 if __name__ == '__main__':
     main()

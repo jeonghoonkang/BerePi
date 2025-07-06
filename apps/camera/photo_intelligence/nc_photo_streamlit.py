@@ -1,6 +1,7 @@
 import json
 import streamlit as st
 import traceback
+
 from nc_photo_list import list_photos
 
 
@@ -25,6 +26,7 @@ def main():
             with st.spinner("이미지 정보를 가져오는 중..."):
                 try:
                     photos = list_photos(
+
                         url,
                         username,
                         password,
@@ -33,6 +35,7 @@ def main():
                         exif_method=method,
                         measure_speed=measure_speed,
                         processed_log=processed_log if processed_log else None,
+
                     )
                     progress_text.write("완료")
                     st.json(photos)
