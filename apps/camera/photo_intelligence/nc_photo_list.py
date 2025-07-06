@@ -215,7 +215,6 @@ def list_local_photos(
 
     return files
 
-
 def list_photos(
     nc_url,
     username,
@@ -235,6 +234,7 @@ def list_photos(
     measure_speed : bool
         If True, timings for both methods are recorded in the result.
     """
+
     root_prefix = f"/remote.php/dav/files/{username}{photo_dir}"
     queue = ["/"]
     seen = set()
@@ -417,6 +417,7 @@ def main():
                 measure_speed=measure_speed,
                 processed_log=processed_log,
             )
+
         result = json.dumps(photos, indent=2, ensure_ascii=False)
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:
