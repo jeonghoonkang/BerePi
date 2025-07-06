@@ -6,7 +6,9 @@ script connects to a Nextcloud server via WebDAV and lists information about all
 modified and size) is printed along with EXIF information (shooting date and
 GPS location) as JSON.
 
-Set the following environment variables before running the script:
+Set the following environment variables before running the script. Command line
+options can override the EXIF parser and enable speed measurement:
+
 
 - `NEXTCLOUD_URL` - base URL of the Nextcloud server
 - `NEXTCLOUD_USERNAME` - your Nextcloud username
@@ -25,7 +27,8 @@ sudo apt-get install exiftool
 ```
 
 Run the script with Python 3. Progress for each directory will be printed to
-the console:
+the console. Command line options allow selecting the EXIF parser and writing
+results to a JSON file:
 
 
 ```bash
@@ -33,7 +36,10 @@ the console:
 python3 nc_photo_list.py
 
 # use exiftool and measure speed difference
-EXIF_METHOD=exiftool COMPARE_SPEED=1 python3 nc_photo_list.py
+python3 nc_photo_list.py --use-exiftool --compare-speed
+
+# write the output to result.json
+python3 nc_photo_list.py -o result.json
 ```
 
 For an interactive interface using [Streamlit](https://streamlit.io/) install the

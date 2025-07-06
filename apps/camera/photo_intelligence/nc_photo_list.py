@@ -10,6 +10,7 @@ import subprocess
 import traceback
 import time
 import re
+import argparse
 
 
 
@@ -18,6 +19,7 @@ def get_env(key, default=None):
     if val is None:
         return default
     return val
+
 
 
 def validate_env():
@@ -30,6 +32,7 @@ def validate_env():
             'NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set'
         )
     return url, user, password, photo_dir
+
 
 def parse_exif_pillow(data):
     """Return shooting date and location from image bytes."""
@@ -252,9 +255,31 @@ def list_photos(
 
 
 def main():
+    parser = argparse.ArgumentParser(description="List Nextcloud photos")
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="write JSON result to file instead of stdout",
+    )
+    parser.add_argument(
+        "--use-exiftool",
+        action="store_true",
+        help="parse EXIF using exiftool",
+    )
+    parser.add_argument(
+        "--compare-speed",
+        action="store_true",
+        help="measure time difference between Pillow and exiftool",
+    )
+    args = parser.parse_args()
+
     url, user, password, photo_dir = validate_env()
-    exif_method = get_env("EXIF_METHOD", "pillow").lower()
-    measure_speed = get_env("COMPARE_SPEED", "0") == "1"
+    exif_method = (
+        "exiftool" if args.use_exiftool else get_env("EXIF_METHOD", "pillow").lower()
+    )
+    measure_speed = args.compare_speed or get_env("COMPARE_SPEED", "0") == "1"
+
+
     try:
         photos = list_photos(
             url,
@@ -264,10 +289,16 @@ def main():
             exif_method=exif_method,
             measure_speed=measure_speed,
         )
-
-        print(json.dumps(photos, indent=2, ensure_ascii=False))
+        result = json.dumps(photos, indent=2, ensure_ascii=False)
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(result)
+        else:
+            print(result)
     except Exception:
         traceback.print_exc()
+
+
 
 if __name__ == '__main__':
     main()
