@@ -16,6 +16,9 @@ options can override the EXIF parser and enable speed measurement:
 - `NEXTCLOUD_PHOTO_DIR` (optional) - remote directory path, defaults to `/Photos`
 - `EXIF_METHOD` (optional) - `pillow` or `exiftool` to select EXIF parser
 - `COMPARE_SPEED` (optional) - set to `1` to measure both methods
+- `PROCESSED_LOG` (optional) - path to a file that tracks processed JPEGs when
+  using exiftool
+
 
 Install the [Pillow](https://python-pillow.org/) package to enable EXIF processing or
 install [exiftool](https://exiftool.org/) if you prefer to use the CLI parser.
@@ -39,7 +42,11 @@ python3 nc_photo_list.py
 python3 nc_photo_list.py --use-exiftool --compare-speed
 
 # write the output to result.json
+
 python3 nc_photo_list.py -o result.json
+
+# record processed files so reruns skip them
+python3 nc_photo_list.py --use-exiftool --processed-log processed.txt
 ```
 
 For an interactive interface using [Streamlit](https://streamlit.io/) install the

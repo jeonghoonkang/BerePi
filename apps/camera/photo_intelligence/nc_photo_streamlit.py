@@ -13,6 +13,7 @@ def main():
     photo_dir = st.text_input("Photo directory", value="/Photos")
     method = st.selectbox("EXIF method", ["pillow", "exiftool"], index=0)
     measure_speed = st.checkbox("측정 모드 (두 방법 속도 비교)")
+    processed_log = st.text_input("Processed log (optional)")
 
     if st.button("Fetch"):
         if not (url and username and password):
@@ -33,6 +34,8 @@ def main():
                         progress_cb=cb,
                         exif_method=method,
                         measure_speed=measure_speed,
+                        processed_log=processed_log if processed_log else None,
+
                     )
                     progress_text.write("완료")
                     st.json(photos)

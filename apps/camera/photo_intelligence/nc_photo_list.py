@@ -131,6 +131,8 @@ def list_photos(
     progress_cb=None,
     exif_method="pillow",
     measure_speed=False,
+    processed_log=None,
+
 ):
     """Iteratively walk the photo directory and return metadata for JPEG files.
 
@@ -146,6 +148,11 @@ def list_photos(
     queue = ["/"]
     seen = set()
     files = []
+
+    processed = set()
+    if processed_log and os.path.exists(processed_log):
+        with open(processed_log, "r", encoding="utf-8") as f:
+            processed = set(l.strip() for l in f if l.strip())
 
     while queue:
         current_path = queue.pop(0)
@@ -185,6 +192,9 @@ def list_photos(
                 continue
 
             if not relative.lower().endswith((".jpg", ".jpeg")):
+                continue
+
+            if relative in processed:
                 continue
 
             prop = resp.find('{DAV:}propstat/{DAV:}prop')
@@ -250,6 +260,12 @@ def list_photos(
                 entry.update(timing)
             files.append(entry)
 
+            if processed_log and (exif_method == "exiftool" or measure_speed):
+                if relative not in processed:
+                    processed.add(relative)
+                    with open(processed_log, "a", encoding="utf-8") as f:
+                        f.write(relative + "\n")
+
 
     return files
 
@@ -271,6 +287,11 @@ def main():
         action="store_true",
         help="measure time difference between Pillow and exiftool",
     )
+    parser.add_argument(
+        "--processed-log",
+        help="file to track processed JPEGs when using exiftool",
+    )
+
     args = parser.parse_args()
 
     url, user, password, photo_dir = validate_env()
@@ -278,6 +299,7 @@ def main():
         "exiftool" if args.use_exiftool else get_env("EXIF_METHOD", "pillow").lower()
     )
     measure_speed = args.compare_speed or get_env("COMPARE_SPEED", "0") == "1"
+    processed_log = args.processed_log or get_env("PROCESSED_LOG")
 
 
     try:
@@ -288,6 +310,8 @@ def main():
             photo_dir,
             exif_method=exif_method,
             measure_speed=measure_speed,
+            processed_log=processed_log,
+
         )
         result = json.dumps(photos, indent=2, ensure_ascii=False)
         if args.output:
@@ -297,8 +321,6 @@ def main():
             print(result)
     except Exception:
         traceback.print_exc()
-
-
 
 if __name__ == '__main__':
     main()
