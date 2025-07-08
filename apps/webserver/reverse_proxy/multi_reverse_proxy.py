@@ -108,7 +108,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             pw = params.get('password', [''])[0]
             if user == self.server.auth_user and pw == self.server.auth_pass:
                 self.send_response(303)
-                self.send_header('Set-Cookie', 'auth=1; Path=/; SameSite-:ax')
+                self.send_header('Set-Cookie', 'auth=1; Path=/; SameSite=Lax')
                 self.send_header('Location', '/')
                 self.send_header('Content-Length', '0')
                 self.send_header('Connection', 'close')
