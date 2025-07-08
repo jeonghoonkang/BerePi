@@ -77,6 +77,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
         html += '<ul>'
+
         for out_port, target in self.server.data:
             html += f'<li>{out_port} -&gt; {target}</li>'
         html += '</ul></body></html>'
@@ -112,6 +113,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
 def start_status_server(port, data, auth_user=None, auth_pass=None):
+
     handler = StatusHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
@@ -122,6 +124,7 @@ def start_status_server(port, data, auth_user=None, auth_pass=None):
         server.requires_auth = True
     else:
         server.requires_auth = False
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
@@ -171,6 +174,8 @@ def main():
 
     servers = []
     global status_data
+
+
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -186,6 +191,7 @@ def main():
         auth_user=args.status_user,
         auth_pass=args.status_pass,
     )
+
 
     try:
         threading.Event().wait()
