@@ -4,7 +4,6 @@ import socketserver
 import urllib.request
 import urllib.parse
 import threading
-from urllib.parse import urlparse
 
 
 # hold mapping information (out_port -> target url) for status display
@@ -127,14 +126,12 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
 
-
 def start_status_server(port, data, auth_user=None, auth_pass=None, redirect_port=2281):
     handler = StatusHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
     server.status_port = port
 
-    
     server.redirect_port = redirect_port
     if auth_user and auth_pass:
         server.auth_user = auth_user

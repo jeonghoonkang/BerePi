@@ -30,5 +30,25 @@ python3 multi_reverse_proxy.py \
 
 `--status-user` 와 `--status-pass` 옵션을 함께 지정하면 상태 페이지에 접속했을 때 사용자 이름과 비밀번호를 입력할 수 있는 간단한 로그인 화면이 나타납니다. 올바른 값을 입력하면 현재 프록시 상태 정보를 볼 수 있습니다.
 
-
 로그인 성공 후에는 `http://bigsoft.iptime.org`의 `--redirect-port` 값으로 설정된 포트로 리다이렉트됩니다.
+
+### 로그인 테스트 예제
+
+`login_client.py` 스크립트는 상태 페이지에 POST 요청을 보내 로그인 과정을 확인하는 간단한 예제입니다.
+
+```bash
+python3 login_client.py --base-url http://localhost:9000 --username admin --password secret
+```
+
+실행하면 다음과 같이 첫 단계에서 `/login` 경로로 POST 요청을 보내고, 응답 코드와 리다이렉트 위치, 쿠키 값을 출력합니다.
+
+```python
+login_url = f'{base_url}/login'
+login_data = {
+    'username': username,
+    'password': password
+}
+print(f"[1] POST to {login_url}")
+response = session.post(login_url, data=login_data, allow_redirects=False)
+```
+
