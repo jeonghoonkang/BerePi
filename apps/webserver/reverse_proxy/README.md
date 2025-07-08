@@ -30,4 +30,5 @@ python3 multi_reverse_proxy.py \
 
 `--status-user` 와 `--status-pass` 옵션을 함께 지정하면 상태 페이지에 접속했을 때 사용자 이름과 비밀번호를 입력할 수 있는 간단한 로그인 화면이 나타납니다. 올바른 값을 입력하면 현재 프록시 상태 정보를 볼 수 있습니다.
 
+
 로그인 성공 후에는 `http://bigsoft.iptime.org`의 `--redirect-port` 값으로 설정된 포트로 리다이렉트됩니다.
