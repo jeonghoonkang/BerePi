@@ -1,5 +1,4 @@
 import argparse
-import base64
 import http.server
 import socketserver
 import urllib.request
@@ -58,21 +57,23 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
-    def do_GET(self):
-        # Basic authentication if configured
-        expected = getattr(self.server, 'auth', None)
-        if expected:
-            auth_header = self.headers.get('Authorization')
-            if auth_header != expected:
+    def _show_login(self, invalid=False):
+        html = '<html><body><h1>Login</h1>'
+        if invalid:
+            html += '<p style="color:red">Invalid credentials</p>'
+        html += (
+            '<form method="post" action="/login">'
+            'Username: <input type="text" name="username"><br>'
+            'Password: <input type="password" name="password"><br>'
+            '<input type="submit" value="Login">'
+            '</form></body></html>'
+        )
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(html.encode('utf-8'))
 
-                body = b'Authentication required.'
-                self.send_response(401)
-                self.send_header('WWW-Authenticate', 'Basic realm="Proxy Status"')
-                self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                self.send_header('Content-Length', str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
+    def _show_status(self):
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
         html += '<ul>'
@@ -85,14 +86,45 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode('utf-8'))
 
+    def do_GET(self):
+        if getattr(self.server, 'requires_auth', False):
+            cookie = self.headers.get('Cookie', '')
+            if 'auth=1' not in cookie:
+                self._show_login()
+                return
+        self._show_status()
 
-def start_status_server(port, data, auth_header=None):
+    def do_POST(self):
+        if self.path == '/login' and getattr(self.server, 'requires_auth', False):
+            length = int(self.headers.get('Content-Length', '0'))
+            body = self.rfile.read(length).decode('utf-8')
+            params = urllib.parse.parse_qs(body)
+            user = params.get('username', [''])[0]
+            pw = params.get('password', [''])[0]
+            if user == self.server.auth_user and pw == self.server.auth_pass:
+                self.send_response(303)
+                self.send_header('Set-Cookie', 'auth=1; Path=/')
+                self.send_header('Location', '/')
+                self.end_headers()
+            else:
+                self._show_login(invalid=True)
+        else:
+            self.send_error(404)
+
+
+def start_status_server(port, data, auth_user=None, auth_pass=None):
+
     handler = StatusHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
     server.status_port = port
-    if auth_header:
-        server.auth = auth_header
+    if auth_user and auth_pass:
+        server.auth_user = auth_user
+        server.auth_pass = auth_pass
+        server.requires_auth = True
+    else:
+        server.requires_auth = False
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
@@ -143,7 +175,7 @@ def main():
     servers = []
     global status_data
 
-    
+
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -153,13 +185,13 @@ def main():
 
     write_status_file(args.status_file, status_data, args.status_port)
 
-    auth_header = None
-    if args.status_user and args.status_pass:
-        token = f'{args.status_user}:{args.status_pass}'
-        b64 = base64.b64encode(token.encode('utf-8')).decode('ascii')
-        auth_header = 'Basic ' + b64
+    status_srv = start_status_server(
+        args.status_port,
+        status_data,
+        auth_user=args.status_user,
+        auth_pass=args.status_pass,
+    )
 
-    status_srv = start_status_server(args.status_port, status_data, auth_header)
 
     try:
         threading.Event().wait()
