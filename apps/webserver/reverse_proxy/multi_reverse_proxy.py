@@ -1,12 +1,10 @@
 import argparse
-
 import base64
 import http.server
 import socketserver
 import urllib.request
 import urllib.parse
 import threading
-
 
 # hold mapping information (out_port -> target url) for status display
 status_data = []
@@ -66,7 +64,9 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             if auth_header != expected:
                 self.send_response(401)
                 self.send_header('WWW-Authenticate', 'Basic realm="Proxy Status"')
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
                 self.end_headers()
+                self.wfile.write(b'Authentication required.')
                 return
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
@@ -99,7 +99,6 @@ def write_status_file(path, data, status_port):
         for out_port, target in data:
             f.write(f'{out_port} -> {target}\n')
 
-            
 def start_proxy(port, target):
     handler = ProxyHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
@@ -146,7 +145,7 @@ def main():
         status_data.append((out_port, target))
 
 
-    write_status_file(args.status_file, status_data, args.status_port)
+        write_status_file(args.status_file, status_data, args.status_port)
 
     auth_header = None
     if args.status_user and args.status_pass:
