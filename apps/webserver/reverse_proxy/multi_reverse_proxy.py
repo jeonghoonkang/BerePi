@@ -92,7 +92,8 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
     def do_GET(self):
-        print ('do_GET')
+        print ('do_GET', self.path)
+
         if getattr(self.server, 'requires_auth', False):
             cookie = self.headers.get('Cookie', '')
             print(f'Received Cookie header: {cookie}')
