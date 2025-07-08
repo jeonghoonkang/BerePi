@@ -4,6 +4,11 @@ import socketserver
 import urllib.request
 import urllib.parse
 import threading
+import os
+
+# hold mapping information (out_port -> target url)
+status_data = []
+
 
 class ProxyHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
@@ -51,6 +56,32 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
 
+class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        html = '<html><body><h1>Proxy Status</h1><ul>'
+        for out_port, target in self.server.data:
+            html += f'<li>{out_port} -&gt; {target}</li>'
+        html += '</ul></body></html>'
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(html.encode('utf-8'))
+
+
+def start_status_server(port, data):
+    handler = StatusHTTPRequestHandler
+    server = ThreadingHTTPServer(('', port), handler)
+    server.data = data
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def write_status_file(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for out_port, target in data:
+            f.write(f'{out_port} -> {target}\n')
+
 def start_proxy(port, target):
     handler = ProxyHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
@@ -76,20 +107,33 @@ def main():
     parser.add_argument('--map', action='append', required=True,
                         metavar='OUT_PORT:HOST:PORT',
                         help='forward OUT_PORT to HOST:PORT')
+    parser.add_argument('--status-port', type=int, default=8000,
+                        help='port to serve status page')
+    parser.add_argument('--status-file', default='status.txt',
+                        help='path to write status information')
     args = parser.parse_args()
 
     servers = []
+    global status_data
+
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
         print(f'Forwarding 0.0.0.0:{out_port} -> {target}')
         servers.append(srv)
+        status_data.append((out_port, target))
+
+    write_status_file(args.status_file, status_data)
+    status_srv = start_status_server(args.status_port, status_data)
+
 
     try:
         threading.Event().wait()
     except KeyboardInterrupt:
         pass
     finally:
+        status_srv.shutdown()
+
         for srv in servers:
             srv.shutdown()
 
