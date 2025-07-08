@@ -118,14 +118,16 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             user = params.get('username', [''])[0]
             pw = params.get('password', [''])[0]
             print(f"Received login credentials: {user=} {pw=}")
+            print(f"Expected credentials: {self.server.auth_user=} {self.server.auth_pass=}")
 
             if user == self.server.auth_user and pw == self.server.auth_pass:
                 self.send_response(303)
-                self.send_header('Set-Cookie', 'auth=1; Path=/; SameSite=Lax')
+                self.send_header('Set-Cookie', 'auth=1; Path=/; Max-Age=600; SameSite=Lax')
                 self.send_header('Location', '/')
                 self.send_header('Content-Length', '0')
                 self.send_header('Connection', 'close')
                 self.end_headers()
+                print(' ### Valid credentials, redirecting to status page')
                 return
 
             else:
