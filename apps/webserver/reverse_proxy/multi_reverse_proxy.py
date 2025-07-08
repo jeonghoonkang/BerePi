@@ -108,9 +108,12 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         if self.path == '/login' and getattr(self.server, 'requires_auth', False):
             length = int(self.headers.get('Content-Length', '0'))
             body = self.rfile.read(length).decode('utf-8')
+            print(f'Login POST body data: {body}')
             params = urllib.parse.parse_qs(body)
             user = params.get('username', [''])[0]
             pw = params.get('password', [''])[0]
+            print(f"Received login credentials: {user=} {pw=}")
+
             if user == self.server.auth_user and pw == self.server.auth_pass:
                 self.send_response(303)
                 self.send_header('Set-Cookie', 'auth=1; Path=/; SameSite=Lax')
