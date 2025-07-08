@@ -64,6 +64,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         if expected:
             auth_header = self.headers.get('Authorization')
             if auth_header != expected:
+
                 body = b'Authentication required.'
                 self.send_response(401)
                 self.send_header('WWW-Authenticate', 'Basic realm="Proxy Status"')
@@ -75,6 +76,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
         html += '<ul>'
+
         for out_port, target in self.server.data:
             html += f'<li>{out_port} -&gt; {target}</li>'
         html += '</ul></body></html>'
@@ -140,6 +142,8 @@ def main():
 
     servers = []
     global status_data
+
+    
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
