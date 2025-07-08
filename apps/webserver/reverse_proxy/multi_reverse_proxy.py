@@ -92,6 +92,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
     def do_GET(self):
+        print ('do_GET')
         if getattr(self.server, 'requires_auth', False):
             cookie = self.headers.get('Cookie', '')
             if 'auth=1' not in cookie:
@@ -100,6 +101,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self._show_status()
 
     def do_POST(self):
+        print ('do_Post')
         if self.path == '/login' and getattr(self.server, 'requires_auth', False):
             length = int(self.headers.get('Content-Length', '0'))
             body = self.rfile.read(length).decode('utf-8')
