@@ -71,6 +71,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
         html += '<ul>'
+
         for out_port, target in self.server.data:
             html += f'<li>{out_port} -&gt; {target}</li>'
         html += '</ul></body></html>'
@@ -97,7 +98,6 @@ def write_status_file(path, data, status_port):
         f.write(f'status_port: {status_port}\n')
         for out_port, target in data:
             f.write(f'{out_port} -> {target}\n')
-
 
 def start_proxy(port, target):
     handler = ProxyHTTPRequestHandler
@@ -136,6 +136,7 @@ def main():
 
     servers = []
     global status_data
+
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -143,7 +144,8 @@ def main():
         servers.append(srv)
         status_data.append((out_port, target))
 
-    write_status_file(args.status_file, status_data, args.status_port)
+
+        write_status_file(args.status_file, status_data, args.status_port)
 
     auth_header = None
     if args.status_user and args.status_pass:
