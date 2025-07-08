@@ -94,40 +94,31 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
     def do_GET(self):
-        print ('do_GET', self.path)
-
         if getattr(self.server, 'requires_auth', False):
             cookie = self.headers.get('Cookie', '')
-            print(f'Received Cookie header: {cookie}')
-
             if 'auth=1' not in cookie:
-                print(' ### No valid auth cookie found, showing login page')
                 self._show_login()
                 return
         self._show_status()
 
     def do_POST(self):
-        print ('do_Post')
-        parsed_path = urlparse(self.path)
 
-        if parsed_path.path == '/login' and getattr(self.server, 'requires_auth', False):
+        if self.path == '/login' and getattr(self.server, 'requires_auth', False):
             length = int(self.headers.get('Content-Length', '0'))
             body = self.rfile.read(length).decode('utf-8')
-            print(f'Login POST body data: {body}')
             params = urllib.parse.parse_qs(body)
             user = params.get('username', [''])[0]
             pw = params.get('password', [''])[0]
-            print(f"Received login credentials: {user=} {pw=}")
-            print(f"Expected credentials: {self.server.auth_user=} {self.server.auth_pass=}")
-
             if user == self.server.auth_user and pw == self.server.auth_pass:
+                # After successful login redirect the browser to the
+                # external address which is also stored in the cookie
+                port = getattr(self.server, 'redirect_port', 2281)
+                redirect_url = f'http://bigsoft.iptime.org:{port}'
                 self.send_response(303)
-                self.send_header('Set-Cookie', 'auth=1; Path=/; Max-Age=600; SameSite=Lax')
-                self.send_header('Location', '/')
+                self.send_header('Set-Cookie', 'auth=1; Path=/')
+                self.send_header('Location', redirect_url)
                 self.send_header('Content-Length', '0')
-                self.send_header('Connection', 'close')
                 self.end_headers()
-                print(' ### Valid credentials, redirecting to status page')
                 return
 
             else:
@@ -136,12 +127,15 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
 
-def start_status_server(port, data, auth_user=None, auth_pass=None):
 
+def start_status_server(port, data, auth_user=None, auth_pass=None, redirect_port=2281):
     handler = StatusHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
     server.status_port = port
+
+    
+    server.redirect_port = redirect_port
     if auth_user and auth_pass:
         server.auth_user = auth_user
         server.auth_pass = auth_pass
@@ -194,6 +188,8 @@ def main():
                         help='username for status page basic auth')
     parser.add_argument('--status-pass', dest='status_pass', default=None,
                         help='password for status page basic auth')
+    parser.add_argument('--redirect-port', type=int, default=2281,
+                        help='port used to build login redirect URL')
     args = parser.parse_args()
 
     servers = []
@@ -213,6 +209,8 @@ def main():
         status_data,
         auth_user=args.status_user,
         auth_pass=args.status_pass,
+
+        redirect_port=args.redirect_port,
     )
 
     try:

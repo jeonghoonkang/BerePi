@@ -18,11 +18,11 @@ python3 multi_reverse_proxy.py \
     --map 8081:localhost:5001
     --status-port 9000
     --status-user admin --status-pass secret
+    --redirect-port 2281
 ```
 
 실행하면 각 매핑에 대해 "Forwarding" 메시지가 표시되며, 여러 프록시가 동시에 동작합니다.
 종료하려면 `Ctrl+C` 를 누르면 됩니다.
-
 
 기본적으로 상태 정보는 `status.txt` 파일에 저장됩니다. 첫 줄에는 상태 페이지가 동작하는
 포트 번호가 기록되며, 이후 줄에는 각 포트 매핑이 나열됩니다. 같은 정보는 `--status-port`
@@ -30,3 +30,5 @@ python3 multi_reverse_proxy.py \
 
 `--status-user` 와 `--status-pass` 옵션을 함께 지정하면 상태 페이지에 접속했을 때 사용자 이름과 비밀번호를 입력할 수 있는 간단한 로그인 화면이 나타납니다. 올바른 값을 입력하면 현재 프록시 상태 정보를 볼 수 있습니다.
 
+
+로그인 성공 후에는 `http://bigsoft.iptime.org`의 `--redirect-port` 값으로 설정된 포트로 리다이렉트됩니다.
