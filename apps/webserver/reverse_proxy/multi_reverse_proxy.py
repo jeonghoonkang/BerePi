@@ -9,6 +9,7 @@ import os
 # hold mapping information (out_port -> target url)
 status_data = []
 
+
 class ProxyHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
@@ -81,7 +82,6 @@ def write_status_file(path, data):
         for out_port, target in data:
             f.write(f'{out_port} -> {target}\n')
 
-
 def start_proxy(port, target):
     handler = ProxyHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
@@ -115,6 +115,7 @@ def main():
 
     servers = []
     global status_data
+
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -125,12 +126,14 @@ def main():
     write_status_file(args.status_file, status_data)
     status_srv = start_status_server(args.status_port, status_data)
 
+
     try:
         threading.Event().wait()
     except KeyboardInterrupt:
         pass
     finally:
         status_srv.shutdown()
+
         for srv in servers:
             srv.shutdown()
 

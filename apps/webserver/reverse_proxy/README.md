@@ -17,6 +17,7 @@ python3 multi_reverse_proxy.py \
     --map 8080:localhost:5000 \
     --map 8081:localhost:5001
     --status-port 9000
+
 ```
 
 실행하면 각 매핑에 대해 "Forwarding" 메시지가 표시되며, 여러 프록시가 동시에 동작합니다.
@@ -24,3 +25,4 @@ python3 multi_reverse_proxy.py \
 
 기본적으로 상태 정보는 `status.txt` 파일에 저장되며, `--status-port` 옵션으로 지정한 포트에서
 동작하는 웹 페이지를 통해 현재 매핑 상태를 확인할 수 있습니다.
+
