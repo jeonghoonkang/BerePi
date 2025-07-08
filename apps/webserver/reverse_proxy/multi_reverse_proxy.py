@@ -5,6 +5,7 @@ import urllib.request
 import urllib.parse
 import threading
 
+
 # hold mapping information (out_port -> target url) for status display
 status_data = []
 
@@ -75,6 +76,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+
     def _show_status(self):
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
@@ -89,6 +91,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+
     def do_GET(self):
         if getattr(self.server, 'requires_auth', False):
             cookie = self.headers.get('Cookie', '')
@@ -98,6 +101,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self._show_status()
 
     def do_POST(self):
+
         if self.path == '/login' and getattr(self.server, 'requires_auth', False):
             length = int(self.headers.get('Content-Length', '0'))
             body = self.rfile.read(length).decode('utf-8')
@@ -115,6 +119,7 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header('Content-Length', '0')
                 self.end_headers()
                 return
+
             else:
                 self._show_login(invalid=True)
         else:
@@ -126,6 +131,7 @@ def start_status_server(port, data, auth_user=None, auth_pass=None, redirect_por
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
     server.status_port = port
+
     server.redirect_port = redirect_port
     if auth_user and auth_pass:
         server.auth_user = auth_user
@@ -133,6 +139,7 @@ def start_status_server(port, data, auth_user=None, auth_pass=None, redirect_por
         server.requires_auth = True
     else:
         server.requires_auth = False
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
@@ -184,6 +191,7 @@ def main():
 
     servers = []
     global status_data
+
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -198,6 +206,7 @@ def main():
         status_data,
         auth_user=args.status_user,
         auth_pass=args.status_pass,
+
         redirect_port=args.redirect_port,
     )
 
