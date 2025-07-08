@@ -4,6 +4,8 @@ import socketserver
 import urllib.request
 import urllib.parse
 import threading
+from urllib.parse import urlparse
+
 
 # hold mapping information (out_port -> target url) for status display
 status_data = []
@@ -106,7 +108,9 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         print ('do_Post')
-        if self.path == '/login' and getattr(self.server, 'requires_auth', False):
+        parsed_path = urlparse(self.path)
+
+        if parsed_path.path == '/login' and getattr(self.server, 'requires_auth', False):
             length = int(self.headers.get('Content-Length', '0'))
             body = self.rfile.read(length).decode('utf-8')
             print(f'Login POST body data: {body}')
