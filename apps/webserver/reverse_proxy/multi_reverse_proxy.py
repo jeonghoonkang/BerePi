@@ -95,7 +95,10 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         print ('do_GET')
         if getattr(self.server, 'requires_auth', False):
             cookie = self.headers.get('Cookie', '')
+            print(f'Received Cookie header: {cookie}')
+
             if 'auth=1' not in cookie:
+                print(' ### No valid auth cookie found, showing login page')
                 self._show_login()
                 return
         self._show_status()
