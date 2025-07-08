@@ -52,3 +52,15 @@ print(f"[1] POST to {login_url}")
 response = session.post(login_url, data=login_data, allow_redirects=False)
 ```
 
+### status.txt 조회 스크립트
+
+`status_reader.py` 스크립트는 로컬에 저장된 `status.txt` 파일을
+비밀번호 입력 후 확인할 수 있게 해 줍니다.
+
+```bash
+python3 status_reader.py --file status.txt --expected-pass secret
+```
+
+비밀번호가 올바르면 파일 내용을 출력하고, 틀리면 `Access denied` 메시지가
+표시됩니다.
+
