@@ -1,14 +1,15 @@
 import argparse
+
+import base64
 import http.server
 import socketserver
 import urllib.request
 import urllib.parse
 import threading
-import os
 
-# hold mapping information (out_port -> target url)
+
+# hold mapping information (out_port -> target url) for status display
 status_data = []
-
 
 class ProxyHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
@@ -58,7 +59,19 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        html = '<html><body><h1>Proxy Status</h1><ul>'
+        # Basic authentication if configured
+        expected = getattr(self.server, 'auth', None)
+        if expected:
+            auth_header = self.headers.get('Authorization')
+            if auth_header != expected:
+                self.send_response(401)
+                self.send_header('WWW-Authenticate', 'Basic realm="Proxy Status"')
+                self.end_headers()
+                return
+        html = '<html><body><h1>Proxy Status</h1>'
+        html += f'<p>Status port: {self.server.status_port}</p>'
+        html += '<ul>'
+
         for out_port, target in self.server.data:
             html += f'<li>{out_port} -&gt; {target}</li>'
         html += '</ul></body></html>'
@@ -68,20 +81,25 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(html.encode('utf-8'))
 
 
-def start_status_server(port, data):
+def start_status_server(port, data, auth_header=None):
     handler = StatusHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
+    server.status_port = port
+    if auth_header:
+        server.auth = auth_header
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
 
 
-def write_status_file(path, data):
+def write_status_file(path, data, status_port):
     with open(path, 'w', encoding='utf-8') as f:
+        f.write(f'status_port: {status_port}\n')
         for out_port, target in data:
             f.write(f'{out_port} -> {target}\n')
 
+            
 def start_proxy(port, target):
     handler = ProxyHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
@@ -111,6 +129,10 @@ def main():
                         help='port to serve status page')
     parser.add_argument('--status-file', default='status.txt',
                         help='path to write status information')
+    parser.add_argument('--status-user', default=None,
+                        help='username for status page basic auth')
+    parser.add_argument('--status-pass', dest='status_pass', default=None,
+                        help='password for status page basic auth')
     args = parser.parse_args()
 
     servers = []
@@ -123,9 +145,16 @@ def main():
         servers.append(srv)
         status_data.append((out_port, target))
 
-    write_status_file(args.status_file, status_data)
-    status_srv = start_status_server(args.status_port, status_data)
 
+    write_status_file(args.status_file, status_data, args.status_port)
+
+    auth_header = None
+    if args.status_user and args.status_pass:
+        token = f'{args.status_user}:{args.status_pass}'
+        b64 = base64.b64encode(token.encode('utf-8')).decode('ascii')
+        auth_header = 'Basic ' + b64
+
+    status_srv = start_status_server(args.status_port, status_data, auth_header)
 
     try:
         threading.Event().wait()
@@ -133,7 +162,6 @@ def main():
         pass
     finally:
         status_srv.shutdown()
-
         for srv in servers:
             srv.shutdown()
 
