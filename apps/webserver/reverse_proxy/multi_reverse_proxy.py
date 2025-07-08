@@ -68,23 +68,28 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             '<input type="submit" value="Login">'
             '</form></body></html>'
         )
+        body = html.encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(html.encode('utf-8'))
+        self.wfile.write(body)
+
 
     def _show_status(self):
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
         html += '<ul>'
-
         for out_port, target in self.server.data:
             html += f'<li>{out_port} -&gt; {target}</li>'
         html += '</ul></body></html>'
+        body = html.encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(html.encode('utf-8'))
+        self.wfile.write(body)
+
 
     def do_GET(self):
         if getattr(self.server, 'requires_auth', False):
@@ -105,7 +110,10 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(303)
                 self.send_header('Set-Cookie', 'auth=1; Path=/')
                 self.send_header('Location', '/')
+                self.send_header('Content-Length', '0')
                 self.end_headers()
+                return
+
             else:
                 self._show_login(invalid=True)
         else:
@@ -175,7 +183,6 @@ def main():
     servers = []
     global status_data
 
-
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -191,7 +198,6 @@ def main():
         auth_user=args.status_user,
         auth_pass=args.status_pass,
     )
-
 
     try:
         threading.Event().wait()
