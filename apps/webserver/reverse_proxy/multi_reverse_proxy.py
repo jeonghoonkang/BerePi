@@ -56,17 +56,22 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def do_GET(self):
         # Basic authentication if configured
         expected = getattr(self.server, 'auth', None)
         if expected:
             auth_header = self.headers.get('Authorization')
             if auth_header != expected:
+
+                body = b'Authentication required.'
                 self.send_response(401)
                 self.send_header('WWW-Authenticate', 'Basic realm="Proxy Status"')
                 self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
                 self.end_headers()
-                self.wfile.write(b'Authentication required.')
+                self.wfile.write(body)
                 return
         html = '<html><body><h1>Proxy Status</h1>'
         html += f'<p>Status port: {self.server.status_port}</p>'
@@ -98,6 +103,7 @@ def write_status_file(path, data, status_port):
         f.write(f'status_port: {status_port}\n')
         for out_port, target in data:
             f.write(f'{out_port} -> {target}\n')
+
 
 def start_proxy(port, target):
     handler = ProxyHTTPRequestHandler
@@ -137,6 +143,7 @@ def main():
     servers = []
     global status_data
 
+    
     for m in args.map:
         out_port, target = parse_map(m)
         srv = start_proxy(out_port, target)
@@ -144,8 +151,7 @@ def main():
         servers.append(srv)
         status_data.append((out_port, target))
 
-
-        write_status_file(args.status_file, status_data, args.status_port)
+    write_status_file(args.status_file, status_data, args.status_port)
 
     auth_header = None
     if args.status_user and args.status_pass:
