@@ -27,14 +27,14 @@ if username is None or password is None:
 else:
     if username == USER and password == PASS:
 
-      print("<html><body><pre>")
+        print("<html><body><pre>")
         try:
             with open(STATUS_FILE, "r", encoding="utf-8") as f:
                 for line in f:
                     print(html.escape(line), end='')
         except Exception as e:
             print(f"Error reading {html.escape(STATUS_FILE)}: {html.escape(str(e))}")
-        print("</pre></body></html>")
+            print("</pre></body></html>")
     else:
         print("<html><body>")
         print("<p style='color:red'>Invalid credentials</p>")
