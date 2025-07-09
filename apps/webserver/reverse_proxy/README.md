@@ -33,9 +33,17 @@ python3 multi_reverse_proxy.py \
 
 
 - 실행(예)
-'''
+```
 sudo python3 multi_reverse_proxy.py --map 2280:localhost:80 --map 2281:localhost:81 --status-port 81 --status-user {username} --status-pass {password}
-'''
+```
+✨ (Status Port 로 연결, username, password ) ✨ 
+
+![image](https://github.com/user-attachments/assets/a0f9ecb4-4e0a-401e-8e30-d255099d2924)
+
+✨ (결과 출력) ✨  
+
+![image](https://github.com/user-attachments/assets/5521fb89-beb9-400e-9e4e-9d99437406dc)
+
 
 ### status.txt 조회 스크립트
 
