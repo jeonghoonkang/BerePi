@@ -26,7 +26,8 @@ if username is None or password is None:
     print("</body></html>")
 else:
     if username == USER and password == PASS:
-        print("<html><body><pre>")
+
+      print("<html><body><pre>")
         try:
             with open(STATUS_FILE, "r", encoding="utf-8") as f:
                 for line in f:

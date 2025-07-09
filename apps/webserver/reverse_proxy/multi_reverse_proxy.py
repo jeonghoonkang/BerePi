@@ -6,6 +6,7 @@ import urllib.parse
 import threading
 import os
 
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -92,6 +93,7 @@ class StatusHTTPRequestHandler(http.server.CGIHTTPRequestHandler):
         if self.path == '/' or self.path == '':
             self.path = '/cgi-bin/status_login.py'
             return http.server.CGIHTTPRequestHandler.do_POST(self)
+
         if self.path.startswith('/cgi-bin/'):
             return http.server.CGIHTTPRequestHandler.do_POST(self)
         self.send_error(404)
