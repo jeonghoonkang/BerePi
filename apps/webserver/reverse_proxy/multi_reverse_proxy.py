@@ -7,6 +7,9 @@ import threading
 import os
 
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+
 # hold mapping information (out_port -> target url) for status display
 status_data = []
 
@@ -57,7 +60,7 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 class StatusHTTPRequestHandler(http.server.CGIHTTPRequestHandler):
-    """Handler that serves proxy status and executes CGI scripts."""
+    """Serve the login CGI on the status port."""
 
     protocol_version = 'HTTP/1.1'
     cgi_directories = ['/cgi-bin']
@@ -79,11 +82,18 @@ class StatusHTTPRequestHandler(http.server.CGIHTTPRequestHandler):
 
 
     def do_GET(self):
+        if self.path == '/' or self.path == '':
+            self.path = '/cgi-bin/status_login.py'
+            return http.server.CGIHTTPRequestHandler.do_GET(self)
         if self.path.startswith('/cgi-bin/'):
             return http.server.CGIHTTPRequestHandler.do_GET(self)
-        self._show_status()
+        self.send_error(404)
 
     def do_POST(self):
+        if self.path == '/' or self.path == '':
+            self.path = '/cgi-bin/status_login.py'
+            return http.server.CGIHTTPRequestHandler.do_POST(self)
+
         if self.path.startswith('/cgi-bin/'):
             return http.server.CGIHTTPRequestHandler.do_POST(self)
         self.send_error(404)

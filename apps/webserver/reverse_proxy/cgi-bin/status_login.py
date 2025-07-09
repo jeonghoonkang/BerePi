@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Simple CGI login script to show status.txt on success."""
 import cgi
+import html
 import os
 
 USER = os.environ.get("STATUS_USER", "admin")
@@ -25,14 +26,17 @@ if username is None or password is None:
     print("</body></html>")
 else:
     if username == USER and password == PASS:
-        print("<pre>")
+
+      print("<html><body><pre>")
         try:
             with open(STATUS_FILE, "r", encoding="utf-8") as f:
-                print(cgi.escape(f.read()))
+                for line in f:
+                    print(html.escape(line), end='')
         except Exception as e:
-            print(f"Error reading {STATUS_FILE}: {e}")
-        print("</pre>")
+            print(f"Error reading {html.escape(STATUS_FILE)}: {html.escape(str(e))}")
+        print("</pre></body></html>")
     else:
+        print("<html><body>")
         print("<p style='color:red'>Invalid credentials</p>")
         print("<a href=''>Try again</a>")
         print("</body></html>")

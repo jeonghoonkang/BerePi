@@ -18,7 +18,6 @@ python3 multi_reverse_proxy.py \
     --map 8081:localhost:5001
     --status-port 9000
     --status-user admin --status-pass secret
-    --redirect-port 2281
 ```
 
 실행하면 각 매핑에 대해 "Forwarding" 메시지가 표시되며, 여러 프록시가 동시에 동작합니다.
@@ -28,10 +27,9 @@ python3 multi_reverse_proxy.py \
 포트 번호가 기록되며, 이후 줄에는 각 포트 매핑이 나열됩니다. 같은 정보는 `--status-port`
 옵션으로 지정한 포트에서 제공되는 웹 페이지에서도 확인할 수 있습니다.
 
-`--status-user` 와 `--status-pass` 옵션을 지정하면 `/cgi-bin/status_login.py` CGI
-스크립트에서 입력 값과 비교하여 인증을 수행합니다. 웹 브라우저에서 해당 CGI
-경로에 접속하여 사용자 이름과 비밀번호를 입력하면 올바른 경우 `status.txt`
-파일의 내용이 출력됩니다.
+`--status-user` 와 `--status-pass` 옵션을 지정하면 상태 포트(`http://호스트:포트/`)
+로 접속 시 로그인 CGI 페이지가 표시됩니다. 올바른 사용자 이름과 비밀번호를
+입력해야 `status.txt` 파일의 내용이 출력됩니다.
 
 ### status.txt 조회 스크립트
 
