@@ -31,6 +31,12 @@ python3 multi_reverse_proxy.py \
 로 접속 시 로그인 CGI 페이지가 표시됩니다. 올바른 사용자 이름과 비밀번호를
 입력해야 `status.txt` 파일의 내용이 출력됩니다.
 
+
+- 실행(예)
+'''
+sudo python3 multi_reverse_proxy.py --map 2280:localhost:80 --map 2281:localhost:81 --status-port 81 --status-user {username} --status-pass {password}
+'''
+
 ### status.txt 조회 스크립트
 
 `status_reader.py` 스크립트는 로컬에 저장된 `status.txt` 파일을
