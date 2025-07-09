@@ -4,6 +4,9 @@ import socketserver
 import urllib.request
 import urllib.parse
 import threading
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 # hold mapping information (out_port -> target url) for status display
@@ -55,26 +58,11 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
 
-class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
-    protocol_version = 'HTTP/1.1'
+class StatusHTTPRequestHandler(http.server.CGIHTTPRequestHandler):
+    """Serve the login CGI on the status port."""
 
-    def _show_login(self, invalid=False):
-        html = '<html><body><h1>Login</h1>'
-        if invalid:
-            html += '<p style="color:red">Invalid credentials</p>'
-        html += (
-            '<form method="post" action="/login">'
-            'Username: <input type="text" name="username"><br>'
-            'Password: <input type="password" name="password"><br>'
-            '<input type="submit" value="Login">'
-            '</form></body></html>'
-        )
-        body = html.encode('utf-8')
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('Content-Length', str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+    protocol_version = 'HTTP/1.1'
+    cgi_directories = ['/cgi-bin']
 
 
     def _show_status(self):
@@ -93,52 +81,34 @@ class StatusHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
     def do_GET(self):
-        if getattr(self.server, 'requires_auth', False):
-            cookie = self.headers.get('Cookie', '')
-            if 'auth=1' not in cookie:
-                self._show_login()
-                return
-        self._show_status()
+        if self.path == '/' or self.path == '':
+            self.path = '/cgi-bin/status_login.py'
+            return http.server.CGIHTTPRequestHandler.do_GET(self)
+        if self.path.startswith('/cgi-bin/'):
+            return http.server.CGIHTTPRequestHandler.do_GET(self)
+        self.send_error(404)
 
     def do_POST(self):
-
-        if self.path == '/login' and getattr(self.server, 'requires_auth', False):
-            length = int(self.headers.get('Content-Length', '0'))
-            body = self.rfile.read(length).decode('utf-8')
-            params = urllib.parse.parse_qs(body)
-            user = params.get('username', [''])[0]
-            pw = params.get('password', [''])[0]
-            if user == self.server.auth_user and pw == self.server.auth_pass:
-                # After successful login redirect the browser to the
-                # external address which is also stored in the cookie
-                port = getattr(self.server, 'redirect_port', 2281)
-                redirect_url = f'http://bigsoft.iptime.org:{port}'
-                self.send_response(303)
-                self.send_header('Set-Cookie', 'auth=1; Path=/')
-                self.send_header('Location', redirect_url)
-                self.send_header('Content-Length', '0')
-                self.end_headers()
-                return
-
-            else:
-                self._show_login(invalid=True)
-        else:
-            self.send_error(404)
+        if self.path == '/' or self.path == '':
+            self.path = '/cgi-bin/status_login.py'
+            return http.server.CGIHTTPRequestHandler.do_POST(self)
+        if self.path.startswith('/cgi-bin/'):
+            return http.server.CGIHTTPRequestHandler.do_POST(self)
+        self.send_error(404)
 
 
-def start_status_server(port, data, auth_user=None, auth_pass=None, redirect_port=2281):
+def start_status_server(port, data, status_file, auth_user=None, auth_pass=None):
+    """Start HTTP server for status page with optional CGI login."""
     handler = StatusHTTPRequestHandler
     server = ThreadingHTTPServer(('', port), handler)
     server.data = data
     server.status_port = port
 
-    server.redirect_port = redirect_port
-    if auth_user and auth_pass:
-        server.auth_user = auth_user
-        server.auth_pass = auth_pass
-        server.requires_auth = True
-    else:
-        server.requires_auth = False
+    os.environ['STATUS_FILE'] = status_file
+    if auth_user:
+        os.environ['STATUS_USER'] = auth_user
+    if auth_pass:
+        os.environ['STATUS_PASS'] = auth_pass
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -185,8 +155,6 @@ def main():
                         help='username for status page basic auth')
     parser.add_argument('--status-pass', dest='status_pass', default=None,
                         help='password for status page basic auth')
-    parser.add_argument('--redirect-port', type=int, default=2281,
-                        help='port used to build login redirect URL')
     args = parser.parse_args()
 
     servers = []
@@ -204,10 +172,9 @@ def main():
     status_srv = start_status_server(
         args.status_port,
         status_data,
+        args.status_file,
         auth_user=args.status_user,
         auth_pass=args.status_pass,
-
-        redirect_port=args.redirect_port,
     )
 
     try:
