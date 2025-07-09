@@ -1,4 +1,8 @@
 #! /bin/bash  
+
+echo "server list"
+#cat server_list.txt
+
 echo " This mahine has 192.168.0.**"      
 
 sudo python3 multi_reverse_proxy.py --map 2280:localhost:80 \ 
