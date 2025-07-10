@@ -6,7 +6,8 @@ This Streamlit app uses Meta's Llama 3 model to answer questions about travel in
 
 1. Install requirements:
    ```bash
-   pip install streamlit transformers
+   pip install streamlit transformers huggingface_hub
+
    ```
    You also need a local copy of the Llama 3 model. Set the environment variable `LLAMA3_MODEL` to the directory or model name.
 2. Run the app:
@@ -15,4 +16,5 @@ This Streamlit app uses Meta's Llama 3 model to answer questions about travel in
    ```
 
 By default the app loads `meta-llama/Meta-Llama-3-8B-Instruct` from HuggingFace.
-Set `LLAMA3_MODEL` if you want to use a local path or a different model.
+Set `LLAMA3_MODEL` if you want to use a local path or a different model. If the model files are missing, the app will prompt you to download them and automatically start after 10 seconds, showing a progress bar while downloading.
+
