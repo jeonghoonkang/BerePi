@@ -17,4 +17,5 @@ This Streamlit app uses Meta's Llama 3 model to answer questions about travel in
 
 By default the app loads `meta-llama/Meta-Llama-3-8B-Instruct` from HuggingFace.
 Set `LLAMA3_MODEL` if you want to use a local path or a different model. If the model files are missing, the app will prompt you to download them and automatically start after 10 seconds, showing a progress bar while downloading.
+When starting, the app also reports the current GPU status.
 

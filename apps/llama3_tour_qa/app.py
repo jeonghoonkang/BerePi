@@ -2,13 +2,28 @@ import os
 import time
 import threading
 
-
 import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+
+def display_gpu_status() -> None:
+    """Display current GPU status at startup."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            gpus = [f"{i}: {torch.cuda.get_device_name(i)}" for i in range(torch.cuda.device_count())]
+            st.info("GPU available: " + ", ".join(gpus))
+        else:
+            st.info("GPU not available, using CPU")
+    except Exception as exc:
+        st.warning(f"Could not determine GPU status: {exc}")
 
 st.set_page_config(page_title="Korean Tourism Q&A", page_icon="\ud83c\udf0d")
 
 st.title("\ud83c\uddf0\ud83c\uddf7 Korean Tourism Q&A with Llama 3")
+display_gpu_status()
+
 
 
 def download_model(model_name: str) -> None:
