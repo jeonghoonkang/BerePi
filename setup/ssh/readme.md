@@ -64,3 +64,11 @@ The key's randomart image is:
   - .ssh 는 700
   - authorized_keys 는 600
       
+
+### Using an additional local port for SSH
+- Local port `1001` can be mapped to the default SSH port `22`.
+- Run `redirect_1001_to_22.sh` as root to add the port forwarding rule:
+  ```bash
+  sudo ./redirect_1001_to_22.sh
+  ```
+- After executing, connections to port `1001` will be served by the same SSH daemon running on port `22`.

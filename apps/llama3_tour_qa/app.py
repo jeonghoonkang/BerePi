@@ -25,6 +25,7 @@ st.title("\ud83c\uddf0\ud83c\uddf7 Korean Tourism Q&A with Llama 3")
 display_gpu_status()
 
 
+
 def download_model(model_name: str) -> None:
     """Download the model showing a simple progress bar."""
     try:
