@@ -1,4 +1,4 @@
-## BerePi
+## BerePi (project)
 
 ##### 개발자
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Philman Jeong (https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)

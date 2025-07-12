@@ -5,6 +5,7 @@ import os
 import time
 import json
 import requests
+import sys
 
 from PIL import Image
 import pytesseract
@@ -15,33 +16,8 @@ from urllib.parse import unquote_plus
 import urllib.parse
 from webdav3.client import Client
 
+from email.utils import parsedate_to_datetime
 
-# def __init__(self, config_path="tmp_config.json"):
-#     self.config = self.load_config(config_path)
-
-    # def load_config(self, config_path):
-    #     """설정 파일 로드"""
-    #     try:
-    #         with open(config_path, 'r', encoding='utf-8') as f:
-    #             config = json.load(f)
-            
-    #         # 필수 설정 확인
-    #         required_keys = [
-    #             'nextcloud/url', 'nextcloud/username', 'nextcloud/password',
-    #             'local/download_folder', 'local/result_json'
-    #         ]
-            
-    #         for key in required_keys:
-    #             section, item = key.split('/')
-    #             if item not in config.get(section, {}):
-    #                 raise ValueError(f"Missing required config: {key}")
-            
-    #         return config
-        
-    #     except FileNotFoundError:
-    #         raise FileNotFoundError(f"Config file not found: {config_path}")
-    #     except json.JSONDecodeError:
-    #         raise ValueError(f"Invalid JSON in config file: {config_path}")
     
 debug_prefix = "  "
 
@@ -76,7 +52,7 @@ def load_config(config_path):
         raise ValueError(f"Invalid JSON in config file: {config_path}")
 
 
-def __init__(config_path="tmp_config.json"):
+def __init__(config_path="tmp_config.json"): ### INIT CHECK ### You should check if using config.json 
     config = load_config(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
@@ -124,13 +100,16 @@ def get_file_list_recursive(conf, current_path="", depth=0):
     for response_buff in tree.findall("{DAV:}response"):
         
         uhref = response_buff.find("{DAV:}href").text
-        relative_path = uhref.replace(f"/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}", "").lstrip("/")
-        print (f"{debug_prefix}  Found uhref: {uhref}")
-        print (f"{debug_prefix}  relative_path: {relative_path}")
-       
-        href = urllib.parse.unquote_plus(uhref)
-        decoded_path = urllib.parse.unquote_plus(relative_path)
-        #print (f"decoded_path: {decoded_path}")
+        href = urllib.parse.unquote(uhref)
+        relative_path = href.replace(
+            f"/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}",
+            "",
+        ).lstrip("/")
+        print(f"{debug_prefix}  Found uhref: {uhref}")
+        print(f"{debug_prefix}  Decoded href: {href}")
+        print(f"{debug_prefix}  relative_path: {relative_path}")
+
+        decoded_path = urllib.parse.unquote(relative_path)
 
         if not relative_path: #current dir skip
             print(f"{debug_prefix}  Skipping current directory")
@@ -145,45 +124,122 @@ def get_file_list_recursive(conf, current_path="", depth=0):
 
         # 파일명만 추출
         filename = href.split("/")[-1]
-        if filename.lower().endswith(('.jpg', '.jpeg')):
-            files.append(current_path+filename)
 
-    #print (f"files: {files}")
+        lastmod_elem = response_buff.find("{DAV:}getlastmodified")
+        lastmod_text = lastmod_elem.text if lastmod_elem is not None else ""
+        if filename.lower().endswith((".jpg", ".jpeg")):
+            prop = response_buff.find("{DAV:}propstat/{DAV:}prop")
+            last_modified = None
+            size = None
+            if prop is not None:
+                lm = prop.find("{DAV:}getlastmodified")
+                if lm is not None:
+                    last_modified = lm.text
+                cl = prop.find("{DAV:}getcontentlength")
+                if cl is not None:
+                    try:
+                        size = int(cl.text)
+                    except (TypeError, ValueError):
+                        size = None
+
+            files.append({
+                'path': current_path + filename,
+                'last_modified': last_modified,
+                'size': size
+            })
+
+
 
     return files
 
 def create_folders(down_dir):
     print (f"Creating folders if not exist: {down_dir}")
-    if not os.path.exists(down_dir):
-        os.makedirs(down_dir)
+    # if not os.path.exists(down_dir):
+    #     os.makedirs(down_dir)
+    os.makedirs(down_dir, exist_ok=True)
+
 
 # 파일 다운로드
-def download_file(conf, filename): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg" 좌측 / 주의 
-    
-    filename = filename.lstrip("/")
+def download_file(conf, file_info): #filename = "/2023/09/01/2023-09-01 00-36-40 3799.jpg" 좌측 / 주의 # file_info dict contains path, last_modified, size
+
+    filename = file_info['path'].lstrip("/")
+    remote_last_modified = file_info.get('last_modified')
+    remote_size = file_info.get('size')
+
     url = f"{conf['nextcloud']['url']}/remote.php/dav/files/{conf['nextcloud']['username']}{conf['nextcloud']['remote_folder']}"
 
-    path_file = f"{conf['nextcloud']['remote_folder']}/{filename}"
-    path_file = f"{conf['nextcloud']['remote_folder']}"
-    local_path = f"{conf['local']['download_folder']}/{filename}"
+    remote_path = os.path.join(conf['nextcloud']['remote_folder'], filename)  # /Photos/biz_card/2023/***.jpg  
+    local_path = os.path.join(conf['local']['download_folder'], filename)     #  down_images/2023/강정훈_명함_KETI.jpg
+    
+    # Decode any escaped characters so remote_path supports unicode
+    remote_path = urllib.parse.unquote(remote_path)
+    local_path = urllib.parse.unquote(local_path)
 
-    local_path_dir = os.path.join(conf['local']['download_folder'], filename)
-    dir_name = os.path.dirname(local_path_dir.lstrip("/"))
-    dir_name = conf['local']['download_folder'] +'/' + dir_name
-    #make dir #subdir 이 깊이가 있을 경우는 확인해야함 (현재는 1 depth 만 확인함)
-    #os.makedirs(dir_name, exist_ok=True)
+    # # Prefix './' on macOS or Linux when using relative paths
+    # if sys.platform.startswith('darwin') or sys.platform.startswith('linux'):
+    #     if not os.path.isabs(local_path) and not local_path.startswith('./'):
+    #         local_path = f"./{local_path}"
+
+
+    # Ensure we work with plain strings for file paths
+    if not isinstance(local_path, str):
+        if isinstance(local_path, bytes):
+            local_path = local_path.decode()
+        else:
+            local_path = str(local_path)
+
+    if not isinstance(remote_path, str):
+        if isinstance(remote_path, bytes):
+            remote_path = remote_path.decode()
+        else:
+            remote_path = str(remote_path)
+
+    # Ensure local directory exists when dealing with sub-folders
+    local_path_dir = os.path.dirname(local_path)
+    if local_path_dir:
+        os.makedirs(local_path_dir, exist_ok=True)
+
+    # Skip download if file already exists and modification date matches
+    if os.path.exists(local_path):
+        local_mtime = os.path.getmtime(local_path)
+        local_size = os.path.getsize(local_path)
+        remote_ts = None
+        if remote_last_modified:
+            try:
+                remote_ts = parsedate_to_datetime(remote_last_modified).timestamp()
+            except Exception:
+                remote_ts = None
+
+        if remote_ts is not None and remote_ts <= local_mtime and remote_size == local_size:
+            print(f"{debug_prefix} Local file {local_path} newer or same as server; skipping download")
+            return local_path
+
 
     client = Client(options)
-    print (f"{debug_prefix} remote dav path: {path_file}")
-    print (f"{debug_prefix} Downloading from {path_file} to {local_path}")
-    client.download_sync(f"{conf['nextcloud']['remote_folder']}", f"{local_path_dir}")
+
+    #print (f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+    #client.download_sync(remote_path, local_path)
+
+    # Encode remote path to handle spaces or non-ASCII characters
+    encoded_remote_path = urllib.parse.quote(remote_path, safe="/")
+
+    print(f"{debug_prefix} Downloading from {remote_path} to {local_path}")
+
+    try:
+        client.download_sync(remote_path=str(remote_path),
+                             local_path=str(local_path))
+    except Exception as e:
+        print(f"{debug_prefix} Failed to download {remote_path}: {e}")
+        return None
+
+    return local_path
 
 
 # 주기적 실행 함수
 def run_periodically(conf, interval_minutes=60):
     print (f"config: {conf}")
     print (f"config: {conf['local']['download_folder']}")
-    #create_folders(conf.get('local',{}).get('download_folder',{}))
+    create_folders(conf.get('local',{}).get('download_folder',''))
     
     while True:
         print(f"\nChecking for new files at {datetime.now()}")
@@ -192,9 +248,9 @@ def run_periodically(conf, interval_minutes=60):
         files = get_file_list_recursive(conf) # 서브디렉토리 포함 
         print(f"Found {len(files)} JPG files in Nextcloud")
         print (f"files: {files}")
-        # # 각 파일 처리
-        for filename in files:
-            local_path = download_file(conf, filename)
+        # 각 파일 처리
+        for file_info in files:
+            local_path = download_file(conf, file_info)
         #     if local_path:
         #         ocr_text = process_ocr(local_path)
         #         if ocr_text:

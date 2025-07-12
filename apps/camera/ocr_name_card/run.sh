@@ -1,16 +1,35 @@
 #!/bin/bash
 
+
 INIFILE=ocr_name_card.ini
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    python3 run_ocr_name_card.py {scan_image_path} {save_description_path}
-    exit 0
-fi
+# if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+#     python3 run_ocr_name_card.py {scan_image_path} {save_description_path}
+#     exit 0
+# fi
+
+FORCE_ARG=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--all)
+            FORCE_ARG="--force-all"
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $(basename "$0") [-a|--all]"
+            exit 0
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 if [ -f $INIFILE ]
 then
 
-    keyword=$1
+    # keyword=$1
     source $INIFILE
 
     echo ""
@@ -21,7 +40,9 @@ then
     echo "====================================================<<"
 
     #arg         [0]                   [1]              [2]
-    time python3 run_ocr_name_card.py  $scan_image_path $save_description_path
+#    time python3 run_ocr_name_card.py  $scan_image_path $save_description_path
+    time python3 run_ocr_name_card.py  $scan_image_path $save_description_path $FORCE_ARG
+ 
     echo " *** end script run for PYTHON *** "
     exit 0
 else

@@ -23,3 +23,8 @@
 ### sudo crontab
 - 부팅 초기에 주기적으로 실행해야 하는 코드는 아래처럼 실행
   - <pre> */3 * * * * bash /home/tinyos/devel/BerePi/system/init_file/sonno_start.sh `sudo vcgencmd measure_temp` > /home/tinyos/devel/BerePi/logs/berepi_sys_log.log 2>&1 </pre>
+
+### SSL 인증서 만기 알림
+- openssl 로 인증서 만기일을 조회해 telegram-send 로 전송하는 스크립트
+- 매달 1일 오전 9시에 실행하도록 설정 예시
+  - <pre>0 9 1 * * bash /home/tinyos/devel/BerePi/setup/shell/monthly_ssl_expire_notice.sh example.com > /dev/null 2>&1</pre>
