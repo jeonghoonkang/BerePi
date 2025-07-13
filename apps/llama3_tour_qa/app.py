@@ -39,6 +39,7 @@ def download_model(model_name: str) -> None:
     If the repository is gated, the HuggingFace token can be provided via the
     ``HF_TOKEN`` or ``HUGGINGFACE_TOKEN`` environment variable.
     """
+
     try:
         from huggingface_hub import snapshot_download
     except Exception:
@@ -67,6 +68,7 @@ def download_model(model_name: str) -> None:
         pct = min(100, pct + 1)
         progress.progress(pct / 100.0)
         time.sleep(1)
+
     thread.join()
     progress.progress(1.0)
     if "download_error" in st.session_state:
@@ -106,6 +108,7 @@ def ensure_model(model_name: str) -> None:
         if cols[0].button("Download now"):
             st.session_state.download_decision = True
             rerun()
+
         if cols[1].button("Cancel"):
             st.session_state.download_decision = False
             st.stop()
@@ -115,6 +118,7 @@ def ensure_model(model_name: str) -> None:
         else:
             time.sleep(1)
             rerun()
+
     elif st.session_state.download_decision:
         download_model(model_name)
     else:
