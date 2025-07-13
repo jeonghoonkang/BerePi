@@ -27,26 +27,39 @@ def display_gpu_status() -> None:
     except Exception as exc:
         st.warning(f"Could not determine GPU status: {exc}")
 
-st.set_page_config(page_title="Korean Tourism Q&A")
-                   #, page_icon="\ud83c\udf0d")
+st.set_page_config(page_title="Korean Tourism Q&A", page_icon="\ud83c\udf0d")
 
-st.title("Korean Tourism Q&A with Llama 3")
+st.title("\ud83c\uddf0\ud83c\uddf7 Korean Tourism Q&A with Llama 3")
 display_gpu_status()
 
 
-
 def download_model(model_name: str) -> None:
-    """Download the model showing a simple progress bar."""
+    """Download the model showing a simple progress bar.
+
+    If the repository is gated, the HuggingFace token can be provided via the
+    ``HF_TOKEN`` or ``HUGGINGFACE_TOKEN`` environment variable.
+    """
+
     try:
         from huggingface_hub import snapshot_download
     except Exception:
         st.error("huggingface_hub is required to download models")
         st.stop()
 
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+
     progress = st.progress(0)
 
     def _download():
-        snapshot_download(repo_id=model_name, local_dir=model_name, resume_download=True)
+        try:
+            snapshot_download(
+                repo_id=model_name,
+                local_dir=model_name,
+                resume_download=True,
+                token=hf_token,
+            )
+        except Exception as exc:
+            st.session_state.download_error = str(exc)
 
     thread = threading.Thread(target=_download)
     thread.start()
@@ -55,7 +68,16 @@ def download_model(model_name: str) -> None:
         pct = min(100, pct + 1)
         progress.progress(pct / 100.0)
         time.sleep(1)
+
+    thread.join()
     progress.progress(1.0)
+    if "download_error" in st.session_state:
+        st.error(
+            "Failed to download model: "
+            + st.session_state.download_error
+            + "\nIf the repository is gated, set HF_TOKEN with your access token."
+        )
+        st.stop()
     st.success("Download complete")
 
 
