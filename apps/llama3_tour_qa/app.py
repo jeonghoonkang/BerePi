@@ -30,7 +30,7 @@ def display_gpu_status() -> None:
 st.set_page_config(page_title="Korean Tourism Q&A")
                    #, page_icon="\ud83c\udf0d")
 
-st.title("\ud83c\uddf0\ud83c\uddf7 Korean Tourism Q&A with Llama 3")
+st.title("Korean Tourism Q&A with Llama 3")
 display_gpu_status()
 
 
