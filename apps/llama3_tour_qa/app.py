@@ -6,6 +6,14 @@ import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 
+def rerun() -> None:
+    """Compatibility helper to rerun the Streamlit script."""
+    if hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
+    else:
+        st.rerun()
+
+
 def display_gpu_status() -> None:
     """Display current GPU status at startup."""
     try:
@@ -19,9 +27,9 @@ def display_gpu_status() -> None:
     except Exception as exc:
         st.warning(f"Could not determine GPU status: {exc}")
 
-st.set_page_config(page_title="Korean Tourism Q&A", page_icon="🌎")
+st.set_page_config(page_title="Korean Tourism Q&A", page_icon="\ud83c\udf0d")
 
-st.title(" 🇰🇷 Korean Tourism Q&A with Llama 3")
+st.title("\ud83c\uddf0\ud83c\uddf7 Korean Tourism Q&A with Llama 3")
 display_gpu_status()
 
 
@@ -76,16 +84,18 @@ def ensure_model(model_name: str) -> None:
         cols = st.columns(2)
         if cols[0].button("Download now"):
             st.session_state.download_decision = True
-            st.experimental_rerun()
+            rerun()
+
         if cols[1].button("Cancel"):
             st.session_state.download_decision = False
             st.stop()
         if remaining <= 0:
             st.session_state.download_decision = True
-            st.experimental_rerun()
+            rerun()
         else:
             time.sleep(1)
-            st.experimental_rerun()
+            rerun()
+
     elif st.session_state.download_decision:
         download_model(model_name)
     else:
