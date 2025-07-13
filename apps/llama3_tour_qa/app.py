@@ -33,6 +33,7 @@ st.title("\ud83c\uddf0\ud83c\uddf7 Korean Tourism Q&A with Llama 3")
 display_gpu_status()
 
 
+
 def download_model(model_name: str) -> None:
     """Download the model showing a simple progress bar."""
     try:
@@ -84,6 +85,7 @@ def ensure_model(model_name: str) -> None:
         if cols[0].button("Download now"):
             st.session_state.download_decision = True
             rerun()
+
         if cols[1].button("Cancel"):
             st.session_state.download_decision = False
             st.stop()
@@ -93,6 +95,7 @@ def ensure_model(model_name: str) -> None:
         else:
             time.sleep(1)
             rerun()
+
     elif st.session_state.download_decision:
         download_model(model_name)
     else:

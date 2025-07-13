@@ -10,6 +10,7 @@
    ```
    로컬에 Llama 3 모델 파일이 필요합니다. 환경 변수 `LLAMA3_MODEL`에 모델 폴더나 이름을 지정하세요.
 2. 앱 실행
+
    ```bash
    streamlit run app.py
    ```
@@ -17,3 +18,4 @@
 기본값으로 HuggingFace의 `meta-llama/Meta-Llama-3-8B-Instruct`를 불러옵니다.
 모델 파일이 없으면 다운로드 여부를 묻고 10초 후 자동으로 다운로드를 시작하며,
 진행 상황을 프로그레스 바로 표시합니다. 앱 시작 시 GPU 사용 가능 여부도 출력합니다.
+
