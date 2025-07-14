@@ -61,3 +61,16 @@ Now available on Github
 Cybersecurity Eval
 The first and most comprehensive set of open source cybersecurity safety evals for LLMs. These benchmarks are based on industry guidance and standards (e.g. CWE & MITRE ATT&CK) and built in collaboration with our security subject matter experts.
 Now available on Github
+
+## FSDP Fine-Tuning Example
+
+`finetune_fsdp.py` demonstrates how to fine-tune a LLaMA model with PyTorch FSDP.
+It loads a small portion of the Wikitext dataset and can be run on two GPUs.
+
+```bash
+# Run with two GPUs
+torchrun --nproc_per_node=2 finetune_fsdp.py --model meta-llama/Llama-2-7b-hf
+```
+
+The script uses HuggingFace Transformers so you need a compatible PyTorch build
+with distributed support.
