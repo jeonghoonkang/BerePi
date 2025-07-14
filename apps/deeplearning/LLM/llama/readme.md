@@ -74,3 +74,18 @@ torchrun --nproc_per_node=2 finetune_fsdp.py --model meta-llama/Llama-2-7b-hf
 
 The script uses HuggingFace Transformers so you need a compatible PyTorch build
 with distributed support.
+
+### Using Your Own Data
+
+`finetune_fsdp_custom.py` lets you fine-tune with plain text files. Provide the paths to your files with `--data_files` (comma separated if more than one):
+
+```bash
+# Example with two text files and two GPUs
+torchrun --nproc_per_node=2 finetune_fsdp_custom.py \
+    --model meta-llama/Llama-2-7b-hf \
+    --data_files my1.txt,my2.txt
+```
+
+The script loads the texts using the HuggingFace `text` dataset loader, tokenizes
+with your selected model tokenizer, and trains using FSDP.
+
