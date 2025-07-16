@@ -1,5 +1,9 @@
 import argparse
 from pathlib import Path
+from typing import Iterable
+
+from rich.progress import Progress, BarColumn, TextColumn
+
 
 
 def replace_in_file(file_path: Path, old_text: str, new_text: str) -> bool:
@@ -16,13 +20,32 @@ def replace_in_file(file_path: Path, old_text: str, new_text: str) -> bool:
     return False
 
 
-def process_directory(directory: Path, old_text: str, new_text: str):
-
+def gather_files(directory: Path) -> Iterable[Path]:
+    """Yield all file paths under the given directory."""
     for path in directory.rglob("*"):
-        if not path.is_file():
-            continue
-        if replace_in_file(path, old_text, new_text):
-            print(f"Updated {path}")
+        if path.is_file():
+            yield path
+
+
+def process_directory(directory: Path, old_text: str, new_text: str):
+    files = list(gather_files(directory))
+    total = len(files)
+    if total == 0:
+        print("No files found to process.")
+        return
+
+    progress = Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total}"),
+    )
+    with progress:
+        task = progress.add_task("Processing files", total=total)
+        for path in files:
+            if replace_in_file(path, old_text, new_text):
+                progress.console.print(f"Updated {path}")
+            progress.update(task, advance=1)
+
 
 
 def main():
