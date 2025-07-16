@@ -17,6 +17,7 @@ def replace_in_file(file_path: Path, old_text: str, new_text: str) -> bool:
 
 
 def process_directory(directory: Path, old_text: str, new_text: str):
+
     for path in directory.rglob("*"):
         if not path.is_file():
             continue
