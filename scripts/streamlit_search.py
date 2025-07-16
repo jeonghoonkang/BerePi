@@ -38,6 +38,7 @@ def main():
         submitted = st.form_submit_button('Search')
 
     if submitted and search_term and directory_input:
+
         directory = Path(directory_input)
         if not directory.is_dir():
             st.error(f'{directory} is not a directory')

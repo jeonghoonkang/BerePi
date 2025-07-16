@@ -8,6 +8,7 @@ Thumbs.db    # Windows
 *.pyc        # Python 컴파일된 파일
 /build/      # 빌드 아웃풋 디렉토리
 /dist/       # 배포 아웃풋 디렉토리
+/venv/       # 가상 환경 
 
 # 패키지 매니저 파일
 node_modules/ # Node.js 패키지

@@ -5,6 +5,7 @@ from typing import Iterable
 from rich.progress import Progress, BarColumn, TextColumn
 
 
+
 def replace_in_file(file_path: Path, old_text: str, new_text: str) -> bool:
     """Replace occurrences of old_text with new_text in the given file."""
     try:
@@ -44,6 +45,7 @@ def process_directory(directory: Path, old_text: str, new_text: str):
             if replace_in_file(path, old_text, new_text):
                 progress.console.print(f"Updated {path}")
             progress.update(task, advance=1)
+
 
 
 def main():
