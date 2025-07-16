@@ -12,19 +12,22 @@ def highlight_term(line: str, term: str) -> str:
 
 def search_directory(directory: Path, term: str):
     """Yield tuples of (file_path, line_no, highlighted_line) for matches."""
-    for path in directory.rglob('*.py'):
-        if path.is_file():
-            try:
-                lines = path.read_text(encoding='utf-8').splitlines()
-            except UnicodeDecodeError:
-                continue
-            for i, line in enumerate(lines, 1):
-                if term.lower() in line.lower():
-                    yield path, i, highlight_term(line, term)
+    for path in directory.rglob('*'):
+        if not path.is_file():
+            continue
+        try:
+            with path.open('r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except UnicodeDecodeError:
+            # Skip non-text files
+            continue
+        for i, line in enumerate(lines, 1):
+            if term.lower() in line.lower():
+                yield path, i, highlight_term(line.rstrip('\n'), term)
 
 
 def main():
-    st.title('Python Source Searcher')
+    st.title('Text File Searcher')
 
     directory_input = st.text_input('Target directory', value='.')
     search_term = st.text_input('Text to search')

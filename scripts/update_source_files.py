@@ -17,14 +17,17 @@ def replace_in_file(file_path: Path, old_text: str, new_text: str) -> bool:
 
 
 def process_directory(directory: Path, old_text: str, new_text: str):
-    for path in directory.rglob("*.py"):
-        if path.is_file():
-            if replace_in_file(path, old_text, new_text):
-                print(f"Updated {path}")
+
+    for path in directory.rglob("*"):
+        if not path.is_file():
+            continue
+        if replace_in_file(path, old_text, new_text):
+            print(f"Updated {path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Replace text in Python source files.")
+    parser = argparse.ArgumentParser(
+        description="Replace text in all text files within the given directory.")
     parser.add_argument("directory", type=Path, help="Root directory to traverse")
     parser.add_argument("old_text", help="Text or date to search for")
     parser.add_argument("new_text", help="Text or date to replace with")
