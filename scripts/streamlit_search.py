@@ -32,11 +32,13 @@ def main():
     current_path = Path.cwd().resolve()
     st.write(f'Current working directory: {current_path}')
 
+    with st.form('search_form'):
+        directory_input = st.text_input('Target directory', value='.')
+        search_term = st.text_input('Text to search')
+        submitted = st.form_submit_button('Search')
 
-    directory_input = st.text_input('Target directory', value='.')
-    search_term = st.text_input('Text to search')
+    if submitted and search_term and directory_input:
 
-    if st.button('Search') and search_term and directory_input:
         directory = Path(directory_input)
         if not directory.is_dir():
             st.error(f'{directory} is not a directory')
