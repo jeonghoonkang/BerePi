@@ -29,6 +29,10 @@ def search_directory(directory: Path, term: str):
 def main():
     st.title('Text File Searcher')
 
+    current_path = Path.cwd().resolve()
+    st.write(f'Current working directory: {current_path}')
+
+
     directory_input = st.text_input('Target directory', value='.')
     search_term = st.text_input('Text to search')
 
