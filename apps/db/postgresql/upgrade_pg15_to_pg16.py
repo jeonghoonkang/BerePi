@@ -13,6 +13,16 @@ def run(cmd: str) -> None:
     subprocess.run(cmd, shell=True, check=True)
 
 
+def start_server(pg_ctl: Path, data_dir: Path, user: str) -> None:
+    """Start a PostgreSQL server using pg_ctl."""
+    run(f"sudo -u {user} {pg_ctl} -D {data_dir} -l {data_dir}/server.log start")
+
+
+def stop_server(pg_ctl: Path, data_dir: Path, user: str) -> None:
+    """Stop a PostgreSQL server using pg_ctl."""
+    run(f"sudo -u {user} {pg_ctl} -D {data_dir} stop")
+
+
 def ensure_binary(binary: Path, package: str) -> None:
     """Ensure the given binary exists and is executable, otherwise install the package."""
     if binary.exists() and os.access(binary, os.X_OK):
@@ -43,6 +53,12 @@ def main() -> None:
         help="Path to PostgreSQL 15 binaries",
     )
     parser.add_argument(
+        "--old-data-dir",
+        default="/var/lib/postgresql/15/main",
+        help="Data directory for the PostgreSQL 15 server",
+    )
+    parser.add_argument(
+
         "--new-bin-dir",
         default="/usr/lib/postgresql/16/bin",
         help="Path to PostgreSQL 16 binaries",
@@ -51,12 +67,21 @@ def main() -> None:
 
     dump_path = Path(args.dump_file).resolve()
     old_dumpall = Path(args.old_bin_dir) / "pg_dumpall"
+    old_pg_ctl = Path(args.old_bin_dir) / "pg_ctl"
     new_psql = Path(args.new_bin_dir) / "psql"
+    old_data_dir = Path(args.old_data_dir)
 
     ensure_binary(old_dumpall, "postgresql-15")
+    ensure_binary(old_pg_ctl, "postgresql-15")
     ensure_binary(new_psql, "postgresql-16")
 
-    run(f"sudo -u {args.user} {old_dumpall} > {dump_path}")
+    try:
+        start_server(old_pg_ctl, old_data_dir, args.user)
+        run(f"sudo -u {args.user} {old_dumpall} > {dump_path}")
+    finally:
+        stop_server(old_pg_ctl, old_data_dir, args.user)
+
+
     run(f"sudo -u {args.user} {new_psql} -f {dump_path}")
     print("Upgrade finished. All databases are now on PostgreSQL 16.")
 
