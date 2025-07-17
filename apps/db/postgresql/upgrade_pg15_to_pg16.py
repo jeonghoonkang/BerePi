@@ -58,6 +58,7 @@ def main() -> None:
         help="Data directory for the PostgreSQL 15 server",
     )
     parser.add_argument(
+
         "--new-bin-dir",
         default="/usr/lib/postgresql/16/bin",
         help="Path to PostgreSQL 16 binaries",
@@ -79,6 +80,7 @@ def main() -> None:
         run(f"sudo -u {args.user} {old_dumpall} > {dump_path}")
     finally:
         stop_server(old_pg_ctl, old_data_dir, args.user)
+
 
     run(f"sudo -u {args.user} {new_psql} -f {dump_path}")
     print("Upgrade finished. All databases are now on PostgreSQL 16.")
