@@ -3,6 +3,7 @@ import sys
 import time
 import threading
 import multiprocessing
+from rich.progress import Progress, BarColumn, TimeRemainingColumn, TextColumn
 
 
 def read_cpu_times():
@@ -61,8 +62,22 @@ def main(duration=900):
     disk_thread = threading.Thread(target=disk_worker, args=(stop_event, "stress_test_file.dat"))
     disk_thread.start()
 
-    print(f"Running stress test for {duration} seconds...")
-    time.sleep(duration)
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Running stress test", total=duration)
+        start = time.time()
+        while True:
+            elapsed = time.time() - start
+            if elapsed >= duration:
+                break
+            progress.update(task, completed=elapsed)
+            time.sleep(1)
+        progress.update(task, completed=duration)
+
 
     stop_event.set()
     disk_thread.join()
