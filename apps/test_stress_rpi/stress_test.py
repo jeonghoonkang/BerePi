@@ -105,7 +105,7 @@ def main(duration=900):
 
 
 if __name__ == "__main__":
-    dur = 900
+    dur = 60
     if len(sys.argv) > 1:
         try:
             dur = int(sys.argv[1])
