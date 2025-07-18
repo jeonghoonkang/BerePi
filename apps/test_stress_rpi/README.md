@@ -7,8 +7,12 @@ it shows a progress bar using the Rich package.
 ## Usage
 
 ```bash
-python3 stress_test.py
+python3 stress_test.py [duration]
 ```
+
+The optional `duration` argument sets how long the test runs in seconds. You can
+also use a simple multiplication expression, e.g. `60*20` to run the test for
+1200 seconds.
 
 Install the `rich` package before running the script:
 

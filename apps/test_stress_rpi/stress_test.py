@@ -104,11 +104,30 @@ def main(duration=900):
     print(f"Disk write        : {write_mb:.2f} MB")
 
 
+def _parse_duration(arg: str) -> int:
+    """Return integer duration from CLI argument.
+
+    Supports a simple ``a*b*c`` style expression so users can pass
+    values like ``60*20``. Any invalid input will raise ``ValueError``.
+    """
+
+    if "*" in arg:
+        parts = arg.split("*")
+        result = 1
+        for p in parts:
+            p = p.strip()
+            if not p:
+                raise ValueError(f"Invalid duration segment: '{arg}'")
+            result *= int(p)
+        return result
+    return int(arg)
+
+
 if __name__ == "__main__":
     dur = 60
     if len(sys.argv) > 1:
         try:
-            dur = int(sys.argv[1])
+            dur = _parse_duration(sys.argv[1])
         except ValueError:
             print(f"Invalid duration '{sys.argv[1]}', using default {dur}s")
     try:
