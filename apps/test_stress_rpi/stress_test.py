@@ -110,7 +110,7 @@ if __name__ == "__main__":
         try:
             dur = int(sys.argv[1])
         except ValueError:
-            print(f"Invalid duration '{sys.argv[1]}', using default 900s")
+            print(f"Invalid duration '{sys.argv[1]}', using default {dur}s")
     try:
         main(dur)
     except KeyboardInterrupt:
