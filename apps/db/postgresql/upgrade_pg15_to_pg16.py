@@ -16,7 +16,8 @@ def run(cmd: str) -> None:
 
 def start_server(pg_ctl: Path, data_dir: Path, user: str) -> None:
     """Start a PostgreSQL server using pg_ctl."""
-    run(f"sudo -u {user} {pg_ctl} -D {data_dir} -l {data_dir}/server.log start")
+    #run(f"sudo -u {user} {pg_ctl} -D {data_dir} -l {data_dir}/server.log start")
+    run(f"sudo {pg_ctl} -D {data_dir} -l {data_dir}/server.log start")
 
 
 def stop_server(pg_ctl: Path, data_dir: Path, user: str) -> None:
