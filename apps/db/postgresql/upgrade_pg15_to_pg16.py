@@ -2,6 +2,7 @@
 """Utility to migrate a PostgreSQL 15 cluster to version 16 using dump/restore."""
 
 import argparse
+import configparser
 import os
 import subprocess
 from pathlib import Path
@@ -38,32 +39,57 @@ def main() -> None:
         description="Upgrade PostgreSQL data from version 15 to 16 using pg_dumpall and psql"
     )
     parser.add_argument(
-        "--dump-file",
-        default="pg15_dump.sql",
-        help="Temporary dump file path",
+        "--config",
+        default="upgrade_pg15_to_pg16.ini",
+        help="Path to configuration ini file",
     )
-    parser.add_argument(
-        "--user",
-        default="postgres",
-        help="Database superuser name",
-    )
+    parser.add_argument("--dump-file", default=None, help="Temporary dump file path")
+    parser.add_argument("--user", default=None, help="Database superuser name")
+    parser.add_argument("--password", default=None, help="Database password")
     parser.add_argument(
         "--old-bin-dir",
-        default="/usr/lib/postgresql/15/bin",
+        default=None,
         help="Path to PostgreSQL 15 binaries",
     )
     parser.add_argument(
         "--old-data-dir",
-        default="/var/lib/postgresql/15/main",
+        default=None,
         help="Data directory for the PostgreSQL 15 server",
     )
     parser.add_argument(
-
         "--new-bin-dir",
-        default="/usr/lib/postgresql/16/bin",
+        default=None,
         help="Path to PostgreSQL 16 binaries",
     )
+
     args = parser.parse_args()
+
+    defaults = {
+        "dump_file": "pg15_dump.sql",
+        "user": "postgres",
+        "password": "",
+        "old_bin_dir": "/usr/lib/postgresql/15/bin",
+        "old_data_dir": "/var/lib/postgresql/15/main",
+        "new_bin_dir": "/usr/lib/postgresql/16/bin",
+    }
+
+    config = configparser.ConfigParser()
+    if Path(args.config).exists():
+        config.read(args.config)
+        if config.has_section("upgrade"):
+            section = config["upgrade"]
+            defaults.update(
+                {k: section.get(k, v) for k, v in defaults.items()}
+            )
+
+    args.dump_file = args.dump_file or defaults["dump_file"]
+    args.user = args.user or defaults["user"]
+    args.password = args.password or defaults["password"]
+    args.old_bin_dir = args.old_bin_dir or defaults["old_bin_dir"]
+    args.old_data_dir = args.old_data_dir or defaults["old_data_dir"]
+    args.new_bin_dir = args.new_bin_dir or defaults["new_bin_dir"]
+
+    os.environ["PGPASSWORD"] = args.password
 
     dump_path = Path(args.dump_file).resolve()
     old_dumpall = Path(args.old_bin_dir) / "pg_dumpall"
@@ -76,10 +102,13 @@ def main() -> None:
     ensure_binary(new_psql, "postgresql-16")
 
     try:
-        start_server(old_pg_ctl, old_data_dir, args.user)
+        # start_server(old_pg_ctl, old_data_dir, args.user)
+        # PostgreSQL server start disabled
         run(f"sudo -u {args.user} {old_dumpall} > {dump_path}")
     finally:
-        stop_server(old_pg_ctl, old_data_dir, args.user)
+        # stop_server(old_pg_ctl, old_data_dir, args.user)
+        # PostgreSQL server stop disabled
+        pass
 
 
     run(f"sudo -u {args.user} {new_psql} -f {dump_path}")
