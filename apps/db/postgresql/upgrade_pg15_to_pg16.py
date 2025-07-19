@@ -103,10 +103,13 @@ def main() -> None:
     ensure_binary(new_psql, "postgresql-16")
 
     try:
-        start_server(old_pg_ctl, old_data_dir, args.user)
+        # start_server(old_pg_ctl, old_data_dir, args.user)
+        # PostgreSQL server start disabled
         run(f"sudo -u {args.user} {old_dumpall} > {dump_path}")
     finally:
-        stop_server(old_pg_ctl, old_data_dir, args.user)
+        # stop_server(old_pg_ctl, old_data_dir, args.user)
+        # PostgreSQL server stop disabled
+        pass
 
 
     run(f"sudo -u {args.user} {new_psql} -f {dump_path}")
