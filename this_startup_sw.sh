@@ -7,4 +7,3 @@ alias sr='screen'
 #sudo screen -dmS lcd sudo python /home/pi/devel/BerePi/apps/lcd_berepi/watch.py -ip xxxxx
 #sudo /home/pi/devel/BerePi/apps/tinyosGW/run_public_ip_rpi.sh xxx xxx xxx 
 
-
