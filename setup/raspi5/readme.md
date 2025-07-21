@@ -1,4 +1,10 @@
-# Raspi5 nvme 부팅 
+# 2025년 7월 확인 내용
+- RaspberryPi Imager 에 있는 Factory Default 디스크 생성으로 Boot Loader 변경 
+  - https://www.cytron.io/tutorial/raspberry-pi-imager-updating-bootloader?srsltid=AfmBOopZIn4vT6cRPlBKcjBlHBLHb_o_orkRwMAejoUGYyEe95qz4q8a
+
+
+# 2025년 이전 버전
+## Raspi5 nvme 부팅 
 - Raspi Imager 로 Rasbian OS 를 SD에 설치
 - SD 부팅후
 - sudo rpi-eeprom-update -a 로 확인
