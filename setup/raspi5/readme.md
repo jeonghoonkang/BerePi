@@ -1,5 +1,6 @@
 # 2025년 7월 확인 내용
-- RaspberryPi Imager 에 있는 Factory Default 디스크 생성으로 Boot Loader 변경 
+- RaspberryPi Imager 에 있는 Factory Default 디스크 생성으로 Boot Loader 변경
+- 부트로더 변경후, NVME 부팅 원활함 
   - https://www.cytron.io/tutorial/raspberry-pi-imager-updating-bootloader?srsltid=AfmBOopZIn4vT6cRPlBKcjBlHBLHb_o_orkRwMAejoUGYyEe95qz4q8a
 
 
