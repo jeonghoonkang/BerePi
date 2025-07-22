@@ -9,7 +9,7 @@ from luma.core.interface.serial import i2c
 from luma.oled.device import ssd1306
 from luma.core.render import canvas
 from PIL import ImageFont
-import RPi.GPIO as GPIO
+import gpiod
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
@@ -27,10 +27,11 @@ def get_ip_address(interface="eth0"):
 
 
 def main():
+    chip = gpiod.Chip("gpiochip0")
+    line = chip.get_line(FAN_PIN)
+    line.request(consumer="ip_display", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[1])
 
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(FAN_PIN, GPIO.OUT)
-    GPIO.output(FAN_PIN, GPIO.HIGH)
+
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
@@ -46,8 +47,12 @@ def main():
                 draw.text((0, 16), ip, font=font, fill=255)
             time.sleep(3)
     finally:
-        GPIO.output(FAN_PIN, GPIO.LOW)
-        GPIO.cleanup()
+
+      line.set_value(0)
+        line.release()
+        chip.close()
+
+
 
 if __name__ == "__main__":
     main()
