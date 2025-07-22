@@ -1,0 +1,3 @@
+luma.oled
+Pillow
+RPi.GPIO
