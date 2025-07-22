@@ -26,6 +26,7 @@ from rich.console import Console
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
+RGBFAN_PIN = (5, 6)
 # RGB LED pins for the fan lighting
 RGB_PINS = (4, 17, 7)
 # temperature threshold in Celsius for turning the fan on
@@ -65,7 +66,9 @@ def main():
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
-    #rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
+    rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGBFAN_PIN]
+    rgb_leds[0].on()
+    rgb_leds[1].on()
     cpu = CPUTemperature()
     console = Console()
 
@@ -97,14 +100,14 @@ def main():
         draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
 
 
-    for sec in range(5, 0, -1):
-        console.print(
-            f"OLED display 중입니다... 남은 시간: {sec}초   ",
-            style="bold green",
-            end="\r",
-        )
-        time.sleep(1)
-    console.print(end="\r")
+#    for sec in range(5, 0, -1):
+#        console.print(
+#            f"OLED display 중입니다... 남은 시간: {sec}초   ",
+#            style="bold green",
+#            end="\r",
+#        )
+#        time.sleep(1)
+#    console.print(end="\r")
 
     remaining = 60
     while remaining >= 0:
@@ -123,8 +126,8 @@ def main():
         if remaining == 0:
             break
 
-        time.sleep(10)
-        remaining -= 10
+        time.sleep(5)
+        remaining -= 5
     console.print()
 
 if __name__ == "__main__":
