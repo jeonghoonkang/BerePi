@@ -65,9 +65,10 @@ def main():
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
-    rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
+    #rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
     cpu = CPUTemperature()
     console = Console()
+
 
 
     # Determine IP address and current time
