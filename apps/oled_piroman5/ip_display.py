@@ -66,7 +66,7 @@ def main():
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
-    rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
+    #rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
     cpu = CPUTemperature()
     console = Console()
 
@@ -74,13 +74,13 @@ def main():
         """Update RGB LED fan based on CPU temperature."""
         if temp <= 45.0:
             status = "1LED"
-            rgb_leds[0].on()
-            for led in rgb_leds[1:]:
-                led.off()
+            #rgb_leds[0].on()
+            #for led in rgb_leds[1:]:
+            #    led.off()
         else:
             status = "ON"
-            for led in rgb_leds:
-                led.on()
+            #for led in rgb_leds:
+            #    led.on()
         return status
 
 
