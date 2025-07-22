@@ -55,6 +55,15 @@ def main():
         except Exception:
             pass
 
+    # Release previously allocated pins to avoid lgpio "GPIO busy" errors
+    try:
+        pins_to_release = (FAN_PIN,) + RGB_PINS
+        for pin in pins_to_release:
+            Device.pin_factory.release(pin)
+    except Exception:
+        # On older pin factories ``release`` may not exist
+        pass
+
 
     fan = OutputDevice(FAN_PIN, active_high=True)
     rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
