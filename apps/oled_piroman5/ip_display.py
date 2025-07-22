@@ -27,15 +27,16 @@ def get_ip_address(interface="eth0"):
 
 
 def main():
+
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(FAN_PIN, GPIO.OUT)
     GPIO.output(FAN_PIN, GPIO.HIGH)
-
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
 
     font = ImageFont.load_default()
+
 
     try:
         while True:
@@ -47,7 +48,6 @@ def main():
     finally:
         GPIO.output(FAN_PIN, GPIO.LOW)
         GPIO.cleanup()
-
 
 if __name__ == "__main__":
     main()
