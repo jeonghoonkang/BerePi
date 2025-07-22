@@ -31,11 +31,13 @@ def main():
     line = chip.get_line(FAN_PIN)
     line.request(consumer="ip_display", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[1])
 
+
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
 
     font = ImageFont.load_default()
+
 
     try:
         while True:
@@ -45,9 +47,11 @@ def main():
                 draw.text((0, 16), ip, font=font, fill=255)
             time.sleep(3)
     finally:
-        line.set_value(0)
+
+      line.set_value(0)
         line.release()
         chip.close()
+
 
 
 if __name__ == "__main__":
