@@ -16,6 +16,7 @@ from luma.core.render import canvas
 from PIL import ImageFont
 from gpiozero import OutputDevice
 
+
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
 
@@ -35,11 +36,13 @@ def main():
     fan = OutputDevice(FAN_PIN, active_high=True)
     fan.on()
 
+
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
 
     font = ImageFont.load_default()
+
 
     try:
         while True:
@@ -50,7 +53,6 @@ def main():
             time.sleep(3)
     finally:
         fan.off()
-
 
 if __name__ == "__main__":
     main()
