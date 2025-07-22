@@ -26,6 +26,8 @@ from rich.console import Console
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
+# RGB LED pins for the fan lighting
+RGB_PINS = (4, 17, 7)
 # temperature threshold in Celsius for turning the fan on
 TEMP_THRESHOLD = 55.0
 
@@ -56,14 +58,17 @@ def main():
     # Release previously allocated pins to avoid lgpio "GPIO busy" errors
     try:
         Device.pin_factory.release(FAN_PIN)
+
     except Exception:
         # On older pin factories ``release`` may not exist
         pass
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
+    rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGB_PINS]
     cpu = CPUTemperature()
     console = Console()
+
 
     # Determine IP address and current time
     ip = get_ip_address("eth0")
@@ -74,6 +79,7 @@ def main():
         fan.on()
     else:
         fan.off()
+
     fan_status = "ON" if fan.is_active else "OFF"
 
     # Initialize OLED display via I2C
@@ -88,6 +94,7 @@ def main():
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
         draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+
 
     for sec in range(5, 0, -1):
         console.print(
@@ -109,10 +116,12 @@ def main():
         console.print(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
             f"CPU: {temp:.1f}°C | Fan: {fan_status}   ",
+
             end="\r",
         )
         if remaining == 0:
             break
+
         time.sleep(10)
         remaining -= 10
     console.print()
