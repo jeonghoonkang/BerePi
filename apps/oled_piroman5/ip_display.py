@@ -22,6 +22,7 @@ from PIL import ImageFont
 import atexit
 from gpiozero import OutputDevice, CPUTemperature, Device
 import time
+from rich.console import Console
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
@@ -52,18 +53,28 @@ def main():
         except Exception:
             pass
 
+    # Release previously allocated pins to avoid lgpio "GPIO busy" errors
+    try:
+        Device.pin_factory.release(FAN_PIN)
+    except Exception:
+        # On older pin factories ``release`` may not exist
+        pass
+
 
     fan = OutputDevice(FAN_PIN, active_high=True)
     cpu = CPUTemperature()
+    console = Console()
 
     # Determine IP address and current time
     ip = get_ip_address("eth0")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if cpu.temperature >= TEMP_THRESHOLD:
+    temp = cpu.temperature
+    if temp >= TEMP_THRESHOLD:
         fan.on()
     else:
         fan.off()
+    fan_status = "ON" if fan.is_active else "OFF"
 
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
@@ -76,7 +87,35 @@ def main():
     with canvas(device) as draw:
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
-    time.sleep(3)
+        draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+
+    for sec in range(5, 0, -1):
+        console.print(
+            f"OLED display 중입니다... 남은 시간: {sec}초   ",
+            style="bold green",
+            end="\r",
+        )
+        time.sleep(1)
+    console.print(end="\r")
+
+    remaining = 60
+    while remaining >= 0:
+        temp = cpu.temperature
+        if temp >= TEMP_THRESHOLD:
+            fan.on()
+        else:
+            fan.off()
+        fan_status = "ON" if fan.is_active else "OFF"
+        console.print(
+            f"OLED display 중입니다... 남은 시간: {remaining}초 | "
+            f"CPU: {temp:.1f}°C | Fan: {fan_status}   ",
+            end="\r",
+        )
+        if remaining == 0:
+            break
+        time.sleep(10)
+        remaining -= 10
+    console.print()
 
 if __name__ == "__main__":
     main()
