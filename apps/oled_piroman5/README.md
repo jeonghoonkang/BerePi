@@ -9,6 +9,9 @@ Install the required Python packages with pip (use `sudo` on Raspberry Pi OS):
 
 ```bash
 pip3 install -r requirements.txt
+sudo pip3 install luma.core luma.oled 
+sudo apt install libgpiod-dev
+
 ```
 
 ## Running
