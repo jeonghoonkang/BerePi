@@ -6,6 +6,7 @@ Requirements installed with::
     pip3 install -r requirements.txt
 """
 
+
 import time
 import subprocess
 
@@ -14,7 +15,9 @@ from luma.core.interface.serial import i2c
 from luma.oled.device import ssd1306
 from luma.core.render import canvas
 from PIL import ImageFont
+
 import RPi.GPIO as GPIO
+
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
@@ -36,11 +39,13 @@ def main():
     GPIO.setup(FAN_PIN, GPIO.OUT)
     GPIO.output(FAN_PIN, GPIO.HIGH)
 
+
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
 
     font = ImageFont.load_default()
+
 
     try:
         while True:
