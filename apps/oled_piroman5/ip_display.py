@@ -21,6 +21,7 @@ from luma.core.render import canvas
 from PIL import ImageFont
 import atexit
 from gpiozero import OutputDevice, CPUTemperature, Device
+import time
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
@@ -75,7 +76,7 @@ def main():
     with canvas(device) as draw:
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
-
+    time.sleep(3)
 
 if __name__ == "__main__":
     main()
