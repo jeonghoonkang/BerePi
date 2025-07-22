@@ -57,9 +57,8 @@ def main():
 
     # Release previously allocated pins to avoid lgpio "GPIO busy" errors
     try:
-        pins_to_release = (FAN_PIN,) + RGB_PINS
-        for pin in pins_to_release:
-            Device.pin_factory.release(pin)
+        Device.pin_factory.release(FAN_PIN)
+
     except Exception:
         # On older pin factories ``release`` may not exist
         pass
@@ -70,18 +69,6 @@ def main():
     cpu = CPUTemperature()
     console = Console()
 
-    def update_rgb_fan(temp: float) -> str:
-        """Update RGB LED fan based on CPU temperature."""
-        if temp <= 45.0:
-            status = "1LED"
-            #rgb_leds[0].on()
-            #for led in rgb_leds[1:]:
-            #    led.off()
-        else:
-            status = "ON"
-            #for led in rgb_leds:
-            #    led.on()
-        return status
 
 
     # Determine IP address and current time
@@ -93,7 +80,7 @@ def main():
         fan.on()
     else:
         fan.off()
-    rgb_status = update_rgb_fan(temp)
+
     fan_status = "ON" if fan.is_active else "OFF"
 
     # Initialize OLED display via I2C
@@ -108,7 +95,7 @@ def main():
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
         draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
-        draw.text((0, 48), f"RGB {rgb_status}", font=font, fill=255)
+
 
     for sec in range(5, 0, -1):
         console.print(
@@ -126,11 +113,11 @@ def main():
             fan.on()
         else:
             fan.off()
-        rgb_status = update_rgb_fan(temp)
         fan_status = "ON" if fan.is_active else "OFF"
         console.print(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
-            f"CPU: {temp:.1f}°C | Fan: {fan_status} | RGB: {rgb_status}   ",
+            f"CPU: {temp:.1f}°C | Fan: {fan_status}   ",
+
             end="\r",
         )
         if remaining == 0:
