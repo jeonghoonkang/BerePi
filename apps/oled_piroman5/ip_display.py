@@ -83,6 +83,7 @@ def main():
                 led.on()
         return status
 
+
     # Determine IP address and current time
     ip = get_ip_address("eth0")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -134,6 +135,7 @@ def main():
         )
         if remaining == 0:
             break
+
         time.sleep(10)
         remaining -= 10
     console.print()
