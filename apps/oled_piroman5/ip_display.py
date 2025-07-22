@@ -51,6 +51,7 @@ def main():
         except Exception:
             pass
 
+
     fan = OutputDevice(FAN_PIN, active_high=True)
     cpu = CPUTemperature()
 
@@ -74,6 +75,7 @@ def main():
     with canvas(device) as draw:
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
+
 
 if __name__ == "__main__":
     main()
