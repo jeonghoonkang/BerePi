@@ -22,6 +22,7 @@ from PIL import ImageFont
 import atexit
 from gpiozero import OutputDevice, CPUTemperature, Device
 import time
+from rich.console import Console
 
 # pin used to control the cooling fan on piroman5 max
 FAN_PIN = 18
@@ -55,6 +56,7 @@ def main():
 
     fan = OutputDevice(FAN_PIN, active_high=True)
     cpu = CPUTemperature()
+    console = Console()
 
     # Determine IP address and current time
     ip = get_ip_address("eth0")
@@ -76,7 +78,19 @@ def main():
     with canvas(device) as draw:
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
-    time.sleep(3)
+
+    remaining = 60
+    for _ in range(6):
+        temp = cpu.temperature
+        status = "ON" if fan.is_active else "OFF"
+        console.print(
+            f"OLED display 중입니다... 남은 시간: {remaining}초 | "
+            f"CPU: {temp:.1f}°C | Fan: {status}   ",
+            end="\r",
+        )
+        time.sleep(10)
+        remaining -= 10
+    console.print()
 
 if __name__ == "__main__":
     main()
