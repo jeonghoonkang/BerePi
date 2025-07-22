@@ -7,11 +7,17 @@ controls the cooling fan on the piroman5 max board when the CPU
 temperature exceeds ``55°C``.
 
 Dependencies can be installed with::
+=======
+"""Display current IP address on OLED using piroman5 driver.
+
+Requirements installed with::
 
     pip3 install -r requirements.txt
 """
 
+
 from datetime import datetime
+
 import subprocess
 
 # piroman5 OLED driver, built on luma.oled
@@ -69,6 +75,5 @@ def main():
     with canvas(device) as draw:
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
-
 if __name__ == "__main__":
     main()
