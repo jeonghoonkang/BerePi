@@ -20,9 +20,4 @@ Add an entry to ``crontab`` so the script runs every minute:
 ```
 
 Each run updates the OLED with the current IP address and the date/time (including seconds). The fan turns on when the CPU temperature exceeds 55 °C and turns off once it drops below that threshold.
-=======
-```bash
-sudo python3 ip_display.py
-```
 
-The fan will remain on while the script is running.
