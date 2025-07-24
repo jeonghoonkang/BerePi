@@ -4,7 +4,7 @@
 This script is designed to be called from ``cron`` once per minute.
 It updates the OLED with the current IPv4 address and timestamp, and
 controls the cooling fan on the piroman5 max board when the CPU
-temperature exceeds ``55°C``.
+temperature exceeds ``50°C``.
 
 Dependencies can be installed with::
 
@@ -30,7 +30,7 @@ RGBFAN_PIN = (5, 6)
 # RGB LED pins for the fan lighting
 RGB_PINS = (4, 17, 7)
 # temperature threshold in Celsius for turning the fan on
-TEMP_THRESHOLD = 55.0
+TEMP_THRESHOLD = 50.0
 
 
 def get_ip_address(interface="eth0"):
@@ -66,6 +66,8 @@ def main():
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
+    # Ensure the fan starts running when the program launches
+    fan.on()
     rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGBFAN_PIN]
     rgb_leds[0].on()
     rgb_leds[1].on()
@@ -98,16 +100,6 @@ def main():
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
         draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
-
-
-#    for sec in range(5, 0, -1):
-#        console.print(
-#            f"OLED display 중입니다... 남은 시간: {sec}초   ",
-#            style="bold green",
-#            end="\r",
-#        )
-#        time.sleep(1)
-#    console.print(end="\r")
 
     remaining = 60
     while remaining >= 0:
