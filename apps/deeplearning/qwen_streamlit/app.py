@@ -1,45 +1,56 @@
 import os
+import sys
 import threading
 import time
 
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+)
 import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 
-def download_model(model_name: str) -> None:
-    """Download the model showing a progress bar."""
+def download_model_cli(model_name: str) -> None:
+    """Download the model showing a Rich progress bar."""
     try:
         from huggingface_hub import snapshot_download
     except Exception:
-        st.error("huggingface_hub is required to download models")
-        st.stop()
+        print("huggingface_hub is required to download models", file=sys.stderr)
+        sys.exit(1)
 
-    progress = st.progress(0)
+    progress = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+    )
+    task = progress.add_task("Downloading model...", total=100)
 
     def _download() -> None:
         try:
             snapshot_download(repo_id=model_name, local_dir=model_name, resume_download=True)
         except Exception as exc:
-            st.session_state.download_error = str(exc)
+            progress.stop()
+            print(f"Failed to download model: {exc}", file=sys.stderr)
+            sys.exit(1)
 
     thread = threading.Thread(target=_download)
     thread.start()
     pct = 0
-    while thread.is_alive():
-        pct = min(100, pct + 1)
-        progress.progress(pct / 100.0)
-        time.sleep(1)
-
-    thread.join()
-    progress.progress(1.0)
-    if "download_error" in st.session_state:
-        st.error("Failed to download model: " + st.session_state.download_error)
-        st.stop()
-    st.success("Download complete")
+    with progress:
+        while thread.is_alive():
+            pct = min(100, pct + 1)
+            progress.update(task, completed=pct)
+            time.sleep(1)
+        thread.join()
+        progress.update(task, completed=100)
 
 
-def ensure_model(model_name: str) -> None:
+def ensure_model_cli(model_name: str) -> None:
     """Ensure model files are available, otherwise download them."""
     if os.path.isdir(model_name):
         return
@@ -51,7 +62,7 @@ def ensure_model(model_name: str) -> None:
     except Exception:
         pass
 
-    download_model(model_name)
+    download_model_cli(model_name)
 
 
 
@@ -72,14 +83,17 @@ def generate_response(prompt: str, tokenizer, model, device):
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
+MODEL_NAME = "Qwen/Qwen1.5-0.5B-Chat"
+
+ensure_model_cli(MODEL_NAME)
+
 st.title("Qwen Chat")
-model_name = "Qwen/Qwen1.5-0.5B-Chat"
 
 ensure_model(model_name)
 
 @st.cache_resource
 def get_model():
-    return load_model(model_name)
+    return load_model(MODEL_NAME)
 
 
 prompt = st.text_input("Enter a sentence")

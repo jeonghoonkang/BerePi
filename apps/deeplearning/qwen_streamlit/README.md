@@ -19,6 +19,8 @@ streamlit run app.py
 ```
 
 The application will automatically download the `Qwen/Qwen1.5-0.5B-Chat` model
-on first run if it is not available locally. A progress bar will be shown while
-the files are being retrieved. After the download completes, enter a sentence in
-the text input box and the model will generate a response.
+on first run if it is not available locally. When this happens the program
+prints a progress bar in the terminal using the **rich** library and the
+Streamlit UI will only appear once the download finishes. After the model is
+ready, enter a sentence in the text input box and the model will generate a
+response.
