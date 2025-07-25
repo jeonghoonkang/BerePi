@@ -70,7 +70,12 @@ def load_model(model_name: str):
     """Load the tokenizer and model."""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.backends.mps.is_available():
+        device = "mps"
+    elif torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
     model.to(device)
     return tokenizer, model, device
 
@@ -89,7 +94,6 @@ ensure_model_cli(MODEL_NAME)
 
 st.title("Qwen Chat")
 
-ensure_model(model_name)
 
 @st.cache_resource
 def get_model():
