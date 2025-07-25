@@ -25,3 +25,4 @@ Streamlit UI will only appear once the download finishes. After the model is
 ready, enter a sentence in the text input box and the model will generate a
 response. If PyTorch detects the MPS backend (for Apple Silicon), the app will
 use it automatically for faster inference.
+
