@@ -89,6 +89,8 @@ ensure_model_cli(MODEL_NAME)
 
 st.title("Qwen Chat")
 
+ensure_model(model_name)
+
 @st.cache_resource
 def get_model():
     return load_model(MODEL_NAME)

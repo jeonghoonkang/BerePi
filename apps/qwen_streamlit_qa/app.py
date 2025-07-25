@@ -27,7 +27,7 @@ def display_gpu_status() -> None:
     except Exception as exc:
         st.warning(f"Could not determine GPU status: {exc}")
 
-st.set_page_config(page_title="Qwen Q&A", page_icon="\ud83d\udcda")
+st.set_page_config(page_title="Qwen Q&A", page_icon="🎃")
 
 st.title("Qwen 기반 Q&A 데모")
 display_gpu_status()
