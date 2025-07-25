@@ -18,4 +18,7 @@ Run the Streamlit application:
 streamlit run app.py
 ```
 
-Enter a sentence in the text input box and the model will generate a response.
+The application will automatically download the `Qwen/Qwen1.5-0.5B-Chat` model
+on first run if it is not available locally. A progress bar will be shown while
+the files are being retrieved. After the download completes, enter a sentence in
+the text input box and the model will generate a response.
