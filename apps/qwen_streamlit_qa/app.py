@@ -14,23 +14,35 @@ def rerun() -> None:
         st.rerun()
 
 
-def display_gpu_status() -> None:
-    """Display current GPU status at startup."""
+def display_gpu_status(tokenizer=None) -> None:
+    """Display current GPU and model info at startup."""
     try:
         import torch
 
         if torch.cuda.is_available():
-            gpus = [f"{i}: {torch.cuda.get_device_name(i)}" for i in range(torch.cuda.device_count())]
-            st.info("GPU available: " + ", ".join(gpus))
+            gpu_names = [f"{i}: {torch.cuda.get_device_name(i)}" for i in range(torch.cuda.device_count())]
+            st.info("GPU available: " + ", ".join(gpu_names))
+
+            mem_info = []
+            for i in range(torch.cuda.device_count()):
+                total = torch.cuda.get_device_properties(i).total_memory // (1024 ** 2)
+                allocated = torch.cuda.memory_allocated(i) // (1024 ** 2)
+                mem_info.append(f"{i}: {allocated}MB/{total}MB")
+            st.info("GPU memory usage: " + ", ".join(mem_info))
         else:
             st.info("GPU not available, using CPU")
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - GPU inspection can fail
         st.warning(f"Could not determine GPU status: {exc}")
+
+    if tokenizer is not None:
+        try:
+            st.info(f"Max input tokens: {getattr(tokenizer, 'model_max_length', 'unknown')}")
+        except Exception:  # pragma: no cover - tokenizer may be malformed
+            pass
 
 st.set_page_config(page_title="Qwen Q&A", page_icon="🎃")
 
 st.title("Qwen 기반 Q&A 데모")
-display_gpu_status()
 
 
 def download_model(model_name: str) -> None:
@@ -121,9 +133,16 @@ def load_model(name: str):
 
 
 generator = load_model(MODEL_NAME)
+display_gpu_status(generator.tokenizer)
 
 prompt = st.text_input("질문을 입력하세요:")
+error_area = st.empty()
 if prompt:
-    with st.spinner("답변 생성 중..."):
-        response = generator(prompt, max_length=512, do_sample=True)
+    try:
+        with st.spinner("답변 생성 중..."):
+            response = generator(prompt, max_length=512, do_sample=True)
         st.write(response[0]["generated_text"][len(prompt):].strip())
+    except Exception as exc:  # pragma: no cover - GUI display
+        error_area.error("답변 생성 중 오류가 발생했습니다.")
+        with st.expander("오류 상세 보기"):
+            st.exception(exc)
