@@ -42,7 +42,7 @@ def display_gpu_status(tokenizer=None) -> None:
 
 st.set_page_config(page_title="Qwen Q&A", page_icon="🎃")
 
-st.title("Qwen 기반 Q&A 데모")
+st.title("QWEN 기반 Q&A 데모")
 
 
 def download_model(model_name: str) -> None:
