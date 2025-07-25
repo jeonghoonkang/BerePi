@@ -123,7 +123,13 @@ def load_model(name: str):
 generator = load_model(MODEL_NAME)
 
 prompt = st.text_input("질문을 입력하세요:")
+error_area = st.empty()
 if prompt:
-    with st.spinner("답변 생성 중..."):
-        response = generator(prompt, max_length=512, do_sample=True)
+    try:
+        with st.spinner("답변 생성 중..."):
+            response = generator(prompt, max_length=512, do_sample=True)
         st.write(response[0]["generated_text"][len(prompt):].strip())
+    except Exception as exc:  # pragma: no cover - GUI display
+        error_area.error("답변 생성 중 오류가 발생했습니다.")
+        with st.expander("오류 상세 보기"):
+            st.exception(exc)
