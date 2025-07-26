@@ -21,7 +21,7 @@ def display_gpu_status(tokenizer=None) -> None:
 
         if torch.cuda.is_available():
             gpu_names = [f"{i}: {torch.cuda.get_device_name(i)}" for i in range(torch.cuda.device_count())]
-            st.info("GPU available (CUDA): " + ", ".join(gpu_names))
+            st.info("GPU available: " + ", ".join(gpu_names))
 
             mem_info = []
             for i in range(torch.cuda.device_count()):
@@ -29,8 +29,7 @@ def display_gpu_status(tokenizer=None) -> None:
                 allocated = torch.cuda.memory_allocated(i) // (1024 ** 2)
                 mem_info.append(f"{i}: {allocated}MB/{total}MB")
             st.info("GPU memory usage: " + ", ".join(mem_info))
-        elif torch.backends.mps.is_available():
-            st.info("GPU available (MPS): Apple Silicon GPU")
+
         else:
             st.info("GPU not available, using CPU")
     except Exception as exc:  # pragma: no cover - GPU inspection can fail
@@ -44,7 +43,8 @@ def display_gpu_status(tokenizer=None) -> None:
 
 st.set_page_config(page_title="Qwen Q&A", page_icon="🎃")
 
-st.title("QWEN 기반 Q&A 데모")
+st.title("Qwen 기반 Q&A 데모")
+
 
 
 def download_model(model_name: str) -> None:
@@ -131,17 +131,10 @@ def load_model(name: str):
     import torch
     
     tokenizer = AutoTokenizer.from_pretrained(name)
-    
-    # 디바이스 설정: CUDA > MPS > CPU 순서로 선택
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    
-    model = AutoModelForCausalLM.from_pretrained(name, device_map=device)
-    generator = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device)
+    # Let transformers automatically place model weights on the best device.
+    model = AutoModelForCausalLM.from_pretrained(name, device_map="auto")
+    generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
+
     return generator
 
 
