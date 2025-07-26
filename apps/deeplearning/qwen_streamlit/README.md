@@ -26,3 +26,4 @@ completes. After the model is ready, enter a sentence (look for the person
 emoji next to the input field) and the robot emoji will display the response.
 If PyTorch detects the MPS backend (for Apple Silicon), the app will use it
 automatically for faster inference.
+

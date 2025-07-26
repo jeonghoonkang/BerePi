@@ -106,6 +106,7 @@ def get_model(name: str):
     return load_model(name)
 
 
+
 prompt = st.text_input("\U0001F464 질문을 입력하세요:")
 if prompt:
     tokenizer, model, device = get_model(MODEL_NAME)
