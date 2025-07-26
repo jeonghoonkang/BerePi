@@ -29,6 +29,7 @@ def display_gpu_status(tokenizer=None) -> None:
                 allocated = torch.cuda.memory_allocated(i) // (1024 ** 2)
                 mem_info.append(f"{i}: {allocated}MB/{total}MB")
             st.info("GPU memory usage: " + ", ".join(mem_info))
+
         else:
             st.info("GPU not available, using CPU")
     except Exception as exc:  # pragma: no cover - GPU inspection can fail
@@ -43,6 +44,7 @@ def display_gpu_status(tokenizer=None) -> None:
 st.set_page_config(page_title="Qwen Q&A", page_icon="🎃")
 
 st.title("Qwen 기반 Q&A 데모")
+
 
 
 def download_model(model_name: str) -> None:
@@ -126,10 +128,13 @@ ensure_model(MODEL_NAME)
 
 @st.cache_resource
 def load_model(name: str):
+    import torch
+    
     tokenizer = AutoTokenizer.from_pretrained(name)
     # Let transformers automatically place model weights on the best device.
     model = AutoModelForCausalLM.from_pretrained(name, device_map="auto")
     generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
+
     return generator
 
 
