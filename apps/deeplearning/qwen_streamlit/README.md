@@ -18,4 +18,11 @@ Run the Streamlit application:
 streamlit run app.py
 ```
 
-Enter a sentence in the text input box and the model will generate a response.
+The application lets you choose between the lightweight `Qwen1.5-0.5B-Chat`
+and the larger `Qwen1.5-1.8B-Chat (GGUF)` model. The selected model is
+downloaded automatically on first run, showing a progress bar in the terminal
+via the **rich** library. The Streamlit UI only appears after the download
+completes. After the model is ready, enter a sentence (look for the person
+emoji next to the input field) and the robot emoji will display the response.
+If PyTorch detects the MPS backend (for Apple Silicon), the app will use it
+automatically for faster inference.
