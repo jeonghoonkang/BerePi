@@ -88,20 +88,27 @@ def generate_response(prompt: str, tokenizer, model, device):
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
-MODEL_NAME = "Qwen/Qwen1.5-0.5B-Chat"
-
-ensure_model_cli(MODEL_NAME)
+MODEL_CHOICES = {
+    "Qwen1.5-0.5B-Chat": "Qwen/Qwen1.5-0.5B-Chat",
+    "Qwen1.5-1.8B-Chat (GGUF)": "Qwen/Qwen1.5-1.8B-Chat-GGUF",
+}
 
 st.title("Qwen Chat")
 
+choice = st.sidebar.selectbox("Model", list(MODEL_CHOICES.keys()))
+MODEL_NAME = MODEL_CHOICES[choice]
+
+ensure_model_cli(MODEL_NAME)
+
 
 @st.cache_resource
-def get_model():
-    return load_model(MODEL_NAME)
+def get_model(name: str):
+    return load_model(name)
 
 
-prompt = st.text_input("Enter a sentence")
+
+prompt = st.text_input("\U0001F464 질문을 입력하세요:")
 if prompt:
-    tokenizer, model, device = get_model()
+    tokenizer, model, device = get_model(MODEL_NAME)
     response = generate_response(prompt, tokenizer, model, device)
-    st.write(response)
+    st.write(f"\U0001F916 {response}")
