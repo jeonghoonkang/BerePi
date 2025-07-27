@@ -7,6 +7,13 @@
 - ssh -Y tinyos@**.**.**.** xeyes
   - 동작 안함 (2022.6.11) ssh -X ids@xxx.xxx.xxx.xxx -vvv -p72 xeyes
 
+<pre> 
+~/.xsession
+startxfce4
+</pre>
+
+---
+
 <pre>
 ( 이제는 아래 내용 사용하지 않아도 됨. )
 
