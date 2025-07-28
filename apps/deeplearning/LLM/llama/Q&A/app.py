@@ -114,7 +114,12 @@ def ensure_model(model_name: str) -> None:
     try:
         from huggingface_hub import hf_hub_download
 
+        # check config and at least one weight file exists locally
         hf_hub_download(repo_id=model_name, filename="config.json", local_files_only=True)
+        try:
+            hf_hub_download(repo_id=model_name, filename="pytorch_model.bin", local_files_only=True)
+        except Exception:
+            hf_hub_download(repo_id=model_name, filename="pytorch_model.bin.index.json", local_files_only=True)
         return
     except Exception:
         pass
@@ -175,8 +180,18 @@ def load_model(name: str):
             trust_remote_code=True,
             local_files_only=True,
         )
+    except FileNotFoundError:
+        # 로컬 파일이 누락된 경우 자동으로 다운로드
+        st.warning("모델 파일이 없어 다운로드를 진행합니다.")
+        with st.spinner("모델 다운로드 중..."):
+            model = AutoModelForCausalLM.from_pretrained(
+                name,
+                device_map="auto",
+                trust_remote_code=True,
+            )
     except Exception:
-        # 로컬에 모델이 없으면 자동으로 다운로드
+        # 기타 오류는 다시 시도하여 처리
+
         with st.spinner("모델 다운로드 중..."):
             model = AutoModelForCausalLM.from_pretrained(
                 name,
