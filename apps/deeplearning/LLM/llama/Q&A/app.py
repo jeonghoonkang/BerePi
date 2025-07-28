@@ -217,8 +217,10 @@ if prompt := st.chat_input("질문을 입력하세요"):
     # 어시스턴트 응답 생성
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
+        time_placeholder = st.empty()
         
         try:
+            start_time = time.time()
             with st.spinner("답변 생성 중..."):
                 # 모델별 채팅 형식으로 프롬프트 포맷팅
                 formatted_prompt = format_prompt(prompt, MODEL_NAME)
@@ -243,6 +245,8 @@ if prompt := st.chat_input("질문을 입력하세요"):
                     message_placeholder.markdown(full_response_text + "▌")
                     time.sleep(0.05)
                 message_placeholder.markdown(full_response_text)
+            elapsed = time.time() - start_time
+            time_placeholder.markdown(f"_(응답 시간: {elapsed:.2f}초)_")
                 
         except Exception as exc:
             message_placeholder.error("답변 생성 중 오류가 발생했습니다.")
