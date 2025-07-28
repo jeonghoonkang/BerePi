@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 import threading
 
@@ -181,8 +182,14 @@ def load_model(name: str):
             local_files_only=True,
         )
     except FileNotFoundError:
-        # 로컬 파일이 누락된 경우 자동으로 다운로드
+        # 로컬 파일이 누락된 경우 캐시를 지우고 자동으로 다운로드
         st.warning("모델 파일이 없어 다운로드를 진행합니다.")
+        cache_dir = os.path.expanduser(
+            f"~/.cache/huggingface/hub/models--{name.replace('/', '--')}"
+        )
+        if os.path.isdir(cache_dir):
+            shutil.rmtree(cache_dir, ignore_errors=True)
+
         with st.spinner("모델 다운로드 중..."):
             model = AutoModelForCausalLM.from_pretrained(
                 name,
