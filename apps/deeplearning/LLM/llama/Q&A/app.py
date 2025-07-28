@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 import threading
 
@@ -114,7 +115,12 @@ def ensure_model(model_name: str) -> None:
     try:
         from huggingface_hub import hf_hub_download
 
+        # check config and at least one weight file exists locally
         hf_hub_download(repo_id=model_name, filename="config.json", local_files_only=True)
+        try:
+            hf_hub_download(repo_id=model_name, filename="pytorch_model.bin", local_files_only=True)
+        except Exception:
+            hf_hub_download(repo_id=model_name, filename="pytorch_model.bin.index.json", local_files_only=True)
         return
     except Exception:
         pass
@@ -167,15 +173,38 @@ def load_model(name: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # 애플 실리콘 MPS 디바이스 우선 사용
-    if torch.backends.mps.is_available():
-        # MPS 사용 시 device_map을 "auto"로 설정하고 pipeline에서 device 인수 제거
-        model = AutoModelForCausalLM.from_pretrained(name, device_map="auto", trust_remote_code=True)
-        generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
-    else:
-        # 기존 CUDA 또는 CPU 사용
-        model = AutoModelForCausalLM.from_pretrained(name, device_map="auto", trust_remote_code=True)
-        generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
+    try:
+        # 우선 로컬 파일만 사용하여 로드 시도
+        model = AutoModelForCausalLM.from_pretrained(
+            name,
+            device_map="auto",
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+    except FileNotFoundError:
+        # 로컬 파일이 누락된 경우 캐시를 지우고 자동으로 다운로드
+        st.warning("모델 파일이 없어 다운로드를 진행합니다.")
+        cache_dir = os.path.expanduser(
+            f"~/.cache/huggingface/hub/models--{name.replace('/', '--')}"
+        )
+        if os.path.isdir(cache_dir):
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        with st.spinner("모델 다운로드 중..."):
+            model = AutoModelForCausalLM.from_pretrained(
+                name,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+    except Exception:
+        # 기타 오류는 다시 시도하여 처리
+        with st.spinner("모델 다운로드 중..."):
+            model = AutoModelForCausalLM.from_pretrained(
+                name,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+
+    generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
 
     return generator
 
@@ -217,8 +246,10 @@ if prompt := st.chat_input("질문을 입력하세요"):
     # 어시스턴트 응답 생성
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
+        time_placeholder = st.empty()
         
         try:
+            start_time = time.time()
             with st.spinner("답변 생성 중..."):
                 # 모델별 채팅 형식으로 프롬프트 포맷팅
                 formatted_prompt = format_prompt(prompt, MODEL_NAME)
@@ -243,6 +274,8 @@ if prompt := st.chat_input("질문을 입력하세요"):
                     message_placeholder.markdown(full_response_text + "▌")
                     time.sleep(0.05)
                 message_placeholder.markdown(full_response_text)
+            elapsed = time.time() - start_time
+            time_placeholder.markdown(f"_(응답 시간: {elapsed:.2f}초)_")
                 
         except Exception as exc:
             message_placeholder.error("답변 생성 중 오류가 발생했습니다.")
