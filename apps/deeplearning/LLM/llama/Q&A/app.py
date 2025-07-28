@@ -167,15 +167,24 @@ def load_model(name: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # 애플 실리콘 MPS 디바이스 우선 사용
-    if torch.backends.mps.is_available():
-        # MPS 사용 시 device_map을 "auto"로 설정하고 pipeline에서 device 인수 제거
-        model = AutoModelForCausalLM.from_pretrained(name, device_map="auto", trust_remote_code=True)
-        generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
-    else:
-        # 기존 CUDA 또는 CPU 사용
-        model = AutoModelForCausalLM.from_pretrained(name, device_map="auto", trust_remote_code=True)
-        generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
+    try:
+        # 우선 로컬 파일만 사용하여 로드 시도
+        model = AutoModelForCausalLM.from_pretrained(
+            name,
+            device_map="auto",
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+    except Exception:
+        # 로컬에 모델이 없으면 자동으로 다운로드
+        with st.spinner("모델 다운로드 중..."):
+            model = AutoModelForCausalLM.from_pretrained(
+                name,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+
+    generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
 
     return generator
 
