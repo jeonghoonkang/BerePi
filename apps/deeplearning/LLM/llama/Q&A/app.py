@@ -191,6 +191,7 @@ def load_model(name: str):
             )
     except Exception:
         # 기타 오류는 다시 시도하여 처리
+
         with st.spinner("모델 다운로드 중..."):
             model = AutoModelForCausalLM.from_pretrained(
                 name,
