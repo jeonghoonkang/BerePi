@@ -85,10 +85,17 @@ def download_model(model_name: str) -> None:
         st.stop()
 
     progress = st.progress(0)
+    status_text = st.empty()
 
     def _download():
         try:
-            snapshot_download(repo_id=model_name, local_dir=model_name, resume_download=True)
+            # resume_download=True로 중단된 다운로드 재개
+            snapshot_download(
+                repo_id=model_name, 
+                local_dir=model_name, 
+                resume_download=True,
+                allow_patterns=["*.json", "*.bin", "*.safetensors", "*.model", "*.txt"]
+            )
         except Exception as exc:
             st.session_state.download_error = str(exc)
 
@@ -98,10 +105,13 @@ def download_model(model_name: str) -> None:
     while thread.is_alive():
         pct = min(100, pct + 1)
         progress.progress(pct / 100.0)
+        status_text.text(f"다운로드 중... {pct}% (중단된 경우 재개됨)")
         time.sleep(1)
 
     thread.join()
     progress.progress(1.0)
+    status_text.text("다운로드 완료!")
+    
     if "download_error" in st.session_state:
         st.error("Failed to download model: " + st.session_state.download_error)
         st.stop()
@@ -110,8 +120,21 @@ def download_model(model_name: str) -> None:
 
 def ensure_model(model_name: str) -> None:
     """Ensure the model files are available. Auto download after 10s."""
+    # 모델 디렉토리 확인
     if os.path.isdir(model_name):
-        return
+        # 기본 파일들이 있는지 확인
+        required_files = ["config.json", "tokenizer.json", "tokenizer_config.json"]
+        missing_files = []
+        
+        for file in required_files:
+            if not os.path.exists(os.path.join(model_name, file)):
+                missing_files.append(file)
+        
+        if not missing_files:
+            return  # 모든 파일이 있으면 OK
+        else:
+            st.warning(f"모델 디렉토리는 있지만 일부 파일이 누락됨: {missing_files}")
+    
     try:
         from huggingface_hub import hf_hub_download
 
@@ -120,7 +143,11 @@ def ensure_model(model_name: str) -> None:
         try:
             hf_hub_download(repo_id=model_name, filename="pytorch_model.bin", local_files_only=True)
         except Exception:
-            hf_hub_download(repo_id=model_name, filename="pytorch_model.bin.index.json", local_files_only=True)
+            try:
+                hf_hub_download(repo_id=model_name, filename="pytorch_model.bin.index.json", local_files_only=True)
+            except Exception:
+                # safetensors 파일도 확인
+                hf_hub_download(repo_id=model_name, filename="model.safetensors", local_files_only=True)
         return
     except Exception:
         pass
@@ -136,6 +163,7 @@ def ensure_model(model_name: str) -> None:
 
     if st.session_state.download_decision is None:
         st.warning(f"Model '{model_name}' not found. Download? (auto in {max(remaining,0)}s)")
+        st.info("중단된 다운로드가 있다면 자동으로 재개됩니다.")
         cols = st.columns(2)
         if cols[0].button("Download now"):
             st.session_state.download_decision = True
@@ -181,29 +209,58 @@ def load_model(name: str):
             trust_remote_code=True,
             local_files_only=True,
         )
-    except FileNotFoundError:
-        # 로컬 파일이 누락된 경우 캐시를 지우고 자동으로 다운로드
-        st.warning("모델 파일이 없어 다운로드를 진행합니다.")
+    except (FileNotFoundError, OSError) as e:
+        # 로컬 파일이 누락되거나 불완전한 경우
+        st.warning(f"모델 파일이 없거나 불완전합니다: {str(e)}")
+        st.info("중단된 다운로드를 재개하거나 새로 다운로드를 시작합니다.")
+        
+        # 캐시 디렉토리 확인 및 정리
         cache_dir = os.path.expanduser(
             f"~/.cache/huggingface/hub/models--{name.replace('/', '--')}"
         )
+        
+        # 불완전한 파일들만 정리 (전체 캐시 삭제 대신)
         if os.path.isdir(cache_dir):
-            shutil.rmtree(cache_dir, ignore_errors=True)
+            try:
+                # 불완전한 다운로드 파일들 정리
+                for file in os.listdir(cache_dir):
+                    file_path = os.path.join(cache_dir, file)
+                    if file.endswith('.tmp') or file.endswith('.lock'):
+                        os.remove(file_path)
+            except Exception:
+                pass
 
+        with st.spinner("모델 다운로드 중..."):
+            try:
+                # resume_download=True로 중단된 다운로드 재개 시도
+                model = AutoModelForCausalLM.from_pretrained(
+                    name,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    resume_download=True,
+                )
+            except Exception as download_error:
+                st.error(f"다운로드 중 오류 발생: {str(download_error)}")
+                st.info("다시 시도합니다...")
+                
+                # 두 번째 시도
+                model = AutoModelForCausalLM.from_pretrained(
+                    name,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    resume_download=True,
+                )
+    except Exception as e:
+        # 기타 예상치 못한 오류
+        st.error(f"모델 로딩 중 예상치 못한 오류: {str(e)}")
+        st.info("다시 시도합니다...")
+        
         with st.spinner("모델 다운로드 중..."):
             model = AutoModelForCausalLM.from_pretrained(
                 name,
                 device_map="auto",
                 trust_remote_code=True,
-            )
-    except Exception:
-        # 기타 오류는 다시 시도하여 처리
-
-        with st.spinner("모델 다운로드 중..."):
-            model = AutoModelForCausalLM.from_pretrained(
-                name,
-                device_map="auto",
-                trust_remote_code=True,
+                resume_download=True,
             )
 
     generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
