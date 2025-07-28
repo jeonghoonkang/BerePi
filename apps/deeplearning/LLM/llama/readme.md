@@ -1,4 +1,6 @@
-
+## Installation 
+### RTX 5090 설치
+- pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
 https://www.llama.com/llama-downloads/
 
 How to download the model
