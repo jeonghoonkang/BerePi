@@ -4,7 +4,11 @@
 - sudo vim /etc/ssh/sshd_config
   - XForwarding = yes 를 주석을 풀어서, 실행 가능하도록 설정
   - <code> X11Forwarding yes </code>
-     
+ X11Forwarding yes
+ X11DisplayOffset 10
+ X11UseLocalhost yes
+
+         
 ## Installation & run
 - Xserver 설치
 - 해당 S/W 실행후
