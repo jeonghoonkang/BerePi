@@ -38,3 +38,4 @@ tmp_this.ini
 # 특정 파일 제외
 #my_secret_file.txt
 nocommit/
+__pycache__/
