@@ -58,6 +58,21 @@ QWEN_MODEL = os.environ.get("QWEN_MODEL", "Qwen/Qwen1.5-7B-Chat")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
+if not OPENAI_API_KEY:
+    key_candidates = [
+        os.path.join(os.path.dirname(__file__), "nocommit_key.txt"),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "nocommit_key.txt"),
+    ]
+    for candidate in key_candidates:
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    OPENAI_API_KEY = f.read().strip()
+                break
+            except Exception:
+                pass
+
+
 
 def download_model(model_name: str) -> None:
     """Download the model showing a simple progress bar."""
