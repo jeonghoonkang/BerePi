@@ -182,6 +182,9 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
 
     receipts = process_receipts(uploaded_files)
+    st.header("process_receipts 결과")
+    st.json(receipts)
+
     embed_receipts(receipts)
     summarize(receipts)
     st.header("OCR 결과")
