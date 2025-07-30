@@ -73,6 +73,7 @@ if not OPENAI_API_KEY:
                 pass
 
 
+
 def download_model(model_name: str) -> None:
     """Download the model showing a simple progress bar."""
     try:

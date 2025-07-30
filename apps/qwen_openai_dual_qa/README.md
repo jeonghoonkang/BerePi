@@ -10,6 +10,7 @@
    ```
   환경 변수 `QWEN_MODEL`에 로컬 모델 경로 또는 HuggingFace 모델 이름을 지정할 수 있습니다.
   OpenAI API 키는 `OPENAI_API_KEY` 환경 변수 또는 `nocommit_key.txt` 파일을 통해 설정할 수 있습니다.
+
 2. 앱 실행
    ```bash
    streamlit run app.py
