@@ -7,6 +7,7 @@ grouped by detected address. The original images are shown at the bottom of the 
 
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app. You
 can ask questions like "금액 합계" or "주소별 합계" in the question box.
+
 ## Usage
 ```
 streamlit run apps/receipt_ocr/receipt_ocr_app.py

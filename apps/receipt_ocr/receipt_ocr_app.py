@@ -5,6 +5,7 @@ from typing import List, Dict
 import streamlit as st
 import base64
 
+
 try:
     import openai
 except Exception:
@@ -16,6 +17,7 @@ NOCOMMIT_DIR = os.path.join(
 os.makedirs(NOCOMMIT_DIR, exist_ok=True)
 
 OPENAI_KEY_PATH = os.path.join(NOCOMMIT_DIR, "nocommit_key.txt")
+
 openai_api_key = None
 if os.path.exists(OPENAI_KEY_PATH):
     with open(OPENAI_KEY_PATH) as f:
@@ -25,6 +27,7 @@ else:
 
 if openai is None:
     st.error("openai package is not installed")
+
 
 AMOUNT_REGEX = re.compile(r"([\d,.]+)")
 ADDRESS_KEYWORDS = ["Address", "주소"]
@@ -46,6 +49,7 @@ def extract_address(text: str) -> str:
         if any(k.lower() in line.lower() for k in ADDRESS_KEYWORDS):
             return line.strip()
     return "Unknown"
+
 
 
 
@@ -72,12 +76,12 @@ def openai_ocr_image(path: str) -> str:
                     ],
                 }
             ],
+
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
     except Exception:
         return ""
-
 
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts = []
@@ -97,6 +101,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
                 "path": save_path,
             }
         )
+
     return receipts
 
 
@@ -120,6 +125,7 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
+
     receipts = process_receipts(uploaded_files)
     summarize(receipts)
     question = st.text_input("질문을 입력하세요")
@@ -140,7 +146,9 @@ if uploaded_files:
         for r in receipts:
             st.write(f"### {r['filename']}")
             st.text(r["text"])
+
     st.header("원본 이미지")
     for r in receipts:
         st.subheader(r["filename"])
         st.image(r["path"], use_column_width=True)
+
