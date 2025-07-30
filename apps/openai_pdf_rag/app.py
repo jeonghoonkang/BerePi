@@ -18,7 +18,6 @@ def get_gpu_info() -> str:
         return ", ".join(gpus) if gpus else "GPU 없음"
     except Exception:
         return "GPU 없음"
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     key_candidates = [
