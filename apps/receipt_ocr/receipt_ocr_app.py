@@ -197,6 +197,7 @@ if uploaded_files:
         else:
             st.write("답변을 생성하지 못했습니다.")
 
+
     st.header("원본 이미지")
     for r in receipts:
         st.subheader(r["filename"])
