@@ -184,6 +184,11 @@ if uploaded_files:
     receipts = process_receipts(uploaded_files)
     embed_receipts(receipts)
     summarize(receipts)
+    st.header("OCR 결과")
+    for r in receipts:
+        st.subheader(r["filename"])
+        st.text(r["text"])
+
     question = st.text_input("질문을 입력하세요")
     if question:
         answer = rag_answer(question, receipts)
@@ -191,10 +196,7 @@ if uploaded_files:
             st.write(answer)
         else:
             st.write("답변을 생성하지 못했습니다.")
-    with st.expander("세부 내용 보기"):
-        for r in receipts:
-            st.write(f"### {r['filename']}")
-            st.text(r["text"])
+
 
     st.header("원본 이미지")
     for r in receipts:
