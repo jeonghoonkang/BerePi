@@ -12,7 +12,7 @@ except Exception:
     openai = None
 
 NOCOMMIT_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "nocommit"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "receipt_ocr/nocommit"
 )
 os.makedirs(NOCOMMIT_DIR, exist_ok=True)
 
@@ -23,6 +23,7 @@ if os.path.exists(OPENAI_KEY_PATH):
     with open(OPENAI_KEY_PATH) as f:
         openai_api_key = f.read().strip()
 else:
+    st.error(OPENAI_KEY_PATH)
     st.error("OpenAI API key not found in nocommit/nocommit_key.txt")
 
 if openai is None:
