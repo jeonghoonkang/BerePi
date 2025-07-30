@@ -1,10 +1,23 @@
 import os
 import io
+import subprocess
 import numpy as np
 import streamlit as st
 from openai import OpenAI
 from PyPDF2 import PdfReader
 
+
+def get_gpu_info() -> str:
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            stderr=subprocess.DEVNULL,
+        )
+        gpus = out.decode().strip().split("\n")
+        gpus = [g for g in gpus if g]
+        return ", ".join(gpus) if gpus else "GPU 없음"
+    except Exception:
+        return "GPU 없음"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     key_candidates = [
@@ -24,6 +37,8 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF 기반 Q&A")
+st.write(f"사용 가능한 GPU: {get_gpu_info()}")
+st.write("사용 모델: gpt-3.5-turbo")
 
 if "docs" not in st.session_state:
     st.session_state.docs = None
@@ -70,6 +85,7 @@ if uploaded_file:
             st.session_state.embs.append(np.array(resp.data[0].embedding))
     st.success("문서 로딩 완료")
 
+st.markdown("---")
 question = st.text_input("질문 입력")
 
 if question:
