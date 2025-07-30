@@ -28,6 +28,7 @@ st.title("📄 PDF 기반 Q&A")
 if "docs" not in st.session_state:
     st.session_state.docs = None
     st.session_state.embs = None
+    st.session_state.pdf_text = ""
 
 
 def read_pdf(file) -> str:
@@ -53,10 +54,11 @@ def chunk_text(text: str, chunk_size: int = 200, overlap: int = 50):
 
 
 uploaded_file = st.file_uploader("PDF 업로드", type="pdf")
-use_pdf = st.checkbox("PDF 내용 사용")
+mode = st.radio("답변 모드", ["기본", "PDF 사용"])
 
 if uploaded_file:
     text = read_pdf(uploaded_file)
+    st.session_state.pdf_text = text
     st.session_state.docs = chunk_text(text)
     st.session_state.embs = []
     with st.spinner("임베딩 생성 중..."):
@@ -69,43 +71,58 @@ if uploaded_file:
     st.success("문서 로딩 완료")
 
 question = st.text_input("질문 입력")
+
 if question:
-    if use_pdf:
-        if st.session_state.docs:
-            with st.spinner("답변 생성 중..."):
-                q_emb = np.array(
-                    client.embeddings.create(
-                        model="text-embedding-3-small", input=[question]
-                    ).data[0].embedding
-                )
-                sims = [
-                    float(
-                        np.dot(q_emb, e)
-                        / (np.linalg.norm(q_emb) * np.linalg.norm(e))
-                    )
-                    for e in st.session_state.embs
-                ]
-                top_indices = np.argsort(sims)[-3:][::-1]
-                context = "\n\n".join(
-                    st.session_state.docs[i] for i in top_indices
-                )
-                prompt = (
-                    "다음 문서 내용을 참고하여 질문에 답변하세요.\n\n문서 내용:\n"
-                    + context
-                    + "\n\n질문: "
-                    + question
-                )
-                resp = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                st.write(resp.choices[0].message.content)
-        else:
-            st.warning("먼저 PDF 파일을 업로드하세요.")
-    else:
+    default_box = st.container()
+    pdf_box = st.container()
+    text_box = st.container()
+
+    with default_box:
+        st.subheader("1. 기본 답변")
         with st.spinner("답변 생성 중..."):
             resp = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": question}],
             )
             st.write(resp.choices[0].message.content)
+
+    with pdf_box:
+        st.subheader("2. PDF 기반 답변")
+        if mode == "PDF 사용":
+            if st.session_state.docs:
+                with st.spinner("답변 생성 중..."):
+                    q_emb = np.array(
+                        client.embeddings.create(
+                            model="text-embedding-3-small", input=[question]
+                        ).data[0].embedding
+                    )
+                    sims = [
+                        float(
+                            np.dot(q_emb, e)
+                            / (np.linalg.norm(q_emb) * np.linalg.norm(e))
+                        )
+                        for e in st.session_state.embs
+                    ]
+                    top_indices = np.argsort(sims)[-3:][::-1]
+                    context = "\n\n".join(
+                        st.session_state.docs[i] for i in top_indices
+                    )
+                    prompt = (
+                        "다음 문서 내용을 참고하여 질문에 답변하세요.\n\n문서 내용:\n"
+                        + context
+                        + "\n\n질문: "
+                        + question
+                    )
+                    resp = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": "user", "content": prompt}],
+                    )
+                    st.write(resp.choices[0].message.content)
+            else:
+                st.warning("먼저 PDF 파일을 업로드하세요.")
+
+    with text_box:
+        st.subheader("3. PDF 내용")
+        if st.session_state.pdf_text:
+            st.text_area("", st.session_state.pdf_text, height=300)
+
