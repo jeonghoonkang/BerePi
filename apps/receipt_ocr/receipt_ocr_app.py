@@ -57,29 +57,29 @@ def extract_address(text: str) -> str:
 
 
 
-
-
-def openai_ocr_image(path: str) -> str:
+def openai_ocr_file(path: str) -> str:
+    """Send an image or PDF to GPT-4o for OCR."""
     if openai is None or openai_api_key is None:
         return ""
+    ext = os.path.splitext(path)[1].lower()
+
     with open(path, "rb") as f:
-        img_bytes = f.read()
-    encoded = base64.b64encode(img_bytes).decode("utf-8")
+        data_bytes = f.read()
+    encoded = base64.b64encode(data_bytes).decode("utf-8")
+    if ext in [".png", ".jpg", ".jpeg", ".webp"]:
+        content = [
+            {"type": "text", "text": "Please transcribe all text from this document."},
+            {"type": "image_url", "image_url": {"data": encoded}},
+        ]
+    else:
+        content = [
+            {"type": "text", "text": "Please transcribe all text from this document."},
+            {"type": "file", "file": {"data": encoded, "mime_type": "application/pdf"}},
+        ]
     try:
         response = openai.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Please transcribe all text from this receipt image.",
-                        },
-                        {"type": "image_url", "image_url": {"data": encoded}},
-                    ],
-                }
-            ],
+            messages=[{"role": "user", "content": content}],
 
             max_tokens=2000,
         )
@@ -144,7 +144,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
         save_path = os.path.join(NOCOMMIT_DIR, file.name)
         with open(save_path, "wb") as out:
             out.write(file.getbuffer())
-        text = openai_ocr_image(save_path)
+        text = openai_ocr_file(save_path)
         amount = extract_amount(text)
         address = extract_address(text)
         receipts.append(
@@ -175,13 +175,16 @@ def summarize(receipts: List[Dict]):
 st.title("Receipt OCR")
 uploaded_files = st.file_uploader(
     "영수증 스캔 파일 업로드 (여러개 선택 가능)",
-    type=["png", "jpg", "jpeg", "webp"],
+    type=["png", "jpg", "jpeg", "webp", "pdf"],
     accept_multiple_files=True,
 )
 
 if uploaded_files:
 
     receipts = process_receipts(uploaded_files)
+    st.header("process_receipts 결과")
+    st.json(receipts)
+
     embed_receipts(receipts)
     summarize(receipts)
     st.header("OCR 결과")
