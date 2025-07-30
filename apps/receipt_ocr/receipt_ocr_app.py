@@ -96,6 +96,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
         address = extract_address(text)
         receipts.append({
             "filename": file.name,
+
             "text_tesseract": tess_text,
             "text_openai": openai_text,
             "amount": amount,
@@ -156,3 +157,4 @@ if uploaded_files:
     for r in receipts:
         st.subheader(r["filename"])
         st.image(r["path"], use_column_width=True)
+
