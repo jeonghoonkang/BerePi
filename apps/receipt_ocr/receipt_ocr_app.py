@@ -17,10 +17,12 @@ except Exception as e:
     pytesseract = None
     st.error("pytesseract is not installed. OCR functionality will not work.")
 
-NOCOMMIT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "nocommit")
+NOCOMMIT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "nocommit"
+)
 os.makedirs(NOCOMMIT_DIR, exist_ok=True)
 
-OPENAI_KEY_PATH = os.path.join(NOCOMMIT_DIR, "openai_key.txt")
+OPENAI_KEY_PATH = os.path.join(NOCOMMIT_DIR, "nocommit_key.txt")
 openai_api_key = None
 if os.path.exists(OPENAI_KEY_PATH):
     with open(OPENAI_KEY_PATH) as f:
@@ -60,7 +62,6 @@ def ocr_image(path: str) -> str:
 
 
 
-
 def openai_ocr_image(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
@@ -71,18 +72,25 @@ def openai_ocr_image(path: str) -> str:
     try:
         response = openai.chat.completions.create(
             model="gpt-4-vision-preview",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Please transcribe all text from this receipt image."},
-                    {"type": "image_url", "image_url": {"data": encoded}}
-                ]
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Please transcribe all text from this receipt image.",
+                        },
+                        {"type": "image_url", "image_url": {"data": encoded}},
+                    ],
+                }
+            ],
+
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
     except Exception:
         return ""
+
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts = []
     for file in files:
@@ -94,15 +102,17 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
         text = openai_text or tess_text
         amount = extract_amount(text)
         address = extract_address(text)
-        receipts.append({
-            "filename": file.name,
+        receipts.append(
+            {
+                "filename": file.name,
+                "text_tesseract": tess_text,
+                "text_openai": openai_text,
+                "amount": amount,
+                "address": address,
+                "path": save_path,
+            }
+        )
 
-            "text_tesseract": tess_text,
-            "text_openai": openai_text,
-            "amount": amount,
-            "address": address,
-            "path": save_path,
-        })
     return receipts
 
 
@@ -148,13 +158,13 @@ if uploaded_files:
     with st.expander("세부 내용 보기"):
         for r in receipts:
             st.write(f"### {r['filename']}")
-            if r['text_openai']:
+            if r["text_openai"]:
                 st.subheader("OpenAI OCR")
-                st.text(r['text_openai'])
+                st.text(r["text_openai"])
             st.subheader("Tesseract OCR")
-            st.text(r['text_tesseract'])
+            st.text(r["text_tesseract"])
+
     st.header("원본 이미지")
     for r in receipts:
         st.subheader(r["filename"])
         st.image(r["path"], use_column_width=True)
-
