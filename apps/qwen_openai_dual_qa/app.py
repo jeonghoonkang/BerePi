@@ -4,7 +4,12 @@ import threading
 
 import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-import openai
+from openai import OpenAI
+
+
+QWEN_MODEL = os.environ.get("QWEN_MODEL", "Qwen/Qwen1.5-7B-Chat")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 
 def rerun() -> None:
@@ -54,10 +59,6 @@ st.set_page_config(page_title="Dual Q&A", page_icon="🤖")
 st.title("🤖 Qwen과 OpenAI로 Q&A")
 
 
-QWEN_MODEL = os.environ.get("QWEN_MODEL", "Qwen/Qwen1.5-7B-Chat")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
 if not OPENAI_API_KEY:
     key_candidates = [
         os.path.join(os.path.dirname(__file__), "nocommit_key.txt"),
@@ -73,6 +74,7 @@ if not OPENAI_API_KEY:
                 pass
 
 
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 def download_model(model_name: str) -> None:
     """Download the model showing a simple progress bar."""
@@ -171,7 +173,6 @@ def load_qwen_model(name: str):
 
 
 qwen_generator = load_qwen_model(QWEN_MODEL)
-openai.api_key = OPENAI_API_KEY
 
 
 display_gpu_status(qwen_generator.tokenizer)
@@ -187,7 +188,7 @@ with col_qwen:
         try:
             with st.spinner("답변 생성 중..."):
                 resp = qwen_generator(qwen_prompt, max_length=512, do_sample=True)
-            st.write(resp[0]["generated_text"][len(qwen_prompt):].strip())
+            st.write(resp[0].generated_text[len(qwen_prompt):].strip())
         except Exception as exc:  # pragma: no cover - GUI display
             qwen_error.error("오류가 발생했습니다.")
             with st.expander("오류 상세 보기"):
@@ -203,10 +204,8 @@ with col_openai:
         else:
             try:
                 with st.spinner("답변 생성 중..."):
-                    resp = openai.ChatCompletion.create(
-                        model=OPENAI_MODEL,
-                        messages=[{"role": "user", "content": openai_prompt}],
-                    )
+                    resp = client.chat.completions.create(model=OPENAI_MODEL,
+                    messages=[{"role": "user", "content": openai_prompt}])
                 st.write(resp.choices[0].message.content)
             except Exception as exc:  # pragma: no cover - GUI display
                 openai_error.error("오류가 발생했습니다.")
