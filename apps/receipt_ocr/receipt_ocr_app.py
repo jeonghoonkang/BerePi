@@ -67,7 +67,7 @@ def openai_ocr_image(path: str) -> str:
     encoded = base64.b64encode(img_bytes).decode("utf-8")
     try:
         response = openai.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "user",
@@ -131,7 +131,7 @@ def rag_answer(question: str, receipts: List[Dict]) -> str:
     )
     try:
         resp = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
         )
         return resp.choices[0].message.content.strip()
