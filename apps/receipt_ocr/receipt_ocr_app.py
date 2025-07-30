@@ -62,6 +62,7 @@ def openai_ocr_file(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
     ext = os.path.splitext(path)[1].lower()
+
     with open(path, "rb") as f:
         data_bytes = f.read()
     encoded = base64.b64encode(data_bytes).decode("utf-8")
@@ -79,6 +80,7 @@ def openai_ocr_file(path: str) -> str:
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": content}],
+
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
@@ -182,6 +184,7 @@ if uploaded_files:
     receipts = process_receipts(uploaded_files)
     st.header("process_receipts 결과")
     st.json(receipts)
+
     embed_receipts(receipts)
     summarize(receipts)
     st.header("OCR 결과")
@@ -196,6 +199,7 @@ if uploaded_files:
             st.write(answer)
         else:
             st.write("답변을 생성하지 못했습니다.")
+
 
     st.header("원본 이미지")
     for r in receipts:

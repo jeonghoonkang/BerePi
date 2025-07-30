@@ -6,6 +6,7 @@ OpenAI's GPT‑4o model to extract text from each one. Uploaded files are saved 
 and receipts are grouped by detected address. The original files are shown at the
 bottom of the page.
 
+
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app. After OCR
 extraction embeddings are built and a retrieval augmented generation (RAG) pipeline lets you
 ask questions like "금액 합계" or "주소별 합계" in the question box.
