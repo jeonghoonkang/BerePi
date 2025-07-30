@@ -184,6 +184,7 @@ if uploaded_files:
     receipts = process_receipts(uploaded_files)
     st.header("process_receipts 결과")
     st.json(receipts)
+
     embed_receipts(receipts)
     summarize(receipts)
     st.header("OCR 결과")
@@ -198,6 +199,7 @@ if uploaded_files:
             st.write(answer)
         else:
             st.write("답변을 생성하지 못했습니다.")
+
 
     st.header("원본 이미지")
     for r in receipts:
