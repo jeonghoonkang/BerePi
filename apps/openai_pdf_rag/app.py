@@ -5,6 +5,8 @@ import time
 import numpy as np
 import pandas as pd
 from fpdf import FPDF
+
+import numpy as np
 import streamlit as st
 from openai import OpenAI
 from PyPDF2 import PdfReader
@@ -21,7 +23,7 @@ def get_gpu_info() -> str:
         return ", ".join(gpus) if gpus else "GPU 없음"
     except Exception:
         return "GPU 없음"
-
+      
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     key_candidates = [
@@ -162,6 +164,7 @@ if question:
                         + question
                     )
                     start_pdf = time.perf_counter()
+
                     resp = client.chat.completions.create(
                         model="gpt-3.5-turbo",
                         messages=[{"role": "user", "content": prompt}],
@@ -170,6 +173,7 @@ if question:
                     pdf_answer = resp.choices[0].message.content
                     st.write(pdf_answer)
                     st.write(f"⏱️ {elapsed_pdf:.2f}초")
+
             else:
                 st.warning("먼저 PDF 파일을 업로드하세요.")
 
@@ -221,4 +225,5 @@ if st.session_state.history:
                 file_name="qa_history.pdf",
                 mime="application/pdf",
             )
+
 

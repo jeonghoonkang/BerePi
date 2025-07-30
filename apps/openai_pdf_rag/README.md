@@ -7,6 +7,7 @@
 
 1. 필요한 패키지 설치
    ```bash
+
    pip install streamlit openai PyPDF2 numpy pandas fpdf
    ```
    OpenAI API 키는 `OPENAI_API_KEY` 환경 변수 또는 `nocommit_key.txt` 파일을 통해
@@ -21,6 +22,7 @@
 또한 질문 입력란 위에 가로줄을 넣어 영역을 구분합니다.
 
 질문을 입력하면 첫 번째 영역에 기본 답변이 표시됩니다.
+
 "답변 모드"를 "PDF 사용"으로 설정하면 두 번째 영역에 업로드한 여러 PDF
 문서를 조합한 답변이 표시됩니다. 세 번째 영역에는 모든 PDF에서 추출한
 원본 텍스트가 그대로 출력됩니다.
