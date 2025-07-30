@@ -4,6 +4,7 @@ from typing import List, Dict
 
 import streamlit as st
 import base64
+import numpy as np
 
 
 try:
@@ -25,6 +26,9 @@ if os.path.exists(OPENAI_KEY_PATH):
 else:
     st.error(OPENAI_KEY_PATH)
     st.error("OpenAI API key not found in nocommit/nocommit_key.txt")
+
+if openai and openai_api_key:
+    openai.api_key = openai_api_key
 
 if openai is None:
     st.error("openai package is not installed")
@@ -58,7 +62,6 @@ def extract_address(text: str) -> str:
 def openai_ocr_image(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
-    openai.api_key = openai_api_key
     with open(path, "rb") as f:
         img_bytes = f.read()
     encoded = base64.b64encode(img_bytes).decode("utf-8")
@@ -81,6 +84,57 @@ def openai_ocr_image(path: str) -> str:
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
+    except Exception:
+        return ""
+
+
+def create_embedding(text: str):
+    if openai is None or openai_api_key is None:
+        return []
+    try:
+        resp = openai.embeddings.create(
+            model="text-embedding-3-small", input=[text]
+        )
+        return resp.data[0].embedding
+    except Exception:
+        return []
+
+
+def embed_receipts(receipts: List[Dict]):
+    for r in receipts:
+        emb = create_embedding(r["text"])
+        if emb:
+            r["embedding"] = np.array(emb)
+
+
+def rag_answer(question: str, receipts: List[Dict]) -> str:
+    if openai is None or openai_api_key is None:
+        return ""
+    q_emb_list = create_embedding(question)
+    if not q_emb_list:
+        return ""
+    q_emb = np.array(q_emb_list)
+    scored = []
+    for r in receipts:
+        emb = r.get("embedding")
+        if emb is None:
+            continue
+        sim = float(np.dot(q_emb, emb) / (np.linalg.norm(q_emb) * np.linalg.norm(emb)))
+        scored.append((sim, r))
+    if not scored:
+        return ""
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_receipts = [r for _, r in scored[:3]]
+    context = "\n\n".join(f"{r['filename']}:\n{r['text']}" for r in top_receipts)
+    prompt = (
+        "다음 영수증 내용을 참고하여 질문에 답변하세요.\n\n" + context + "\n\n질문: " + question
+    )
+    try:
+        resp = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.choices[0].message.content.strip()
     except Exception:
         return ""
 
@@ -128,25 +182,20 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
 
     receipts = process_receipts(uploaded_files)
+    embed_receipts(receipts)
     summarize(receipts)
+    st.header("OCR 결과")
+    for r in receipts:
+        st.subheader(r["filename"])
+        st.text(r["text"])
+
     question = st.text_input("질문을 입력하세요")
     if question:
-        if "금액" in question and "합" in question:
-            total = sum(r["amount"] for r in receipts)
-            st.write(f"총 금액 합계: {total}")
-        elif "주소" in question or "위치" in question:
-            grouped: Dict[str, list] = {}
-            for r in receipts:
-                grouped.setdefault(r["address"], []).append(r)
-            for addr, items in grouped.items():
-                subtotal = sum(i["amount"] for i in items)
-                st.write(f"{addr}: {subtotal}")
+        answer = rag_answer(question, receipts)
+        if answer:
+            st.write(answer)
         else:
-            st.write("지원되지 않는 질문입니다.")
-    with st.expander("세부 내용 보기"):
-        for r in receipts:
-            st.write(f"### {r['filename']}")
-            st.text(r["text"])
+            st.write("답변을 생성하지 못했습니다.")
 
     st.header("원본 이미지")
     for r in receipts:
