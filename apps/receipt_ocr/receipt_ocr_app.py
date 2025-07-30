@@ -61,6 +61,7 @@ def ocr_image(path: str) -> str:
     return pytesseract.image_to_string(img, lang="kor+eng", config="--psm 6")
 
 
+
 def openai_ocr_image(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
@@ -83,12 +84,12 @@ def openai_ocr_image(path: str) -> str:
                     ],
                 }
             ],
+
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
     except Exception:
         return ""
-
 
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts = []
@@ -111,6 +112,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
                 "path": save_path,
             }
         )
+
     return receipts
 
 
@@ -161,6 +163,7 @@ if uploaded_files:
                 st.text(r["text_openai"])
             st.subheader("Tesseract OCR")
             st.text(r["text_tesseract"])
+
     st.header("원본 이미지")
     for r in receipts:
         st.subheader(r["filename"])
