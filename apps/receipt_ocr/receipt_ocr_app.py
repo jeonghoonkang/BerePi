@@ -8,6 +8,7 @@ import numpy as np
 import time
 
 
+
 try:
     import openai
 except Exception:
@@ -231,11 +232,13 @@ if uploaded_files:
     summarize(receipts)
 
     st.header("영수증 이미지")
+
     if "view_idx" not in st.session_state:
         st.session_state.view_idx = 0
     current = receipts[st.session_state.view_idx]
     st.subheader(current["filename"])
     st.image(current["path"], use_column_width=True)
+
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◀", use_container_width=True):
@@ -259,6 +262,7 @@ if uploaded_files:
                 "elapsed": elapsed,
             }
         )
+
     for msg in st.session_state.qa_history:
         with st.chat_message("user" if msg["role"] == "user" else "assistant"):
             st.write(msg["content"])
