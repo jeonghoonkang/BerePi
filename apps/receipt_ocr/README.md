@@ -5,7 +5,9 @@ OpenAI's GPT‑4o model to extract text from each one. The OCR prompt is tuned f
 Korean so Hangul is transcribed accurately. Uploaded files are saved in the
 `nocommit` directory, which is ignored by git. Amounts found in each receipt are
 summed and receipts are grouped by detected address. The original files can be
-reviewed one at a time with arrow buttons instead of a long list. Each image is
+reviewed one at a time with arrow buttons instead of a long list. The recognized
+text is stored for Q&A but not displayed next to the images. Each image is
+
 Base64 encoded before being sent to OpenAI for OCR.
 During the upload a progress bar inside the Streamlit app shows the status of
 files being sent to OpenAI.

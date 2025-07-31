@@ -6,9 +6,6 @@ import streamlit as st
 import base64
 import numpy as np
 import time
-from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
-
 
 
 
@@ -232,16 +229,16 @@ if uploaded_files:
 
     st.header("process_receipts 결과")
     st.json(receipts)
-
     summarize(receipts)
 
-    st.header("OCR 결과 및 이미지")
+    st.header("영수증 이미지")
+
     if "view_idx" not in st.session_state:
         st.session_state.view_idx = 0
     current = receipts[st.session_state.view_idx]
     st.subheader(current["filename"])
     st.image(current["path"], use_column_width=True)
-    st.text(current["text"])
+
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◀", use_container_width=True):
