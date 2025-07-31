@@ -4,6 +4,8 @@ from typing import List, Dict
 
 import streamlit as st
 import base64
+import numpy as np
+import time
 
 
 try:
@@ -25,6 +27,9 @@ if os.path.exists(OPENAI_KEY_PATH):
 else:
     st.error(OPENAI_KEY_PATH)
     st.error("OpenAI API key not found in nocommit/nocommit_key.txt")
+
+if openai and openai_api_key:
+    openai.api_key = openai_api_key
 
 if openai is None:
     st.error("openai package is not installed")
@@ -52,45 +57,127 @@ def extract_address(text: str) -> str:
     return "Unknown"
 
 
+def encode_file_to_base64(path: str) -> str:
+    """Read a file and return a base64-encoded string."""
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
 
 
 
-def openai_ocr_image(path: str) -> str:
+def openai_ocr_file(path: str) -> str:
+    """Send an image or PDF to GPT-4o for OCR."""
     if openai is None or openai_api_key is None:
         return ""
-    openai.api_key = openai_api_key
-    with open(path, "rb") as f:
-        img_bytes = f.read()
-    encoded = base64.b64encode(img_bytes).decode("utf-8")
+    ext = os.path.splitext(path)[1].lower()
+    b64 = encode_file_to_base64(path)
+    if ext in [".png", ".jpg", ".jpeg", ".webp"]:
+        mime = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+        }.get(ext, "application/octet-stream")
+        data_url = f"data:{mime};base64,{b64}"
+        content = [
+            {
+                "type": "text",
+                "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
+            },
+            {"type": "image_url", "image_url": {"url": data_url}},
+        ]
+    else:
+        content = [
+            {
+                "type": "text",
+                "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
+            },
+            {"type": "file", "file": {"data": b64, "mime_type": "application/pdf"}},
+        ]
     try:
         response = openai.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=[
                 {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Please transcribe all text from this receipt image.",
-                        },
-                        {"type": "image_url", "image_url": {"data": encoded}},
-                    ],
-                }
+                    "role": "system",
+                    "content": "You accurately transcribe Korean text from documents.",
+                },
+                {"role": "user", "content": content},
             ],
-
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
     except Exception:
         return ""
 
+
+def create_embedding(text: str):
+    if openai is None or openai_api_key is None:
+        return []
+    try:
+        resp = openai.embeddings.create(
+            model="text-embedding-3-large", input=[text]
+        )
+        return resp.data[0].embedding
+    except Exception:
+        return []
+
+
+def embed_receipts(receipts: List[Dict]):
+    for r in receipts:
+        emb = create_embedding(r["text"])
+        if emb:
+            r["embedding"] = np.array(emb)
+
+
+def rag_answer(question: str, receipts: List[Dict]) -> str:
+    if openai is None or openai_api_key is None:
+        return ""
+    q_emb_list = create_embedding(question)
+    if not q_emb_list:
+        return ""
+    q_emb = np.array(q_emb_list)
+    scored = []
+    for r in receipts:
+        emb = r.get("embedding")
+        if emb is None:
+            continue
+        sim = float(np.dot(q_emb, emb) / (np.linalg.norm(q_emb) * np.linalg.norm(emb)))
+        scored.append((sim, r))
+    if not scored:
+        return ""
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_receipts = [r for _, r in scored[:3]]
+    context = "\n\n".join(f"{r['filename']}:\n{r['text']}" for r in top_receipts)
+    prompt = (
+        "다음 영수증 내용을 참고하여 질문에 답변하세요.\n\n" + context + "\n\n질문: " + question
+    )
+    try:
+        resp = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Answer in Korean using the provided receipts as context.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return ""
+
 def process_receipts(files: List[Dict]) -> List[Dict]:
-    receipts = []
-    for file in files:
+    receipts: List[Dict] = []
+    status = st.empty()
+    bar = st.progress(0)
+    total = len(files)
+    for i, file in enumerate(files, start=1):
+        status.text(f"{file.name} 업로드 중")
+        bar.progress((i - 1) / total)
         save_path = os.path.join(NOCOMMIT_DIR, file.name)
         with open(save_path, "wb") as out:
             out.write(file.getbuffer())
-        text = openai_ocr_image(save_path)
+        text = openai_ocr_file(save_path)
         amount = extract_amount(text)
         address = extract_address(text)
         receipts.append(
@@ -102,7 +189,8 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
                 "path": save_path,
             }
         )
-
+        bar.progress(i / total)
+    status.text("완료")
     return receipts
 
 
@@ -121,35 +209,59 @@ def summarize(receipts: List[Dict]):
 st.title("Receipt OCR")
 uploaded_files = st.file_uploader(
     "영수증 스캔 파일 업로드 (여러개 선택 가능)",
-    type=["png", "jpg", "jpeg", "webp"],
+    type=["png", "jpg", "jpeg", "webp", "pdf"],
     accept_multiple_files=True,
 )
 
 if uploaded_files:
 
-    receipts = process_receipts(uploaded_files)
-    summarize(receipts)
-    question = st.text_input("질문을 입력하세요")
-    if question:
-        if "금액" in question and "합" in question:
-            total = sum(r["amount"] for r in receipts)
-            st.write(f"총 금액 합계: {total}")
-        elif "주소" in question or "위치" in question:
-            grouped: Dict[str, list] = {}
-            for r in receipts:
-                grouped.setdefault(r["address"], []).append(r)
-            for addr, items in grouped.items():
-                subtotal = sum(i["amount"] for i in items)
-                st.write(f"{addr}: {subtotal}")
-        else:
-            st.write("지원되지 않는 질문입니다.")
-    with st.expander("세부 내용 보기"):
-        for r in receipts:
-            st.write(f"### {r['filename']}")
-            st.text(r["text"])
+    uploaded_names = [f.name for f in uploaded_files]
+    if (
+        "receipts" not in st.session_state
+        or st.session_state.get("uploaded_names") != uploaded_names
+    ):
+        receipts = process_receipts(uploaded_files)
+        embed_receipts(receipts)
+        st.session_state.receipts = receipts
+        st.session_state.uploaded_names = uploaded_names
+    receipts = st.session_state.receipts
 
-    st.header("원본 이미지")
-    for r in receipts:
-        st.subheader(r["filename"])
-        st.image(r["path"], use_column_width=True)
+    st.header("process_receipts 결과")
+    st.json(receipts)
+    summarize(receipts)
+
+    st.header("영수증 이미지")
+    if "view_idx" not in st.session_state:
+        st.session_state.view_idx = 0
+    current = receipts[st.session_state.view_idx]
+    st.subheader(current["filename"])
+    st.image(current["path"], use_column_width=True)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("◀", use_container_width=True):
+            st.session_state.view_idx = (st.session_state.view_idx - 1) % len(receipts)
+    with col3:
+        if st.button("▶", use_container_width=True):
+            st.session_state.view_idx = (st.session_state.view_idx + 1) % len(receipts)
+
+    st.header("Q&A")
+    if "qa_history" not in st.session_state:
+        st.session_state.qa_history = []
+    if question := st.chat_input("질문을 입력하세요"):
+        st.session_state.qa_history.append({"role": "user", "content": question})
+        start_t = time.time()
+        answer = rag_answer(question, receipts)
+        elapsed = time.time() - start_t
+        st.session_state.qa_history.append(
+            {
+                "role": "assistant",
+                "content": answer if answer else "답변을 생성하지 못했습니다.",
+                "elapsed": elapsed,
+            }
+        )
+    for msg in st.session_state.qa_history:
+        with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+            st.write(msg["content"])
+            if msg.get("elapsed") is not None:
+                st.caption(f"응답 시간: {msg['elapsed']:.2f}초")
 
