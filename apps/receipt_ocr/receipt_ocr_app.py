@@ -68,18 +68,31 @@ def openai_ocr_file(path: str) -> str:
     encoded = base64.b64encode(data_bytes).decode("utf-8")
     if ext in [".png", ".jpg", ".jpeg", ".webp"]:
         content = [
-            {"type": "text", "text": "Please transcribe all text from this document."},
+            {
+                "type": "text",
+                "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
+            },
             {"type": "image_url", "image_url": {"data": encoded}},
         ]
     else:
         content = [
-            {"type": "text", "text": "Please transcribe all text from this document."},
+            {
+                "type": "text",
+                "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
+            },
+
             {"type": "file", "file": {"data": encoded, "mime_type": "application/pdf"}},
         ]
     try:
         response = openai.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": content}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You accurately transcribe Korean text from documents.",
+                },
+                {"role": "user", "content": content},
+            ],
 
             max_tokens=2000,
         )
@@ -93,7 +106,8 @@ def create_embedding(text: str):
         return []
     try:
         resp = openai.embeddings.create(
-            model="text-embedding-3-small", input=[text]
+            model="text-embedding-3-large", input=[text]
+
         )
         return resp.data[0].embedding
     except Exception:
@@ -132,7 +146,13 @@ def rag_answer(question: str, receipts: List[Dict]) -> str:
     try:
         resp = openai.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Answer in Korean using the provided receipts as context.",
+                },
+                {"role": "user", "content": prompt},
+            ],
         )
         return resp.choices[0].message.content.strip()
     except Exception:
@@ -199,7 +219,6 @@ if uploaded_files:
             st.write(answer)
         else:
             st.write("답변을 생성하지 못했습니다.")
-
 
     st.header("원본 이미지")
     for r in receipts:
