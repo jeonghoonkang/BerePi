@@ -56,6 +56,11 @@ def extract_address(text: str) -> str:
     return "Unknown"
 
 
+def encode_file_to_base64(path: str) -> str:
+    """Read a file and return a base64-encoded string."""
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
 
 def openai_ocr_file(path: str) -> str:
     """Send an image or PDF to GPT-4o for OCR."""
@@ -63,16 +68,21 @@ def openai_ocr_file(path: str) -> str:
         return ""
     ext = os.path.splitext(path)[1].lower()
 
-    with open(path, "rb") as f:
-        data_bytes = f.read()
-    encoded = base64.b64encode(data_bytes).decode("utf-8")
+    b64 = encode_file_to_base64(path)
     if ext in [".png", ".jpg", ".jpeg", ".webp"]:
+        mime = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+        }.get(ext, "application/octet-stream")
+        data_url = f"data:{mime};base64,{b64}"
         content = [
             {
                 "type": "text",
                 "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
             },
-            {"type": "image_url", "image_url": {"data": encoded}},
+            {"type": "image_url", "image_url": {"url": data_url}},
         ]
     else:
         content = [
@@ -80,8 +90,7 @@ def openai_ocr_file(path: str) -> str:
                 "type": "text",
                 "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
             },
-
-            {"type": "file", "file": {"data": encoded, "mime_type": "application/pdf"}},
+            {"type": "file", "file": {"data": b64, "mime_type": "application/pdf"}},
         ]
     try:
         response = openai.chat.completions.create(
@@ -93,7 +102,6 @@ def openai_ocr_file(path: str) -> str:
                 },
                 {"role": "user", "content": content},
             ],
-
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()

@@ -5,7 +5,8 @@ OpenAI's GPT‑4o model to extract text from each one. The OCR prompt is tuned f
 Korean so Hangul is transcribed accurately. Uploaded files are saved in the
 `nocommit` directory, which is ignored by git. Amounts found in each receipt are
 summed and receipts are grouped by detected address. The original files are shown
-at the bottom of the page.
+at the bottom of the page. Each image is Base64 encoded before being sent to
+OpenAI for OCR.
 
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app.
 After OCR extraction embeddings are built with the `text-embedding-3-large` model
