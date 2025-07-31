@@ -68,6 +68,7 @@ def openai_ocr_file(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
     ext = os.path.splitext(path)[1].lower()
+
     b64 = encode_file_to_base64(path)
     if ext in [".png", ".jpg", ".jpeg", ".webp"]:
         mime = {
@@ -115,6 +116,7 @@ def create_embedding(text: str):
     try:
         resp = openai.embeddings.create(
             model="text-embedding-3-large", input=[text]
+
         )
         return resp.data[0].embedding
     except Exception:
