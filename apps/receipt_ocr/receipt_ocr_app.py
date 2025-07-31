@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
 
+
 try:
     import openai
 except Exception:
@@ -71,6 +72,7 @@ def openai_ocr_file(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
     ext = os.path.splitext(path)[1].lower()
+
     b64 = encode_file_to_base64(path)
     if ext in [".png", ".jpg", ".jpeg", ".webp"]:
         mime = {
@@ -118,6 +120,7 @@ def create_embedding(text: str):
     try:
         resp = openai.embeddings.create(
             model="text-embedding-3-large", input=[text]
+
         )
         return resp.data[0].embedding
     except Exception:
@@ -163,6 +166,7 @@ def rag_answer(question: str, receipts: List[Dict]) -> str:
                 },
                 {"role": "user", "content": prompt},
             ],
+
         )
         return resp.choices[0].message.content.strip()
     except Exception:
@@ -234,6 +238,7 @@ if uploaded_files:
 
     st.header("process_receipts 결과")
     st.json(receipts)
+
     summarize(receipts)
 
     st.header("OCR 결과 및 이미지")
@@ -276,4 +281,5 @@ if uploaded_files:
                     "elapsed": elapsed,
                 }
             )
+
 
