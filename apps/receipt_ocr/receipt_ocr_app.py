@@ -184,6 +184,7 @@ def merge_save_ocr_json(new_receipts: List[Dict], path: str = OCR_JSON_PATH):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(list(data.values()), f, ensure_ascii=False, indent=2)
 
+
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts: List[Dict] = []
     status = st.empty()
@@ -211,6 +212,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
     status.text("완료")
     if receipts:
         merge_save_ocr_json(receipts)
+
     return receipts
 
 
@@ -263,6 +265,7 @@ if uploaded_files:
     current = receipts[st.session_state.view_idx]
     st.subheader(current["filename"])
     st.image(current["path"], use_column_width=True)
+
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◀", use_container_width=True):
@@ -286,6 +289,7 @@ if uploaded_files:
                 "elapsed": elapsed,
             }
         )
+
     for msg in st.session_state.qa_history:
         with st.chat_message("user" if msg["role"] == "user" else "assistant"):
             st.write(msg["content"])

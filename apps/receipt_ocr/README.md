@@ -16,6 +16,7 @@ files being sent to OpenAI.
 Uploaded receipts are cached so subsequent Q&A uses the stored text without
 re-uploading, and each answer shows how long the model took to respond.
 
+
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app.
 After OCR extraction embeddings are built with the `text-embedding-3-large` model
 and a retrieval augmented generation (RAG) pipeline powers a Q&A chat box so you
