@@ -62,6 +62,7 @@ def encode_file_to_base64(path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
+
 def openai_ocr_file(path: str) -> str:
     """Send an image or PDF to GPT-4o for OCR."""
     if openai is None or openai_api_key is None:
@@ -212,24 +213,35 @@ if uploaded_files:
     receipts = process_receipts(uploaded_files)
     st.header("process_receipts 결과")
     st.json(receipts)
-
     embed_receipts(receipts)
     summarize(receipts)
-    st.header("OCR 결과")
-    for r in receipts:
-        st.subheader(r["filename"])
-        st.text(r["text"])
 
-    question = st.text_input("질문을 입력하세요")
-    if question:
+    st.header("OCR 결과 및 이미지")
+    if "view_idx" not in st.session_state:
+        st.session_state.view_idx = 0
+    current = receipts[st.session_state.view_idx]
+    st.subheader(current["filename"])
+    st.image(current["path"], use_column_width=True)
+    st.text(current["text"])
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("◀", use_container_width=True):
+            st.session_state.view_idx = (st.session_state.view_idx - 1) % len(receipts)
+    with col3:
+        if st.button("▶", use_container_width=True):
+            st.session_state.view_idx = (st.session_state.view_idx + 1) % len(receipts)
+
+    st.header("Q&A")
+    if "qa_history" not in st.session_state:
+        st.session_state.qa_history = []
+    for msg in st.session_state.qa_history:
+        with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+            st.write(msg["content"])
+    if question := st.chat_input("질문을 입력하세요"):
+        st.session_state.qa_history.append({"role": "user", "content": question})
         answer = rag_answer(question, receipts)
         if answer:
-            st.write(answer)
+            st.session_state.qa_history.append({"role": "assistant", "content": answer})
         else:
-            st.write("답변을 생성하지 못했습니다.")
-
-    st.header("원본 이미지")
-    for r in receipts:
-        st.subheader(r["filename"])
-        st.image(r["path"], use_column_width=True)
+            st.session_state.qa_history.append({"role": "assistant", "content": "답변을 생성하지 못했습니다."})
 
