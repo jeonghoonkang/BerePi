@@ -6,6 +6,10 @@ import streamlit as st
 import base64
 import numpy as np
 import time
+from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
+
+
 
 
 try:
@@ -228,6 +232,7 @@ if uploaded_files:
 
     st.header("process_receipts 결과")
     st.json(receipts)
+
     summarize(receipts)
 
     st.header("OCR 결과 및 이미지")
@@ -260,6 +265,7 @@ if uploaded_files:
                 "elapsed": elapsed,
             }
         )
+
     for msg in st.session_state.qa_history:
         with st.chat_message("user" if msg["role"] == "user" else "assistant"):
             st.write(msg["content"])
