@@ -62,6 +62,7 @@ def openai_ocr_file(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
     ext = os.path.splitext(path)[1].lower()
+
     with open(path, "rb") as f:
         data_bytes = f.read()
     encoded = base64.b64encode(data_bytes).decode("utf-8")
@@ -79,6 +80,7 @@ def openai_ocr_file(path: str) -> str:
                 "type": "text",
                 "text": "이 문서에 포함된 모든 글자를 가능한 한 정확하게 한국어로 전사해 주세요.",
             },
+
             {"type": "file", "file": {"data": encoded, "mime_type": "application/pdf"}},
         ]
     try:
@@ -91,6 +93,7 @@ def openai_ocr_file(path: str) -> str:
                 },
                 {"role": "user", "content": content},
             ],
+
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
@@ -104,6 +107,7 @@ def create_embedding(text: str):
     try:
         resp = openai.embeddings.create(
             model="text-embedding-3-large", input=[text]
+
         )
         return resp.data[0].embedding
     except Exception:
@@ -200,6 +204,7 @@ if uploaded_files:
     receipts = process_receipts(uploaded_files)
     st.header("process_receipts 결과")
     st.json(receipts)
+
     embed_receipts(receipts)
     summarize(receipts)
     st.header("OCR 결과")
