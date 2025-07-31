@@ -6,7 +6,7 @@ import streamlit as st
 import base64
 import numpy as np
 import time
-
+import json
 
 
 try:
@@ -18,6 +18,8 @@ NOCOMMIT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "receipt_ocr/nocommit"
 )
 os.makedirs(NOCOMMIT_DIR, exist_ok=True)
+
+OCR_JSON_PATH = os.path.join(NOCOMMIT_DIR, "ocr_results.json")
 
 OPENAI_KEY_PATH = os.path.join(NOCOMMIT_DIR, "nocommit_key.txt")
 
@@ -167,6 +169,22 @@ def rag_answer(question: str, receipts: List[Dict]) -> str:
     except Exception:
         return ""
 
+
+def merge_save_ocr_json(new_receipts: List[Dict], path: str = OCR_JSON_PATH):
+    existing: List[Dict] = []
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = []
+    data = {r.get("filename"): r for r in existing if r.get("filename")}
+    for r in new_receipts:
+        data[r.get("filename")] = r
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(list(data.values()), f, ensure_ascii=False, indent=2)
+
+
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts: List[Dict] = []
     status = st.empty()
@@ -192,6 +210,9 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
         )
         bar.progress(i / total)
     status.text("완료")
+    if receipts:
+        merge_save_ocr_json(receipts)
+
     return receipts
 
 
@@ -232,9 +253,15 @@ if uploaded_files:
     summarize(receipts)
 
     st.header("영수증 이미지")
-
     if "view_idx" not in st.session_state:
         st.session_state.view_idx = 0
+    file_query = st.text_input("파일 이름 입력", key="file_query")
+    if file_query:
+        idx = next((i for i, r in enumerate(receipts) if r["filename"] == file_query), None)
+        if idx is not None:
+            st.session_state.view_idx = idx
+        else:
+            st.warning("해당 파일이 없습니다.")
     current = receipts[st.session_state.view_idx]
     st.subheader(current["filename"])
     st.image(current["path"], use_column_width=True)

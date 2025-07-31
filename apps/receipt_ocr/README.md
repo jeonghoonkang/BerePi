@@ -6,13 +6,16 @@ Korean so Hangul is transcribed accurately. Uploaded files are saved in the
 `nocommit` directory, which is ignored by git. Amounts found in each receipt are
 summed and receipts are grouped by detected address. The original files can be
 reviewed one at a time with arrow buttons instead of a long list. The recognized
-text is stored for Q&A but not displayed next to the images. Each image is
-
-Base64 encoded before being sent to OpenAI for OCR.
+text is stored for Q&A and shown in the interface. Each image is
+Base64 encoded before being sent to OpenAI for OCR. You can jump directly to an
+image by entering its file name in a separate input box. OCR results are merged
+and saved to `nocommit/ocr_results.json` so previous extractions persist across
+uploads.
 During the upload a progress bar inside the Streamlit app shows the status of
 files being sent to OpenAI.
 Uploaded receipts are cached so subsequent Q&A uses the stored text without
 re-uploading, and each answer shows how long the model took to respond.
+
 
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app.
 After OCR extraction embeddings are built with the `text-embedding-3-large` model
