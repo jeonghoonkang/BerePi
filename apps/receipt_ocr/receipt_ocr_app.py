@@ -62,12 +62,12 @@ def encode_file_to_base64(path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-
 def openai_ocr_file(path: str) -> str:
     """Send an image or PDF to GPT-4o for OCR."""
     if openai is None or openai_api_key is None:
         return ""
     ext = os.path.splitext(path)[1].lower()
+
     b64 = encode_file_to_base64(path)
     if ext in [".png", ".jpg", ".jpeg", ".webp"]:
         mime = {
@@ -115,6 +115,7 @@ def create_embedding(text: str):
     try:
         resp = openai.embeddings.create(
             model="text-embedding-3-large", input=[text]
+
         )
         return resp.data[0].embedding
     except Exception:
@@ -211,6 +212,7 @@ if uploaded_files:
     receipts = process_receipts(uploaded_files)
     st.header("process_receipts 결과")
     st.json(receipts)
+
     embed_receipts(receipts)
     summarize(receipts)
     st.header("OCR 결과")
