@@ -11,6 +11,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
 
 
+
 try:
     import openai
 except Exception:
@@ -72,7 +73,6 @@ def openai_ocr_file(path: str) -> str:
     if openai is None or openai_api_key is None:
         return ""
     ext = os.path.splitext(path)[1].lower()
-
     b64 = encode_file_to_base64(path)
     if ext in [".png", ".jpg", ".jpeg", ".webp"]:
         mime = {
@@ -120,7 +120,6 @@ def create_embedding(text: str):
     try:
         resp = openai.embeddings.create(
             model="text-embedding-3-large", input=[text]
-
         )
         return resp.data[0].embedding
     except Exception:
@@ -166,7 +165,6 @@ def rag_answer(question: str, receipts: List[Dict]) -> str:
                 },
                 {"role": "user", "content": prompt},
             ],
-
         )
         return resp.choices[0].message.content.strip()
     except Exception:
@@ -174,33 +172,29 @@ def rag_answer(question: str, receipts: List[Dict]) -> str:
 
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts: List[Dict] = []
-    console = Console()
-    with Progress(
-        SpinnerColumn(),
-        BarColumn(),
-        TextColumn("{task.description}"),
-        console=console,
-        transient=True,
-    ) as progress:
-        task = progress.add_task("OpenAI 업로드 준비", total=len(files))
-        for file in files:
-            progress.update(task, description=f"{file.name} 업로드 중")
-            save_path = os.path.join(NOCOMMIT_DIR, file.name)
-            with open(save_path, "wb") as out:
-                out.write(file.getbuffer())
-            text = openai_ocr_file(save_path)
-            amount = extract_amount(text)
-            address = extract_address(text)
-            receipts.append(
-                {
-                    "filename": file.name,
-                    "text": text,
-                    "amount": amount,
-                    "address": address,
-                    "path": save_path,
-                }
-            )
-            progress.advance(task)
+    status = st.empty()
+    bar = st.progress(0)
+    total = len(files)
+    for i, file in enumerate(files, start=1):
+        status.text(f"{file.name} 업로드 중")
+        bar.progress((i - 1) / total)
+        save_path = os.path.join(NOCOMMIT_DIR, file.name)
+        with open(save_path, "wb") as out:
+            out.write(file.getbuffer())
+        text = openai_ocr_file(save_path)
+        amount = extract_amount(text)
+        address = extract_address(text)
+        receipts.append(
+            {
+                "filename": file.name,
+                "text": text,
+                "amount": amount,
+                "address": address,
+                "path": save_path,
+            }
+        )
+        bar.progress(i / total)
+    status.text("완료")
     return receipts
 
 
@@ -259,27 +253,22 @@ if uploaded_files:
     st.header("Q&A")
     if "qa_history" not in st.session_state:
         st.session_state.qa_history = []
-    for msg in st.session_state.qa_history:
-        with st.chat_message("user" if msg["role"] == "user" else "assistant"):
-            st.write(msg["content"])
-            if msg.get("elapsed") is not None:
-                st.caption(f"응답 시간: {msg['elapsed']:.2f}초")
     if question := st.chat_input("질문을 입력하세요"):
         st.session_state.qa_history.append({"role": "user", "content": question})
         start_t = time.time()
         answer = rag_answer(question, receipts)
         elapsed = time.time() - start_t
-        if answer:
-            st.session_state.qa_history.append(
-                {"role": "assistant", "content": answer, "elapsed": elapsed}
-            )
-        else:
-            st.session_state.qa_history.append(
-                {
-                    "role": "assistant",
-                    "content": "답변을 생성하지 못했습니다.",
-                    "elapsed": elapsed,
-                }
-            )
+        st.session_state.qa_history.append(
+            {
+                "role": "assistant",
+                "content": answer if answer else "답변을 생성하지 못했습니다.",
+                "elapsed": elapsed,
+            }
+        )
 
+    for msg in st.session_state.qa_history:
+        with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+            st.write(msg["content"])
+            if msg.get("elapsed") is not None:
+                st.caption(f"응답 시간: {msg['elapsed']:.2f}초")
 

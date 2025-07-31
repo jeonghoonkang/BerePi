@@ -7,11 +7,10 @@ Korean so Hangul is transcribed accurately. Uploaded files are saved in the
 summed and receipts are grouped by detected address. The original files can be
 reviewed one at a time with arrow buttons instead of a long list. Each image is
 Base64 encoded before being sent to OpenAI for OCR.
-During the upload a rich progress bar in the terminal shows the status of files
-being sent to OpenAI.
+During the upload a progress bar inside the Streamlit app shows the status of
+files being sent to OpenAI.
 Uploaded receipts are cached so subsequent Q&A uses the stored text without
 re-uploading, and each answer shows how long the model took to respond.
-
 
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app.
 After OCR extraction embeddings are built with the `text-embedding-3-large` model
