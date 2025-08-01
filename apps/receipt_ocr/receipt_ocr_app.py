@@ -131,9 +131,10 @@ def create_embedding(text: str):
 
 def embed_receipts(receipts: List[Dict]):
     for r in receipts:
-        emb = create_embedding(r["text"])
-        if emb:
-            r["embedding"] = np.array(emb)
+        if r.get("embedding") is None:
+            emb = create_embedding(r["text"])
+            if emb:
+                r["embedding"] = np.array(emb)
 
 
 def rag_answer(question: str, receipts: List[Dict]) -> str:
@@ -188,6 +189,53 @@ def merge_save_ocr_json(new_receipts: List[Dict], path: str = OCR_JSON_PATH):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(list(data.values()), f, ensure_ascii=False, indent=2)
 
+
+def init_existing_receipts():
+    if "receipts" in st.session_state:
+        return
+    receipts: List[Dict] = []
+    if os.path.exists(OCR_JSON_PATH):
+        try:
+            with open(OCR_JSON_PATH, "r", encoding="utf-8") as f:
+                receipts = json.load(f)
+        except Exception:
+            receipts = []
+    existing = {r.get("filename") for r in receipts}
+    new_receipts: List[Dict] = []
+    for fname in os.listdir(UPLOAD_DIR):
+        path = os.path.join(UPLOAD_DIR, fname)
+        if not os.path.isfile(path):
+            continue
+        if os.path.splitext(fname)[1].lower() not in [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp",
+            ".pdf",
+        ]:
+            continue
+        if fname not in existing:
+            text = openai_ocr_file(path)
+            amount = extract_amount(text)
+            address = extract_address(text)
+            new_receipts.append(
+                {
+                    "filename": fname,
+                    "text": text,
+                    "amount": amount,
+                    "address": address,
+                    "path": path,
+                }
+            )
+    if new_receipts:
+        receipts.extend(new_receipts)
+        merge_save_ocr_json(new_receipts)
+    for r in receipts:
+        r["path"] = os.path.join(UPLOAD_DIR, r["filename"])
+    embed_receipts(receipts)
+    st.session_state.receipts = receipts
+    st.session_state.uploaded_names = [r["filename"] for r in receipts]
+
 def process_receipts(files: List[Dict]) -> List[Dict]:
     receipts: List[Dict] = []
     status = st.empty()
@@ -215,7 +263,6 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
     status.text("완료")
     if receipts:
         merge_save_ocr_json(receipts)
-
     return receipts
 
 
@@ -232,6 +279,7 @@ def summarize(receipts: List[Dict]):
 
 
 st.title("Receipt OCR")
+init_existing_receipts()
 uploaded_files = st.file_uploader(
     "영수증 스캔 파일 업로드 (여러개 선택 가능)",
     type=["png", "jpg", "jpeg", "webp", "pdf"],
@@ -239,20 +287,20 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
+    new_receipts = process_receipts(uploaded_files)
+    embed_receipts(new_receipts)
+    if "receipts" in st.session_state:
+        st.session_state.receipts.extend(new_receipts)
+    else:
+        st.session_state.receipts = new_receipts
+    st.session_state.uploaded_names = [r["filename"] for r in st.session_state.receipts]
 
-    uploaded_names = [f.name for f in uploaded_files]
-    if (
-        "receipts" not in st.session_state
-        or st.session_state.get("uploaded_names") != uploaded_names
-    ):
-        receipts = process_receipts(uploaded_files)
-        embed_receipts(receipts)
-        st.session_state.receipts = receipts
-        st.session_state.uploaded_names = uploaded_names
-    receipts = st.session_state.receipts
+receipts = st.session_state.get("receipts", [])
 
-    st.header("process_receipts 결과")
-    st.json(receipts)
+if receipts:
+
+    with st.expander("process_receipts 결과", expanded=False):
+        st.json(receipts)
     summarize(receipts)
 
     st.header("영수증 이미지")
@@ -291,7 +339,6 @@ if uploaded_files:
             st.session_state.view_idx = (st.session_state.view_idx + 1) % len(receipts)
             st.session_state.file_name = receipts[st.session_state.view_idx]["filename"]
 
-
     st.header("Q&A")
     if "qa_history" not in st.session_state:
         st.session_state.qa_history = []
@@ -307,10 +354,12 @@ if uploaded_files:
                 "elapsed": elapsed,
             }
         )
-
     for msg in st.session_state.qa_history:
         with st.chat_message("user" if msg["role"] == "user" else "assistant"):
             st.write(msg["content"])
             if msg.get("elapsed") is not None:
                 st.caption(f"응답 시간: {msg['elapsed']:.2f}초")
+
+else:
+    st.info("영수증이 없습니다. 파일을 업로드하세요.")
 
