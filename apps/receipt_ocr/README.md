@@ -16,6 +16,7 @@ start‑up the app compares the `upload` folder to that JSON and only sends file
 that are missing from the JSON or have an empty OCR result, updating the JSON
 after each transcription. This keeps the viewer and data in sync. During the
 upload a progress bar inside the Streamlit app
+
 shows the status of files being sent to OpenAI.
 Uploaded receipts are cached so subsequent Q&A uses the stored text without
 re-uploading, and each answer shows how long the model took to respond.
