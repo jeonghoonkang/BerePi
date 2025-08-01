@@ -3,6 +3,7 @@ import time
 import threading
 
 import streamlit as st
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 
@@ -160,9 +161,37 @@ prompt = st.text_input("질문을 입력하세요:")
 error_area = st.empty()
 if prompt:
     try:
+        result = {"response": None, "error": None}
+
+        def _generate() -> None:
+            try:
+                result["response"] = generator(prompt, max_length=512, do_sample=True)
+            except Exception as exc:  # pragma: no cover - pass exception
+                result["error"] = exc
+
+        start_time = time.time()
+        thread = threading.Thread(target=_generate)
+        thread.start()
+
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TimeElapsedColumn(),
+        )
         with st.spinner("답변 생성 중..."):
-            response = generator(prompt, max_length=512, do_sample=True)
-        st.write(response[0]["generated_text"][len(prompt):].strip())
+            with progress:
+                task = progress.add_task("Generating...", total=None)
+                while thread.is_alive():
+                    progress.advance(task)
+                    time.sleep(0.1)
+                thread.join()
+
+        if result["error"] is not None:
+            raise result["error"]
+
+        elapsed = time.time() - start_time
+        st.write(result["response"][0]["generated_text"][len(prompt):].strip())
+        st.info(f"소요 시간: {elapsed:.2f}초")
     except Exception as exc:  # pragma: no cover - GUI display
         error_area.error("답변 생성 중 오류가 발생했습니다.")
         with st.expander("오류 상세 보기"):
