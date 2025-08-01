@@ -7,6 +7,7 @@ import base64
 import numpy as np
 import time
 import json
+from PIL import Image
 
 
 try:
@@ -311,7 +312,6 @@ if receipts:
         st.json(receipts)
     summarize(receipts)
 
-
     st.header("영수증 이미지")
     if "view_idx" not in st.session_state:
         st.session_state.view_idx = 0
@@ -325,9 +325,16 @@ if receipts:
         idx = next((i for i, r in enumerate(receipts) if r["filename"] == file_name), None)
         if idx is not None:
             st.session_state.view_idx = idx
-        st.image(path, use_column_width=True)
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".pdf":
+            st.info("PDF는 이미지로 표시할 수 없습니다.")
+        else:
+            img = Image.open(path)
+            img.thumbnail((800, 400))
+            st.image(img)
     else:
         st.warning("해당 파일이 없습니다.")
+
 
     col1, _, col3 = st.columns([1, 1, 1])
     with col1:
