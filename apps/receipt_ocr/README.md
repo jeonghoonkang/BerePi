@@ -9,6 +9,7 @@ receipts are grouped by detected address. The original files can be reviewed
 one at a time with arrow buttons instead of a long list. The recognized text is
 stored for Q&A and shown in the interface. Images render inside an ~800×400 window
 for a consistent viewing size. Each image is Base64 encoded before
+
 being sent to OpenAI for OCR. The filename shown above the viewer is editable.
 Changing the filename searches the `upload` directory for a matching file and
 displays that image directly from disk. OCR results are merged and saved to
@@ -17,9 +18,11 @@ start‑up the app compares the `upload` folder to that JSON and only sends file
 that are missing from the JSON or have an empty OCR result, updating the JSON
 after each transcription. This keeps the viewer and data in sync. During the
 upload a progress bar inside the Streamlit app
+
 shows the status of files being sent to OpenAI.
 Uploaded receipts are cached so subsequent Q&A uses the stored text without
 re-uploading, and each answer shows how long the model took to respond.
+
 
 Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app.
 After OCR extraction embeddings are built with the `text-embedding-3-large` model

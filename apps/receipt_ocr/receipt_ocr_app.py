@@ -205,6 +205,7 @@ def init_existing_receipts():
     data: Dict[str, Dict] = {r.get("filename"): r for r in receipts if r.get("filename")}
     new_receipts: List[Dict] = []
 
+
     for fname in os.listdir(UPLOAD_DIR):
         path = os.path.join(UPLOAD_DIR, fname)
         if not os.path.isfile(path):
@@ -239,6 +240,7 @@ def init_existing_receipts():
         merge_save_ocr_json(new_receipts)
     for r in receipts:
         r.setdefault("path", os.path.join(UPLOAD_DIR, r["filename"]))
+
     embed_receipts(receipts)
     st.session_state.receipts = receipts
     st.session_state.uploaded_names = [r["filename"] for r in receipts]
@@ -333,6 +335,7 @@ if receipts:
     else:
         st.warning("해당 파일이 없습니다.")
 
+
     col1, _, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◀", use_container_width=True):
@@ -363,6 +366,7 @@ if receipts:
             st.write(msg["content"])
             if msg.get("elapsed") is not None:
                 st.caption(f"응답 시간: {msg['elapsed']:.2f}초")
+
 else:
     st.info("영수증이 없습니다. 파일을 업로드하세요.")
 
