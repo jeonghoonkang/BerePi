@@ -215,6 +215,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
     status.text("완료")
     if receipts:
         merge_save_ocr_json(receipts)
+
     return receipts
 
 
@@ -290,6 +291,7 @@ if uploaded_files:
             st.session_state.view_idx = (st.session_state.view_idx + 1) % len(receipts)
             st.session_state.file_name = receipts[st.session_state.view_idx]["filename"]
 
+
     st.header("Q&A")
     if "qa_history" not in st.session_state:
         st.session_state.qa_history = []
@@ -305,6 +307,7 @@ if uploaded_files:
                 "elapsed": elapsed,
             }
         )
+
     for msg in st.session_state.qa_history:
         with st.chat_message("user" if msg["role"] == "user" else "assistant"):
             st.write(msg["content"])

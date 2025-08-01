@@ -2,6 +2,7 @@
 
 This Streamlit app lets you upload many receipt images or PDF documents and uses
 OpenAI's GPT‑4o model to extract text from each one. The OCR prompt is tuned for
+
 Korean so Hangul is transcribed accurately. Uploaded files are saved to an
 `upload` subdirectory inside this app, which is ignored by git and used to show
 the images in the interface. Amounts found in each receipt are
