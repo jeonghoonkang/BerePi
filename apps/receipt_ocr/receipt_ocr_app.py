@@ -200,8 +200,11 @@ def init_existing_receipts():
                 receipts = json.load(f)
         except Exception:
             receipts = []
-    existing = {r.get("filename") for r in receipts}
+
+    data: Dict[str, Dict] = {r.get("filename"): r for r in receipts if r.get("filename")}
     new_receipts: List[Dict] = []
+
+
     for fname in os.listdir(UPLOAD_DIR):
         path = os.path.join(UPLOAD_DIR, fname)
         if not os.path.isfile(path):
@@ -214,24 +217,29 @@ def init_existing_receipts():
             ".pdf",
         ]:
             continue
-        if fname not in existing:
+        rec = data.get(fname)
+        if rec is None or not rec.get("text"):
             text = openai_ocr_file(path)
             amount = extract_amount(text)
             address = extract_address(text)
-            new_receipts.append(
-                {
-                    "filename": fname,
-                    "text": text,
-                    "amount": amount,
-                    "address": address,
-                    "path": path,
-                }
-            )
+            rec = {
+                "filename": fname,
+                "text": text,
+                "amount": amount,
+                "address": address,
+                "path": path,
+            }
+            data[fname] = rec
+            new_receipts.append(rec)
+        else:
+            rec["path"] = path
+
+    receipts = list(data.values())
     if new_receipts:
-        receipts.extend(new_receipts)
         merge_save_ocr_json(new_receipts)
     for r in receipts:
-        r["path"] = os.path.join(UPLOAD_DIR, r["filename"])
+        r.setdefault("path", os.path.join(UPLOAD_DIR, r["filename"]))
+
     embed_receipts(receipts)
     st.session_state.receipts = receipts
     st.session_state.uploaded_names = [r["filename"] for r in receipts]
@@ -303,33 +311,25 @@ if receipts:
         st.json(receipts)
     summarize(receipts)
 
+
     st.header("영수증 이미지")
     if "view_idx" not in st.session_state:
         st.session_state.view_idx = 0
+    if "file_name" not in st.session_state:
         st.session_state.file_name = receipts[0]["filename"]
-    current = receipts[st.session_state.view_idx]
-    file_name = st.text_input(
-        "파일 이름",
-        key="file_name",
-        value=st.session_state.get("file_name", current["filename"]),
-    )
-    if file_name != current["filename"]:
-        path = os.path.join(UPLOAD_DIR, file_name)
-        if os.path.exists(path):
-            idx = next((i for i, r in enumerate(receipts) if r["filename"] == file_name), None)
-            if idx is not None:
-                st.session_state.view_idx = idx
-                current = receipts[idx]
-            else:
-                current = {"filename": file_name, "path": path}
-            st.session_state.file_name = file_name
-        else:
-            st.warning("해당 파일이 없습니다.")
-    if os.path.exists(current.get("path", "")):
-        st.image(current["path"], use_column_width=True)
+
+    file_name = st.text_input("파일 이름", st.session_state.file_name)
+    path = os.path.join(UPLOAD_DIR, file_name)
+    if os.path.exists(path):
+        st.session_state.file_name = file_name
+        idx = next((i for i, r in enumerate(receipts) if r["filename"] == file_name), None)
+        if idx is not None:
+            st.session_state.view_idx = idx
+        st.image(path, use_column_width=True)
     else:
-        st.warning("이미지 파일을 찾을 수 없습니다.")
-    col1, col2, col3 = st.columns([1, 1, 1])
+        st.warning("해당 파일이 없습니다.")
+
+    col1, _, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◀", use_container_width=True):
             st.session_state.view_idx = (st.session_state.view_idx - 1) % len(receipts)

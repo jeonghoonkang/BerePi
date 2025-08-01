@@ -10,10 +10,13 @@ one at a time with arrow buttons instead of a long list. The recognized text is
 stored for Q&A and shown in the interface. Each image is Base64 encoded before
 being sent to OpenAI for OCR. The filename shown above the viewer is editable.
 Changing the filename searches the `upload` directory for a matching file and
-displays it. OCR results are merged and saved to `nocommit/ocr_results.json` so
-previous extractions persist across uploads. On start‑up the app compares the
-`upload` folder to that JSON and automatically OCRs any new files so the viewer
-and data stay in sync. During the upload a progress bar inside the Streamlit app
+displays that image directly from disk. OCR results are merged and saved to
+`nocommit/ocr_results.json` so previous extractions persist across uploads. On
+start‑up the app compares the `upload` folder to that JSON and only sends files
+that are missing from the JSON or have an empty OCR result, updating the JSON
+after each transcription. This keeps the viewer and data in sync. During the
+upload a progress bar inside the Streamlit app
+
 shows the status of files being sent to OpenAI.
 Uploaded receipts are cached so subsequent Q&A uses the stored text without
 re-uploading, and each answer shows how long the model took to respond.
