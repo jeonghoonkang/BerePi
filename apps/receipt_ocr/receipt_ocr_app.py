@@ -359,6 +359,7 @@ if receipts:
             st.write(msg["content"])
             if msg.get("elapsed") is not None:
                 st.caption(f"응답 시간: {msg['elapsed']:.2f}초")
+
 else:
     st.info("영수증이 없습니다. 파일을 업로드하세요.")
 
