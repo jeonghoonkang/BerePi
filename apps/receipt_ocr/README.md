@@ -1,12 +1,30 @@
 # Receipt OCR Streamlit App
 
-This Streamlit app lets you upload many receipt images and uses OpenAI's GPT‑4 Vision
-to extract text from each one. Uploaded files are saved in the `nocommit` directory,
-which is ignored by git. Amounts found in each receipt are summed and receipts are
-grouped by detected address. The original images are shown at the bottom of the page.
+This Streamlit app lets you upload many receipt images or PDF documents and uses
+OpenAI's GPT‑4o model to extract text from each one. The OCR prompt is tuned for
+Korean so Hangul is transcribed accurately. Uploaded files are saved to an
+`upload` subdirectory inside this app, which is ignored by git and used to show
+the images in the interface. Amounts found in each receipt are summed and
+receipts are grouped by detected address. The original files can be reviewed
+one at a time with arrow buttons instead of a long list. The recognized text is
+stored for Q&A and shown in the interface. Images render inside an ~800×400 window
+for a consistent viewing size. Each image is Base64 encoded before
+being sent to OpenAI for OCR. The filename shown above the viewer is editable.
+Changing the filename searches the `upload` directory for a matching file and
+displays that image directly from disk. OCR results are merged and saved to
+`nocommit/ocr_results.json` so previous extractions persist across uploads. On
+start‑up the app compares the `upload` folder to that JSON and only sends files
+that are missing from the JSON or have an empty OCR result, updating the JSON
+after each transcription. This keeps the viewer and data in sync. During the
+upload a progress bar inside the Streamlit app
+shows the status of files being sent to OpenAI.
+Uploaded receipts are cached so subsequent Q&A uses the stored text without
+re-uploading, and each answer shows how long the model took to respond.
 
-Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app. You
-can ask questions like "금액 합계" or "주소별 합계" in the question box.
+Place your OpenAI API key in `nocommit/nocommit_key.txt` before running the app.
+After OCR extraction embeddings are built with the `text-embedding-3-large` model
+and a retrieval augmented generation (RAG) pipeline powers a Q&A chat box so you
+can ask questions like "금액 합계" or "주소별 합계" about the recognized text.
 
 ## Usage
 ```
