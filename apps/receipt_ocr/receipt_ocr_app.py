@@ -19,6 +19,10 @@ NOCOMMIT_DIR = os.path.join(
 )
 os.makedirs(NOCOMMIT_DIR, exist_ok=True)
 
+# Directory to store uploaded images shown in the viewer
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "upload")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 OCR_JSON_PATH = os.path.join(NOCOMMIT_DIR, "ocr_results.json")
 
 OPENAI_KEY_PATH = os.path.join(NOCOMMIT_DIR, "nocommit_key.txt")
@@ -192,7 +196,7 @@ def process_receipts(files: List[Dict]) -> List[Dict]:
     for i, file in enumerate(files, start=1):
         status.text(f"{file.name} 업로드 중")
         bar.progress((i - 1) / total)
-        save_path = os.path.join(NOCOMMIT_DIR, file.name)
+        save_path = os.path.join(UPLOAD_DIR, file.name)
         with open(save_path, "wb") as out:
             out.write(file.getbuffer())
         text = openai_ocr_file(save_path)
@@ -262,15 +266,21 @@ if uploaded_files:
         value=st.session_state.get("file_name", current["filename"]),
     )
     if file_name != current["filename"]:
-        idx = next((i for i, r in enumerate(receipts) if r["filename"] == file_name), None)
-        if idx is not None:
-            st.session_state.view_idx = idx
+        path = os.path.join(UPLOAD_DIR, file_name)
+        if os.path.exists(path):
+            idx = next((i for i, r in enumerate(receipts) if r["filename"] == file_name), None)
+            if idx is not None:
+                st.session_state.view_idx = idx
+                current = receipts[idx]
+            else:
+                current = {"filename": file_name, "path": path}
             st.session_state.file_name = file_name
-            current = receipts[idx]
         else:
             st.warning("해당 파일이 없습니다.")
-    st.image(current["path"], use_column_width=True)
-
+    if os.path.exists(current.get("path", "")):
+        st.image(current["path"], use_column_width=True)
+    else:
+        st.warning("이미지 파일을 찾을 수 없습니다.")
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("◀", use_container_width=True):
