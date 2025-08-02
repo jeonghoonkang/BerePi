@@ -31,6 +31,7 @@ import lgpio
 from flask import Flask, render_template_string
 from influxdb import InfluxDBClient
 
+
 # Constants for the SHT20 sensor
 SHT20_ADDR = 0x40       # SHT20 register address
 SHT20_CMD_R_T = 0xF3    # no hold Master Mode (Temperature)
@@ -65,6 +66,7 @@ INFLUX_MEASUREMENT = "temperature"
 QUERY_LAST_MONTH = (
     f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time >= now() - 30d'
 )
+
 
 def reading(v):
     if v == 1:
@@ -132,6 +134,7 @@ def write_influx(temp, timestamp):
         client.switch_database(INFLUX_DB)
         datapoint = [{
             "measurement": INFLUX_MEASUREMENT,
+
             "time": timestamp,
             "fields": {"value": float(temp)},
         }]
@@ -145,6 +148,7 @@ def start_influxdb():
     if shutil.which("influxd") is None:
         print("InfluxDB executable not found; please install InfluxDB.")
         return None
+
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -210,6 +214,7 @@ def index():
                 <p>Measurement: {{ influx_measurement }}</p>
                 <h3>Query for Last Month</h3>
                 <pre>{{ query }}</pre>
+
             </body>
         </html>
         """,
@@ -221,6 +226,7 @@ def index():
         influx_db=INFLUX_DB,
         influx_measurement=INFLUX_MEASUREMENT,
         query=QUERY_LAST_MONTH,
+
     )
 
 
@@ -228,6 +234,7 @@ if __name__ == "__main__":
     influx_process = start_influxdb()
     if influx_process is not None:
         atexit.register(influx_process.terminate)
+
 
     # Start background thread for sensor updates
     thread = threading.Thread(target=update_loop, daemon=True)
