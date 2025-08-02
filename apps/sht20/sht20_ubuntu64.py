@@ -31,7 +31,6 @@ import lgpio
 from flask import Flask, render_template_string
 from influxdb import InfluxDBClient
 
-
 # Constants for the SHT20 sensor
 SHT20_ADDR = 0x40       # SHT20 register address
 SHT20_CMD_R_T = 0xF3    # no hold Master Mode (Temperature)
@@ -234,7 +233,6 @@ if __name__ == "__main__":
     influx_process = start_influxdb()
     if influx_process is not None:
         atexit.register(influx_process.terminate)
-
 
     # Start background thread for sensor updates
     thread = threading.Thread(target=update_loop, daemon=True)
