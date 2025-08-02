@@ -66,6 +66,7 @@ QUERY_LAST_MONTH = (
     f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time >= now() - 30d'
 )
 
+
 def reading(v):
     if v == 1:
         lgpio.i2c_write_byte(bus, SHT20_CMD_R_T)
@@ -132,6 +133,7 @@ def write_influx(temp, timestamp):
         client.switch_database(INFLUX_DB)
         datapoint = [{
             "measurement": INFLUX_MEASUREMENT,
+
             "time": timestamp,
             "fields": {"value": float(temp)},
         }]
@@ -145,6 +147,7 @@ def start_influxdb():
     if shutil.which("influxd") is None:
         print("InfluxDB executable not found; please install InfluxDB.")
         return None
+
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -210,6 +213,7 @@ def index():
                 <p>Measurement: {{ influx_measurement }}</p>
                 <h3>Query for Last Month</h3>
                 <pre>{{ query }}</pre>
+
             </body>
         </html>
         """,
@@ -221,6 +225,7 @@ def index():
         influx_db=INFLUX_DB,
         influx_measurement=INFLUX_MEASUREMENT,
         query=QUERY_LAST_MONTH,
+
     )
 
 
