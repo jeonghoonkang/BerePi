@@ -152,6 +152,7 @@ def write_influx(temp, timestamp):
         client.switch_database(INFLUX_DB)
         datapoint = [{
             "measurement": INFLUX_MEASUREMENT,
+
             "time": timestamp,
             "fields": {"value": float(temp)},
         }]
@@ -187,6 +188,7 @@ def start_influxdb():
         return None
 
 
+
 def capture_and_send(html, outfile="sht20_page.pdf"):
     """Capture the given HTML to a PDF and send via telegram-send."""
     try:
@@ -196,6 +198,7 @@ def capture_and_send(html, outfile="sht20_page.pdf"):
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send error:", exc)
+
 
 
 def update_loop():
@@ -234,6 +237,7 @@ def update_loop():
             )
         capture_and_send(html)
 
+
         time.sleep(30)
 
 
@@ -242,6 +246,7 @@ def index():
     """Render a simple HTML page with the latest reading."""
     return render_template_string(
         INDEX_TEMPLATE,
+
         temp=latest_data["temperature"],
         ip=latest_data["ip"],
         ts=latest_data["timestamp"],
