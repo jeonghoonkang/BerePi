@@ -43,6 +43,27 @@ bus = lgpio.i2c_open(1, SHT20_ADDR)
 # Flask application setup
 app = Flask(__name__)
 
+# HTML template for the web page
+INDEX_TEMPLATE = """
+<html>
+    <head><title>SHT20 Sensor</title></head>
+    <body>
+        <h1>SHT20 Temperature</h1>
+        <p>Temperature: {{ temp }} &deg;C</p>
+        <p>IP Address: {{ ip }}</p>
+        <p>Last Update: {{ ts }}</p>
+        <h2>InfluxDB Info</h2>
+        <p>User: {{ influx_user }}</p>
+        <p>Password: {{ influx_pass }}</p>
+        <p>Database: {{ influx_db }}</p>
+        <p>Measurement: {{ influx_measurement }}</p>
+        <h3>Query for Last Month</h3>
+        <pre>{{ query }}</pre>
+    </body>
+</html>
+"""
+
+
 # In-memory cache of the latest reading
 latest_data = {
     "temperature": None,
@@ -170,6 +191,18 @@ def start_influxdb():
         return None
 
 
+def capture_and_send(html, outfile="sht20_page.jpg"):
+    """Capture the given HTML to an image and send via telegram-send."""
+    try:
+        import imgkit
+
+        imgkit.from_string(html, outfile)
+        subprocess.run(["telegram-send", "-f", outfile], check=False)
+    except Exception as exc:  # pragma: no cover - best effort logging
+        print("Capture/send error:", exc)
+
+
+
 def update_loop():
     """Background thread that updates sensor data every 30 seconds."""
     while True:
@@ -191,6 +224,22 @@ def update_loop():
         write_influx(temp_c, timestamp)
         write_json(temp_c, ip, timestamp)
 
+        # Render the page and send a screenshot via Telegram
+        with app.app_context():
+            html = render_template_string(
+                INDEX_TEMPLATE,
+                temp=latest_data["temperature"],
+                ip=latest_data["ip"],
+                ts=latest_data["timestamp"],
+                influx_user=INFLUX_USER,
+                influx_pass=INFLUX_PASS,
+                influx_db=INFLUX_DB,
+                influx_measurement=INFLUX_MEASUREMENT,
+                query=QUERY_LAST_MONTH,
+            )
+        capture_and_send(html)
+
+
         time.sleep(30)
 
 
@@ -198,25 +247,8 @@ def update_loop():
 def index():
     """Render a simple HTML page with the latest reading."""
     return render_template_string(
-        """
-        <html>
-            <head><title>SHT20 Sensor</title></head>
-            <body>
-                <h1>SHT20 Temperature</h1>
-                <p>Temperature: {{ temp }} &deg;C</p>
-                <p>IP Address: {{ ip }}</p>
-                <p>Last Update: {{ ts }}</p>
-                <h2>InfluxDB Info</h2>
-                <p>User: {{ influx_user }}</p>
-                <p>Password: {{ influx_pass }}</p>
-                <p>Database: {{ influx_db }}</p>
-                <p>Measurement: {{ influx_measurement }}</p>
-                <h3>Query for Last Month</h3>
-                <pre>{{ query }}</pre>
+        INDEX_TEMPLATE,
 
-            </body>
-        </html>
-        """,
         temp=latest_data["temperature"],
         ip=latest_data["ip"],
         ts=latest_data["timestamp"],
@@ -225,7 +257,6 @@ def index():
         influx_db=INFLUX_DB,
         influx_measurement=INFLUX_MEASUREMENT,
         query=QUERY_LAST_MONTH,
-
     )
 
 
