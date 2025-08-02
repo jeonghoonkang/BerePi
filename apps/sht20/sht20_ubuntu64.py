@@ -54,6 +54,20 @@ latest_data = {
 # JSON file used to persist readings locally
 JSON_FILE = os.path.join(os.path.dirname(__file__), "sht20_data.json")
 
+# InfluxDB connection information
+INFLUX_HOST = "localhost"
+INFLUX_PORT = 8086
+INFLUX_USER = os.environ.get("INFLUX_USER", "admin")
+INFLUX_PASS = os.environ.get("INFLUX_PASS", "admin")
+INFLUX_DB = "sht20"
+INFLUX_MEASUREMENT = "temperature"
+
+# Query to fetch one month of temperature readings
+QUERY_LAST_MONTH = (
+    f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time >= now() - 30d'
+)
+
+
 def reading(v):
     if v == 1:
         lgpio.i2c_write_byte(bus, SHT20_CMD_R_T)
@@ -110,12 +124,17 @@ def write_json(temp, ip, timestamp):
 def write_influx(temp, timestamp):
     """Store a reading in InfluxDB."""
     try:
-        client = InfluxDBClient(host="localhost", port=8086)
-        dbname = "sht20"
-        client.create_database(dbname)
-        client.switch_database(dbname)
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER,
+            password=INFLUX_PASS,
+        )
+        client.create_database(INFLUX_DB)
+        client.switch_database(INFLUX_DB)
         datapoint = [{
-            "measurement": "temperature",
+            "measurement": INFLUX_MEASUREMENT,
+
             "time": timestamp,
             "fields": {"value": float(temp)},
         }]
@@ -129,6 +148,7 @@ def start_influxdb():
     if shutil.which("influxd") is None:
         print("InfluxDB executable not found; please install InfluxDB.")
         return None
+
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -187,12 +207,26 @@ def index():
                 <p>Temperature: {{ temp }} &deg;C</p>
                 <p>IP Address: {{ ip }}</p>
                 <p>Last Update: {{ ts }}</p>
+                <h2>InfluxDB Info</h2>
+                <p>User: {{ influx_user }}</p>
+                <p>Password: {{ influx_pass }}</p>
+                <p>Database: {{ influx_db }}</p>
+                <p>Measurement: {{ influx_measurement }}</p>
+                <h3>Query for Last Month</h3>
+                <pre>{{ query }}</pre>
+
             </body>
         </html>
         """,
         temp=latest_data["temperature"],
         ip=latest_data["ip"],
         ts=latest_data["timestamp"],
+        influx_user=INFLUX_USER,
+        influx_pass=INFLUX_PASS,
+        influx_db=INFLUX_DB,
+        influx_measurement=INFLUX_MEASUREMENT,
+        query=QUERY_LAST_MONTH,
+
     )
 
 
