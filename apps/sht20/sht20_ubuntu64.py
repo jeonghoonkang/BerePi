@@ -63,6 +63,7 @@ INDEX_TEMPLATE = """
 </html>
 """
 
+
 # In-memory cache of the latest reading
 latest_data = {
     "temperature": None,
@@ -85,6 +86,7 @@ INFLUX_MEASUREMENT = "temperature"
 QUERY_LAST_MONTH = (
     f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time >= now() - 30d'
 )
+
 
 def reading(v):
     if v == 1:
@@ -152,6 +154,7 @@ def write_influx(temp, timestamp):
         client.switch_database(INFLUX_DB)
         datapoint = [{
             "measurement": INFLUX_MEASUREMENT,
+
             "time": timestamp,
             "fields": {"value": float(temp)},
         }]
@@ -165,6 +168,7 @@ def start_influxdb():
     if shutil.which("influxd") is None:
         print("InfluxDB executable not found; please install InfluxDB.")
         return None
+
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -196,6 +200,7 @@ def capture_and_send(html, outfile="sht20_page.jpg"):
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send error:", exc)
+
 
 
 def update_loop():
@@ -234,6 +239,7 @@ def update_loop():
             )
         capture_and_send(html)
 
+
         time.sleep(30)
 
 
@@ -242,6 +248,7 @@ def index():
     """Render a simple HTML page with the latest reading."""
     return render_template_string(
         INDEX_TEMPLATE,
+
         temp=latest_data["temperature"],
         ip=latest_data["ip"],
         ts=latest_data["timestamp"],
