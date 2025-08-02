@@ -23,10 +23,14 @@ import os
 import socket
 import threading
 import time
+import subprocess
+import shutil
+import atexit
 
 import lgpio
 from flask import Flask, render_template_string
 from influxdb import InfluxDBClient
+
 
 # Constants for the SHT20 sensor
 SHT20_ADDR = 0x40       # SHT20 register address
@@ -120,6 +124,33 @@ def write_influx(temp, timestamp):
         print("InfluxDB write error:", exc)
 
 
+def start_influxdb():
+    """Start an InfluxDB server if one is not already running."""
+    if shutil.which("influxd") is None:
+        print("InfluxDB executable not found; please install InfluxDB.")
+        return None
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(1)
+        sock.connect(("localhost", 8086))
+        # Already running
+        return None
+    except OSError:
+        pass
+    finally:
+        sock.close()
+
+    try:
+        proc = subprocess.Popen(
+            ["influxd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return proc
+    except Exception as exc:  # pragma: no cover - best effort logging
+        print("Failed to start InfluxDB:", exc)
+        return None
+
+
 def update_loop():
     """Background thread that updates sensor data every 30 seconds."""
     while True:
@@ -166,6 +197,11 @@ def index():
 
 
 if __name__ == "__main__":
+    influx_process = start_influxdb()
+    if influx_process is not None:
+        atexit.register(influx_process.terminate)
+
+
     # Start background thread for sensor updates
     thread = threading.Thread(target=update_loop, daemon=True)
     thread.start()
