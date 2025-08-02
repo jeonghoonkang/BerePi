@@ -125,7 +125,8 @@ def capture_and_send(url, outfile="dashboard.jpg"):
     try:
         import imgkit
 
-        imgkit.from_url(url, outfile)
+        options = {"javascript-delay": 2000, "enable-local-file-access": ""}
+        imgkit.from_url(url, outfile, options=options)
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover
         print("Capture/send failed:", exc)

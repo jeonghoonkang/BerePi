@@ -63,7 +63,6 @@ INDEX_TEMPLATE = """
 </html>
 """
 
-
 # In-memory cache of the latest reading
 latest_data = {
     "temperature": None,
@@ -86,7 +85,6 @@ INFLUX_MEASUREMENT = "temperature"
 QUERY_LAST_MONTH = (
     f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time >= now() - 30d'
 )
-
 
 def reading(v):
     if v == 1:
@@ -169,7 +167,6 @@ def start_influxdb():
         print("InfluxDB executable not found; please install InfluxDB.")
         return None
 
-
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.settimeout(1)
@@ -191,12 +188,13 @@ def start_influxdb():
         return None
 
 
-def capture_and_send(html, outfile="sht20_page.jpg"):
-    """Capture the given HTML to an image and send via telegram-send."""
-    try:
-        import imgkit
 
-        imgkit.from_string(html, outfile)
+def capture_and_send(html, outfile="sht20_page.pdf"):
+    """Capture the given HTML to a PDF and send via telegram-send."""
+    try:
+        import pdfkit
+
+        pdfkit.from_string(html, outfile)
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send error:", exc)
