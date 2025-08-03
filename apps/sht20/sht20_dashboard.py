@@ -193,6 +193,7 @@ async def _capture_with_pyppeteer(url, outfile):
     except Exception:
         # Fall back to a short delay if the flag wasn't set in time
         await page.waitForTimeout(2000)
+
     await page.screenshot({"path": outfile, "fullPage": True})
     await browser.close()
 
