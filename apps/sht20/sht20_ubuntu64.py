@@ -86,6 +86,10 @@ QUERY_LAST_MONTH = (
     f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time >= now() - 30d'
 )
 
+# Interval between Telegram notifications (3 hours)
+SEND_INTERVAL = 3 * 60 * 60
+
+
 def reading(v):
     if v == 1:
         lgpio.i2c_write_byte(bus, SHT20_CMD_R_T)
@@ -188,7 +192,6 @@ def start_influxdb():
         return None
 
 
-
 def capture_and_send(html, outfile="sht20_page.pdf"):
     """Capture the given HTML to a PDF and send via telegram-send."""
     try:
@@ -200,9 +203,10 @@ def capture_and_send(html, outfile="sht20_page.pdf"):
         print("Capture/send error:", exc)
 
 
-
 def update_loop():
     """Background thread that updates sensor data every 30 seconds."""
+    last_send = 0
+
     while True:
         temp_raw = reading(1)
         humi_raw = reading(2)
@@ -222,7 +226,8 @@ def update_loop():
         write_influx(temp_c, timestamp)
         write_json(temp_c, ip, timestamp)
 
-        # Render the page and send a screenshot via Telegram
+        # Render the page and periodically send a screenshot via Telegram
+
         with app.app_context():
             html = render_template_string(
                 INDEX_TEMPLATE,
@@ -235,7 +240,11 @@ def update_loop():
                 influx_measurement=INFLUX_MEASUREMENT,
                 query=QUERY_LAST_MONTH,
             )
-        capture_and_send(html)
+
+        now = time.monotonic()
+        if now - last_send >= SEND_INTERVAL:
+            capture_and_send(html)
+            last_send = now
 
 
         time.sleep(30)
@@ -272,5 +281,3 @@ if __name__ == "__main__":
 
     # Run the web server
     app.run(host="0.0.0.0", port=5000)
-
-
