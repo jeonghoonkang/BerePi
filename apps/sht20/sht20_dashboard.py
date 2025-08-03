@@ -106,10 +106,12 @@ def index():
             {% endfor %}
             <script>
             // Ensure the entire DOM is loaded before trying to access elements
-            document.addEventListener('DOMContentLoaded', (event) => {
+            document.addEventListener('DOMContentLoaded', () => {
                 const weeks = {{ weeks|tojson }};
                 let chartsRenderedCount = 0;
                 const totalCharts = weeks.length;
+                // Flag used by the screenshot routine to detect chart completion
+                window.CHARTS_READY = false;
 
                 weeks.forEach((wk, idx) => {
                     const ctx = document.getElementById('chart'+(idx+1)).getContext('2d');
@@ -127,7 +129,7 @@ def index():
                             }]
                         },
                         options: {
-                            responsive: true,
+                            responsive: false,
                             maintainAspectRatio: false,
                             scales: {
                                 x: {
@@ -160,10 +162,9 @@ def index():
                         }
                     });
                     chartsRenderedCount++;
-                    // After all charts are rendered, set window.status
+                    // After all charts are rendered, set the global flag
                     if (chartsRenderedCount === totalCharts) {
-                        console.log("All charts rendered. Setting window.status to 'ready'.");
-                        window.status = 'ready';
+                        window.CHARTS_READY = true;
                     }
                 });
             });
@@ -183,12 +184,16 @@ async def _capture_with_pyppeteer(url, outfile):
 
     browser = await launch(args=["--no-sandbox"])
     page = await browser.newPage()
-    await page.goto(url)
+    await page.setViewport({"width": 1024, "height": 768})
+    # Wait for all network activity (including Chart.js) to finish
+    await page.goto(url, {"waitUntil": "networkidle0"})
     try:
         # Wait until the page JS reports that charts are rendered
-        await page.waitForFunction('window.status === "ready"', timeout=5000)
+        await page.waitForFunction("window.CHARTS_READY === true", timeout=10000)
     except Exception:
-        pass
+        # Fall back to a short delay if the flag wasn't set in time
+        await page.waitForTimeout(2000)
+
     await page.screenshot({"path": outfile, "fullPage": True})
     await browser.close()
 
