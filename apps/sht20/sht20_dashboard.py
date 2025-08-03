@@ -231,10 +231,14 @@ async def _capture_with_pyppeteer(url, outfile):
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
-        "--single-process",
+        "--no-zygote",
     ]
 
-    browser = await launch(executablePath=chrome_path, args=launch_args)
+    try:
+        browser = await launch(executablePath=chrome_path, args=launch_args)
+    except errors.BrowserError as exc:
+        raise RuntimeError(f"Failed to launch Chrome: {exc}") from exc
+
     try:
         page = await browser.newPage()
         await page.setViewport({"width": 1024, "height": 768})
@@ -285,7 +289,6 @@ def wait_for_server(url, timeout=30):
         except Exception:
             time.sleep(0.5)
     return False
-
 
 
 if __name__ == "__main__":
