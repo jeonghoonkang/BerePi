@@ -192,21 +192,23 @@ def start_influxdb():
         return None
 
 
-def capture_and_send(html, outfile="sht20_page.pdf"):
-    """Capture the given HTML to a PDF and send via telegram-send."""
+def send_plaintext(temp, ip, timestamp):
+    """Send a plain text summary via telegram-send."""
+    message = (
+        f"Temperature: {temp:.2f} \u00b0C\n"
+        f"IP Address: {ip}\n"
+        f"Timestamp: {timestamp}\n"
+        "\uc704\uce58: A\ub3d9 \uc11c\ubc84\uc2e4"  # 위치: A동 서버실
+    )
     try:
-        import pdfkit
-
-        pdfkit.from_string(html, outfile)
-        subprocess.run(["telegram-send", "-f", outfile], check=False)
+        subprocess.run(["telegram-send", message], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
-        print("Capture/send error:", exc)
+        print("Telegram send error:", exc)
 
 
 def update_loop():
     """Background thread that updates sensor data every 30 seconds."""
     last_send = 0
-
     while True:
         temp_raw = reading(1)
         humi_raw = reading(2)
@@ -226,24 +228,9 @@ def update_loop():
         write_influx(temp_c, timestamp)
         write_json(temp_c, ip, timestamp)
 
-        # Render the page and periodically send a screenshot via Telegram
-
-        with app.app_context():
-            html = render_template_string(
-                INDEX_TEMPLATE,
-                temp=latest_data["temperature"],
-                ip=latest_data["ip"],
-                ts=latest_data["timestamp"],
-                influx_user=INFLUX_USER,
-                influx_pass=INFLUX_PASS,
-                influx_db=INFLUX_DB,
-                influx_measurement=INFLUX_MEASUREMENT,
-                query=QUERY_LAST_MONTH,
-            )
-
         now = time.monotonic()
         if now - last_send >= SEND_INTERVAL:
-            capture_and_send(html)
+            send_plaintext(temp_c, ip, timestamp)
             last_send = now
 
 
@@ -278,6 +265,10 @@ if __name__ == "__main__":
 
     # Store the initial IP address so the web page has content immediately
     latest_data["ip"] = get_ip_address()
+
+    # Run the web server
+    app.run(host="0.0.0.0", port=5000)
+
 
     # Run the web server
     app.run(host="0.0.0.0", port=5000)
