@@ -205,6 +205,7 @@ async def _capture_with_pyppeteer(url, outfile):
         )
 
     browser = await launch(executablePath=chrome_path, args=["--no-sandbox"])
+
     page = await browser.newPage()
     await page.setViewport({"width": 1024, "height": 768})
     # Wait for all network activity (including Chart.js) to finish
@@ -215,6 +216,7 @@ async def _capture_with_pyppeteer(url, outfile):
     except Exception:
         # Fall back to a short delay if the flag wasn't set in time
         await page.waitForTimeout(2000)
+
     await page.screenshot({"path": outfile, "fullPage": True})
     await browser.close()
 
