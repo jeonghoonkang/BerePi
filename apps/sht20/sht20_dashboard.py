@@ -202,6 +202,8 @@ def index():
                     // After all charts are rendered, set the global flag
                     if (chartsRenderedCount === totalCharts) {
                         window.CHARTS_READY = true;
+                        window.status = 'ready';
+
                     }
                 });
             });
@@ -211,51 +213,6 @@ def index():
         """,
         weeks=weeks,
     )
-
-
-
-
-async def _capture_with_pyppeteer(url, outfile):
-    """Use headless Chrome to capture a screenshot of the dashboard."""
-    from pyppeteer import errors, launch
-
-    chrome_path = find_chrome_executable()
-    if not chrome_path:
-        raise RuntimeError(
-            "Chrome/Chromium not found. Please install it to capture screenshots."
-        )
-
-    # Extra flags help avoid crashes on constrained systems (e.g. Raspberry Pi)
-    launch_args = [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-zygote",
-    ]
-
-    try:
-        browser = await launch(executablePath=chrome_path, args=launch_args)
-    except errors.BrowserError as exc:
-        raise RuntimeError(f"Failed to launch Chrome: {exc}") from exc
-
-    try:
-        page = await browser.newPage()
-        await page.setViewport({"width": 1024, "height": 768})
-        # Wait for all network activity (including Chart.js) to finish
-        await page.goto(url, {"waitUntil": "networkidle0"})
-        try:
-            # Wait until the page JS reports that charts are rendered
-            await page.waitForFunction("window.CHARTS_READY === true", timeout=15000)
-        except Exception:
-            # Fall back to a short delay if the flag wasn't set in time
-            await page.waitForTimeout(2000)
-        await page.screenshot({"path": outfile, "fullPage": True})
-    finally:
-        try:
-            await browser.close()
-        except errors.BrowserError:
-            pass
 
 
 
