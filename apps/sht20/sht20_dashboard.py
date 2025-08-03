@@ -217,7 +217,7 @@ def index():
 
 async def _capture_with_pyppeteer(url, outfile):
     """Use headless Chrome to capture a screenshot of the dashboard."""
-    from pyppeteer import launch
+    from pyppeteer import errors, launch
 
     chrome_path = find_chrome_executable()
     if not chrome_path:
@@ -225,34 +225,67 @@ async def _capture_with_pyppeteer(url, outfile):
             "Chrome/Chromium not found. Please install it to capture screenshots."
         )
 
-    browser = await launch(executablePath=chrome_path, args=["--no-sandbox"])
+    # Extra flags help avoid crashes on constrained systems (e.g. Raspberry Pi)
+    launch_args = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--single-process",
+    ]
 
-    page = await browser.newPage()
-    await page.setViewport({"width": 1024, "height": 768})
-    # Wait for all network activity (including Chart.js) to finish
-    await page.goto(url, {"waitUntil": "networkidle0"})
+    browser = await launch(executablePath=chrome_path, args=launch_args)
     try:
-        # Wait until the page JS reports that charts are rendered
-        await page.waitForFunction("window.CHARTS_READY === true", timeout=10000)
-    except Exception:
-        # Fall back to a short delay if the flag wasn't set in time
-        await page.waitForTimeout(2000)
+        page = await browser.newPage()
+        await page.setViewport({"width": 1024, "height": 768})
+        # Wait for all network activity (including Chart.js) to finish
+        await page.goto(url, {"waitUntil": "networkidle0"})
+        try:
+            # Wait until the page JS reports that charts are rendered
+            await page.waitForFunction("window.CHARTS_READY === true", timeout=15000)
+        except Exception:
+            # Fall back to a short delay if the flag wasn't set in time
+            await page.waitForTimeout(2000)
+        await page.screenshot({"path": outfile, "fullPage": True})
+    finally:
+        try:
+            await browser.close()
+        except errors.BrowserError:
+            pass
 
-    await page.screenshot({"path": outfile, "fullPage": True})
-    await browser.close()
 
 
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
         import asyncio
+        from pyppeteer import errors
+
 
         asyncio.get_event_loop().run_until_complete(
             _capture_with_pyppeteer(url, outfile)
         )
         subprocess.run(["telegram-send", "-f", outfile], check=False)
+    except errors.BrowserError as exc:  # pragma: no cover
+        print("Capture/send failed: headless Chrome crashed:", exc)
     except Exception as exc:  # pragma: no cover
         print("Capture/send failed:", exc)
+
+
+def wait_for_server(url, timeout=30):
+    """Poll ``url`` until it responds or ``timeout`` seconds elapse."""
+    import urllib.request
+
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            with urllib.request.urlopen(url) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception:
+            time.sleep(0.5)
+    return False
+
 
 
 if __name__ == "__main__":
@@ -269,8 +302,9 @@ if __name__ == "__main__":
     server.daemon = True
     server.start()
 
-    # Give the server a moment to start before capturing
-    time.sleep(5)
-    capture_and_send(url)
+    if wait_for_server(url):
+        capture_and_send(url)
+    else:
+        print("Dashboard server did not become ready in time")
 
     server.join()
