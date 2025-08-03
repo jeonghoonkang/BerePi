@@ -254,11 +254,13 @@ async def _capture_with_pyppeteer(url, outfile):
             pass
 
 
+
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
         import asyncio
         from pyppeteer import errors
+
 
         asyncio.get_event_loop().run_until_complete(
             _capture_with_pyppeteer(url, outfile)
@@ -283,6 +285,7 @@ def wait_for_server(url, timeout=30):
         except Exception:
             time.sleep(0.5)
     return False
+
 
 
 if __name__ == "__main__":
