@@ -177,18 +177,30 @@ def index():
 
 
 
+async def _capture_with_pyppeteer(url, outfile):
+    """Use headless Chrome to capture a screenshot of the dashboard."""
+    from pyppeteer import launch
+
+    browser = await launch(args=["--no-sandbox"])
+    page = await browser.newPage()
+    await page.goto(url)
+    try:
+        # Wait until the page JS reports that charts are rendered
+        await page.waitForFunction('window.status === "ready"', timeout=5000)
+    except Exception:
+        pass
+    await page.screenshot({"path": outfile, "fullPage": True})
+    await browser.close()
+
+
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
-        import imgkit
+        import asyncio
 
-        options = {
-            "javascript-delay": 2000,
-            "enable-local-file-access": "",
-            "window-status": "ready",
-            "no-stop-slow-scripts": "",
-        }
-        imgkit.from_url(url, outfile, options=options)
+        asyncio.get_event_loop().run_until_complete(
+            _capture_with_pyppeteer(url, outfile)
+        )
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover
         print("Capture/send failed:", exc)
