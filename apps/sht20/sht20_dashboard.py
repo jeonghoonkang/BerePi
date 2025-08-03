@@ -112,6 +112,7 @@ def index():
                     options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } }
                 });
             });
+            window.status = 'ready';
             </script>
         </body>
         </html>
@@ -125,7 +126,12 @@ def capture_and_send(url, outfile="dashboard.jpg"):
     try:
         import imgkit
 
-        options = {"javascript-delay": 2000, "enable-local-file-access": ""}
+        options = {
+            "javascript-delay": 2000,
+            "enable-local-file-access": "",
+            "window-status": "ready",
+            "no-stop-slow-scripts": "",
+        }
         imgkit.from_url(url, outfile, options=options)
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover
