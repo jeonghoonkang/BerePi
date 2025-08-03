@@ -199,7 +199,7 @@ def send_plaintext(temp, ip, timestamp):
         f"IP Address: {ip}\n"
         f"Timestamp: {timestamp}\n"
         "\uc704\uce58: A\ub3d9 \uc11c\ubc84\uc2e4 \n"  # 위치: A동 서버실
-        f"influxdb user, pass {INFLUX_USER} {INFLUX_PASS} {INFLUX_DB} {INFLUX_MEASUREMENT} \n"
+        f"influxdb user, pass, DB, measurements {INFLUX_USER} {INFLUX_PASS} {INFLUX_DB} {INFLUX_MEASUREMENT} \n"
         f"{QUERY_LAST_MONTH}"
     )
   
