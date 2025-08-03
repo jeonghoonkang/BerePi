@@ -4,6 +4,7 @@ import subprocess
 import time
 from threading import Thread
 import shutil
+import asyncio
 
 from flask import Flask, render_template_string
 from influxdb import InfluxDBClient
@@ -215,17 +216,14 @@ def index():
     )
 
 
-
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
-        import asyncio
-        from pyppeteer import errors
+        chrome = _find_chrome_executable()
+        if not chrome:
+            raise RuntimeError("Chrome/Chromium not found")
+        asyncio.run(_capture_with_pyppeteer(url, outfile, chrome))
 
-
-        asyncio.get_event_loop().run_until_complete(
-            _capture_with_pyppeteer(url, outfile)
-        )
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except errors.BrowserError as exc:  # pragma: no cover
         print("Capture/send failed: headless Chrome crashed:", exc)
@@ -246,6 +244,59 @@ def wait_for_server(url, timeout=30):
         except Exception:
             time.sleep(0.5)
     return False
+
+
+def _find_chrome_executable():
+    """Return path to a working Chrome/Chromium executable or ``None``."""
+    candidates = [
+        "google-chrome-stable",
+        "google-chrome",
+        "chromium-browser",
+        "chromium",
+    ]
+    for name in candidates:
+        path = shutil.which(name)
+        if not path:
+            continue
+        try:
+            subprocess.run(
+                [path, "--version"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            return path
+        except Exception:
+            continue
+    return None
+
+
+async def _capture_with_pyppeteer(url, outfile, executable):
+    """Use pyppeteer to capture ``url`` to ``outfile``."""
+    from pyppeteer import launch
+
+    browser = await launch(
+        executablePath=executable,
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-gpu",
+            "--no-zygote",
+        ],
+    )
+    try:
+        page = await browser.newPage()
+        await page.setViewport({"width": 1000, "height": 800})
+        await page.goto(url, {"waitUntil": "networkidle2"})
+        try:
+            await page.waitForFunction("window.CHARTS_READY === true", timeout=10000)
+        except Exception:
+            pass
+        await page.screenshot({"path": outfile, "type": "jpeg", "quality": 80, "fullPage": True})
+    finally:
+        await browser.close()
+
 
 
 if __name__ == "__main__":
