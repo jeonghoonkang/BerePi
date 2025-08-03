@@ -92,33 +92,89 @@ def index():
         <head>
             <title>SHT20 Charts</title>
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body { font-family: sans-serif; margin: 20px; }
+                canvas { max-width: 800px; margin-bottom: 30px; border: 1px solid #eee; }
+                h1, h2 { color: #333; }
+            </style>
         </head>
         <body>
             <h1>Monthly temperature overview</h1>
             {% for w in range(4) %}
             <h2>Week {{ loop.index }}</h2>
-            <canvas id="chart{{loop.index}}" width="400" height="200"></canvas>
+            <canvas id="chart{{loop.index}}" width="800" height="400"></canvas> {# Increased dimensions for better clarity in capture #}
             {% endfor %}
             <script>
-            const weeks = {{ weeks|tojson }};
-            weeks.forEach((wk, idx) => {
-                const ctx = document.getElementById('chart'+(idx+1)).getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: wk.map(p => p.time),
-                        datasets: [{ label: 'Temperature', data: wk.map(p => p.value), borderColor: 'blue', fill: false }]
-                    },
-                    options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } }
+            // Ensure the entire DOM is loaded before trying to access elements
+            document.addEventListener('DOMContentLoaded', (event) => {
+                const weeks = {{ weeks|tojson }};
+                let chartsRenderedCount = 0;
+                const totalCharts = weeks.length;
+
+                weeks.forEach((wk, idx) => {
+                    const ctx = document.getElementById('chart'+(idx+1)).getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: wk.map(p => new Date(p.time).toLocaleString()), // Format time for better readability
+                            datasets: [{
+                                label: 'Temperature',
+                                data: wk.map(p => p.value),
+                                borderColor: 'blue',
+                                backgroundColor: 'rgba(0, 0, 255, 0.1)', // Optional: shaded area below line
+                                fill: false, // Changed from true to false for a cleaner look if desired
+                                tension: 0.1 // Smooths the line
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        maxTicksLimit: 8, // Adjust tick limit
+                                        autoSkip: true,
+                                        maxRotation: 45,
+                                        minRotation: 0
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Time'
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Temperature Value'
+                                    }
+                                }
+                            },
+                            animation: {
+                                duration: 0 // Disable animation for instant rendering before capture
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true
+                                }
+                            }
+                        }
+                    });
+                    chartsRenderedCount++;
+                    // After all charts are rendered, set window.status
+                    if (chartsRenderedCount === totalCharts) {
+                        console.log("All charts rendered. Setting window.status to 'ready'.");
+                        window.status = 'ready';
+                    }
                 });
             });
-            window.status = 'ready';
             </script>
         </body>
         </html>
         """,
         weeks=weeks,
     )
+
+
 
 
 def capture_and_send(url, outfile="dashboard.jpg"):
