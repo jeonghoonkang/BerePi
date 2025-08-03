@@ -198,8 +198,11 @@ def send_plaintext(temp, ip, timestamp):
         f"Temperature: {temp:.2f} \u00b0C\n"
         f"IP Address: {ip}\n"
         f"Timestamp: {timestamp}\n"
-        "\uc704\uce58: A\ub3d9 \uc11c\ubc84\uc2e4"  # 위치: A동 서버실
+        "\uc704\uce58: A\ub3d9 \uc11c\ubc84\uc2e4 \n"  # 위치: A동 서버실
+        f"influxdb user, pass {INFLUX_USER} {INFLUX_PASS} {INFLUX_DB} {INFLUX_MEASUREMENT} \n"
+        f"{QUERY_LAST_MONTH}"
     )
+  
     try:
         subprocess.run(["telegram-send", message], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
