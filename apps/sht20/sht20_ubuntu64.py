@@ -62,18 +62,18 @@ INDEX_TEMPLATE = """
         <p>Measurement: {{ influx_measurement }}</p>
         <h3>Query for Last Month</h3>
         <pre>{{ query }}</pre>
-        <h2>Historical Temperature</h2>
+        <h2>Recent Temperature</h2>
         <canvas id="tempChart" width="400" height="200"></canvas>
         <script>
-            const history = {{ history|tojson }};
+            const recent = {{ recent|tojson }};
             const ctx = document.getElementById('tempChart').getContext('2d');
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: history.map(p => p.time),
+                    labels: recent.map(p => p.time),
                     datasets: [{
                         label: 'Temperature',
-                        data: history.map(p => p.temperature),
+                        data: recent.map(p => p.temperature),
                         borderColor: 'red',
                         fill: false
                     }]
@@ -187,6 +187,29 @@ def write_influx(temp, timestamp):
         print("InfluxDB write error:", exc)
 
 
+def query_recent_temperatures(limit=50):
+    """Retrieve recent temperature points from InfluxDB."""
+    try:
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER,
+            password=INFLUX_PASS,
+            database=INFLUX_DB,
+        )
+        result = client.query(
+            f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" ORDER BY time DESC LIMIT {limit}'
+        )
+        points = list(result.get_points())
+        points.reverse()
+        return [
+            {"time": p["time"], "temperature": p["value"]} for p in points
+        ]
+    except Exception as exc:  # pragma: no cover - best effort logging
+        print("InfluxDB query error:", exc)
+        return []
+
+
 def start_influxdb():
     """Start an InfluxDB server if one is not already running."""
     if shutil.which("influxd") is None:
@@ -243,15 +266,6 @@ def capture_and_send(url, outfile="sht20.jpg"):
         print("Capture/send failed:", exc)
 
 
-def load_history():
-    """Load temperature history from the JSON file."""
-    try:
-        with open(JSON_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:  # pragma: no cover - best effort
-        return []
-
-
 def update_loop():
     """Background thread that updates sensor data every 30 seconds."""
     last_send = 0
@@ -286,7 +300,7 @@ def update_loop():
 @app.route("/")
 def index():
     """Render a simple HTML page with the latest reading."""
-    history = load_history()
+    recent = query_recent_temperatures()
     return render_template_string(
         INDEX_TEMPLATE,
 
@@ -298,7 +312,7 @@ def index():
         influx_db=INFLUX_DB,
         influx_measurement=INFLUX_MEASUREMENT,
         query=QUERY_LAST_MONTH,
-        history=history,
+        recent=recent,
     )
 
 
