@@ -238,6 +238,7 @@ async def _capture_with_pyppeteer(url, outfile):
         browser = await launch(executablePath=chrome_path, args=launch_args)
     except errors.BrowserError as exc:
         raise RuntimeError(f"Failed to launch Chrome: {exc}") from exc
+
     try:
         page = await browser.newPage()
         await page.setViewport({"width": 1024, "height": 768})
@@ -257,11 +258,13 @@ async def _capture_with_pyppeteer(url, outfile):
             pass
 
 
+
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
         import asyncio
         from pyppeteer import errors
+
 
         asyncio.get_event_loop().run_until_complete(
             _capture_with_pyppeteer(url, outfile)
