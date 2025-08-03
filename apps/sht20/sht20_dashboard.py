@@ -19,6 +19,43 @@ INFLUX_MEASUREMENT = "temperature"
 app = Flask(__name__)
 
 
+def find_chrome_executable():
+    """Return path to a Chrome/Chromium executable if installed.
+
+    Some environments (e.g. Raspberry Pi) may have an incompatible
+    pyppeteer-managed Chromium on ``$PATH``.  We iterate through common
+    browser commands and verify that the located executable actually runs.
+    """
+
+    candidates = [
+        "chromium-browser",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ]
+
+    for name in candidates:
+        path = shutil.which(name)
+        if not path:
+            continue
+        # Skip pyppeteer's bundled Chromium which may be the wrong arch
+        if "pyppeteer" in path:
+            continue
+        try:
+            subprocess.run(
+                [path, "--version"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+        except Exception:
+            # If running the binary fails (e.g. exec format error), try next
+            continue
+        return path
+    return None
+
+
 def get_ip_address():
     """Return the host's primary IP address."""
     ip = "127.0.0.1"
@@ -182,7 +219,14 @@ async def _capture_with_pyppeteer(url, outfile):
     """Use headless Chrome to capture a screenshot of the dashboard."""
     from pyppeteer import launch
 
-    browser = await launch(args=["--no-sandbox"])
+    chrome_path = find_chrome_executable()
+    if not chrome_path:
+        raise RuntimeError(
+            "Chrome/Chromium not found. Please install it to capture screenshots."
+        )
+
+    browser = await launch(executablePath=chrome_path, args=["--no-sandbox"])
+
     page = await browser.newPage()
     await page.setViewport({"width": 1024, "height": 768})
     # Wait for all network activity (including Chart.js) to finish
@@ -212,8 +256,6 @@ def capture_and_send(url, outfile="dashboard.jpg"):
 
 
 if __name__ == "__main__":
-    import shutil
-
     influx_proc = start_influxdb()
     if influx_proc is not None:
         import atexit
