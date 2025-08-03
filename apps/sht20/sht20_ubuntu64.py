@@ -46,7 +46,10 @@ app = Flask(__name__)
 # HTML template for the web page
 INDEX_TEMPLATE = """
 <html>
-    <head><title>SHT20 Sensor</title></head>
+    <head>
+        <title>SHT20 Sensor</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
     <body>
         <h1>SHT20 Temperature</h1>
         <p>Temperature: {{ temp }} &deg;C</p>
@@ -59,6 +62,25 @@ INDEX_TEMPLATE = """
         <p>Measurement: {{ influx_measurement }}</p>
         <h3>Query for Last Month</h3>
         <pre>{{ query }}</pre>
+        <h2>Historical Temperature</h2>
+        <canvas id="tempChart" width="400" height="200"></canvas>
+        <script>
+            const history = {{ history|tojson }};
+            const ctx = document.getElementById('tempChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: history.map(p => p.time),
+                    datasets: [{
+                        label: 'Temperature',
+                        data: history.map(p => p.temperature),
+                        borderColor: 'red',
+                        fill: false
+                    }]
+                },
+                options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } }
+            });
+        </script>
     </body>
 </html>
 """
@@ -209,6 +231,27 @@ def send_plaintext(temp, ip, timestamp):
         print("Telegram send error:", exc)
 
 
+def capture_and_send(url, outfile="sht20.jpg"):
+    """Capture the given URL to an image and send via telegram-send."""
+    try:
+        import imgkit
+
+        options = {"javascript-delay": 2000, "enable-local-file-access": ""}
+        imgkit.from_url(url, outfile, options=options)
+        subprocess.run(["telegram-send", "-f", outfile], check=False)
+    except Exception as exc:  # pragma: no cover - best effort logging
+        print("Capture/send failed:", exc)
+
+
+def load_history():
+    """Load temperature history from the JSON file."""
+    try:
+        with open(JSON_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:  # pragma: no cover - best effort
+        return []
+
+
 def update_loop():
     """Background thread that updates sensor data every 30 seconds."""
     last_send = 0
@@ -243,6 +286,7 @@ def update_loop():
 @app.route("/")
 def index():
     """Render a simple HTML page with the latest reading."""
+    history = load_history()
     return render_template_string(
         INDEX_TEMPLATE,
 
@@ -254,6 +298,7 @@ def index():
         influx_db=INFLUX_DB,
         influx_measurement=INFLUX_MEASUREMENT,
         query=QUERY_LAST_MONTH,
+        history=history,
     )
 
 
@@ -268,10 +313,13 @@ if __name__ == "__main__":
 
     # Store the initial IP address so the web page has content immediately
     latest_data["ip"] = get_ip_address()
+    server = threading.Thread(
+        target=lambda: app.run(host="0.0.0.0", port=5000, use_reloader=False)
+    )
+    server.daemon = True
+    server.start()
 
-    # Run the web server
-    app.run(host="0.0.0.0", port=5000)
+    time.sleep(5)
+    capture_and_send("http://localhost:5000")
 
-
-    # Run the web server
-    app.run(host="0.0.0.0", port=5000)
+    server.join()
