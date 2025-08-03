@@ -89,6 +89,7 @@ QUERY_LAST_MONTH = (
 # Interval between Telegram notifications (3 hours)
 SEND_INTERVAL = 3 * 60 * 60
 
+
 def reading(v):
     if v == 1:
         lgpio.i2c_write_byte(bus, SHT20_CMD_R_T)
@@ -155,6 +156,7 @@ def write_influx(temp, timestamp):
         client.switch_database(INFLUX_DB)
         datapoint = [{
             "measurement": INFLUX_MEASUREMENT,
+
             "time": timestamp,
             "fields": {"value": float(temp)},
         }]
@@ -231,6 +233,7 @@ def update_loop():
             send_plaintext(temp_c, ip, timestamp)
             last_send = now
 
+
         time.sleep(30)
 
 
@@ -239,6 +242,7 @@ def index():
     """Render a simple HTML page with the latest reading."""
     return render_template_string(
         INDEX_TEMPLATE,
+
         temp=latest_data["temperature"],
         ip=latest_data["ip"],
         ts=latest_data["timestamp"],
@@ -266,3 +270,5 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
 
 
+    # Run the web server
+    app.run(host="0.0.0.0", port=5000)
