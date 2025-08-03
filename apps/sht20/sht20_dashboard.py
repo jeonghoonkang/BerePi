@@ -19,6 +19,22 @@ INFLUX_MEASUREMENT = "temperature"
 app = Flask(__name__)
 
 
+def find_chrome_executable():
+    """Return path to a Chrome/Chromium executable if installed."""
+    candidates = [
+        "chromium-browser",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ]
+    for name in candidates:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
 def get_ip_address():
     """Return the host's primary IP address."""
     ip = "127.0.0.1"
@@ -106,10 +122,12 @@ def index():
             {% endfor %}
             <script>
             // Ensure the entire DOM is loaded before trying to access elements
-            document.addEventListener('DOMContentLoaded', (event) => {
+            document.addEventListener('DOMContentLoaded', () => {
                 const weeks = {{ weeks|tojson }};
                 let chartsRenderedCount = 0;
                 const totalCharts = weeks.length;
+                // Flag used by the screenshot routine to detect chart completion
+                window.CHARTS_READY = false;
 
                 weeks.forEach((wk, idx) => {
                     const ctx = document.getElementById('chart'+(idx+1)).getContext('2d');
@@ -127,7 +145,7 @@ def index():
                             }]
                         },
                         options: {
-                            responsive: true,
+                            responsive: false,
                             maintainAspectRatio: false,
                             scales: {
                                 x: {
@@ -160,10 +178,9 @@ def index():
                         }
                     });
                     chartsRenderedCount++;
-                    // After all charts are rendered, set window.status
+                    // After all charts are rendered, set the global flag
                     if (chartsRenderedCount === totalCharts) {
-                        console.log("All charts rendered. Setting window.status to 'ready'.");
-                        window.status = 'ready';
+                        window.CHARTS_READY = true;
                     }
                 });
             });
@@ -177,26 +194,45 @@ def index():
 
 
 
+async def _capture_with_pyppeteer(url, outfile):
+    """Use headless Chrome to capture a screenshot of the dashboard."""
+    from pyppeteer import launch
+
+    chrome_path = find_chrome_executable()
+    if not chrome_path:
+        raise RuntimeError(
+            "Chrome/Chromium not found. Please install it to capture screenshots."
+        )
+
+    browser = await launch(executablePath=chrome_path, args=["--no-sandbox"])
+    page = await browser.newPage()
+    await page.setViewport({"width": 1024, "height": 768})
+    # Wait for all network activity (including Chart.js) to finish
+    await page.goto(url, {"waitUntil": "networkidle0"})
+    try:
+        # Wait until the page JS reports that charts are rendered
+        await page.waitForFunction("window.CHARTS_READY === true", timeout=10000)
+    except Exception:
+        # Fall back to a short delay if the flag wasn't set in time
+        await page.waitForTimeout(2000)
+    await page.screenshot({"path": outfile, "fullPage": True})
+    await browser.close()
+
+
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
-        import imgkit
+        import asyncio
 
-        options = {
-            "javascript-delay": 2000,
-            "enable-local-file-access": "",
-            "window-status": "ready",
-            "no-stop-slow-scripts": "",
-        }
-        imgkit.from_url(url, outfile, options=options)
+        asyncio.get_event_loop().run_until_complete(
+            _capture_with_pyppeteer(url, outfile)
+        )
         subprocess.run(["telegram-send", "-f", outfile], check=False)
     except Exception as exc:  # pragma: no cover
         print("Capture/send failed:", exc)
 
 
 if __name__ == "__main__":
-    import shutil
-
     influx_proc = start_influxdb()
     if influx_proc is not None:
         import atexit
