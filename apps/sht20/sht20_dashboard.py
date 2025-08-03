@@ -106,10 +106,12 @@ def index():
             {% endfor %}
             <script>
             // Ensure the entire DOM is loaded before trying to access elements
-            document.addEventListener('DOMContentLoaded', (event) => {
+            document.addEventListener('DOMContentLoaded', () => {
                 const weeks = {{ weeks|tojson }};
                 let chartsRenderedCount = 0;
                 const totalCharts = weeks.length;
+                // Flag used by the screenshot routine to detect chart completion
+                window.CHARTS_READY = false;
 
                 weeks.forEach((wk, idx) => {
                     const ctx = document.getElementById('chart'+(idx+1)).getContext('2d');
@@ -127,7 +129,7 @@ def index():
                             }]
                         },
                         options: {
-                            responsive: true,
+                            responsive: false,
                             maintainAspectRatio: false,
                             scales: {
                                 x: {
@@ -160,9 +162,9 @@ def index():
                         }
                     });
                     chartsRenderedCount++;
-                    // After all charts are rendered, set window.status
+                    // After all charts are rendered, set the global flag
                     if (chartsRenderedCount === totalCharts) {
-                        console.log("All charts rendered. Setting window.status to 'ready'.");
+                        window.CHARTS_READY = true;
                         window.status = 'ready';
                     }
                 });
@@ -173,8 +175,6 @@ def index():
         """,
         weeks=weeks,
     )
-
-
 
 
 def capture_and_send(url, outfile="dashboard.jpg"):
@@ -194,9 +194,22 @@ def capture_and_send(url, outfile="dashboard.jpg"):
         print("Capture/send failed:", exc)
 
 
-if __name__ == "__main__":
-    import shutil
+def wait_for_server(url, timeout=30):
+    """Poll ``url`` until it responds or ``timeout`` seconds elapse."""
+    import urllib.request
 
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            with urllib.request.urlopen(url) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception:
+            time.sleep(0.5)
+    return False
+
+
+if __name__ == "__main__":
     influx_proc = start_influxdb()
     if influx_proc is not None:
         import atexit
@@ -210,8 +223,9 @@ if __name__ == "__main__":
     server.daemon = True
     server.start()
 
-    # Give the server a moment to start before capturing
-    time.sleep(5)
-    capture_and_send(url)
+    if wait_for_server(url):
+        capture_and_send(url)
+    else:
+        print("Dashboard server did not become ready in time")
 
     server.join()
