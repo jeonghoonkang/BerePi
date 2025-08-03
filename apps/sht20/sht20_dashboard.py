@@ -19,6 +19,43 @@ INFLUX_MEASUREMENT = "temperature"
 app = Flask(__name__)
 
 
+def find_chrome_executable():
+    """Return path to a Chrome/Chromium executable if installed.
+
+    Some environments (e.g. Raspberry Pi) may have an incompatible
+    pyppeteer-managed Chromium on ``$PATH``.  We iterate through common
+    browser commands and verify that the located executable actually runs.
+    """
+
+    candidates = [
+        "chromium-browser",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ]
+
+    for name in candidates:
+        path = shutil.which(name)
+        if not path:
+            continue
+        # Skip pyppeteer's bundled Chromium which may be the wrong arch
+        if "pyppeteer" in path:
+            continue
+        try:
+            subprocess.run(
+                [path, "--version"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+        except Exception:
+            # If running the binary fails (e.g. exec format error), try next
+            continue
+        return path
+    return None
+
+
 def get_ip_address():
     """Return the host's primary IP address."""
     ip = "127.0.0.1"
@@ -166,6 +203,7 @@ def index():
                     if (chartsRenderedCount === totalCharts) {
                         window.CHARTS_READY = true;
                         window.status = 'ready';
+
                     }
                 });
             });
@@ -177,19 +215,20 @@ def index():
     )
 
 
+
 def capture_and_send(url, outfile="dashboard.jpg"):
     """Capture the given URL to an image and send via telegram-send."""
     try:
-        import imgkit
+        import asyncio
+        from pyppeteer import errors
 
-        options = {
-            "javascript-delay": 2000,
-            "enable-local-file-access": "",
-            "window-status": "ready",
-            "no-stop-slow-scripts": "",
-        }
-        imgkit.from_url(url, outfile, options=options)
+
+        asyncio.get_event_loop().run_until_complete(
+            _capture_with_pyppeteer(url, outfile)
+        )
         subprocess.run(["telegram-send", "-f", outfile], check=False)
+    except errors.BrowserError as exc:  # pragma: no cover
+        print("Capture/send failed: headless Chrome crashed:", exc)
     except Exception as exc:  # pragma: no cover
         print("Capture/send failed:", exc)
 
