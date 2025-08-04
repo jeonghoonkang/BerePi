@@ -5,6 +5,7 @@ import shutil
 import urllib.request
 import urllib.parse
 
+
 INFLUX_HOST = "localhost"
 INFLUX_PORT = 8086
 INFLUX_USER = os.environ.get("INFLUX_USER", "admin")
@@ -59,9 +60,13 @@ def fetch_and_send():
     outfile = "temperature.png"
     try:
         fetch_chart_png(outfile)
+
         subprocess.run(["telegram-send", "-f", outfile], check=False)
+    except errors.BrowserError as exc:  # pragma: no cover
+        print("Capture/send failed: headless Chrome crashed:", exc)
     except Exception as exc:  # pragma: no cover
         print("Capture/send failed:", exc)
+
 
 
 if __name__ == "__main__":
@@ -74,4 +79,5 @@ if __name__ == "__main__":
     while True:
         fetch_and_send()
         time.sleep(12 * 3600)
+
 
