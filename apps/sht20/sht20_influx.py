@@ -62,6 +62,7 @@ def main():
         latest = fetch_recent_values(client, limit=5)
         print(latest)
 
+
         now = datetime.datetime.utcnow()
         for i in range(4):
             end = now - datetime.timedelta(weeks=i)
@@ -74,6 +75,7 @@ def main():
                 INFLUX_USER,
                 INFLUX_PASSWORD,
                 INFLUX_MEASUREMENT,
+
                 INFLUX_FIELD,
                 start,
                 end,
@@ -82,6 +84,7 @@ def main():
             send_image(img_path)
     except Exception as exc:
         print(f"Failed to connect to InfluxDB: {exc}")
+
 
 
 if __name__ == "__main__":
