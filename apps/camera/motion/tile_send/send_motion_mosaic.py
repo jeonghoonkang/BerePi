@@ -24,7 +24,9 @@ from typing import Dict, Iterable, List
 import matplotlib.pyplot as plt
 from PIL import Image
 from rich.progress import Progress
-from influxdb_client import InfluxDBClient, Point
+# use the classic influxdb client instead of raw HTTP requests
+from influxdb import InfluxDBClient
+
 from ultralytics import YOLO
 
 MOTION_DIR = Path("/var/lib/motion")
@@ -32,10 +34,12 @@ OUTPUT_MOSAIC = Path("/tmp/motion_mosaic.jpg")
 PEOPLE_GRAPH = Path("/tmp/person_count.png")
 DISK_GRAPH = Path("/tmp/disk_free.png")
 
-INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
-INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "token")
-INFLUX_ORG = os.getenv("INFLUX_ORG", "org")
-INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "bucket")
+INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
+INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
+INFLUX_USER = os.getenv("INFLUX_USER", "")
+INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
+INFLUX_DB = os.getenv("INFLUX_DB", "")
+
 
 
 def _images_since(start: datetime) -> List[Path]:
@@ -87,33 +91,47 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
 
 
 def write_counts(client: InfluxDBClient, counts: Dict[Path, int]) -> None:
-    write_api = client.write_api()
+    points = []
     for path, num in counts.items():
-        point = (
-            Point("person_count")
-            .tag("source", "motion")
-            .field("count", num)
-            .time(datetime.fromtimestamp(path.stat().st_mtime))
+        points.append(
+            {
+                "measurement": "person_count",
+                "tags": {"source": "motion"},
+                "time": datetime.utcfromtimestamp(path.stat().st_mtime).isoformat() + "Z",
+                "fields": {"count": num},
+            }
         )
-        write_api.write(INFLUX_BUCKET, INFLUX_ORG, point)
+    if points:
+        client.write_points(points)
+
 
 
 def write_disk_free(client: InfluxDBClient) -> None:
     free = shutil.disk_usage("/").free
-    point = Point("disk_free").field("bytes", free).time(datetime.utcnow())
-    client.write_api().write(INFLUX_BUCKET, INFLUX_ORG, point)
+    point = {
+        "measurement": "disk_free",
+        "time": datetime.utcnow().isoformat() + "Z",
+        "fields": {"bytes": free},
+    }
+    client.write_points([point])
 
 
-def generate_graph(client: InfluxDBClient, measurement: str, output: Path) -> Path:
-    query = f"from(bucket: '{INFLUX_BUCKET}') |> range(start: -48h) |> filter(fn: (r) => r['_measurement'] == '{measurement}')"
-    tables = client.query_api().query(query, org=INFLUX_ORG)
+def generate_graph(
+    client: InfluxDBClient, measurement: str, field: str, output: Path
+) -> Path:
+    query = (
+        f'SELECT "{field}" FROM "{measurement}" '
+        f'WHERE time > now() - 48h'
+    )
+    result = client.query(query)
+    points = list(result.get_points(measurement=measurement))
 
     times: List[datetime] = []
     values: List[float] = []
-    for table in tables:
-        for record in table.records:
-            times.append(record.get_time())
-            values.append(record.get_value())
+    for p in points:
+        times.append(datetime.fromisoformat(p["time"].replace("Z", "+00:00")))
+        values.append(p[field])
+
 
     if times and values:
         plt.figure()
@@ -144,11 +162,19 @@ def main() -> None:
 
     people_counts = detect_people(model, images)
 
-    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
-        write_counts(client, people_counts)
-        write_disk_free(client)
-        generate_graph(client, "person_count", PEOPLE_GRAPH)
-        generate_graph(client, "disk_free", DISK_GRAPH)
+    client = InfluxDBClient(
+        host=INFLUX_HOST,
+        port=INFLUX_PORT,
+        username=INFLUX_USER or None,
+        password=INFLUX_PASSWORD or None,
+        database=INFLUX_DB,
+    )
+    write_counts(client, people_counts)
+    write_disk_free(client)
+    generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
+    generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
+    client.close()
+
 
     mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
 
@@ -157,5 +183,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
