@@ -3,57 +3,98 @@ import datetime
 import os
 import subprocess
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import pandas as pd
-from influxdb_client import InfluxDBClient
+import matplotlib.pyplot as plt
+import seaborn as sns
+from influxdb import InfluxDBClient
+from rich.console import Console
 
-INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
-INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "")
-INFLUX_ORG = os.getenv("INFLUX_ORG", "")
-INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "")
-MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "sht20")
+INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
+INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
+INFLUX_USER = os.getenv("INFLUX_USER", "")
+INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
+INFLUX_DB = os.getenv("INFLUX_DB", "")
+INFLUX_MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
+INFLUX_FIELD = os.getenv("INFLUX_FIELD", "value")
 
-def fetch_week(client, start, stop):
-    query = f"""
-    from(bucket: \"{INFLUX_BUCKET}\")
-      |> range(start: {start.isoformat()}, stop: {stop.isoformat()})
-      |> filter(fn: (r) => r[\"_measurement\"] == \"{MEASUREMENT}\")
-    """
-    df = client.query_api().query_data_frame(org=INFLUX_ORG, query=query)
-    if isinstance(df, list):
-        df = pd.concat(df, ignore_index=True)
-    return df
+console = Console()
+sns.set_theme()
 
-def plot_week(df, title, path):
-    plt.figure(figsize=(10, 4))
-    plt.plot(df["_time"], df["_value"])
-    plt.title(title)
-    plt.xlabel("Time")
-    plt.ylabel("Value")
-    plt.tight_layout()
-    plt.savefig(path)
-    plt.close()
+
+def fetch_recent_values(client, limit=10):
+    result = client.query(
+        f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" ORDER BY time DESC LIMIT {limit}'
+    )
+    return list(result.get_points(measurement=INFLUX_MEASUREMENT))
+
+
+def render_week(client, measurement, field, start, stop, path):
+    start_utc = start.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stop_utc = stop.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    query = (
+        f"SELECT \"{field}\" FROM \"{measurement}\" "
+        f"WHERE time >= '{start_utc}' AND time <= '{stop_utc}'"
+    )
+    result = client.query(query)
+    points = list(result.get_points(measurement=measurement))
+    if not points:
+        console.print("No data found for the specified range")
+        return
+
+    df = pd.DataFrame(points)
+    df["time"] = pd.to_datetime(df["time"]).dt.tz_convert("Asia/Seoul")
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.lineplot(data=df, x="time", y=field, ax=ax)
+    ax.set_title(
+        f"{measurement} {start.date()} - {stop.date()} \U0001F321\uFE0F"
+    )
+    ax.set_ylabel("Temperature (°C)")
+    fig.tight_layout()
+    fig.savefig(path)
+    console.print(f"Chart saved: {path}")
+    plt.close(fig)
+
 
 def send_image(path):
+    console.print(f"Sending image: {path}")
     subprocess.run(["telegram-send", "--image", str(path)], check=False)
 
+
 def main():
-    client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-    now = datetime.datetime.utcnow()
-    for i in range(4):
-        end = now - datetime.timedelta(weeks=i)
-        start = now - datetime.timedelta(weeks=i + 1)
-        df = fetch_week(client, start, end)
-        if df.empty:
-            continue
-        df["_time"] = pd.to_datetime(df["_time"])
-        img_path = Path(f"week_{i + 1}.png")
-        title = f"Week {i + 1}: {start.date()} to {end.date()}"
-        plot_week(df, title, img_path)
-        send_image(img_path)
+    try:
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER,
+            password=INFLUX_PASSWORD,
+            database=INFLUX_DB,
+        )
+        client.ping()
+        latest = fetch_recent_values(client, limit=5)
+        console.print(latest)
+
+        tz = ZoneInfo("Asia/Seoul")
+        now = datetime.datetime.now(tz)
+        for i in range(4):
+            end = now - datetime.timedelta(weeks=i)
+            start = now - datetime.timedelta(weeks=i + 1)
+            img_path = Path(f"week_{i + 1}.png").resolve()
+            render_week(
+                client,
+                INFLUX_MEASUREMENT,
+                INFLUX_FIELD,
+                start,
+                end,
+                img_path,
+            )
+            send_image(img_path)
+    except Exception as exc:
+        console.print(f"Failed to connect to InfluxDB: {exc}")
+
 
 if __name__ == "__main__":
     main()
+
