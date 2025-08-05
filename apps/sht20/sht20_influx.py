@@ -6,13 +6,15 @@ from pathlib import Path
 
 import pandas as pd
 import matplotlib.pyplot as plt
+
 from influxdb import InfluxDBClient
 
 INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
-INFLUX_USER = os.getenv("INFLUX_USER", "")
-INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
-INFLUX_DB = os.getenv("INFLUX_DB", "")
+INFLUX_USER = os.getenv("INFLUX_USER", "admin")
+INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "admin")
+INFLUX_DB = os.getenv("INFLUX_DB", "sht20")
+
 INFLUX_MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
 INFLUX_FIELD = os.getenv("INFLUX_FIELD", "value")
 
@@ -47,6 +49,7 @@ def render_week(client, measurement, field, start, stop, path):
     plt.close(fig)
 
 
+
 def send_image(path):
     subprocess.run(["telegram-send", "--image", str(path)], check=False)
 
@@ -64,6 +67,7 @@ def main():
         latest = fetch_recent_values(client, limit=5)
         print(latest)
 
+
         now = datetime.datetime.utcnow()
         for i in range(4):
             end = now - datetime.timedelta(weeks=i)
@@ -72,6 +76,7 @@ def main():
             render_week(
                 client,
                 INFLUX_MEASUREMENT,
+
                 INFLUX_FIELD,
                 start,
                 end,
