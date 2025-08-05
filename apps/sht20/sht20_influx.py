@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+
 from influxdb import InfluxDBClient
 from rich.console import Console
 
@@ -14,11 +16,13 @@ INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
-INFLUX_DB = os.getenv("INFLUX_DB", "sht20")
+INFLUX_DB = os.getenv("INFLUX_DB", "")
 INFLUX_MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
 INFLUX_FIELD = os.getenv("INFLUX_FIELD", "value")
 
 console = Console()
+sns.set_theme()
+
 
 
 def fetch_recent_values(client, limit=10):
@@ -40,16 +44,18 @@ def render_week(client, measurement, field, start, stop, path):
     points = list(result.get_points(measurement=measurement))
     if not points:
         console.print("No data found for the specified range")
-
         return
 
     df = pd.DataFrame(points)
-    df["time"] = pd.to_datetime(df["time"])
-    df.set_index("time", inplace=True)
+    df["time"] = pd.to_datetime(df["time"]).dt.tz_convert("Asia/Seoul")
 
-    ax = df[field].plot(figsize=(10, 4), title=f"{measurement} {start.date()} - {stop.date()}")
-    ax.set_ylabel(field)
-    fig = ax.get_figure()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.lineplot(data=df, x="time", y=field, ax=ax)
+    ax.set_title(
+        f"{measurement} {start.date()} - {stop.date()} \U0001F321\uFE0F"
+    )
+    ax.set_ylabel("Temperature (°C)")
+
     fig.tight_layout()
     fig.savefig(path)
     console.print(f"Chart saved: {path}")
