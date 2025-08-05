@@ -26,6 +26,7 @@ from PIL import Image
 from rich.progress import Progress
 # use the classic influxdb client instead of raw HTTP requests
 from influxdb import InfluxDBClient
+
 from ultralytics import YOLO
 
 MOTION_DIR = Path("/var/lib/motion")
@@ -38,6 +39,7 @@ INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
 INFLUX_DB = os.getenv("INFLUX_DB", "")
+
 
 
 def _images_since(start: datetime) -> List[Path]:
@@ -103,6 +105,7 @@ def write_counts(client: InfluxDBClient, counts: Dict[Path, int]) -> None:
         client.write_points(points)
 
 
+
 def write_disk_free(client: InfluxDBClient) -> None:
     free = shutil.disk_usage("/").free
     point = {
@@ -128,6 +131,7 @@ def generate_graph(
     for p in points:
         times.append(datetime.fromisoformat(p["time"].replace("Z", "+00:00")))
         values.append(p[field])
+
 
     if times and values:
         plt.figure()
@@ -170,6 +174,7 @@ def main() -> None:
     generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
     generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
     client.close()
+
 
     mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
 
