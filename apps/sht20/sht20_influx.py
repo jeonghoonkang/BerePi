@@ -34,11 +34,13 @@ def render_week(client, measurement, field, start, stop, path):
     query = (
         f"SELECT \"{field}\" FROM \"{measurement}\" "
         f"WHERE time >= '{start_utc}' AND time <= '{stop_utc}'"
+
     )
     result = client.query(query)
     points = list(result.get_points(measurement=measurement))
     if not points:
         console.print("No data found for the specified range")
+
         return
 
     df = pd.DataFrame(points)
@@ -52,6 +54,7 @@ def render_week(client, measurement, field, start, stop, path):
     fig.savefig(path)
     console.print(f"Chart saved: {path}")
     plt.close(fig)
+
 
 
 def send_image(path):
@@ -81,6 +84,7 @@ def main():
             render_week(
                 client,
                 INFLUX_MEASUREMENT,
+
                 INFLUX_FIELD,
                 start,
                 end,
@@ -89,6 +93,7 @@ def main():
             send_image(img_path)
     except Exception as exc:
         console.print(f"Failed to connect to InfluxDB: {exc}")
+
 
 
 if __name__ == "__main__":
