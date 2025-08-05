@@ -152,7 +152,7 @@ if __name__ == "__main__":
     server.start()
 
 
-        atexit.register(influx_proc.terminate)
+    atexit.register(influx_proc.terminate)
 
     # Wait for server to become reachable
     for _ in range(30):
