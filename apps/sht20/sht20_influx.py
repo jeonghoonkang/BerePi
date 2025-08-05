@@ -75,6 +75,7 @@ def main():
         print(f"Failed to connect to InfluxDB: {exc}")
 
 
+
 if __name__ == "__main__":
     main()
 
