@@ -1,39 +1,21 @@
 import asyncio
 import os
-import socket
 import subprocess
 import time
-from threading import Thread
 import shutil
 import urllib.request
 
-from flask import Flask, render_template_string
-from influxdb import InfluxDBClient
+
 
 
 PORT = 5001
+
 INFLUX_HOST = "localhost"
 INFLUX_PORT = 8086
 INFLUX_USER = os.environ.get("INFLUX_USER", "admin")
 INFLUX_PASS = os.environ.get("INFLUX_PASS", "admin")
 INFLUX_DB = "sht20"
 INFLUX_MEASUREMENT = "temperature"
-
-app = Flask(__name__)
-
-
-def get_ip_address():
-    """Return the host's primary IP address."""
-    ip = "127.0.0.1"
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-    except OSError:
-        pass
-    finally:
-        s.close()
-    return ip
 
 
 def find_chrome():
@@ -168,9 +150,8 @@ if __name__ == "__main__":
     server.daemon = True
     server.start()
 
-    ip = get_ip_address()
-    url = f"http://{ip}:{PORT}"
-    print("Web page available at", url)
+
+        atexit.register(influx_proc.terminate)
 
     # Wait for server to become reachable
     for _ in range(30):
@@ -186,4 +167,5 @@ if __name__ == "__main__":
         except Exception as exc:  # pragma: no cover
             print("Capture/send failed:", exc)
         time.sleep(12 * 3600)
+
 
