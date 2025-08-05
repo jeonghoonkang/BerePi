@@ -55,12 +55,10 @@ def render_week(client, measurement, field, start, stop, path):
         f"{measurement} {start.date()} - {stop.date()} \U0001F321\uFE0F"
     )
     ax.set_ylabel("Temperature (°C)")
-
     fig.tight_layout()
     fig.savefig(path)
     console.print(f"Chart saved: {path}")
     plt.close(fig)
-
 
 
 def send_image(path):
