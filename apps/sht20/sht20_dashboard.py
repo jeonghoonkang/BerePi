@@ -154,19 +154,6 @@ if __name__ == "__main__":
 
 
 
-    # Wait for server to become reachable
-    for _ in range(30):
-        try:
-            urllib.request.urlopen(url, timeout=1)
-            break
-        except Exception:
-            time.sleep(1)
 
-    while True:
-        try:
-            capture_and_send(url)
-        except Exception as exc:  # pragma: no cover
-            print("Capture/send failed:", exc)
-        time.sleep(12 * 3600)
 
 
