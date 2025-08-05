@@ -9,11 +9,18 @@ from influxdb import InfluxDBClient
 
 INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
-INFLUX_USER = os.getenv("INFLUX_USER", "admin")
-INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "admin")
-INFLUX_DB = os.getenv("INFLUX_DB", "sht20")
-MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
+INFLUX_USER = os.getenv("INFLUX_USER", "")
+INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
+INFLUX_DB = os.getenv("INFLUX_DB", "")
+INFLUX_MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
 INFLUX_FIELD = os.getenv("INFLUX_FIELD", "value")
+
+
+def fetch_recent_values(client, limit=10):
+    result = client.query(
+        f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" ORDER BY time DESC LIMIT {limit}'
+    )
+    return list(result.get_points(measurement=INFLUX_MEASUREMENT))
 
 
 def render_week(host, port, db, user, password, measurement, field, start, stop, path):
@@ -52,6 +59,9 @@ def main():
             database=INFLUX_DB,
         )
         client.ping()
+        latest = fetch_recent_values(client, limit=5)
+        print(latest)
+
 
         now = datetime.datetime.utcnow()
         for i in range(4):
@@ -64,7 +74,8 @@ def main():
                 INFLUX_DB,
                 INFLUX_USER,
                 INFLUX_PASSWORD,
-                MEASUREMENT,
+                INFLUX_MEASUREMENT,
+
                 INFLUX_FIELD,
                 start,
                 end,
