@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 from influxdb import InfluxDBClient
 from rich.console import Console
 
@@ -23,6 +24,7 @@ console = Console()
 sns.set_theme()
 
 
+
 def fetch_recent_values(client, limit=10):
     result = client.query(
         f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" ORDER BY time DESC LIMIT {limit}'
@@ -36,6 +38,7 @@ def render_week(client, measurement, field, start, stop, path):
     query = (
         f"SELECT \"{field}\" FROM \"{measurement}\" "
         f"WHERE time >= '{start_utc}' AND time <= '{stop_utc}'"
+
     )
     result = client.query(query)
     points = list(result.get_points(measurement=measurement))
@@ -85,6 +88,7 @@ def main():
             render_week(
                 client,
                 INFLUX_MEASUREMENT,
+
                 INFLUX_FIELD,
                 start,
                 end,
@@ -93,6 +97,7 @@ def main():
             send_image(img_path)
     except Exception as exc:
         console.print(f"Failed to connect to InfluxDB: {exc}")
+
 
 
 if __name__ == "__main__":
