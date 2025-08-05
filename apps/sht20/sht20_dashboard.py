@@ -1,10 +1,14 @@
+import asyncio
 import os
 import subprocess
 import time
 import shutil
 import urllib.request
-import urllib.parse
 
+
+
+
+PORT = 5001
 
 INFLUX_HOST = "localhost"
 INFLUX_PORT = 8086
@@ -14,70 +18,154 @@ INFLUX_DB = "sht20"
 INFLUX_MEASUREMENT = "temperature"
 
 
-def start_influxdb():
-    """Start an InfluxDB server if one is not already running."""
-    if subprocess.call(["pgrep", "influxd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-        return None
-    if not shutil.which("influxd"):
-        print("InfluxDB binary not found")
-        return None
+def find_chrome():
+    """Return the path to a working Chrome/Chromium executable, if any."""
+    candidates = [
+        "chromium-browser",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ]
+    for name in candidates:
+        path = shutil.which(name)
+        if not path:
+            continue
+        try:
+            subprocess.run([path, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            return path
+        except Exception:
+            continue
+    return None
+
+
+def query_last_48h():
+    """Fetch temperature readings for the last 48 hours."""
+    query = f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time > now() - 48h'
+    points = []
     try:
-        proc = subprocess.Popen(
-            ["influxd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER,
+            password=INFLUX_PASS,
+            database=INFLUX_DB,
         )
-        return proc
+        result = client.query(query)
+        for pt in result.get_points():
+            points.append({"time": pt["time"], "value": pt["value"]})
     except Exception as exc:  # pragma: no cover
-        print("Failed to start InfluxDB:", exc)
-        return None
+        print("InfluxDB query error:", exc)
+    return points
 
 
-def fetch_chart_png(outfile="temperature.png"):
-    """Request a 48-hour temperature graph from InfluxDB and save it."""
-    query = (
-        f'SELECT mean("value") FROM "{INFLUX_MEASUREMENT}" '
-        f'WHERE time > now() - 48h GROUP BY time(1h)'
+@app.route("/")
+def index():
+    data = query_last_48h()
+    return render_template_string(
+        """
+        <html>
+        <head>
+            <title>SHT20 48-hour chart</title>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body { font-family: sans-serif; margin: 20px; }
+                #chart { max-width: 800px; height: 400px; border: 1px solid #eee; }
+            </style>
+        </head>
+        <body>
+            <h1>Last 48 hours</h1>
+            <canvas id="chart" width="800" height="400"></canvas>
+            <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const data = {{ data|tojson }};
+                const ctx = document.getElementById('chart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(p => new Date(p.time).toLocaleString()),
+                        datasets: [{
+                            label: 'Temperature',
+                            data: data.map(p => p.value),
+                            borderColor: 'blue',
+                            fill: false,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { ticks: { maxTicksLimit: 8 } },
+                            y: { title: { display: true, text: 'Temperature' } }
+                        }
+                    }
+                });
+                window.CHARTS_READY = true;
+                window.status = 'ready';
+            });
+            </script>
+        </body>
+        </html>
+        """,
+        data=data,
     )
-    params = urllib.parse.urlencode(
-        {
-            "db": INFLUX_DB,
-            "u": INFLUX_USER,
-            "p": INFLUX_PASS,
-            "q": query,
-            "format": "png",
-        }
+
+
+async def _capture_with_pyppeteer(url, outfile, chrome_path):
+    from pyppeteer import launch
+
+    browser = await launch(
+        executablePath=chrome_path,
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--no-zygote",
+        ],
     )
-    url = f"http://{INFLUX_HOST}:{INFLUX_PORT}/render?{params}"
-    with urllib.request.urlopen(url, timeout=30) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"InfluxDB render failed: HTTP {resp.status}")
-        with open(outfile, "wb") as fh:
-            fh.write(resp.read())
-    return outfile
-
-
-def fetch_and_send():
-    """Fetch the chart PNG and send it via telegram-send."""
-    outfile = "temperature.png"
     try:
-        fetch_chart_png(outfile)
+        page = await browser.newPage()
+        await page.goto(url, waitUntil="networkidle2")
+        await page.waitForFunction("window.CHARTS_READY === true")
+        await page.screenshot({"path": outfile, "fullPage": True})
+    finally:
+        await browser.close()
 
-        subprocess.run(["telegram-send", "-f", outfile], check=False)
-    except errors.BrowserError as exc:  # pragma: no cover
-        print("Capture/send failed: headless Chrome crashed:", exc)
-    except Exception as exc:  # pragma: no cover
-        print("Capture/send failed:", exc)
 
+def capture_and_send(url, outfile="dashboard.jpg"):
+    """Capture the dashboard and send it via telegram-send."""
+    chrome = find_chrome()
+    if not chrome:
+        raise RuntimeError("Chrome/Chromium not found")
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_capture_with_pyppeteer(url, outfile, chrome))
+    subprocess.run(["telegram-send", "-f", outfile], check=False)
 
 
 if __name__ == "__main__":
-    influx_proc = start_influxdb()
-    if influx_proc is not None:
-        import atexit
+    server = Thread(target=lambda: app.run(host="0.0.0.0", port=PORT, use_reloader=False))
+    server.daemon = True
+    server.start()
+
 
         atexit.register(influx_proc.terminate)
 
+    # Wait for server to become reachable
+    for _ in range(30):
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            break
+        except Exception:
+            time.sleep(1)
+
     while True:
-        fetch_and_send()
+        try:
+            capture_and_send(url)
+        except Exception as exc:  # pragma: no cover
+            print("Capture/send failed:", exc)
         time.sleep(12 * 3600)
 
 
