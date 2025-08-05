@@ -4,6 +4,7 @@ import subprocess
 import time
 import shutil
 import urllib.request
+from flask import Flask, render_template_string  # Flask와 render_template_string 임포트
 
 
 
