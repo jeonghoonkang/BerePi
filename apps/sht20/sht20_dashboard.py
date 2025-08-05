@@ -1,12 +1,15 @@
+import asyncio
 import os
 import socket
 import subprocess
 import time
 from threading import Thread
 import shutil
+import urllib.request
 
 from flask import Flask, render_template_string
 from influxdb import InfluxDBClient
+
 
 PORT = 5001
 INFLUX_HOST = "localhost"
@@ -33,29 +36,30 @@ def get_ip_address():
     return ip
 
 
-def start_influxdb():
-    """Start an InfluxDB server if one is not already running."""
-    if subprocess.call(["pgrep", "influxd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-        return None
-    if not shutil.which("influxd"):
-        print("InfluxDB binary not found")
-        return None
-    try:
-        proc = subprocess.Popen(
-            ["influxd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        return proc
-    except Exception as exc:  # pragma: no cover
-        print("Failed to start InfluxDB:", exc)
-        return None
+def find_chrome():
+    """Return the path to a working Chrome/Chromium executable, if any."""
+    candidates = [
+        "chromium-browser",
+        "chromium",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ]
+    for name in candidates:
+        path = shutil.which(name)
+        if not path:
+            continue
+        try:
+            subprocess.run([path, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            return path
+        except Exception:
+            continue
+    return None
 
 
-def query_week(start_days, end_days):
-    """Query a week's worth of readings from InfluxDB."""
-    query = (
-        f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" '
-        f"WHERE time >= now() - {start_days}d AND time < now() - {end_days}d"
-    )
+def query_last_48h():
+    """Fetch temperature readings for the last 48 hours."""
+    query = f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" WHERE time > now() - 48h'
     points = []
     try:
         client = InfluxDBClient(
@@ -73,145 +77,113 @@ def query_week(start_days, end_days):
     return points
 
 
-def fetch_weeks():
-    """Return data for four weeks, newest first."""
-    weeks = []
-    for i in range(4):
-        start = 7 * (i + 1)
-        end = 7 * i
-        weeks.append(query_week(start, end))
-    return weeks
-
-
 @app.route("/")
 def index():
-    weeks = fetch_weeks()
+    data = query_last_48h()
     return render_template_string(
         """
         <html>
         <head>
-            <title>SHT20 Charts</title>
+            <title>SHT20 48-hour chart</title>
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <style>
                 body { font-family: sans-serif; margin: 20px; }
-                canvas { max-width: 800px; margin-bottom: 30px; border: 1px solid #eee; }
-                h1, h2 { color: #333; }
+                #chart { max-width: 800px; height: 400px; border: 1px solid #eee; }
             </style>
         </head>
         <body>
-            <h1>Monthly temperature overview</h1>
-            {% for w in range(4) %}
-            <h2>Week {{ loop.index }}</h2>
-            <canvas id="chart{{loop.index}}" width="800" height="400"></canvas> {# Increased dimensions for better clarity in capture #}
-            {% endfor %}
+            <h1>Last 48 hours</h1>
+            <canvas id="chart" width="800" height="400"></canvas>
             <script>
-            // Ensure the entire DOM is loaded before trying to access elements
-            document.addEventListener('DOMContentLoaded', (event) => {
-                const weeks = {{ weeks|tojson }};
-                let chartsRenderedCount = 0;
-                const totalCharts = weeks.length;
-
-                weeks.forEach((wk, idx) => {
-                    const ctx = document.getElementById('chart'+(idx+1)).getContext('2d');
-                    new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: wk.map(p => new Date(p.time).toLocaleString()), // Format time for better readability
-                            datasets: [{
-                                label: 'Temperature',
-                                data: wk.map(p => p.value),
-                                borderColor: 'blue',
-                                backgroundColor: 'rgba(0, 0, 255, 0.1)', // Optional: shaded area below line
-                                fill: false, // Changed from true to false for a cleaner look if desired
-                                tension: 0.1 // Smooths the line
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: {
-                                    ticks: {
-                                        maxTicksLimit: 8, // Adjust tick limit
-                                        autoSkip: true,
-                                        maxRotation: 45,
-                                        minRotation: 0
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: 'Time'
-                                    }
-                                },
-                                y: {
-                                    title: {
-                                        display: true,
-                                        text: 'Temperature Value'
-                                    }
-                                }
-                            },
-                            animation: {
-                                duration: 0 // Disable animation for instant rendering before capture
-                            },
-                            plugins: {
-                                legend: {
-                                    display: true
-                                }
-                            }
+            document.addEventListener('DOMContentLoaded', () => {
+                const data = {{ data|tojson }};
+                const ctx = document.getElementById('chart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(p => new Date(p.time).toLocaleString()),
+                        datasets: [{
+                            label: 'Temperature',
+                            data: data.map(p => p.value),
+                            borderColor: 'blue',
+                            fill: false,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { ticks: { maxTicksLimit: 8 } },
+                            y: { title: { display: true, text: 'Temperature' } }
                         }
-                    });
-                    chartsRenderedCount++;
-                    // After all charts are rendered, set window.status
-                    if (chartsRenderedCount === totalCharts) {
-                        console.log("All charts rendered. Setting window.status to 'ready'.");
-                        window.status = 'ready';
                     }
                 });
+                window.CHARTS_READY = true;
+                window.status = 'ready';
             });
             </script>
         </body>
         </html>
         """,
-        weeks=weeks,
+        data=data,
     )
 
 
+async def _capture_with_pyppeteer(url, outfile, chrome_path):
+    from pyppeteer import launch
+
+    browser = await launch(
+        executablePath=chrome_path,
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--no-zygote",
+        ],
+    )
+    try:
+        page = await browser.newPage()
+        await page.goto(url, waitUntil="networkidle2")
+        await page.waitForFunction("window.CHARTS_READY === true")
+        await page.screenshot({"path": outfile, "fullPage": True})
+    finally:
+        await browser.close()
 
 
 def capture_and_send(url, outfile="dashboard.jpg"):
-    """Capture the given URL to an image and send via telegram-send."""
-    try:
-        import imgkit
-
-        options = {
-            "javascript-delay": 2000,
-            "enable-local-file-access": "",
-            "window-status": "ready",
-            "no-stop-slow-scripts": "",
-        }
-        imgkit.from_url(url, outfile, options=options)
-        subprocess.run(["telegram-send", "-f", outfile], check=False)
-    except Exception as exc:  # pragma: no cover
-        print("Capture/send failed:", exc)
+    """Capture the dashboard and send it via telegram-send."""
+    chrome = find_chrome()
+    if not chrome:
+        raise RuntimeError("Chrome/Chromium not found")
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_capture_with_pyppeteer(url, outfile, chrome))
+    subprocess.run(["telegram-send", "-f", outfile], check=False)
 
 
 if __name__ == "__main__":
-    import shutil
-
-    influx_proc = start_influxdb()
-    if influx_proc is not None:
-        import atexit
-        atexit.register(influx_proc.terminate)
+    server = Thread(target=lambda: app.run(host="0.0.0.0", port=PORT, use_reloader=False))
+    server.daemon = True
+    server.start()
 
     ip = get_ip_address()
     url = f"http://{ip}:{PORT}"
     print("Web page available at", url)
 
-    server = Thread(target=lambda: app.run(host="0.0.0.0", port=PORT, use_reloader=False))
-    server.daemon = True
-    server.start()
+    # Wait for server to become reachable
+    for _ in range(30):
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            break
+        except Exception:
+            time.sleep(1)
 
-    # Give the server a moment to start before capturing
-    time.sleep(5)
-    capture_and_send(url)
+    while True:
+        try:
+            capture_and_send(url)
+        except Exception as exc:  # pragma: no cover
+            print("Capture/send failed:", exc)
+        time.sleep(12 * 3600)
 
-    server.join()
