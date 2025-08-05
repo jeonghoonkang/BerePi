@@ -14,7 +14,7 @@ INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
-INFLUX_DB = os.getenv("INFLUX_DB", "")
+INFLUX_DB = os.getenv("INFLUX_DB", "sht20")
 INFLUX_MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
 INFLUX_FIELD = os.getenv("INFLUX_FIELD", "value")
 
