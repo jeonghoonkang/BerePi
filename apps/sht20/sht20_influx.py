@@ -41,19 +41,25 @@ def send_image(path):
     subprocess.run(["telegram-send", "--image", str(path)], check=False)
 
 def main():
-    client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-    now = datetime.datetime.utcnow()
-    for i in range(4):
-        end = now - datetime.timedelta(weeks=i)
-        start = now - datetime.timedelta(weeks=i + 1)
-        df = fetch_week(client, start, end)
-        if df.empty:
-            continue
-        df["_time"] = pd.to_datetime(df["_time"])
-        img_path = Path(f"week_{i + 1}.png")
-        title = f"Week {i + 1}: {start.date()} to {end.date()}"
-        plot_week(df, title, img_path)
-        send_image(img_path)
+    try:
+        with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
+            # Ensure the server is reachable before proceeding.
+            client.ping()
+
+            now = datetime.datetime.utcnow()
+            for i in range(4):
+                end = now - datetime.timedelta(weeks=i)
+                start = now - datetime.timedelta(weeks=i + 1)
+                df = fetch_week(client, start, end)
+                if df.empty:
+                    continue
+                df["_time"] = pd.to_datetime(df["_time"])
+                img_path = Path(f"week_{i + 1}.png")
+                title = f"Week {i + 1}: {start.date()} to {end.date()}"
+                plot_week(df, title, img_path)
+                send_image(img_path)
+    except Exception as exc:
+        print(f"Failed to connect to InfluxDB: {exc}")
 
 if __name__ == "__main__":
     main()
