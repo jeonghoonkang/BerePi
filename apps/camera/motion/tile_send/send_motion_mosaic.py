@@ -2,7 +2,7 @@
 """Monitor motion images, detect people, create mosaics and send via telegram.
 
 The script waits for five new images to appear in ``/var/lib/motion``. Once the
-threshold is met, it collects the next eighteen images, runs a person detection
+threshold is met, it collects the next sixteen images, runs a person detection
 model on them and stores the counts to InfluxDB. A mosaic of the images is
 generated along with two graphs for the last 48 hours: number of detected
 people and remaining HDD space. All artefacts are then sent using
@@ -22,7 +22,6 @@ import shutil
 import argparse
 from datetime import datetime, timedelta, date
 
-from math import ceil, sqrt
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -152,13 +151,16 @@ def log_images(image_paths: Iterable[Path]) -> None:
             progress.advance(task)
 
 
-def create_mosaic(image_paths: Iterable[Path], output_path: Path) -> Path:
-    paths = list(image_paths)
+def create_mosaic(
+    image_paths: Iterable[Path], output_path: Path, cols: int = 4, rows: int = 4
+) -> Path:
+    """Assemble images into a mosaic of ``cols`` by ``rows`` tiles."""
+    paths = list(image_paths)[: cols * rows]
+    if not paths:
+        raise ValueError("No images provided for mosaic")
     imgs = [Image.open(p) for p in paths]
 
     w, h = imgs[0].size
-    cols = ceil(sqrt(len(imgs)))
-    rows = ceil(len(imgs) / cols)
     mosaic = Image.new("RGB", (cols * w, rows * h))
 
     with Progress() as progress:
@@ -297,11 +299,10 @@ def main() -> None:
         console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
         return
 
-
     start_time = datetime.now()
     wait_for_images(start_time, 5)  # wait until 5 images appear
     trigger = datetime.now()
-    images = wait_for_images(trigger, 18)
+    images = wait_for_images(trigger, 16)
 
     log_images(images)
 
