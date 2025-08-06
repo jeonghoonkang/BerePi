@@ -21,6 +21,7 @@ import time
 import shutil
 import argparse
 from datetime import datetime, timedelta, date
+
 from math import ceil, sqrt
 from pathlib import Path
 from typing import Dict, Iterable, List
@@ -104,6 +105,7 @@ def ensure_database(client: InfluxDBClient, name: str) -> None:
 def _images_in_range(start: datetime, end: datetime) -> List[Path]:
     """Return image paths whose mtime lies between ``start`` and ``end``."""
     images: List[Path] = []
+
     exts = {".jpg", ".jpeg", ".png"}
     for entry in os.scandir(MOTION_DIR):
         if not entry.is_file():
@@ -128,6 +130,7 @@ def images_for_day(day: date) -> List[Path]:
     start = datetime.combine(day, datetime.min.time())
     end = start + timedelta(days=1)
     return _images_in_range(start, end)
+
 
 
 def wait_for_images(start: datetime, count: int) -> List[Path]:
@@ -243,7 +246,7 @@ def generate_graph(
 def send_via_telegram(paths: Iterable[Path]) -> None:
     cmd = ["telegram-send"]
     for path in paths:
-        cmd.extend(["--image", str(path)])
+        cmd.extend(["-i", str(path)])
     subprocess.run(cmd, check=True)
 
 
@@ -293,6 +296,7 @@ def main() -> None:
         print_system_usage("End ")
         console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
         return
+
 
     start_time = datetime.now()
     wait_for_images(start_time, 5)  # wait until 5 images appear
