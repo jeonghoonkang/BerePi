@@ -226,7 +226,7 @@ def generate_graph(
 def send_via_telegram(paths: Iterable[Path]) -> None:
     cmd = ["telegram-send"]
     for path in paths:
-        cmd.extend(["--image", str(path)])
+        cmd.extend(["-i", str(path)])
     subprocess.run(cmd, check=True)
 
 
