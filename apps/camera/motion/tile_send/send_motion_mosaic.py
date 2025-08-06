@@ -8,6 +8,9 @@ generated along with two graphs for the last 48 hours: number of detected
 people and remaining HDD space. All artefacts are then sent using
 ``telegram-send``. Progress for long running operations is displayed with
 ``rich``.
+
+When ``--date YYYY-MM-DD`` is supplied, the script instead processes all images
+from that day, sending mosaics of the photos in 4x4 batches.
 """
 
 from __future__ import annotations
@@ -16,7 +19,9 @@ import os
 import subprocess
 import time
 import shutil
-from datetime import datetime, timedelta
+import argparse
+from datetime import datetime, timedelta, date
+
 from math import ceil, sqrt
 from pathlib import Path
 from typing import Dict, Iterable, List
@@ -97,10 +102,10 @@ def ensure_database(client: InfluxDBClient, name: str) -> None:
 
 
 
-def _images_since(start: datetime) -> List[Path]:
-    """Return image paths modified within four days prior to ``start``."""
+def _images_in_range(start: datetime, end: datetime) -> List[Path]:
+    """Return image paths whose mtime lies between ``start`` and ``end``."""
     images: List[Path] = []
-    cutoff = start - timedelta(days=4)
+
     exts = {".jpg", ".jpeg", ".png"}
     for entry in os.scandir(MOTION_DIR):
         if not entry.is_file():
@@ -108,9 +113,24 @@ def _images_since(start: datetime) -> List[Path]:
         if not entry.name.lower().endswith(tuple(exts)):
             continue
         mtime = datetime.fromtimestamp(entry.stat().st_mtime)
-        if cutoff <= mtime <= start:
+        if start <= mtime <= end:
             images.append(Path(entry.path))
-    return sorted(images, key=lambda p: p.stat().st_mtime)
+    return sorted(images, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def _images_since(start: datetime) -> List[Path]:
+    """Return images newer than ``start`` limited to the last four days."""
+    now = datetime.now()
+    cutoff = max(start, now - timedelta(days=4))
+    return _images_in_range(cutoff, now)
+
+
+def images_for_day(day: date) -> List[Path]:
+    """Return all images for the given ``day`` (00:00-23:59)."""
+    start = datetime.combine(day, datetime.min.time())
+    end = start + timedelta(days=1)
+    return _images_in_range(start, end)
+
 
 
 def wait_for_images(start: datetime, count: int) -> List[Path]:
@@ -231,8 +251,52 @@ def send_via_telegram(paths: Iterable[Path]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="YYYY-MM-DD to mosaic instead of live feed")
+    args = parser.parse_args()
+
     perf_start = time.perf_counter()
     print_system_usage("Start ")
+
+    if args.date:
+        target_day = datetime.strptime(args.date, "%Y-%m-%d").date()
+        images = images_for_day(target_day)
+        if not images:
+            console.print(f"No images found for {args.date}")
+            print_system_usage("End ")
+            console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
+            return
+
+        model = YOLO("yolov8n.pt")
+        ensure_influx_running()
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER or None,
+            password=INFLUX_PASSWORD or None,
+        )
+        ensure_database(client, INFLUX_DB)
+        client.switch_database(INFLUX_DB)
+
+        for idx in range(0, len(images), 16):
+            batch = images[idx : idx + 16]
+            log_images(batch)
+            counts = detect_people(model, batch)
+            write_counts(client, counts)
+            mosaic_path = OUTPUT_MOSAIC.with_name(f"motion_mosaic_{idx//16}.jpg")
+            create_mosaic(batch, mosaic_path)
+            send_via_telegram([mosaic_path])
+
+        write_disk_free(client)
+        generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
+        generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
+        send_via_telegram([PEOPLE_GRAPH, DISK_GRAPH])
+        client.close()
+
+        print_system_usage("End ")
+        console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
+        return
+
 
     start_time = datetime.now()
     wait_for_images(start_time, 5)  # wait until 5 images appear
@@ -241,9 +305,7 @@ def main() -> None:
 
     log_images(images)
 
-
     model = YOLO("yolov8n.pt")
-
     people_counts = detect_people(model, images)
 
     ensure_influx_running()
