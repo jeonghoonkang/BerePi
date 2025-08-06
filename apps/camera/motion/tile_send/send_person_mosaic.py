@@ -40,6 +40,7 @@ from ultralytics import YOLO
 
 MOTION_DIR = Path("/var/lib/motion")
 OUTPUT_MOSAIC = Path("/tmp/motion_mosaic.jpg")
+PERSON_MOSAIC = Path("/tmp/person_mosaic.jpg")
 PEOPLE_GRAPH = Path("/tmp/person_count.png")
 DISK_GRAPH = Path("/tmp/disk_free.png")
 
@@ -195,6 +196,67 @@ def create_mosaic(
     return output_path
 
 
+def select_person_images(
+    image_paths: Iterable[Path],
+    counts: Dict[Path, int],
+    min_interval: int = 60,
+    limit: int = 16,
+) -> List[Path]:
+    """Return up to ``limit`` images with people spaced ``min_interval`` seconds apart."""
+    paths = sorted(image_paths, key=lambda p: p.stat().st_mtime)
+    selected: List[Path] = []
+    last_time: float | None = None
+    for path in paths:
+        if counts.get(path, 0) <= 0:
+            continue
+        mtime = path.stat().st_mtime
+        if last_time is None or mtime - last_time >= min_interval:
+            selected.append(path)
+            last_time = mtime
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def create_timed_mosaic(
+    image_paths: Iterable[Path], output_path: Path, cols: int = 4, rows: int = 4
+) -> Path:
+    """Create a mosaic annotating each tile with its capture time."""
+    paths = list(image_paths)[: cols * rows]
+    if not paths:
+        raise ValueError("No images provided for mosaic")
+    imgs = [Image.open(p) for p in paths]
+    w, h = imgs[0].size
+    mosaic = Image.new("RGB", (cols * w, rows * h))
+
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+        )
+    except OSError:  # pragma: no cover - font may be missing
+        font = ImageFont.load_default()
+
+    with Progress() as progress:
+        task = progress.add_task("Assembling mosaic", total=len(imgs))
+        for idx, (img, path) in enumerate(zip(imgs, paths)):
+            x = (idx % cols) * w
+            y = (idx // cols) * h
+            mosaic.paste(img, (x, y))
+            mtime = datetime.fromtimestamp(path.stat().st_mtime)
+            time_text = mtime.strftime("%Y-%m-%d %H:%M")
+            draw = ImageDraw.Draw(mosaic)
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx or dy:
+                        draw.text((x + 10 + dx, y + 10 + dy), time_text, font=font, fill="black")
+            draw.text((x + 10, y + 10), time_text, font=font, fill="white")
+            progress.print(str(path))
+            progress.advance(task)
+
+    mosaic.save(output_path)
+    return output_path
+
+
 def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
     paths = list(image_paths)
     counts: Dict[Path, int] = {}
@@ -306,7 +368,15 @@ def main() -> None:
             write_counts(client, counts)
             mosaic_path = OUTPUT_MOSAIC.with_name(f"motion_mosaic_{idx//16}.jpg")
             create_mosaic(batch, mosaic_path)
-            send_via_telegram([mosaic_path])
+            person_imgs = select_person_images(batch, counts)
+            to_send: List[Path] = [mosaic_path]
+            if person_imgs:
+                person_path = PERSON_MOSAIC.with_name(
+                    f"person_mosaic_{idx//16}.jpg"
+                )
+                create_timed_mosaic(person_imgs, person_path)
+                to_send.append(person_path)
+            send_via_telegram(to_send)
 
         write_disk_free(client)
         generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
@@ -344,8 +414,14 @@ def main() -> None:
     client.close()
 
     mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
+    person_images = select_person_images(images, people_counts)
+    paths_to_send: List[Path] = [mosaic_path]
+    if person_images:
+        person_mosaic = create_timed_mosaic(person_images, PERSON_MOSAIC)
+        paths_to_send.append(person_mosaic)
+    paths_to_send.extend([PEOPLE_GRAPH, DISK_GRAPH])
 
-    send_via_telegram([mosaic_path, PEOPLE_GRAPH, DISK_GRAPH])
+    send_via_telegram(paths_to_send)
 
     print_system_usage("End ")
     console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
