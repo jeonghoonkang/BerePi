@@ -86,6 +86,16 @@ def ensure_influx_running() -> None:
         time.sleep(5)
 
 
+def ensure_database(client: InfluxDBClient, name: str) -> None:
+    """Create the given database in InfluxDB if it doesn't exist."""
+    try:
+        existing = {db["name"] for db in client.get_list_database()}
+        if name not in existing:
+            client.create_database(name)
+    except Exception as exc:  # pragma: no cover - best effort
+        console.print(f"Failed to verify/create database {name}: {exc}")
+
+
 
 def _images_since(start: datetime) -> List[Path]:
     """Return image paths modified within four days prior to ``start``."""
@@ -237,14 +247,14 @@ def main() -> None:
     people_counts = detect_people(model, images)
 
     ensure_influx_running()
-
     client = InfluxDBClient(
         host=INFLUX_HOST,
         port=INFLUX_PORT,
         username=INFLUX_USER or None,
         password=INFLUX_PASSWORD or None,
-        database=INFLUX_DB,
     )
+    ensure_database(client, INFLUX_DB)
+    client.switch_database(INFLUX_DB)
     write_counts(client, people_counts)
     write_disk_free(client)
     generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
