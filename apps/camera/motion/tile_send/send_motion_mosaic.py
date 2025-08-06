@@ -131,7 +131,6 @@ def images_for_day(day: date) -> List[Path]:
     return _images_in_range(start, end)
 
 
-
 def wait_for_images(start: datetime, count: int) -> List[Path]:
     """Block until ``count`` images exist after ``start``."""
     while True:
@@ -235,7 +234,7 @@ def generate_graph(
 
     if times and values:
         plt.figure()
-        plt.plot(times, values)
+        plt.bar(times, values)
         plt.title(measurement)
         plt.xlabel("time")
         plt.ylabel("value")
@@ -245,11 +244,10 @@ def generate_graph(
     return output
 
 
-def send_via_telegram(paths: Iterable[Path]) -> None:
-    cmd = ["telegram-send"]
+def send_via_telegram(paths: Iterable[Path], delay: float = 1.0) -> None:
     for path in paths:
-        cmd.extend(["-i", str(path)])
-    subprocess.run(cmd, check=True)
+        subprocess.run(["telegram-send", "-i", str(path)], check=True)
+        time.sleep(delay)
 
 
 def main() -> None:
