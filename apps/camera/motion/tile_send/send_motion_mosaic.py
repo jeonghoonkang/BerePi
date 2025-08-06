@@ -21,6 +21,7 @@ import time
 import shutil
 import argparse
 from datetime import datetime, timedelta, date
+
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -103,6 +104,7 @@ def ensure_database(client: InfluxDBClient, name: str) -> None:
 def _images_in_range(start: datetime, end: datetime) -> List[Path]:
     """Return image paths whose mtime lies between ``start`` and ``end``."""
     images: List[Path] = []
+
     exts = {".jpg", ".jpeg", ".png"}
     for entry in os.scandir(MOTION_DIR):
         if not entry.is_file():
@@ -155,6 +157,7 @@ def create_mosaic(
 
     The earliest timestamp among the images is rendered onto the mosaic.
     """
+
     paths = list(image_paths)[: cols * rows]
     if not paths:
         raise ValueError("No images provided for mosaic")
@@ -250,6 +253,7 @@ def generate_graph(
     if times and values:
         plt.figure()
         plt.bar(times, values, edgecolor="black")
+
         plt.title(measurement)
         plt.xlabel("time")
         plt.ylabel("value")
