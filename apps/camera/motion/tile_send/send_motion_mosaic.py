@@ -180,7 +180,13 @@ def create_mosaic(
     earliest = min(paths, key=lambda p: p.stat().st_mtime).stat().st_mtime
     time_text = datetime.fromtimestamp(earliest).strftime("%Y-%m-%d %H:%M:%S")
     draw = ImageDraw.Draw(mosaic)
-    font = ImageFont.load_default()
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+        )
+    except OSError:  # pragma: no cover - font may be missing
+        font = ImageFont.load_default()
+
     x, y = 10, 10
     # draw black outline for readability
     for dx in (-1, 0, 1):
@@ -252,12 +258,12 @@ def generate_graph(
 
     if times and values:
         plt.figure()
-        plt.bar(times, values, edgecolor="black")
-
+        plt.plot(times, values, "o", linestyle="none")
         plt.title(measurement)
         plt.xlabel("time")
         plt.ylabel("value")
-        plt.grid(axis="x", linestyle="--", linewidth=0.5)
+        plt.grid(True, linestyle="--", linewidth=0.5)
+
         plt.tight_layout()
         plt.savefig(output)
         plt.close()
