@@ -2,12 +2,15 @@
 """Monitor motion images, detect people, create mosaics and send via telegram.
 
 The script waits for five new images to appear in ``/var/lib/motion``. Once the
-threshold is met, it collects the next eighteen images, runs a person detection
+threshold is met, it collects the next sixteen images, runs a person detection
 model on them and stores the counts to InfluxDB. A mosaic of the images is
 generated along with two graphs for the last 48 hours: number of detected
 people and remaining HDD space. All artefacts are then sent using
 ``telegram-send``. Progress for long running operations is displayed with
 ``rich``.
+
+When ``--date YYYY-MM-DD`` is supplied, the script instead processes all images
+from that day, sending mosaics of the photos in 4x4 batches.
 """
 
 from __future__ import annotations
@@ -16,10 +19,15 @@ import os
 import subprocess
 import time
 import shutil
-from datetime import datetime
-from math import ceil, sqrt
+import argparse
+from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Dict, Iterable, List
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - optional dependency
+    psutil = None
 
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -39,9 +47,23 @@ INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "admin")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "admin")
-INFLUX_DB = os.getenv("INFLUX_DB", "")
+INFLUX_DB = os.getenv("INFLUX_DB", "motion")
 
 console = Console()
+
+
+def print_system_usage(tag: str = "", disk_path: str = str(MOTION_DIR)) -> None:
+    """Print current system CPU, RAM and disk usage with an optional tag."""
+    if psutil is None:
+        console.print(f"{tag}CPU/RAM/Disk usage unavailable (psutil missing)")
+        return
+    cpu = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
+    usage = psutil.disk_usage(disk_path)
+    free_gb = usage.free / (1024 ** 3)
+    console.print(
+        f"{tag}CPU: {cpu:.1f}% | RAM: {mem.percent:.1f}% | Disk Free: {free_gb:.1f} GB"
+    )
 
 
 def ensure_influx_running() -> None:
@@ -67,13 +89,44 @@ def ensure_influx_running() -> None:
         time.sleep(5)
 
 
+def ensure_database(client: InfluxDBClient, name: str) -> None:
+    """Create the given database in InfluxDB if it doesn't exist."""
+    try:
+        existing = {db["name"] for db in client.get_list_database()}
+        if name not in existing:
+            client.create_database(name)
+    except Exception as exc:  # pragma: no cover - best effort
+        console.print(f"Failed to verify/create database {name}: {exc}")
+
+
+
+def _images_in_range(start: datetime, end: datetime) -> List[Path]:
+    """Return image paths whose mtime lies between ``start`` and ``end``."""
+    images: List[Path] = []
+    exts = {".jpg", ".jpeg", ".png"}
+    for entry in os.scandir(MOTION_DIR):
+        if not entry.is_file():
+            continue
+        if not entry.name.lower().endswith(tuple(exts)):
+            continue
+        mtime = datetime.fromtimestamp(entry.stat().st_mtime)
+        if start <= mtime <= end:
+            images.append(Path(entry.path))
+    return sorted(images, key=lambda p: p.stat().st_mtime, reverse=True)
+
 
 def _images_since(start: datetime) -> List[Path]:
-    """Return images created after ``start``."""
-    images: List[Path] = []
-    for ext in ("*.jpg", "*.jpeg", "*.png"):
-        images.extend(p for p in MOTION_DIR.glob(ext) if datetime.fromtimestamp(p.stat().st_mtime) <= start)
-    return sorted(images, key=lambda p: p.stat().st_mtime)
+    """Return images newer than ``start`` limited to the last four days."""
+    now = datetime.now()
+    cutoff = max(start, now - timedelta(days=4))
+    return _images_in_range(cutoff, now)
+
+
+def images_for_day(day: date) -> List[Path]:
+    """Return all images for the given ``day`` (00:00-23:59)."""
+    start = datetime.combine(day, datetime.min.time())
+    end = start + timedelta(days=1)
+    return _images_in_range(start, end)
 
 
 def wait_for_images(start: datetime, count: int) -> List[Path]:
@@ -95,13 +148,16 @@ def log_images(image_paths: Iterable[Path]) -> None:
             progress.advance(task)
 
 
-def create_mosaic(image_paths: Iterable[Path], output_path: Path) -> Path:
-    paths = list(image_paths)
+def create_mosaic(
+    image_paths: Iterable[Path], output_path: Path, cols: int = 4, rows: int = 4
+) -> Path:
+    """Assemble images into a mosaic of ``cols`` by ``rows`` tiles."""
+    paths = list(image_paths)[: cols * rows]
+    if not paths:
+        raise ValueError("No images provided for mosaic")
     imgs = [Image.open(p) for p in paths]
 
     w, h = imgs[0].size
-    cols = ceil(sqrt(len(imgs)))
-    rows = ceil(len(imgs) / cols)
     mosaic = Image.new("RGB", (cols * w, rows * h))
 
     with Progress() as progress:
@@ -189,32 +245,76 @@ def generate_graph(
 def send_via_telegram(paths: Iterable[Path]) -> None:
     cmd = ["telegram-send"]
     for path in paths:
-        cmd.extend(["--image", str(path)])
+        cmd.extend(["-i", str(path)])
     subprocess.run(cmd, check=True)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="YYYY-MM-DD to mosaic instead of live feed")
+    args = parser.parse_args()
+
+    perf_start = time.perf_counter()
+    print_system_usage("Start ")
+
+    if args.date:
+        target_day = datetime.strptime(args.date, "%Y-%m-%d").date()
+        images = images_for_day(target_day)
+        if not images:
+            console.print(f"No images found for {args.date}")
+            print_system_usage("End ")
+            console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
+            return
+
+        model = YOLO("yolov8n.pt")
+        ensure_influx_running()
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER or None,
+            password=INFLUX_PASSWORD or None,
+        )
+        ensure_database(client, INFLUX_DB)
+        client.switch_database(INFLUX_DB)
+
+        for idx in range(0, len(images), 16):
+            batch = images[idx : idx + 16]
+            log_images(batch)
+            counts = detect_people(model, batch)
+            write_counts(client, counts)
+            mosaic_path = OUTPUT_MOSAIC.with_name(f"motion_mosaic_{idx//16}.jpg")
+            create_mosaic(batch, mosaic_path)
+            send_via_telegram([mosaic_path])
+
+        write_disk_free(client)
+        generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
+        generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
+        send_via_telegram([PEOPLE_GRAPH, DISK_GRAPH])
+        client.close()
+
+        print_system_usage("End ")
+        console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
+        return
+
     start_time = datetime.now()
     wait_for_images(start_time, 5)  # wait until 5 images appear
     trigger = datetime.now()
-    images = wait_for_images(trigger, 18)
+    images = wait_for_images(trigger, 16)
 
     log_images(images)
 
-
     model = YOLO("yolov8n.pt")
-
     people_counts = detect_people(model, images)
 
     ensure_influx_running()
-
     client = InfluxDBClient(
         host=INFLUX_HOST,
         port=INFLUX_PORT,
         username=INFLUX_USER or None,
         password=INFLUX_PASSWORD or None,
-        database=INFLUX_DB,
     )
+    ensure_database(client, INFLUX_DB)
+    client.switch_database(INFLUX_DB)
     write_counts(client, people_counts)
     write_disk_free(client)
     generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
@@ -224,6 +324,9 @@ def main() -> None:
     mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
 
     send_via_telegram([mosaic_path, PEOPLE_GRAPH, DISK_GRAPH])
+
+    print_system_usage("End ")
+    console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
 
 
 if __name__ == "__main__":
