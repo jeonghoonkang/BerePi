@@ -31,7 +31,7 @@ except ImportError:  # pragma: no cover - optional dependency
     psutil = None
 
 import matplotlib.pyplot as plt
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from rich.console import Console
 from rich.progress import Progress
 # use the classic influxdb client instead of raw HTTP requests
@@ -153,7 +153,11 @@ def log_images(image_paths: Iterable[Path]) -> None:
 def create_mosaic(
     image_paths: Iterable[Path], output_path: Path, cols: int = 4, rows: int = 4
 ) -> Path:
-    """Assemble images into a mosaic of ``cols`` by ``rows`` tiles."""
+    """Assemble images into a mosaic of ``cols`` by ``rows`` tiles.
+
+    The earliest timestamp among the images is rendered onto the mosaic.
+    """
+
     paths = list(image_paths)[: cols * rows]
     if not paths:
         raise ValueError("No images provided for mosaic")
@@ -171,6 +175,20 @@ def create_mosaic(
             progress.print(str(path))
 
             progress.advance(task)
+
+    # annotate with the earliest timestamp of the included images
+    earliest = min(paths, key=lambda p: p.stat().st_mtime).stat().st_mtime
+    time_text = datetime.fromtimestamp(earliest).strftime("%Y-%m-%d %H:%M:%S")
+    draw = ImageDraw.Draw(mosaic)
+    font = ImageFont.load_default()
+    x, y = 10, 10
+    # draw black outline for readability
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            if dx or dy:
+                draw.text((x + dx, y + dy), time_text, font=font, fill="black")
+    draw.text((x, y), time_text, font=font, fill="white")
+
     mosaic.save(output_path)
     return output_path
 
@@ -234,10 +252,12 @@ def generate_graph(
 
     if times and values:
         plt.figure()
-        plt.bar(times, values)
+        plt.bar(times, values, edgecolor="black")
+
         plt.title(measurement)
         plt.xlabel("time")
         plt.ylabel("value")
+        plt.grid(axis="x", linestyle="--", linewidth=0.5)
         plt.tight_layout()
         plt.savefig(output)
         plt.close()
