@@ -27,6 +27,7 @@ from rich.console import Console
 from rich.progress import Progress
 # use the classic influxdb client instead of raw HTTP requests
 from influxdb import InfluxDBClient
+
 from ultralytics import YOLO
 
 MOTION_DIR = Path("/var/lib/motion")
@@ -66,6 +67,7 @@ def ensure_influx_running() -> None:
         time.sleep(5)
 
 
+
 def _images_since(start: datetime) -> List[Path]:
     """Return images created after ``start``."""
     images: List[Path] = []
@@ -96,6 +98,7 @@ def log_images(image_paths: Iterable[Path]) -> None:
 def create_mosaic(image_paths: Iterable[Path], output_path: Path) -> Path:
     paths = list(image_paths)
     imgs = [Image.open(p) for p in paths]
+
     w, h = imgs[0].size
     cols = ceil(sqrt(len(imgs)))
     rows = ceil(len(imgs) / cols)
@@ -108,6 +111,7 @@ def create_mosaic(image_paths: Iterable[Path], output_path: Path) -> Path:
             y = (idx // cols) * h
             mosaic.paste(img, (x, y))
             progress.print(str(path))
+
             progress.advance(task)
     mosaic.save(output_path)
     return output_path
@@ -123,6 +127,7 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
             progress.print(str(path))
+
             progress.advance(task)
     return counts
 
@@ -168,6 +173,7 @@ def generate_graph(
         times.append(datetime.fromisoformat(p["time"].replace("Z", "+00:00")))
         values.append(p[field])
 
+
     if times and values:
         plt.figure()
         plt.plot(times, values)
@@ -195,11 +201,13 @@ def main() -> None:
 
     log_images(images)
 
+
     model = YOLO("yolov8n.pt")
 
     people_counts = detect_people(model, images)
 
     ensure_influx_running()
+
     client = InfluxDBClient(
         host=INFLUX_HOST,
         port=INFLUX_PORT,
