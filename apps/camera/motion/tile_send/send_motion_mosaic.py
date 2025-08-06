@@ -23,6 +23,7 @@ from typing import Dict, Iterable, List
 
 import matplotlib.pyplot as plt
 from PIL import Image
+from rich.console import Console
 from rich.progress import Progress
 # use the classic influxdb client instead of raw HTTP requests
 from influxdb import InfluxDBClient
@@ -39,6 +40,31 @@ INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
 INFLUX_DB = os.getenv("INFLUX_DB", "")
+
+console = Console()
+
+
+def ensure_influx_running() -> None:
+    """Start the InfluxDB service if it is not running."""
+    running = subprocess.run(
+        ["pgrep", "-f", "influxd"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode
+    if running != 0:
+        console.print("InfluxDB not running, attempting to start...")
+        started = subprocess.run(
+            ["systemctl", "start", "influxdb"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        if started != 0:
+            subprocess.Popen(
+                ["influxd"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        time.sleep(5)
 
 
 
@@ -59,8 +85,20 @@ def wait_for_images(start: datetime, count: int) -> List[Path]:
         time.sleep(2)
 
 
+def log_images(image_paths: Iterable[Path]) -> None:
+    """Print paths of images being processed with progress."""
+    paths = list(image_paths)
+    with Progress() as progress:
+        task = progress.add_task("Images", total=len(paths))
+        for p in paths:
+            progress.print(str(p))
+            progress.advance(task)
+
+
 def create_mosaic(image_paths: Iterable[Path], output_path: Path) -> Path:
-    imgs = [Image.open(p) for p in image_paths]
+    paths = list(image_paths)
+    imgs = [Image.open(p) for p in paths]
+
     w, h = imgs[0].size
     cols = ceil(sqrt(len(imgs)))
     rows = ceil(len(imgs) / cols)
@@ -68,10 +106,12 @@ def create_mosaic(image_paths: Iterable[Path], output_path: Path) -> Path:
 
     with Progress() as progress:
         task = progress.add_task("Assembling mosaic", total=len(imgs))
-        for idx, img in enumerate(imgs):
+        for idx, (img, path) in enumerate(zip(imgs, paths)):
             x = (idx % cols) * w
             y = (idx // cols) * h
             mosaic.paste(img, (x, y))
+            progress.print(str(path))
+
             progress.advance(task)
     mosaic.save(output_path)
     return output_path
@@ -86,6 +126,8 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
             results = model(str(path))
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
+            progress.print(str(path))
+
             progress.advance(task)
     return counts
 
@@ -103,7 +145,6 @@ def write_counts(client: InfluxDBClient, counts: Dict[Path, int]) -> None:
         )
     if points:
         client.write_points(points)
-
 
 
 def write_disk_free(client: InfluxDBClient) -> None:
@@ -158,9 +199,14 @@ def main() -> None:
     trigger = datetime.now()
     images = wait_for_images(trigger, 18)
 
+    log_images(images)
+
+
     model = YOLO("yolov8n.pt")
 
     people_counts = detect_people(model, images)
+
+    ensure_influx_running()
 
     client = InfluxDBClient(
         host=INFLUX_HOST,
@@ -174,7 +220,6 @@ def main() -> None:
     generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
     generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
     client.close()
-
 
     mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
 
