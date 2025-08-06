@@ -37,8 +37,8 @@ DISK_GRAPH = Path("/tmp/disk_free.png")
 
 INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
-INFLUX_USER = os.getenv("INFLUX_USER", "")
-INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
+INFLUX_USER = os.getenv("INFLUX_USER", "admin")
+INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "admin")
 INFLUX_DB = os.getenv("INFLUX_DB", "")
 
 console = Console()
@@ -72,7 +72,7 @@ def _images_since(start: datetime) -> List[Path]:
     """Return images created after ``start``."""
     images: List[Path] = []
     for ext in ("*.jpg", "*.jpeg", "*.png"):
-        images.extend(p for p in MOTION_DIR.glob(ext) if datetime.fromtimestamp(p.stat().st_mtime) >= start)
+        images.extend(p for p in MOTION_DIR.glob(ext) if datetime.fromtimestamp(p.stat().st_mtime) <= start)
     return sorted(images, key=lambda p: p.stat().st_mtime)
 
 
