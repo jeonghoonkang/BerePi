@@ -16,7 +16,7 @@ import os
 import subprocess
 import time
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from math import ceil, sqrt
 from pathlib import Path
 from typing import Dict, Iterable, List
@@ -69,10 +69,15 @@ def ensure_influx_running() -> None:
 
 
 def _images_since(start: datetime) -> List[Path]:
-    """Return images created after ``start``."""
+    """Return images created after ``start`` within the last four days."""
     images: List[Path] = []
+    cutoff = start - timedelta(days=4)
     for ext in ("*.jpg", "*.jpeg", "*.png"):
-        images.extend(p for p in MOTION_DIR.glob(ext) if datetime.fromtimestamp(p.stat().st_mtime) <= start)
+        images.extend(
+            p
+            for p in MOTION_DIR.glob(ext)
+            if cutoff <= datetime.fromtimestamp(p.stat().st_mtime) <= start
+        )
     return sorted(images, key=lambda p: p.stat().st_mtime)
 
 
