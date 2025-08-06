@@ -378,10 +378,10 @@ def main() -> None:
                 to_send.append(person_path)
             send_via_telegram(to_send)
 
-        write_disk_free(client)
-        generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
-        generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
-        send_via_telegram([PEOPLE_GRAPH, DISK_GRAPH])
+        #write_disk_free(client)
+        #generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
+        #generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
+        #send_via_telegram([PEOPLE_GRAPH, DISK_GRAPH])
         client.close()
 
         print_system_usage("End ")
@@ -389,7 +389,7 @@ def main() -> None:
         return
 
     start_time = datetime.now()
-    wait_for_images(start_time, 5)  # wait until 5 images appear
+    #wait_for_images(start_time, 5)  # wait until 5 images appear
     trigger = datetime.now()
     images = wait_for_images(trigger, 16)
 
@@ -407,10 +407,10 @@ def main() -> None:
     )
     ensure_database(client, INFLUX_DB)
     client.switch_database(INFLUX_DB)
-    write_counts(client, people_counts)
-    write_disk_free(client)
-    generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
-    generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
+    #write_counts(client, people_counts)
+    #write_disk_free(client)
+    #generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
+    #generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
     client.close()
 
     mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
@@ -419,7 +419,7 @@ def main() -> None:
     if person_images:
         person_mosaic = create_timed_mosaic(person_images, PERSON_MOSAIC)
         paths_to_send.append(person_mosaic)
-    paths_to_send.extend([PEOPLE_GRAPH, DISK_GRAPH])
+    #paths_to_send.extend([PEOPLE_GRAPH, DISK_GRAPH])
 
     send_via_telegram(paths_to_send)
 
