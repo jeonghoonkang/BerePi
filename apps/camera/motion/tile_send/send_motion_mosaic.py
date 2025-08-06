@@ -21,6 +21,7 @@ import time
 import shutil
 import argparse
 from datetime import datetime, timedelta, date
+
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -103,6 +104,7 @@ def ensure_database(client: InfluxDBClient, name: str) -> None:
 def _images_in_range(start: datetime, end: datetime) -> List[Path]:
     """Return image paths whose mtime lies between ``start`` and ``end``."""
     images: List[Path] = []
+
     exts = {".jpg", ".jpeg", ".png"}
     for entry in os.scandir(MOTION_DIR):
         if not entry.is_file():
@@ -127,6 +129,7 @@ def images_for_day(day: date) -> List[Path]:
     start = datetime.combine(day, datetime.min.time())
     end = start + timedelta(days=1)
     return _images_in_range(start, end)
+
 
 
 def wait_for_images(start: datetime, count: int) -> List[Path]:
