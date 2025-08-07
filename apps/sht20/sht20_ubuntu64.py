@@ -30,6 +30,13 @@ import atexit
 import lgpio
 from flask import Flask, render_template_string
 from influxdb import InfluxDBClient
+from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Seoul")
+except Exception:  # pragma: no cover - fallback if zoneinfo is unavailable
+    from datetime import timezone, timedelta
+    TZ = timezone(timedelta(hours=9))
 
 # Constants for the SHT20 sensor
 SHT20_ADDR = 0x40       # SHT20 register address
@@ -62,7 +69,7 @@ INDEX_TEMPLATE = """
         <p>Measurement: {{ influx_measurement }}</p>
         <h3>Query for Last Month</h3>
         <pre>{{ query }}</pre>
-        <h2>Recent Temperature</h2>
+        <h2>Recent Temperature (last 48h)</h2>
         <canvas id="tempChart" width="400" height="200"></canvas>
         <script>
             const recent = {{ recent|tojson }};
@@ -187,8 +194,8 @@ def write_influx(temp, timestamp):
         print("InfluxDB write error:", exc)
 
 
-def query_recent_temperatures(limit=50):
-    """Retrieve recent temperature points from InfluxDB."""
+def query_recent_temperatures(hours=48):
+    """Retrieve temperature points from the last ``hours`` hours."""
     try:
         client = InfluxDBClient(
             host=INFLUX_HOST,
@@ -197,13 +204,20 @@ def query_recent_temperatures(limit=50):
             password=INFLUX_PASS,
             database=INFLUX_DB,
         )
-        result = client.query(
-            f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" ORDER BY time DESC LIMIT {limit}'
+        query = (
+            f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" '
+            f'WHERE time >= now() - {hours}h ORDER BY time ASC'
         )
+        result = client.query(query)
         points = list(result.get_points())
-        points.reverse()
         return [
-            {"time": p["time"], "temperature": p["value"]} for p in points
+            {
+                "time": datetime.fromisoformat(p["time"].replace("Z", "+00:00"))
+                .astimezone(TZ)
+                .strftime("%m-%d %H:%M"),
+                "temperature": p["value"],
+            }
+            for p in points
         ]
     except Exception as exc:  # pragma: no cover - best effort logging
         print("InfluxDB query error:", exc)
@@ -261,7 +275,7 @@ def capture_and_send(url, outfile="sht20.jpg"):
 
         options = {"javascript-delay": 2000, "enable-local-file-access": ""}
         imgkit.from_url(url, outfile, options=options)
-        subprocess.run(["telegram-send", "-f", outfile], check=False)
+        subprocess.run(["telegram-send", "-i", outfile], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send failed:", exc)
 
@@ -279,7 +293,7 @@ def update_loop():
 
         temp_c, _ = calc(temp_raw, humi_raw)
         ip = get_ip_address()
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        timestamp = datetime.now(TZ).isoformat()
 
         latest_data["temperature"] = temp_c
         latest_data["ip"] = ip
