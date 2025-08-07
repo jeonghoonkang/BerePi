@@ -87,6 +87,8 @@ INDEX_TEMPLATE = """
                 },
                 options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } }
             });
+            window.CHARTS_READY = true;
+            window.status = 'ready';
         </script>
     </body>
 </html>
@@ -273,7 +275,7 @@ def capture_and_send(url, outfile="sht20.jpg"):
     try:
         import imgkit
 
-        options = {"javascript-delay": 2000, "enable-local-file-access": ""}
+        options = {"enable-local-file-access": "", "window-status": "ready"}
         imgkit.from_url(url, outfile, options=options)
         subprocess.run(["telegram-send", "-i", outfile], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
