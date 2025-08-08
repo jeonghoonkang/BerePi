@@ -32,6 +32,7 @@ from flask import Flask, render_template_string, jsonify
 from influxdb import InfluxDBClient
 from datetime import datetime
 from rich.console import Console
+
 try:
     from zoneinfo import ZoneInfo
     TZ = ZoneInfo("Asia/Seoul")
@@ -104,6 +105,7 @@ INDEX_TEMPLATE = """
             }
 
             setInterval(refresh, 60000);
+
         </script>
     </body>
 </html>
@@ -329,6 +331,7 @@ def capture_and_send(outfile="sht20.png"):
         console.print(outfile_path)
 
         subprocess.run(["telegram-send", "-i", outfile_path], check=False)
+
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send failed:", exc)
 
@@ -406,4 +409,5 @@ if __name__ == "__main__":
     )
     server.daemon = True
     server.start()
+
     server.join()
