@@ -5,7 +5,7 @@
 """SHT20 sensor reader with web and storage support.
 
 This script periodically reads temperature data from the SHT20 sensor and
-exposes it through a simple web page.  Every 30 seconds the following actions
+exposes it through a simple web page.  Every minute the following actions
 are performed:
 
 * Read the current temperature from the sensor.
@@ -28,9 +28,10 @@ import shutil
 import atexit
 
 import lgpio
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, jsonify
 from influxdb import InfluxDBClient
 from datetime import datetime
+from rich.console import Console
 try:
     from zoneinfo import ZoneInfo
     TZ = ZoneInfo("Asia/Seoul")
@@ -49,6 +50,8 @@ bus = lgpio.i2c_open(1, SHT20_ADDR)
 
 # Flask application setup
 app = Flask(__name__)
+
+console = Console()
 
 # HTML template for the web page
 INDEX_TEMPLATE = """
@@ -74,7 +77,7 @@ INDEX_TEMPLATE = """
         <script>
             const recent = {{ recent|tojson }};
             const ctx = document.getElementById('tempChart').getContext('2d');
-            new Chart(ctx, {
+            const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: recent.map(p => p.time),
@@ -87,6 +90,20 @@ INDEX_TEMPLATE = """
                 },
                 options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } }
             });
+
+            async function refresh() {
+                try {
+                    const resp = await fetch('/data');
+                    const data = await resp.json();
+                    chart.data.labels = data.map(p => p.time);
+                    chart.data.datasets[0].data = data.map(p => p.temperature);
+                    chart.update();
+                } catch (e) {
+                    console.log('Refresh failed', e);
+                }
+            }
+
+            setInterval(refresh, 60000);
         </script>
     </body>
 </html>
@@ -268,27 +285,63 @@ def send_plaintext(temp, ip, timestamp):
         print("Telegram send error:", exc)
 
 
-def capture_and_send(url, outfile="sht20.jpg"):
-    """Capture the given URL to an image and send via telegram-send."""
+def capture_and_send(outfile="sht20.png"):
+    """Generate a temperature chart from InfluxDB data and send it."""
     try:
-        import imgkit
+        import matplotlib.pyplot as plt
+        import seaborn as sns
 
-        options = {"javascript-delay": 2000, "enable-local-file-access": ""}
-        imgkit.from_url(url, outfile, options=options)
-        subprocess.run(["telegram-send", "-i", outfile], check=False)
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER,
+            password=INFLUX_PASS,
+            database=INFLUX_DB,
+        )
+        query = (
+            f'SELECT "value" FROM "{INFLUX_MEASUREMENT}" '
+            f'WHERE time >= now() - 48h ORDER BY time ASC'
+        )
+        result = client.query(query)
+        points = list(result.get_points())
+        if not points:
+            return
+
+        times = [
+            datetime.fromisoformat(p["time"].replace("Z", "+00:00"))
+            .astimezone(TZ)
+            for p in points
+        ]
+        temps = [p["value"] for p in points]
+
+        sns.set_theme(style="whitegrid")
+        fig, ax = plt.subplots(figsize=(10, 4))
+        sns.lineplot(x=times, y=temps, ax=ax, color="red")
+        ax.set_title("Recent Temperature (last 48h)")
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Temperature (°C)")
+        fig.autofmt_xdate()
+        fig.tight_layout()
+        fig.savefig(outfile)
+        plt.close(fig)
+
+        outfile_path = os.path.abspath(outfile)
+        console.print(outfile_path)
+
+        subprocess.run(["telegram-send", "-i", outfile_path], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send failed:", exc)
 
 
 def update_loop():
-    """Background thread that updates sensor data every 30 seconds."""
+    """Background thread that updates sensor data every minute."""
     last_send = 0
     while True:
         temp_raw = reading(1)
         humi_raw = reading(2)
         if not temp_raw or not humi_raw:
             print("register error")
-            time.sleep(30)
+            time.sleep(60)
             continue
 
         temp_c, _ = calc(temp_raw, humi_raw)
@@ -305,10 +358,17 @@ def update_loop():
         now = time.monotonic()
         if now - last_send >= SEND_INTERVAL:
             send_plaintext(temp_c, ip, timestamp)
+            capture_and_send()
             last_send = now
 
 
-        time.sleep(30)
+        time.sleep(60)
+
+
+@app.route("/data")
+def data():
+    """Return recent temperature points as JSON."""
+    return jsonify(query_recent_temperatures())
 
 
 @app.route("/")
@@ -346,8 +406,4 @@ if __name__ == "__main__":
     )
     server.daemon = True
     server.start()
-
-    time.sleep(5)
-    capture_and_send("http://localhost:5000")
-
     server.join()
