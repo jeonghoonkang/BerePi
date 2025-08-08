@@ -5,7 +5,7 @@
 """SHT20 sensor reader with web and storage support.
 
 This script periodically reads temperature data from the SHT20 sensor and
-exposes it through a simple web page.  Every 30 seconds the following actions
+exposes it through a simple web page.  Every minute the following actions
 are performed:
 
 * Read the current temperature from the sensor.
@@ -28,7 +28,7 @@ import shutil
 import atexit
 
 import lgpio
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, jsonify
 from influxdb import InfluxDBClient
 from datetime import datetime
 from rich.console import Console
@@ -54,7 +54,6 @@ app = Flask(__name__)
 
 console = Console()
 
-
 # HTML template for the web page
 INDEX_TEMPLATE = """
 <html>
@@ -79,7 +78,7 @@ INDEX_TEMPLATE = """
         <script>
             const recent = {{ recent|tojson }};
             const ctx = document.getElementById('tempChart').getContext('2d');
-            new Chart(ctx, {
+            const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: recent.map(p => p.time),
@@ -92,8 +91,21 @@ INDEX_TEMPLATE = """
                 },
                 options: { scales: { x: { ticks: { maxTicksLimit: 6 } } } }
             });
-            window.CHARTS_READY = true;
-            window.status = 'ready';
+
+            async function refresh() {
+                try {
+                    const resp = await fetch('/data');
+                    const data = await resp.json();
+                    chart.data.labels = data.map(p => p.time);
+                    chart.data.datasets[0].data = data.map(p => p.temperature);
+                    chart.update();
+                } catch (e) {
+                    console.log('Refresh failed', e);
+                }
+            }
+
+            setInterval(refresh, 60000);
+
         </script>
     </body>
 </html>
@@ -277,7 +289,6 @@ def send_plaintext(temp, ip, timestamp):
 
 def capture_and_send(outfile="sht20.png"):
     """Generate a temperature chart from InfluxDB data and send it."""
-
     try:
         import matplotlib.pyplot as plt
         import seaborn as sns
@@ -326,14 +337,14 @@ def capture_and_send(outfile="sht20.png"):
 
 
 def update_loop():
-    """Background thread that updates sensor data every 30 seconds."""
+    """Background thread that updates sensor data every minute."""
     last_send = 0
     while True:
         temp_raw = reading(1)
         humi_raw = reading(2)
         if not temp_raw or not humi_raw:
             print("register error")
-            time.sleep(30)
+            time.sleep(60)
             continue
 
         temp_c, _ = calc(temp_raw, humi_raw)
@@ -354,7 +365,13 @@ def update_loop():
             last_send = now
 
 
-        time.sleep(30)
+        time.sleep(60)
+
+
+@app.route("/data")
+def data():
+    """Return recent temperature points as JSON."""
+    return jsonify(query_recent_temperatures())
 
 
 @app.route("/")
