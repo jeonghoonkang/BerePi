@@ -275,8 +275,9 @@ def send_plaintext(temp, ip, timestamp):
         print("Telegram send error:", exc)
 
 
-def capture_and_send(outfile="sht20.jpg"):
-    """Capture the given URL to an image and send via telegram-send."""
+def capture_and_send(outfile="sht20.png"):
+    """Generate a temperature chart from InfluxDB data and send it."""
+
     try:
         import matplotlib.pyplot as plt
         import seaborn as sns
@@ -319,7 +320,6 @@ def capture_and_send(outfile="sht20.jpg"):
         console.print(outfile_path)
 
         subprocess.run(["telegram-send", "-i", outfile_path], check=False)
-        
 
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send failed:", exc)
@@ -350,6 +350,7 @@ def update_loop():
         now = time.monotonic()
         if now - last_send >= SEND_INTERVAL:
             send_plaintext(temp_c, ip, timestamp)
+            capture_and_send()
             last_send = now
 
 
@@ -391,8 +392,5 @@ if __name__ == "__main__":
     )
     server.daemon = True
     server.start()
-
-    time.sleep(5)
-    capture_and_send()
 
     server.join()
