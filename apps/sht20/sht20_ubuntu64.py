@@ -276,6 +276,8 @@ def send_plaintext(temp, ip, timestamp):
     total_gb = total / (1024 ** 3)
     free_gb = free / (1024 ** 3)
     free_pct = free / total * 100 if total else 0
+    used_pct = 100 - free_pct
+
 
     try:
         with open("/proc/uptime", "r", encoding="utf-8") as f:
@@ -300,6 +302,12 @@ def send_plaintext(temp, ip, timestamp):
   
     try:
         subprocess.run(["telegram-send", message], check=False)
+        if used_pct > 80:
+            warning = (
+                f"\u26a0\ufe0f \ub514\uc2a4\ud06c \uc6a9\ub7c9\uc774 \ubd80\uc871\ud569\ub2c8\ub2e4: "
+                f"{free_gb:.2f}GB \ub0a8\uc74c ({free_pct:.1f}%)"
+            )
+            subprocess.run(["telegram-send", warning], check=False)
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Telegram send error:", exc)
 
