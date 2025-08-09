@@ -30,7 +30,7 @@ import atexit
 import lgpio
 from flask import Flask, render_template_string, jsonify
 from influxdb import InfluxDBClient
-from datetime import datetime
+from datetime import datetime, timedelta
 from rich.console import Console
 
 try:
@@ -272,13 +272,30 @@ def start_influxdb():
 
 def send_plaintext(temp, ip, timestamp):
     """Send a plain text summary via telegram-send."""
+    total, _, free = shutil.disk_usage("/")
+    total_gb = total / (1024 ** 3)
+    free_gb = free / (1024 ** 3)
+    free_pct = free / total * 100 if total else 0
+
+    try:
+        with open("/proc/uptime", "r", encoding="utf-8") as f:
+            uptime_seconds = float(f.readline().split()[0])
+    except Exception:
+        uptime_seconds = 0
+    boot_time = datetime.now(TZ) - timedelta(seconds=uptime_seconds)
+    uptime_hours = uptime_seconds / 3600
+    uptime_days = uptime_seconds / 86400
+
     message = (
         f"Temperature: {temp:.2f} \u00b0C\n"
         f"IP Address: {ip}\n"
         f"Timestamp: {timestamp}\n"
         "\uc704\uce58: A\ub3d9 \uc11c\ubc84\uc2e4 \n"  # 위치: A동 서버실
         f"influxdb user, pass, DB, measurements {INFLUX_USER} {INFLUX_PASS} {INFLUX_DB} {INFLUX_MEASUREMENT} \n"
-        f"{QUERY_LAST_MONTH}"
+        f"{QUERY_LAST_MONTH}\n"
+        f"Disk: {total_gb:.2f}GB total, {free_gb:.2f}GB free ({free_pct:.1f}%)\n"
+        f"Boot: {boot_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Uptime: {uptime_hours:.1f}h ({uptime_days:.2f}d)"
     )
   
     try:
