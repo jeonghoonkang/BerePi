@@ -32,6 +32,7 @@ from flask import Flask, render_template_string, jsonify
 from influxdb import InfluxDBClient
 from datetime import datetime, timedelta
 from rich.console import Console
+
 try:
     from zoneinfo import ZoneInfo
     TZ = ZoneInfo("Asia/Seoul")
@@ -104,6 +105,7 @@ INDEX_TEMPLATE = """
             }
 
             setInterval(refresh, 60000);
+
         </script>
     </body>
 </html>
@@ -276,6 +278,7 @@ def send_plaintext(temp, ip, timestamp):
     free_pct = free / total * 100 if total else 0
     used_pct = 100 - free_pct
 
+
     try:
         with open("/proc/uptime", "r", encoding="utf-8") as f:
             uptime_seconds = float(f.readline().split()[0])
@@ -353,6 +356,7 @@ def capture_and_send(outfile="sht20.png"):
         console.print(outfile_path)
 
         subprocess.run(["telegram-send", "-i", outfile_path], check=False)
+
     except Exception as exc:  # pragma: no cover - best effort logging
         print("Capture/send failed:", exc)
 
@@ -430,4 +434,5 @@ if __name__ == "__main__":
     )
     server.daemon = True
     server.start()
+
     server.join()
