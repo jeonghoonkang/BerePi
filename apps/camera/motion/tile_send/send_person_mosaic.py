@@ -101,6 +101,11 @@ def recent_images(minutes: int = 30) -> Dict[Path, datetime]:
     return images
 
 
+        if ts >= cutoff:
+            images[path] = ts
+    return images
+
+
 def cpu_temperature() -> float:
     """Return the current CPU temperature in Celsius."""
     try:
@@ -117,6 +122,7 @@ def wait_for_cool_cpu(max_temp: float = 58.0, cool_temp: float = 53.0) -> None:
     exceeds ``max_temp`` the function sleeps, reporting the temperature every
     second, until it drops below ``cool_temp``.
     """
+
     temp = cpu_temperature()
     console.print(f"CPU temperature: {temp:.1f}°C")
     if temp > max_temp:
@@ -144,6 +150,7 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
                 progress.print(f"Missing file: {path}")
                 progress.advance(task)
                 continue
+
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
             progress.print(str(path))
@@ -163,6 +170,7 @@ def write_counts(
                 ts = datetime.utcfromtimestamp(path.stat().st_mtime)
             except FileNotFoundError:
                 continue
+
         points.append(
             {
                 "measurement": "person_count",
@@ -250,6 +258,7 @@ def create_mosaic_with_times(
             continue
     if not paths:
         raise ValueError("No images for mosaic")
+
     w, h = imgs[0].size
     mosaic = Image.new("RGB", (cols * w, rows * h))
     try:
@@ -334,6 +343,7 @@ def main() -> None:
     if any_person:
         generate_graph(client, PEOPLE_GRAPH)
         send_via_telegram([PEOPLE_GRAPH])
+
 
     client.close()
     console.print(f"Elapsed time: {time.perf_counter() - start_perf:.2f}s")
