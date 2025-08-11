@@ -98,6 +98,26 @@ def recent_images(minutes: int = 30) -> Dict[Path, datetime]:
     return images
 
 
+def cpu_temperature() -> float:
+    """Return the current CPU temperature in Celsius."""
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            return int(f.read().strip()) / 1000.0
+    except FileNotFoundError:  # pragma: no cover - platform specific
+        return 0.0
+
+
+def wait_for_cool_cpu(max_temp: float = 60.0, cool_temp: float = 55.0) -> None:
+    """Print CPU temperature and delay if above ``max_temp`` until below ``cool_temp``."""
+    temp = cpu_temperature()
+    console.print(f"CPU temperature: {temp:.1f}°C")
+    if temp > max_temp:
+        while temp > cool_temp:
+            time.sleep(5)
+            temp = cpu_temperature()
+            console.print(f"CPU temperature: {temp:.1f}°C")
+
+
 def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
     """Return number of detected persons for each image."""
     paths = list(image_paths)
@@ -105,6 +125,7 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
     with Progress() as progress:
         task = progress.add_task("Detecting people", total=len(paths))
         for path in paths:
+            wait_for_cool_cpu()
             results = model(str(path))
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
@@ -283,6 +304,7 @@ def main() -> None:
     if any_person:
         generate_graph(client, PEOPLE_GRAPH)
         send_via_telegram([PEOPLE_GRAPH])
+
 
     client.close()
     console.print(f"Elapsed time: {time.perf_counter() - start_perf:.2f}s")
