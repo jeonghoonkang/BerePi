@@ -305,6 +305,7 @@ def main() -> None:
         generate_graph(client, PEOPLE_GRAPH)
         send_via_telegram([PEOPLE_GRAPH])
 
+
     client.close()
     console.print(f"Elapsed time: {time.perf_counter() - start_perf:.2f}s")
 
