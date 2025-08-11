@@ -96,6 +96,10 @@ def recent_images(minutes: int = 30) -> Dict[Path, datetime]:
             ts = timestamp_from_filename(path)
         except FileNotFoundError:
             continue
+        if ts >= cutoff:
+            images[path] = ts
+    return images
+
 
         if ts >= cutoff:
             images[path] = ts
@@ -111,15 +115,21 @@ def cpu_temperature() -> float:
         return 0.0
 
 
-def wait_for_cool_cpu(max_temp: float = 60.0, cool_temp: float = 55.0) -> None:
-    """Print CPU temperature and delay if above ``max_temp`` until below ``cool_temp``."""
+def wait_for_cool_cpu(max_temp: float = 58.0, cool_temp: float = 53.0) -> None:
+    """Delay processing if the CPU is above ``max_temp``.
+
+    The current temperature is printed before the check. When the temperature
+    exceeds ``max_temp`` the function sleeps, reporting the temperature every
+    second, until it drops below ``cool_temp``.
+    """
+
     temp = cpu_temperature()
     console.print(f"CPU temperature: {temp:.1f}°C")
     if temp > max_temp:
         while temp > cool_temp:
-            time.sleep(5)
+            time.sleep(1)
             temp = cpu_temperature()
-            console.print(f"CPU temperature: {temp:.1f}°C")
+            console.print(f"Sleeping... CPU temperature: {temp:.1f}°C")
 
 
 def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
