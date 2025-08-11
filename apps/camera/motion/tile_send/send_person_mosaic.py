@@ -92,7 +92,11 @@ def recent_images(minutes: int = 30) -> Dict[Path, datetime]:
         if not entry.name.lower().endswith((".jpg", ".jpeg")):
             continue
         path = Path(entry.path)
-        ts = timestamp_from_filename(path)
+        try:
+            ts = timestamp_from_filename(path)
+        except FileNotFoundError:
+            continue
+
         if ts >= cutoff:
             images[path] = ts
     return images
@@ -125,8 +129,18 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
     with Progress() as progress:
         task = progress.add_task("Detecting people", total=len(paths))
         for path in paths:
+            if not path.exists():
+                progress.print(f"Missing file: {path}")
+                progress.advance(task)
+                continue
             wait_for_cool_cpu()
-            results = model(str(path))
+            try:
+                results = model(str(path))
+            except FileNotFoundError:
+                progress.print(f"Missing file: {path}")
+                progress.advance(task)
+                continue
+
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
             progress.print(str(path))
@@ -140,7 +154,13 @@ def write_counts(
     """Store person counts in InfluxDB using supplied timestamps."""
     points = []
     for path, num in counts.items():
-        ts = times.get(path, datetime.utcfromtimestamp(path.stat().st_mtime))
+        ts = times.get(path)
+        if ts is None:
+            try:
+                ts = datetime.utcfromtimestamp(path.stat().st_mtime)
+            except FileNotFoundError:
+                continue
+
         points.append(
             {
                 "measurement": "person_count",
@@ -216,10 +236,19 @@ def create_mosaic_with_times(
     image_paths: Iterable[Path], output: Path, cols: int = 4, rows: int = 4
 ) -> Path:
     """Create a mosaic annotating each tile with its capture time."""
-    paths = list(image_paths)[: cols * rows]
+    paths = []
+    imgs = []
+    for p in list(image_paths)[: cols * rows]:
+        if not p.exists():
+            continue
+        try:
+            imgs.append(Image.open(p))
+            paths.append(p)
+        except FileNotFoundError:
+            continue
     if not paths:
         raise ValueError("No images for mosaic")
-    imgs = [Image.open(p) for p in paths]
+
     w, h = imgs[0].size
     mosaic = Image.new("RGB", (cols * w, rows * h))
     try:
