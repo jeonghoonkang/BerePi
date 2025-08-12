@@ -21,6 +21,7 @@ import time
 import shutil
 import argparse
 from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 
 from pathlib import Path
 from typing import Dict, Iterable, List
@@ -49,6 +50,8 @@ INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "admin")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "admin")
 INFLUX_DB = os.getenv("INFLUX_DB", "motion")
+
+KST = ZoneInfo("Asia/Seoul")
 
 console = Console()
 
@@ -178,7 +181,7 @@ def create_mosaic(
 
     # annotate with the earliest timestamp of the included images
     earliest = min(paths, key=lambda p: p.stat().st_mtime).stat().st_mtime
-    time_text = datetime.fromtimestamp(earliest).strftime("%Y-%m-%d %H:%M:%S")
+    time_text = datetime.fromtimestamp(earliest, KST).strftime("%Y-%m-%d %H:%M:%S")
     draw = ImageDraw.Draw(mosaic)
     try:
         font = ImageFont.truetype(
@@ -229,7 +232,7 @@ def write_counts(client: InfluxDBClient, counts: Dict[Path, int]) -> None:
             {
                 "measurement": "person_count",
                 "tags": {"source": "motion"},
-                "time": datetime.utcfromtimestamp(path.stat().st_mtime).isoformat() + "Z",
+                "time": datetime.fromtimestamp(path.stat().st_mtime, KST).isoformat(),
                 "fields": {"count": num},
             }
         )
@@ -241,7 +244,7 @@ def write_disk_free(client: InfluxDBClient) -> None:
     free = shutil.disk_usage("/").free
     point = {
         "measurement": "disk_free",
-        "time": datetime.utcnow().isoformat() + "Z",
+        "time": datetime.now(KST).isoformat(),
         "fields": {"bytes": free},
     }
     client.write_points([point])
