@@ -187,7 +187,8 @@ def create_mosaic(
     except OSError:  # pragma: no cover - font may be missing
         font = ImageFont.load_default()
 
-    x, y = 10, 10
+    _, _, _, text_height = draw.textbbox((0, 0), time_text, font=font)
+    x, y = 10, mosaic.height - text_height - 10
     # draw black outline for readability
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
@@ -199,7 +200,11 @@ def create_mosaic(
     return output_path
 
 
-def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
+def detect_people(
+    model: YOLO, image_paths: Iterable[Path], client: InfluxDBClient | None = None
+) -> Dict[Path, int]:
+    """Detect people in images and optionally write counts to InfluxDB."""
+
     paths = list(image_paths)
     counts: Dict[Path, int] = {}
     with Progress() as progress:
@@ -209,8 +214,11 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
             progress.print(str(path))
-
             progress.advance(task)
+
+    if client is not None:
+        write_counts(client, counts)
+
     return counts
 
 
@@ -307,8 +315,7 @@ def main() -> None:
         for idx in range(0, len(images), 16):
             batch = images[idx : idx + 16]
             log_images(batch)
-            counts = detect_people(model, batch)
-            write_counts(client, counts)
+            detect_people(model, batch, client)
             mosaic_path = OUTPUT_MOSAIC.with_name(f"motion_mosaic_{idx//16}.jpg")
             create_mosaic(batch, mosaic_path)
             send_via_telegram([mosaic_path])
@@ -331,7 +338,6 @@ def main() -> None:
     log_images(images)
 
     model = YOLO("yolov8n.pt")
-    people_counts = detect_people(model, images)
 
     ensure_influx_running()
     client = InfluxDBClient(
@@ -342,7 +348,8 @@ def main() -> None:
     )
     ensure_database(client, INFLUX_DB)
     client.switch_database(INFLUX_DB)
-    write_counts(client, people_counts)
+
+    detect_people(model, images, client)
     write_disk_free(client)
     generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
     generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
