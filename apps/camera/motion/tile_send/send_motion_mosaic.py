@@ -21,6 +21,7 @@ import time
 import shutil
 import argparse
 from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 
 from pathlib import Path
 from typing import Dict, Iterable, List
@@ -49,6 +50,8 @@ INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "admin")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "admin")
 INFLUX_DB = os.getenv("INFLUX_DB", "motion")
+
+KST = ZoneInfo("Asia/Seoul")
 
 console = Console()
 
@@ -178,7 +181,7 @@ def create_mosaic(
 
     # annotate with the earliest timestamp of the included images
     earliest = min(paths, key=lambda p: p.stat().st_mtime).stat().st_mtime
-    time_text = datetime.fromtimestamp(earliest).strftime("%Y-%m-%d %H:%M:%S")
+    time_text = datetime.fromtimestamp(earliest, KST).strftime("%Y-%m-%d %H:%M:%S")
     draw = ImageDraw.Draw(mosaic)
     try:
         font = ImageFont.truetype(
@@ -187,7 +190,8 @@ def create_mosaic(
     except OSError:  # pragma: no cover - font may be missing
         font = ImageFont.load_default()
 
-    x, y = 10, 10
+    _, _, _, text_height = draw.textbbox((0, 0), time_text, font=font)
+    x, y = 10, mosaic.height - text_height - 10
     # draw black outline for readability
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
@@ -199,7 +203,11 @@ def create_mosaic(
     return output_path
 
 
-def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
+def detect_people(
+    model: YOLO, image_paths: Iterable[Path], client: InfluxDBClient | None = None
+) -> Dict[Path, int]:
+    """Detect people in images and optionally write counts to InfluxDB."""
+
     paths = list(image_paths)
     counts: Dict[Path, int] = {}
     with Progress() as progress:
@@ -209,8 +217,11 @@ def detect_people(model: YOLO, image_paths: Iterable[Path]) -> Dict[Path, int]:
             persons = sum(1 for c in results[0].boxes.cls if int(c) == 0)
             counts[path] = persons
             progress.print(str(path))
-
             progress.advance(task)
+
+    if client is not None:
+        write_counts(client, counts)
+
     return counts
 
 
@@ -221,7 +232,7 @@ def write_counts(client: InfluxDBClient, counts: Dict[Path, int]) -> None:
             {
                 "measurement": "person_count",
                 "tags": {"source": "motion"},
-                "time": datetime.utcfromtimestamp(path.stat().st_mtime).isoformat() + "Z",
+                "time": datetime.fromtimestamp(path.stat().st_mtime, KST).isoformat(),
                 "fields": {"count": num},
             }
         )
@@ -233,7 +244,7 @@ def write_disk_free(client: InfluxDBClient) -> None:
     free = shutil.disk_usage("/").free
     point = {
         "measurement": "disk_free",
-        "time": datetime.utcnow().isoformat() + "Z",
+        "time": datetime.now(KST).isoformat(),
         "fields": {"bytes": free},
     }
     client.write_points([point])
@@ -307,8 +318,7 @@ def main() -> None:
         for idx in range(0, len(images), 16):
             batch = images[idx : idx + 16]
             log_images(batch)
-            counts = detect_people(model, batch)
-            write_counts(client, counts)
+            detect_people(model, batch, client)
             mosaic_path = OUTPUT_MOSAIC.with_name(f"motion_mosaic_{idx//16}.jpg")
             create_mosaic(batch, mosaic_path)
             send_via_telegram([mosaic_path])
@@ -331,7 +341,6 @@ def main() -> None:
     log_images(images)
 
     model = YOLO("yolov8n.pt")
-    people_counts = detect_people(model, images)
 
     ensure_influx_running()
     client = InfluxDBClient(
@@ -342,7 +351,8 @@ def main() -> None:
     )
     ensure_database(client, INFLUX_DB)
     client.switch_database(INFLUX_DB)
-    write_counts(client, people_counts)
+
+    detect_people(model, images, client)
     write_disk_free(client)
     generate_graph(client, "person_count", "count", PEOPLE_GRAPH)
     generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
