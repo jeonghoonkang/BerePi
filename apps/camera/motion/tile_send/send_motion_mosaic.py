@@ -123,7 +123,7 @@ def _images_in_range(start: datetime, end: datetime) -> List[Path]:
 def _images_since(start: datetime) -> List[Path]:
     """Return images newer than ``start`` limited to the last four days."""
     now = datetime.now()
-    cutoff = max(start, now - timedelta(days=4))
+    cutoff = max(start, now - timedelta(days=2))
     return _images_in_range(cutoff, now)
 
 
