@@ -268,16 +268,18 @@ def generate_graph(
 
 
     if times and values:
-        plt.figure()
-        plt.plot(times, values, "o", linestyle="none")
-        plt.title(measurement)
-        plt.xlabel("time")
-        plt.ylabel("value")
-        plt.grid(True, linestyle="--", linewidth=0.5)
+        fig, ax = plt.subplots()
+        ax.plot(times, values, "o", linestyle="none")
+        ax.set_title(measurement)
+        ax.set_xlabel("time")
+        ax.set_ylabel("value")
+        ax.grid(True, linestyle="--", linewidth=0.5)
 
-        plt.tight_layout()
-        plt.savefig(output)
-        plt.close()
+        fig.tight_layout()
+        time_text = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+        fig.text(0.01, 0.01, time_text, ha="left", va="bottom")
+        fig.savefig(output)
+        plt.close(fig)
     return output
 
 
