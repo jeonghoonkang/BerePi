@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Monitor motion images, detect people, create mosaics and send via telegram.
 
-The script waits for five new images to appear in ``/var/lib/motion``. Once the
-threshold is met, it collects the next sixteen images, runs a person detection
-model on them and stores the counts to InfluxDB. A mosaic of the images is
-generated along with two graphs for the last 48 hours: number of detected
-people and remaining HDD space. All artefacts are then sent using
-``telegram-send``. Progress for long running operations is displayed with
-``rich``.
+The script collects the thirty-two most recent images in ``/var/lib/motion``,
+runs a person detection model on them and stores the counts to InfluxDB. A
+8x4 mosaic of the images is generated along with two graphs for the last 48
+hours: number of detected people and remaining HDD space. All artefacts are
+then sent using ``telegram-send``. Progress for long running operations is
+displayed with ``rich``.
 
 When ``--date YYYY-MM-DD`` is supplied, the script instead processes all images
 from that day, sending mosaics of the photos in 4x4 batches.
@@ -141,6 +140,12 @@ def wait_for_images(start: datetime, count: int) -> List[Path]:
         if len(imgs) >= count:
             return imgs[:count]
         time.sleep(2)
+
+
+def latest_images(count: int) -> List[Path]:
+    """Return the ``count`` most recent images."""
+    recent = _images_since(datetime.now() - timedelta(days=4))
+    return recent[:count]
 
 
 def log_images(image_paths: Iterable[Path]) -> None:
@@ -335,10 +340,7 @@ def main() -> None:
         console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
         return
 
-    start_time = datetime.now()
-    wait_for_images(start_time, 5)  # wait until 5 images appear
-    trigger = datetime.now()
-    images = wait_for_images(trigger, 16)
+    images = latest_images(32)
 
     log_images(images)
 
@@ -360,7 +362,7 @@ def main() -> None:
     generate_graph(client, "disk_free", "bytes", DISK_GRAPH)
     client.close()
 
-    mosaic_path = create_mosaic(images, OUTPUT_MOSAIC)
+    mosaic_path = create_mosaic(images, OUTPUT_MOSAIC, cols=8, rows=4)
 
     send_via_telegram([mosaic_path, PEOPLE_GRAPH, DISK_GRAPH])
 
