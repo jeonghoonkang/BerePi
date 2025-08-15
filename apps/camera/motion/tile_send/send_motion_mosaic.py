@@ -15,6 +15,7 @@ from that day, sending mosaics of the photos in 4x4 batches.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 import shutil
@@ -126,6 +127,18 @@ def _images_since(start: datetime) -> List[Path]:
     return _images_in_range(cutoff, now)
 
 
+def timestamp_from_filename(path: Path) -> datetime:
+    """Return timestamp encoded in ``path`` or fall back to file mtime."""
+    match = re.search(r"(\d{8})[_-](\d{6})", path.name)
+    if match:
+        dt_str = match.group(1) + match.group(2)
+        try:
+            return datetime.strptime(dt_str, "%Y%m%d%H%M%S").replace(tzinfo=KST)
+        except ValueError:
+            pass
+    return datetime.fromtimestamp(path.stat().st_mtime, KST)
+
+
 def images_for_day(day: date) -> List[Path]:
     """Return all images for the given ``day`` (00:00-23:59)."""
     start = datetime.combine(day, datetime.min.time())
@@ -209,7 +222,11 @@ def create_mosaic(
 
 
 def detect_people(
-    model: YOLO, image_paths: Iterable[Path], client: InfluxDBClient | None = None
+    model: YOLO,
+    image_paths: Iterable[Path],
+    client: InfluxDBClient | None = None,
+    times: Dict[Path, datetime] | None = None,
+
 ) -> Dict[Path, int]:
     """Detect people in images and optionally write counts to InfluxDB."""
 
@@ -225,19 +242,27 @@ def detect_people(
             progress.advance(task)
 
     if client is not None:
-        write_counts(client, counts)
+        write_counts(client, counts, times)
+
 
     return counts
 
 
-def write_counts(client: InfluxDBClient, counts: Dict[Path, int]) -> None:
+def write_counts(
+    client: InfluxDBClient,
+    counts: Dict[Path, int],
+    times: Dict[Path, datetime] | None = None,
+) -> None:
     points = []
     for path, num in counts.items():
+        ts = times[path] if times and path in times else datetime.fromtimestamp(
+            path.stat().st_mtime, KST
+        )
         points.append(
             {
                 "measurement": "person_count",
                 "tags": {"source": "motion"},
-                "time": datetime.fromtimestamp(path.stat().st_mtime, KST).isoformat(),
+                "time": ts.isoformat(),
                 "fields": {"count": num},
             }
         )
@@ -297,10 +322,49 @@ def send_via_telegram(paths: Iterable[Path], delay: float = 1.0) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", help="YYYY-MM-DD to mosaic instead of live feed")
+    parser.add_argument(
+        "--pcount",
+        action="store_true",
+        help="count people in images from the last 24 hours",
+    )
     args = parser.parse_args()
 
     perf_start = time.perf_counter()
     print_system_usage("Start ")
+
+    if args.pcount:
+        images = _images_since(datetime.now() - timedelta(days=1))
+        if not images:
+            console.print("No images found in last 24 hours")
+            print_system_usage("End ")
+            console.print(
+                f"Elapsed time: {time.perf_counter() - perf_start:.2f}s"
+            )
+            return
+
+        model = YOLO("yolov8n.pt")
+        ensure_influx_running()
+        client = InfluxDBClient(
+            host=INFLUX_HOST,
+            port=INFLUX_PORT,
+            username=INFLUX_USER or None,
+            password=INFLUX_PASSWORD or None,
+        )
+        ensure_database(client, INFLUX_DB)
+        client.switch_database(INFLUX_DB)
+
+        times = {p: timestamp_from_filename(p) for p in images}
+        counts = detect_people(model, images, client, times)
+        for path in sorted(images, key=lambda p: times[p]):
+            ts = times[path]
+            console.print(
+                f"{path.name} {ts.strftime('%Y-%m-%d %H:%M:%S')} count={counts[path]}"
+            )
+        client.close()
+
+        print_system_usage("End ")
+        console.print(f"Elapsed time: {time.perf_counter() - perf_start:.2f}s")
+        return
 
     if args.date:
         target_day = datetime.strptime(args.date, "%Y-%m-%d").date()
