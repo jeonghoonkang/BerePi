@@ -123,7 +123,7 @@ def _images_in_range(start: datetime, end: datetime) -> List[Path]:
 def _images_since(start: datetime) -> List[Path]:
     """Return images newer than ``start`` limited to the last four days."""
     now = datetime.now()
-    cutoff = max(start, now - timedelta(days=4))
+    cutoff = max(start, now - timedelta(days=2))
     return _images_in_range(cutoff, now)
 
 
@@ -226,6 +226,7 @@ def detect_people(
     image_paths: Iterable[Path],
     client: InfluxDBClient | None = None,
     times: Dict[Path, datetime] | None = None,
+
 ) -> Dict[Path, int]:
     """Detect people in images and optionally write counts to InfluxDB."""
 
@@ -242,6 +243,7 @@ def detect_people(
 
     if client is not None:
         write_counts(client, counts, times)
+
 
     return counts
 
