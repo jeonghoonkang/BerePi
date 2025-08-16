@@ -1,7 +1,12 @@
-One method is a bash for loop.
 
-<pre>
-For converting only .mp4 files:
+
+
+find {dir_location} -type f \( -name "*.mkv" -o -name "*.avi" -o -name "*.flv" \) > ./filelist.txt
+
+## One method is a bash for loop.
+
+
+### For converting only .mp4 files:
 
 mkdir outputs
 for f in *.mp4; do ffmpeg -i "$f" -c:a libmp3lame -b:a 256k "outputs/${f%.mp4}.mp3"; done
@@ -13,4 +18,6 @@ For converting anything use the "*" wildcard:
 
 mkdir outputs
 for f in *; do ffmpeg -i "$f" -c:a libmp3lame "outputs/${f%.*}.mp3"; done
-</pre>
+
+
+
