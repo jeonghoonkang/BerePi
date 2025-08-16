@@ -123,7 +123,7 @@ echo ${files_to_convert[@]}
 
 exit 1
 
-for file in "${files_to_convert[@]}"; do
+for file in "${files_to_convert[@]}"; do #경로중 빈칸 에러를 제외하기 위해, 배열에"" 를 사용함 
     ((processed++))
     echo "#### For IF Loop ##### processed "$processed" skipped "$skipped
     echo "#### 현재처리중인 파일: $file"
