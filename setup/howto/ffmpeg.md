@@ -4,7 +4,7 @@
 ### 용량 크기 계산
 -  du -ch $(< filelist.txt)
 ### 변환
-- ffmpeg -i {media} -threads 2 -c:v libx264 -crf 18 -preset fast -c:a aac -b:a 192k -strict -2 {media}
+- ffmpeg -i {media} -threads 2 -c:v libx264 -crf 18 -preset fast -c:a aac -b:a 320k -strict -2 {media}
 
 ### 파일 실행 방법 
 
