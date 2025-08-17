@@ -20,6 +20,9 @@ if [ -z "$URL" ]; then
     usage
 fi
 
+echo "### starting openssl ###'
+echo "### It takes time ###'
+
 end_date=$(openssl s_client -servername "$URL" -connect "$URL:$PORT" 2>/dev/null \
     | openssl x509 -noout -enddate | cut -d= -f2)
 
