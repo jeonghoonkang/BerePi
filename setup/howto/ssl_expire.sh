@@ -1,17 +1,23 @@
-check_ssl_expiry.sh
-신규
-+28
--0
-
 #!/bin/bash
+# Author : github.com/jeonghoonkang
 # Check if SSL certificate expires within 2 weeks
+
+usage() { echo "Usage: $0 [-p port] <domain>" >&2; exit 1; }
+
+PORT=443
+while getopts ":p:" opt; do
+    case "$opt" in
+        p) PORT="$OPTARG" ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND-1))
+
 URL="$1"
-PORT="${2:-443}"
 THRESHOLD_DAYS=14
 
 if [ -z "$URL" ]; then
-    echo "Usage: $0 <domain> [port]" >&2
-    exit 1
+    usage
 fi
 
 end_date=$(openssl s_client -servername "$URL" -connect "$URL:$PORT" 2>/dev/null \
@@ -27,9 +33,7 @@ current_ts=$(date +%s)
 diff_days=$(( (end_ts - current_ts) / 86400 ))
 
 if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
-    echo "SSL certificate for $URL expires in $diff_days days (within 2 weeks)"
+    echo "SSL certificate for $URL:$PORT expires in $diff_days days (within 2 weeks)"
 else
-    echo "SSL certificate for $URL expires in $diff_days days"
+    echo "SSL certificate for $URL:$PORT expires in $diff_days days"
 fi
-
-
