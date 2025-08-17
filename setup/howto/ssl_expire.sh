@@ -42,3 +42,4 @@ if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
 else
     echo "SSL certificate for $URL:$PORT expires on $formatted_end_date"
 fi
+
