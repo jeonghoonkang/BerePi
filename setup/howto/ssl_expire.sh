@@ -35,8 +35,10 @@ end_ts=$(date -d "$end_date" +%s)
 current_ts=$(date +%s)
 diff_days=$(( (end_ts - current_ts) / 86400 ))
 
+formatted_end_date=$(date -d "$end_date" '+%m월 %d일 %A')
+
 if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
-    echo "SSL certificate for $URL:$PORT expires in $diff_days days (within 2 weeks)"
+    echo "SSL certificate for $URL:$PORT expires on $formatted_end_date (within 2 weeks)"
 else
-    echo "SSL certificate for $URL:$PORT expires in $diff_days days"
+    echo "SSL certificate for $URL:$PORT expires on $formatted_end_date"
 fi
