@@ -29,6 +29,7 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
         print(f"{remote_path} not found on server")
         return
 
+
     client.download_sync(remote_path=remote_path, local_path=local_path)
 
 
