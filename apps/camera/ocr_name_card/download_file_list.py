@@ -2,6 +2,7 @@ import argparse
 import json
 
 
+
 def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
     """Read WebDAV credentials from a JSON config and download file_list.json."""
     from webdav3.client import Client
@@ -38,6 +39,7 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
 
     try:
         import requests
+
 
         client.download_sync(remote_path=remote_path, local_path=local_path)
     except KeyError:
@@ -78,6 +80,7 @@ def check_ctime(local_path: str = './file_list.json') -> None:
 
     print(f"Oldest ctime: {min(ctimes)}")
     print(f"Newest ctime: {max(ctimes)}")
+
 
 
 if __name__ == '__main__':
