@@ -1,4 +1,5 @@
 import json
+import requests
 from webdav3.client import Client
 
 
@@ -34,7 +35,21 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
         print(f"{remote_path} not found on server")
         return
 
-    client.download_sync(remote_path=remote_path, local_path=local_path)
+    try:
+        client.download_sync(remote_path=remote_path, local_path=local_path)
+    except KeyError:
+        url = f"{options['webdav_hostname'].rstrip('/')}{remote_path}"
+        with requests.get(
+            url,
+            auth=(options['webdav_login'], options['webdav_password']),
+            stream=True,
+            verify=client.verify,
+        ) as r:
+            r.raise_for_status()
+            with open(local_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
 
 
 if __name__ == '__main__':
