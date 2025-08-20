@@ -22,6 +22,7 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
         print(name)
 
     remote_path = f'{remote_dir}/file_list.json'
+
     local_path = './file_list.json'
 
     client.download_sync(remote_path=remote_path, local_path=local_path)
