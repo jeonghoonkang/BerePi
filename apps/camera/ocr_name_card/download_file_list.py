@@ -17,7 +17,12 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
     client = Client(options)
     client.verify = True
 
-    remote_path = '/Photos/biz_card/file_list.json'
+    remote_dir = '/Photos/biz_card'
+    for name in client.list(remote_dir):
+        print(name)
+
+    remote_path = f'{remote_dir}/file_list.json'
+
     local_path = './file_list.json'
 
     client.download_sync(remote_path=remote_path, local_path=local_path)
