@@ -25,10 +25,14 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
     remote_path = f'{remote_dir}/file_list.json'
     local_path = './file_list.json'
 
+    if not isinstance(remote_path, str):
+        print(f"remote_path must be str, got {type(remote_path).__name__}")
+        return
+
+
     if 'file_list.json' not in entries:
         print(f"{remote_path} not found on server")
         return
-
 
     client.download_sync(remote_path=remote_path, local_path=local_path)
 
