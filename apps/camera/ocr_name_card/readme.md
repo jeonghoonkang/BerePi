@@ -17,8 +17,12 @@ To run the OCR Name Card Application, follow these steps:
 2. ocr reader source code of this repo 
 3. for mac osx
   - brew install tesseract
-  - brew reinstall tesseract
- 
+    - brew reinstall tesseract
+
+4. sudo apt-get install tesseract-ocr-kor
+   - apt install tesseract-lang
+   - tesseract --list-langs
+   - export TESSDATA_PREFIX="/usr/share/tesseract-ocr/4.00/tessdata/"
 
 ## Usage
 
