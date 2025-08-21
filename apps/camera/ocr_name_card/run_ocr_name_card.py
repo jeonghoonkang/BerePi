@@ -1,8 +1,5 @@
-import cv2     #sudo pip3 install opencv-python
-import numpy as np
 import os
 import sys
-import torch    #sudo pip3 install torch
 import json
 import time
 import argparse
@@ -10,26 +7,21 @@ import configparser
 from datetime import datetime, timedelta
 import re
 import shutil
-from rich import print as rprint
-from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, BarColumn, TextColumn
-from rich.live import Live
-from rich.layout import Layout
-
-
-
-
-import easyocr
-import pytesseract  # check out language pack for tesseract 
-                    # tesseract --list-langs # dir: /usr/local/share/tessdata
-                    # https://cjsal95.tistory.com/25
-                    # for m1 mac, https://simmigyeong.tistory.com/3
-                      # brew install tesseract
-                      # brew install tesseract-lang # for language pack
-                      # tesseract --list-langs # check installed language pack
-
-                    
+import importlib
+import subprocess
+try:
+    from rich import print as rprint
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.progress import Progress, BarColumn, TextColumn
+    from rich.live import Live
+    from rich.layout import Layout
+except ImportError:  # pragma: no cover - fallback when rich is missing
+    rprint = print
+    class Console:  # minimal fallback console
+        def print(self, *args, **kwargs):
+            print(*args)
+    Panel = Progress = BarColumn = TextColumn = Live = Layout = object
 import inspect
 
 NEXTCLOUD_PHOTOS_DIR = None
@@ -42,6 +34,29 @@ options = {
 
 dest_dir = None
 console = Console()
+
+REQUIRED_PACKAGES = {
+    'rich': 'rich',
+    'opencv-python': 'cv2',
+    'numpy': 'numpy',
+    'torch': 'torch',
+    'easyocr': 'easyocr',
+    'pytesseract': 'pytesseract',
+}
+
+
+def install_required_packages():
+    for pip_name, module_name in REQUIRED_PACKAGES.items():
+        try:
+            importlib.import_module(module_name)
+            console.print(f"[green]{module_name} already installed[/green]")
+        except ImportError:
+            console.print(f"[yellow]{module_name} not installed. Installing {pip_name}...[/yellow]")
+            try:
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', pip_name])
+                console.print(f"[green]Installed {pip_name}[/green]")
+            except subprocess.CalledProcessError:
+                console.print(f"[red]Failed to install {pip_name}[/red]")
 
 
 def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json 
@@ -448,7 +463,28 @@ if __name__=='__main__':
     parser.add_argument('save_description', nargs='?', help='결과 내용 저장할 디렉토리 경로')
     parser.add_argument('-c', '--config', default='ocr_name_card.ini', help='초기 설정 파일 경로')
     parser.add_argument('-a', '--force-all', action='store_true', help='기존 처리 여부와 상관없이 모든 파일을 처리')
+    parser.add_argument('--pip', action='store_true', help='필요한 패키지를 설치하고 종료')
     args = parser.parse_args()
+
+    if args.pip:
+        install_required_packages()
+        sys.exit(0)
+
+    try:
+        import cv2
+        import numpy as np
+        import torch
+        import easyocr
+        import pytesseract  # check out language pack for tesseract
+        # tesseract --list-langs # dir: /usr/local/share/tessdata
+        # https://cjsal95.tistory.com/25
+        # for m1 mac, https://simmigyeong.tistory.com/3
+        # brew install tesseract
+        # brew install tesseract-lang # for language pack
+        # tesseract --list-langs # check installed language pack
+    except ImportError as e:
+        console.print(f"[red]필수 패키지가 설치되어 있지 않습니다: {e}. --pip 옵션을 사용하여 설치하세요.[/red]")
+        sys.exit(1)
 
     conf = init()
 
