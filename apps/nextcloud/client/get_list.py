@@ -4,21 +4,46 @@
 import os
 import time
 import json
-import requests
 import sys
+import argparse
+import importlib
+import subprocess
 
-from PIL import Image
-import pytesseract
-
-from datetime import datetime
-from requests.auth import HTTPBasicAuth
 from urllib.parse import unquote_plus
 import urllib.parse
-from webdav3.client import Client
-
+from datetime import datetime
 from email.utils import parsedate_to_datetime
 
-    
+REQUIRED_PACKAGES = {
+    "requests": "requests",
+    "PIL": "Pillow",
+    "pytesseract": "pytesseract",
+    "webdav3": "webdavclient3",
+}
+
+def install_required_packages():
+    """필요한 패키지를 확인하고 설치"""
+    for module, package in REQUIRED_PACKAGES.items():
+        try:
+            importlib.import_module(module)
+        except ImportError:
+            print(f"Installing missing package: {package}")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+if "--pip" in sys.argv:
+    install_required_packages()
+
+try:
+    import requests
+    from PIL import Image
+    import pytesseract
+    from webdav3.client import Client
+    from requests.auth import HTTPBasicAuth
+except ImportError as e:
+    missing = getattr(e, "name", str(e))
+    print(f"Missing package: {missing}. Run with --pip to install required packages.")
+    sys.exit(1)
+
 debug_prefix = "  "
 
 options = {
@@ -264,10 +289,19 @@ def run_periodically(conf, interval_minutes=60):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Nextcloud WebDAV client")
+    parser.add_argument("--pip", action="store_true", help="필요한 패키지를 설치하고 종료")
+    parser.add_argument("--config", default="tmp_config.json", help="설정 파일 경로")
+    args = parser.parse_args()
+
     # Tesseract 경로 설정 (필요한 경우)
     # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-    
-    conf = __init__()
+
+    if args.pip:
+        # 패키지는 이미 설치되었으므로 바로 종료
+        sys.exit(0)
+
+    conf = __init__(args.config)
 
     try:
         run_periodically(conf, interval_minutes=5)  # 60분마다 실행
