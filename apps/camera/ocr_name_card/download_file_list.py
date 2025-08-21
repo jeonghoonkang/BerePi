@@ -62,10 +62,27 @@ def download_file_list(config_path: str = "nocommit_url2.ini") -> None:
 def check_ctime(local_path: str = './file_list.json') -> None:
     """Print oldest and newest ctime values from file_list.json."""
     try:
+        from rich.console import Console
+        from rich.syntax import Syntax
+    except ImportError:
+        print('rich library is required for check')
+        return
+
+    console = Console()
+    try:
         with open(local_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+            text = f.read()
     except FileNotFoundError:
-        print(f"{local_path} not found")
+        console.print(f"[red]{local_path} not found[/red]")
+        return
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        console.print(f"[red]JSON syntax error: {e}[/red]")
+        syntax = Syntax(text, "json", theme="monokai", line_numbers=True, highlight_lines={e.lineno})
+        console.print(syntax)
+
         return
 
     items = data.values() if isinstance(data, dict) else data
@@ -75,11 +92,11 @@ def check_ctime(local_path: str = './file_list.json') -> None:
             ctimes.append(item['ctime'])
 
     if not ctimes:
-        print('No ctime fields found')
+        console.print('[yellow]No ctime fields found[/yellow]')
         return
 
-    print(f"Oldest ctime: {min(ctimes)}")
-    print(f"Newest ctime: {max(ctimes)}")
+    console.print(f"Oldest ctime: {min(ctimes)}")
+    console.print(f"Newest ctime: {max(ctimes)}")
 
 
 
