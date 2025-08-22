@@ -218,6 +218,12 @@ def merge_json_files(file_list, save_path):
         except json.JSONDecodeError:
             pass
 
+        # Rename existing file to include a timestamp
+        timestamp_old = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base, ext = os.path.splitext(save_path)
+        backup_path = f"{base}_{timestamp_old}_backup{ext}"
+        shutil.move(save_path, backup_path)
+
     merged = {}
     for item in json_data:
         key = item.get('filepath') or item.get('filename')
@@ -265,7 +271,7 @@ def remove_old_timestamped_files(save_path, months=3):
     """Delete timestamped JSON files older than the given number of months."""
     base_dir = os.path.dirname(save_path)
     base_name, ext = os.path.splitext(os.path.basename(save_path))
-    pattern = re.compile(rf"{re.escape(base_name)}_(\d{{8}}_\d{{6}}){re.escape(ext)}$")
+    pattern = re.compile(rf"{re.escape(base_name)}_(\d{{8}}_\d{{6}})(?:_backup)?{re.escape(ext)}$")
     cutoff = datetime.now() - timedelta(days=30 * months)
 
     for fname in os.listdir(base_dir):
@@ -466,8 +472,8 @@ if __name__=='__main__':
     parser.add_argument('--pip', action='store_true', help='필요한 패키지를 설치하고 종료')
     args = parser.parse_args()
 
+    install_required_packages()
     if args.pip:
-        install_required_packages()
         sys.exit(0)
 
     try:
@@ -483,7 +489,7 @@ if __name__=='__main__':
         # brew install tesseract-lang # for language pack
         # tesseract --list-langs # check installed language pack
     except ImportError as e:
-        console.print(f"[red]필수 패키지가 설치되어 있지 않습니다: {e}. --pip 옵션을 사용하여 설치하세요.[/red]")
+        console.print(f"[red]필수 패키지를 설치할 수 없습니다: {e}[/red]")
         sys.exit(1)
 
     conf = init()
