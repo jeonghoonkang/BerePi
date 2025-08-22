@@ -59,7 +59,44 @@ def install_required_packages():
                 console.print(f"[red]Failed to install {pip_name}[/red]")
 
 
-def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json 
+def ensure_tesseract_langpacks(required=("kor", "eng")):
+    """Check for required Tesseract language packs and try to install them."""
+    try:
+        import pytesseract
+    except ImportError:
+        console.print("[yellow]pytesseract not installed; skipping language pack check[/yellow]")
+        return
+
+    try:
+        installed = set(pytesseract.get_languages(config=""))
+    except pytesseract.pytesseract.TesseractNotFoundError:
+        console.print("[yellow]Tesseract not available; skipping language pack check[/yellow]")
+        return
+
+    missing = [lang for lang in required if lang not in installed]
+    if not missing:
+        return
+
+    console.print(f"[yellow]Missing Tesseract language pack(s): {', '.join(missing)}[/yellow]")
+    if sys.platform == "darwin":
+        cmd = ["brew", "install", "tesseract-lang"]
+    elif sys.platform.startswith("linux"):
+        cmd = ["sudo", "apt-get", "install", "-y"] + [f"tesseract-ocr-{lang}" for lang in missing]
+    else:
+        cmd = None
+
+    if cmd:
+        console.print(f"Attempting to install via: {' '.join(cmd)}")
+        try:
+            subprocess.check_call(cmd)
+            console.print("[green]Tesseract language pack installation attempted[/green]")
+        except Exception:
+            console.print("[red]Failed to install language packs automatically. Please install them manually.[/red]")
+    else:
+        console.print("[yellow]Please install the missing language packs manually for your platform.[/yellow]")
+
+
+def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json
     config = load_nextcloud_value(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
@@ -218,6 +255,12 @@ def merge_json_files(file_list, save_path):
         except json.JSONDecodeError:
             pass
 
+        # Rename existing file to include a timestamp
+        timestamp_old = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base, ext = os.path.splitext(save_path)
+        backup_path = f"{base}_{timestamp_old}_backup{ext}"
+        shutil.move(save_path, backup_path)
+
     merged = {}
     for item in json_data:
         key = item.get('filepath') or item.get('filename')
@@ -265,7 +308,7 @@ def remove_old_timestamped_files(save_path, months=3):
     """Delete timestamped JSON files older than the given number of months."""
     base_dir = os.path.dirname(save_path)
     base_name, ext = os.path.splitext(os.path.basename(save_path))
-    pattern = re.compile(rf"{re.escape(base_name)}_(\d{{8}}_\d{{6}}){re.escape(ext)}$")
+    pattern = re.compile(rf"{re.escape(base_name)}_(\d{{8}}_\d{{6}})(?:_backup)?{re.escape(ext)}$")
     cutoff = datetime.now() - timedelta(days=30 * months)
 
     for fname in os.listdir(base_dir):
@@ -466,8 +509,8 @@ if __name__=='__main__':
     parser.add_argument('--pip', action='store_true', help='필요한 패키지를 설치하고 종료')
     args = parser.parse_args()
 
+    install_required_packages()
     if args.pip:
-        install_required_packages()
         sys.exit(0)
 
     try:
@@ -475,15 +518,10 @@ if __name__=='__main__':
         import numpy as np
         import torch
         import easyocr
-        import pytesseract  # check out language pack for tesseract
-        # tesseract --list-langs # dir: /usr/local/share/tessdata
-        # https://cjsal95.tistory.com/25
-        # for m1 mac, https://simmigyeong.tistory.com/3
-        # brew install tesseract
-        # brew install tesseract-lang # for language pack
-        # tesseract --list-langs # check installed language pack
+        import pytesseract
+        ensure_tesseract_langpacks()
     except ImportError as e:
-        console.print(f"[red]필수 패키지가 설치되어 있지 않습니다: {e}. --pip 옵션을 사용하여 설치하세요.[/red]")
+        console.print(f"[red]필수 패키지를 설치할 수 없습니다: {e}[/red]")
         sys.exit(1)
 
     conf = init()
