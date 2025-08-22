@@ -59,7 +59,44 @@ def install_required_packages():
                 console.print(f"[red]Failed to install {pip_name}[/red]")
 
 
-def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json 
+def ensure_tesseract_langpacks(required=("kor", "eng")):
+    """Check for required Tesseract language packs and try to install them."""
+    try:
+        import pytesseract
+    except ImportError:
+        console.print("[yellow]pytesseract not installed; skipping language pack check[/yellow]")
+        return
+
+    try:
+        installed = set(pytesseract.get_languages(config=""))
+    except pytesseract.pytesseract.TesseractNotFoundError:
+        console.print("[yellow]Tesseract not available; skipping language pack check[/yellow]")
+        return
+
+    missing = [lang for lang in required if lang not in installed]
+    if not missing:
+        return
+
+    console.print(f"[yellow]Missing Tesseract language pack(s): {', '.join(missing)}[/yellow]")
+    if sys.platform == "darwin":
+        cmd = ["brew", "install", "tesseract-lang"]
+    elif sys.platform.startswith("linux"):
+        cmd = ["sudo", "apt-get", "install", "-y"] + [f"tesseract-ocr-{lang}" for lang in missing]
+    else:
+        cmd = None
+
+    if cmd:
+        console.print(f"Attempting to install via: {' '.join(cmd)}")
+        try:
+            subprocess.check_call(cmd)
+            console.print("[green]Tesseract language pack installation attempted[/green]")
+        except Exception:
+            console.print("[red]Failed to install language packs automatically. Please install them manually.[/red]")
+    else:
+        console.print("[yellow]Please install the missing language packs manually for your platform.[/yellow]")
+
+
+def init(config_path="nocommit_url2.ini"): ### INIT CHECK ### You should check if using config.json
     config = load_nextcloud_value(config_path)
     options['webdav_hostname'] = config['nextcloud']['webdav_hostname']
     options['webdav_login'] = config['nextcloud']['username']
@@ -481,13 +518,8 @@ if __name__=='__main__':
         import numpy as np
         import torch
         import easyocr
-        import pytesseract  # check out language pack for tesseract
-        # tesseract --list-langs # dir: /usr/local/share/tessdata
-        # https://cjsal95.tistory.com/25
-        # for m1 mac, https://simmigyeong.tistory.com/3
-        # brew install tesseract
-        # brew install tesseract-lang # for language pack
-        # tesseract --list-langs # check installed language pack
+        import pytesseract
+        ensure_tesseract_langpacks()
     except ImportError as e:
         console.print(f"[red]필수 패키지를 설치할 수 없습니다: {e}[/red]")
         sys.exit(1)
