@@ -12,6 +12,10 @@ DB=$(awk -F '=' '/^db[ \t]*=/ {print $2}' "$CONFIG_FILE" | tr -d ' \r\n')
 ID=$(awk -F '=' '/^id[ \t]*=/ {print $2}' "$CONFIG_FILE" | tr -d ' \r\n')
 PASSWORD=$(awk -F '=' '/^password[ \t]*=/ {print $2}' "$CONFIG_FILE" | tr -d ' \r\n')
 
+echo 'db='$DB
+echo 'id='$ID
+echo 'pass='$PASSWORD
+
 if [[ -z "$DB" || -z "$ID" || -z "$PASSWORD" ]]; then
   echo "db, id or password missing in $CONFIG_FILE"
   exit 1
@@ -27,10 +31,10 @@ docker exec bookstack_db \
   mysqldump -u "$ID" -p"$PASSWORD" "$DB" \
   > "$BACKUP_DIR/bookstack.sql"
 
-# 2) 업로드 파일 백업 (컨테이너 이름: bookstack_app)
+# 2) 업로드 파일 백업 (컨테이너 이름: bookstack)
 docker run --rm \
-  --volumes-from bookstack_app \
+  --volumes-from bookstack \
   -v "$BACKUP_DIR":/backup \
-  alpine tar czvf /backup/uploads.tgz /var/www/bookstack/storage/uploads
+  alpine tar czvf /backup/uploads.tgz /config/www/uploads
 
 echo "백업 완료: $BACKUP_DIR"
