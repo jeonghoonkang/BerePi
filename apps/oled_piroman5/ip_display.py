@@ -30,7 +30,7 @@ RGBFAN_PIN = (5, 6)
 # RGB LED pins for the fan lighting
 RGB_PINS = (4, 17, 7)
 # temperature threshold in Celsius for turning the fan on
-TEMP_THRESHOLD = 50.0
+TEMP_THRESHOLD = 47.0
 
 
 def get_ip_address(interface="eth0"):
