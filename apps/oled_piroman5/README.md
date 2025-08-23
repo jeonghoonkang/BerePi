@@ -32,3 +32,5 @@ Each run updates the OLED with the current IP address and the date/time (includi
 
 The display also shows the current fan duty setting as ``Duty: <percentage>/60s`` on the last line.
 
+### to do
+- all run code for FAN control without any code by Hardware control
