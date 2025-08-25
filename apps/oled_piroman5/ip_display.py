@@ -126,6 +126,12 @@ def main():
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
         draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+        draw.text(
+            (0, 48),
+            f"Duty: {args.fan_duty}%/{int(total_runtime)}s",
+            font=font,
+            fill=255,
+        )
 
     while remaining >= 0:
         temp = cpu.temperature

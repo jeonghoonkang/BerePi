@@ -30,3 +30,5 @@ To run the fan for less than the full minute when the CPU is cool, pass a percen
 
 Each run updates the OLED with the current IP address and the date/time (including seconds). The fan is powered on when the script starts. It remains on whenever the CPU temperature is 50 °C or higher and, when cooler, runs only for the specified portion of the minute.
 
+The display also shows the current fan duty setting as ``Duty: <percentage>/60s`` on the last line.
+
