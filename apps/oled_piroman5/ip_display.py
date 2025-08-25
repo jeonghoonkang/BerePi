@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Display IP address and time on the OLED using the piroman5 driver.
 
-This script is designed to be called from ``cron`` once per minute.
+This script is designed to be called from ``cron`` once every two minutes.
 It updates the OLED with the current IPv4 address and timestamp, and
 controls the cooling fan on the piroman5 max board. By default the
 fan runs continuously, but a different duty cycle (e.g. 75 or 50) may
 be specified via ``--fan-duty`` to run the fan only for part of the
-minute when the CPU temperature is below ``50°C``.
+two-minute interval when the CPU temperature is below ``50°C``.
+
 
 Dependencies can be installed with::
 
@@ -58,7 +59,8 @@ def parse_args():
         type=int,
         default=100,
         help=(
-            "Percentage of the minute to run the fan when the CPU "
+            "Percentage of the two-minute cycle to run the fan when the CPU "
+
             "temperature is below the threshold (0-100)."
         ),
     )
@@ -98,40 +100,18 @@ def main():
 
 
 
-    # Determine IP address and current time
+    # Determine IP address once; update other values in the loop
     ip = get_ip_address("eth0")
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    total_runtime = 60
+
+    total_runtime = 120
     fan_on_duration = total_runtime * args.fan_duty / 100
     remaining = total_runtime
-
-    temp = cpu.temperature
-    if temp >= TEMP_THRESHOLD or remaining > total_runtime - fan_on_duration:
-        fan.on()
-    else:
-        fan.off()
-
-    fan_status = "ON" if fan.is_active else "OFF"
 
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
-
     font = ImageFont.load_default()
-
-    # Draw the information once. The display retains the last frame so
-    # the text remains visible after the program ends.
-    with canvas(device) as draw:
-        draw.text((0, 0), ip, font=font, fill=255)
-        draw.text((0, 16), now, font=font, fill=255)
-        draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
-        draw.text(
-            (0, 48),
-            f"Duty: {args.fan_duty}%/{int(total_runtime)}s",
-            font=font,
-            fill=255,
-        )
 
     while remaining >= 0:
         temp = cpu.temperature
@@ -140,15 +120,24 @@ def main():
         else:
             fan.off()
         fan_status = "ON" if fan.is_active else "OFF"
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with canvas(device) as draw:
+            draw.text((0, 0), ip, font=font, fill=255)
+            draw.text((0, 16), now, font=font, fill=255)
+            draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+            draw.text(
+                (0, 48),
+                f"Duty: {args.fan_duty}%/{int(total_runtime)}s L{int(remaining)}s",
+                font=font,
+                fill=255,
+            )
         console.print(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
             f"CPU: {temp:.1f}°C | Fan: {fan_status}   ",
-
             end="\r",
         )
         if remaining == 0:
             break
-
         time.sleep(5)
         remaining -= 5
     console.print()
