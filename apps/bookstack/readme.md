@@ -22,5 +22,8 @@ password=your_password
 
 ### Restore
 
-- sudo tar xvf uploads.tgz -C ~/server/docker/bookstack/
+- sql 파일 restore
+  - docker exec -i bookstack_db  mysql -u bookstack -p'bookstack12' bookstack < "$BACKUP_DIR/bookstack.sql" 
+- 업로드 파일 restore
+  - sudo tar xvf uploads.tgz -C ~/server/docker/bookstack/
   - uploads.tgz 은 <code> config/.... </code> 로 압축이 풀림
