@@ -3,8 +3,10 @@
 
 This script is designed to be called from ``cron`` once per minute.
 It updates the OLED with the current IPv4 address and timestamp, and
-controls the cooling fan on the piroman5 max board when the CPU
-temperature exceeds ``50°C``.
+controls the cooling fan on the piroman5 max board. By default the
+fan runs continuously, but a different duty cycle (e.g. 75 or 50) may
+be specified via ``--fan-duty`` to run the fan only for part of the
+minute when the CPU temperature is below ``50°C``.
 
 Dependencies can be installed with::
 
@@ -13,6 +15,7 @@ Dependencies can be installed with::
 
 from datetime import datetime
 import subprocess
+import argparse
 
 # piroman5 OLED driver, built on luma.oled
 from luma.core.interface.serial import i2c
@@ -44,8 +47,29 @@ def get_ip_address(interface="eth0"):
     return "0.0.0.0"
 
 
+def parse_args():
+    """Return parsed command line arguments."""
+
+    parser = argparse.ArgumentParser(
+        description="Update the OLED and control the cooling fan once."
+    )
+    parser.add_argument(
+        "--fan-duty",
+        type=int,
+        default=100,
+        help=(
+            "Percentage of the minute to run the fan when the CPU "
+            "temperature is below the threshold (0-100)."
+        ),
+    )
+    return parser.parse_args()
+
+
 def main():
     """Update the OLED and control the cooling fan once."""
+
+    args = parse_args()
+    args.fan_duty = max(0, min(args.fan_duty, 100))
 
     # Prevent gpiozero from resetting the pin states on exit so the fan
     # remains in the state we set. Older versions of gpiozero may not
@@ -66,8 +90,6 @@ def main():
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
-    # Ensure the fan starts running when the program launches
-    fan.on()
     rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGBFAN_PIN]
     rgb_leds[0].on()
     rgb_leds[1].on()
@@ -80,8 +102,12 @@ def main():
     ip = get_ip_address("eth0")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    total_runtime = 60
+    fan_on_duration = total_runtime * args.fan_duty / 100
+    remaining = total_runtime
+
     temp = cpu.temperature
-    if temp >= TEMP_THRESHOLD:
+    if temp >= TEMP_THRESHOLD or remaining > total_runtime - fan_on_duration:
         fan.on()
     else:
         fan.off()
@@ -100,11 +126,16 @@ def main():
         draw.text((0, 0), ip, font=font, fill=255)
         draw.text((0, 16), now, font=font, fill=255)
         draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+        draw.text(
+            (0, 48),
+            f"Duty: {args.fan_duty}%/{int(total_runtime)}s",
+            font=font,
+            fill=255,
+        )
 
-    remaining = 60
     while remaining >= 0:
         temp = cpu.temperature
-        if temp >= TEMP_THRESHOLD:
+        if temp >= TEMP_THRESHOLD or remaining > total_runtime - fan_on_duration:
             fan.on()
         else:
             fan.off()
