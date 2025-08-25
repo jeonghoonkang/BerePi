@@ -8,6 +8,7 @@ fan runs continuously, but a different duty cycle (e.g. 75 or 50) may
 be specified via ``--fan-duty`` to run the fan only for part of the
 two-minute interval when the CPU temperature is below ``50°C``.
 
+
 Dependencies can be installed with::
 
     pip3 install -r requirements.txt
@@ -59,6 +60,7 @@ def parse_args():
         default=100,
         help=(
             "Percentage of the two-minute cycle to run the fan when the CPU "
+
             "temperature is below the threshold (0-100)."
         ),
     )
@@ -100,6 +102,7 @@ def main():
 
     # Determine IP address once; update other values in the loop
     ip = get_ip_address("eth0")
+
 
     total_runtime = 120
     fan_on_duration = total_runtime * args.fan_duty / 100
