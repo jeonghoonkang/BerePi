@@ -7,11 +7,11 @@ exit so the fan and LEDs stay on.
 """
 
 import atexit
+import time
 from gpiozero import OutputDevice, Device
 
 FAN_PIN = 18
 RGBFAN_PIN = (5, 6)
-
 
 def cpu_fan_on(pin=FAN_PIN):
     """Activate the CPU cooling fan and return its device."""
@@ -29,14 +29,33 @@ def led_fan_on(pins=RGBFAN_PIN):
 
 
 def main():
-    """Turn on the CPU fan and RGB LED fan."""
+
+    # Prevent gpiozero from resetting the pin states on exit so the fan
+    # remains in the state we set. Older versions of gpiozero may not
+    # expose ``Device._shutdown``, so handle that case gracefully.
     if hasattr(Device, "_shutdown"):
         try:
             atexit.unregister(Device._shutdown)
         except Exception:
             pass
-    cpu_fan_on()
-    led_fan_on()
+
+    # Release previously allocated pins to avoid lgpio "GPIO busy" errors
+    try:
+        Device.pin_factory.release(FAN_PIN)
+        Device.pin_factory.release(RGBFAN_PIN)
+
+    except Exception:
+        # On older pin factories ``release`` may not exist
+        pass
+
+
+
+    fan = cpu_fan_on()
+    led = led_fan_on()
+
+    fan.on()
+
+    time.sleep(60)
 
 
 if __name__ == "__main__":
