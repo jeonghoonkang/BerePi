@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Display IP address and time on the OLED using the piroman5 driver.
 
-This script is designed to be called from ``cron`` once per minute.
+This script is designed to be called from ``cron`` once every two minutes.
 It updates the OLED with the current IPv4 address and timestamp, and
-controls the cooling fan on the piroman5 max board when the CPU
-temperature exceeds ``50°C``.
+controls the cooling fan on the piroman5 max board. By default the
+fan runs continuously, but a different duty cycle (e.g. 75 or 50) may
+be specified via ``--fan-duty`` to run the fan only for part of the
+two-minute interval when the CPU temperature is below ``50°C``.
 
 Dependencies can be installed with::
 
@@ -13,6 +15,18 @@ Dependencies can be installed with::
 
 from datetime import datetime
 import subprocess
+import argparse
+import serial
+import sys
+import time
+from serial.tools import list_ports
+
+BNAME = "/home/tinyos/devel_opment/"
+LOG_DIR = BNAME + "selfcloud/apps/log"
+
+sys.path.append(LOG_DIR)
+
+import berepi_logger
 
 # piroman5 OLED driver, built on luma.oled
 from luma.core.interface.serial import i2c
@@ -21,7 +35,6 @@ from luma.core.render import canvas
 from PIL import ImageFont
 import atexit
 from gpiozero import OutputDevice, CPUTemperature, Device
-import time
 from rich.console import Console
 
 # pin used to control the cooling fan on piroman5 max
@@ -44,8 +57,62 @@ def get_ip_address(interface="eth0"):
     return "0.0.0.0"
 
 
+def parse_args():
+    """Return parsed command line arguments."""
+
+    parser = argparse.ArgumentParser(
+        description="Update the OLED and control the cooling fan once."
+    )
+    parser.add_argument(
+        "--fan-duty",
+        type=int,
+        default=100,
+        help=(
+            "Percentage of the two-minute cycle to run the fan when the CPU "
+            "temperature is below the threshold (0-100)."
+        ),
+    )
+    return parser.parse_args()
+
+
+def find_ppm(ins):
+    print("RAW string", ins)
+    stnum = 0
+    if ins[0] == 0xF1 and ins[1] == 0xF2 and ins[2] == 0x02:
+        stnum = ins[3] * 256 + ins[4]
+    else:
+        print("error in data")
+        return None
+    ret = stnum
+    print("...", stnum, "ppm")
+    return ret
+
+
+def pass2file(ins):
+    print("...logging...")
+    print(time.strftime("%Y-%m-%d %H:%M"))
+    logclass = berepi_logger.selfdatalogger()
+    logclass.set_logger("CO2_POC")
+    logclass.berelog("co2 ppm", str(ins), "CO2_POC ")
+    print("co2 ppm", str(ins), "CO2_POC ")
+
+
+def read_co2(op):
+    rq_str = b"\xF1\xF2\x01\x1C"
+    op.write(rq_str)
+    in_string = op.read(size=8)
+    ppm = find_ppm(in_string)
+    if ppm is None:
+        in_string = op.read(size=8)
+        ppm = find_ppm(in_string)
+    return ppm
+
+
 def main():
     """Update the OLED and control the cooling fan once."""
+
+    args = parse_args()
+    args.fan_duty = max(0, min(args.fan_duty, 100))
 
     # Prevent gpiozero from resetting the pin states on exit so the fan
     # remains in the state we set. Older versions of gpiozero may not
@@ -66,61 +133,80 @@ def main():
 
 
     fan = OutputDevice(FAN_PIN, active_high=True)
-    # Ensure the fan starts running when the program launches
-    fan.on()
     rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGBFAN_PIN]
     rgb_leds[0].on()
     rgb_leds[1].on()
     cpu = CPUTemperature()
     console = Console()
 
+    co2_port = None
+    try:
+        ports = [p.device for p in list_ports.comports()]
+        console.print(
+            "Connected USB ports: " + (", ".join(ports) if ports else "None")
+        )
+        port_name = "/dev/ttyUSB0"
+        if port_name not in ports and ports:
+            port_name = ports[0]
+        if port_name in ports:
+            console.print(f"Using CO2 sensor port: {port_name}")
+            co2_port = serial.Serial(port_name, baudrate=9600, rtscts=True)
+            time.sleep(3)
+    except Exception as exc:
+        console.print(f"CO2 sensor setup failed: {exc}")
 
 
-    # Determine IP address and current time
+
+    # Determine IP address once; update other values in the loop
     ip = get_ip_address("eth0")
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    temp = cpu.temperature
-    if temp >= TEMP_THRESHOLD:
-        fan.on()
-    else:
-        fan.off()
-
-    fan_status = "ON" if fan.is_active else "OFF"
+    total_runtime = 120
+    fan_on_duration = total_runtime * args.fan_duty / 100
+    remaining = total_runtime
 
     # Initialize OLED display via I2C
     serial = i2c(port=1, address=0x3C)
     device = ssd1306(serial)
-
     font = ImageFont.load_default()
 
-    # Draw the information once. The display retains the last frame so
-    # the text remains visible after the program ends.
-    with canvas(device) as draw:
-        draw.text((0, 0), ip, font=font, fill=255)
-        draw.text((0, 16), now, font=font, fill=255)
-        draw.text((0, 32), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
-
-    remaining = 60
     while remaining >= 0:
         temp = cpu.temperature
-        if temp >= TEMP_THRESHOLD:
+        if temp >= TEMP_THRESHOLD or remaining > total_runtime - fan_on_duration:
             fan.on()
         else:
             fan.off()
         fan_status = "ON" if fan.is_active else "OFF"
-        console.print(
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        co2_ppm = None
+        if co2_port:
+            try:
+                co2_ppm = read_co2(co2_port)
+                if co2_ppm is not None:
+                    pass2file(co2_ppm)
+            except Exception:
+                co2_ppm = None
+        co2_text = f"CO2 {co2_ppm}ppm" if co2_ppm is not None else "CO2 N/A"
+        with canvas(device) as draw:
+            draw.text((0, 0), ip, font=font, fill=255)
+            draw.text((0, 12), now, font=font, fill=255)
+            draw.text((0, 24), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+            draw.text((0, 36), co2_text, font=font, fill=255)
+            draw.text(
+                (0, 48),
+                f"Duty: {args.fan_duty}%/{int(total_runtime)}s L{int(remaining)}s",
+                font=font,
+                fill=255,
+            )
+        console.log(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
-            f"CPU: {temp:.1f}°C | Fan: {fan_status}   ",
-
-            end="\r",
+            f"CPU: {temp:.1f}°C | CO2: {co2_ppm if co2_ppm is not None else 'N/A'}ppm | Fan: {fan_status}"
         )
         if remaining == 0:
             break
-
         time.sleep(5)
         remaining -= 5
-    console.print()
+    if co2_port:
+        co2_port.close()
 
 if __name__ == "__main__":
     main()
