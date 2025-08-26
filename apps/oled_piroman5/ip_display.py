@@ -20,6 +20,8 @@ import argparse
 import serial
 import sys
 import time
+from serial.tools import list_ports
+
 
 BNAME = "/home/tinyos/devel_opment/"
 LOG_DIR = BNAME + "selfcloud/apps/log"
@@ -27,6 +29,7 @@ LOG_DIR = BNAME + "selfcloud/apps/log"
 sys.path.append(LOG_DIR)
 
 import berepi_logger
+
 
 
 # piroman5 OLED driver, built on luma.oled
@@ -109,8 +112,6 @@ def read_co2(op):
         ppm = find_ppm(in_string)
     return ppm
 
-
-
 def main():
     """Update the OLED and control the cooling fan once."""
 
@@ -147,7 +148,21 @@ def main():
     except Exception:
         co2_port = None
 
-
+    co2_port = None
+    try:
+        ports = [p.device for p in list_ports.comports()]
+        console.print(
+            "Connected USB ports: " + (", ".join(ports) if ports else "None")
+        )
+        port_name = "/dev/ttyUSB0"
+        if port_name not in ports and ports:
+            port_name = ports[0]
+        if port_name in ports:
+            console.print(f"Using CO2 sensor port: {port_name}")
+            co2_port = serial.Serial(port_name, baudrate=9600, rtscts=True)
+            time.sleep(3)
+    except Exception as exc:
+        console.print(f"CO2 sensor setup failed: {exc}")
 
     # Determine IP address once; update other values in the loop
     ip = get_ip_address("eth0")
@@ -190,16 +205,16 @@ def main():
                 font=font,
                 fill=255,
             )
-        console.print(
+        console.log(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
-            f"CPU: {temp:.1f}°C | CO2: {co2_ppm if co2_ppm is not None else 'N/A'}ppm | Fan: {fan_status}   ",
+            f"CPU: {temp:.1f}°C | CO2: {co2_ppm if co2_ppm is not None else 'N/A'}ppm | Fan: {fan_status}"
 
-            end="\r",
         )
         if remaining == 0:
             break
         time.sleep(5)
         remaining -= 5
+
     console.print()
     if co2_port:
         co2_port.close()
