@@ -34,3 +34,6 @@ The display's last line shows the configured fan duty and updates every five sec
 
 The line above the duty information shows the current CO₂ concentration read from a serial sensor (e.g. ``CO2 450ppm``).
 
+
+### to do
+- all run code for FAN control without any code by Hardware control
