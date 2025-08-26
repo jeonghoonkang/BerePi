@@ -74,4 +74,13 @@ The line above the duty information shows the current CO₂ concentration read f
 
 
 ### to do
-- all run code for FAN control without any code by Hardware control
+- something
+  
+### SUDO , GPIO preperation
+- sudo adduser {user} gpio
+- sudo addgroup gpio
+- sudo adduser {user} gpio
+- sudo vim /etc/udev/rules.d/99-gpio.rules
+  - add below lines
+  - SUBSYSTEM=="gpio", MODE="0660", GROUP="gpio"
+  - SUBSYSTEM=="gpiomem", MODE="0660", GROUP="gpio"
