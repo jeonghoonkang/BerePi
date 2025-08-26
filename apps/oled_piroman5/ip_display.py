@@ -31,7 +31,6 @@ sys.path.append(LOG_DIR)
 import berepi_logger
 
 
-
 # piroman5 OLED driver, built on luma.oled
 from luma.core.interface.serial import i2c
 from luma.oled.device import ssd1306
@@ -112,6 +111,22 @@ def read_co2(op):
         ppm = find_ppm(in_string)
     return ppm
 
+
+def cpu_fan_on(pin=FAN_PIN):
+    """Activate the CPU cooling fan and return its device."""
+    fan = OutputDevice(pin, active_high=True)
+    fan.on()
+    return fan
+
+
+def led_fan_on(pins=RGBFAN_PIN):
+    """Activate the LED fan outputs and return their devices."""
+    leds = [OutputDevice(pin, active_high=True) for pin in pins]
+    for led in leds:
+        led.on()
+    return leds
+
+
 def main():
     """Update the OLED and control the cooling fan once."""
 
@@ -136,10 +151,9 @@ def main():
         pass
 
 
-    fan = OutputDevice(FAN_PIN, active_high=True)
-    rgb_leds = [OutputDevice(pin, active_high=True) for pin in RGBFAN_PIN]
-    rgb_leds[0].on()
-    rgb_leds[1].on()
+    fan = cpu_fan_on()
+    rgb_leds = led_fan_on()
+
     cpu = CPUTemperature()
     console = Console()
     try:
@@ -163,6 +177,8 @@ def main():
             time.sleep(3)
     except Exception as exc:
         console.print(f"CO2 sensor setup failed: {exc}")
+
+
 
     # Determine IP address once; update other values in the loop
     ip = get_ip_address("eth0")
@@ -215,7 +231,6 @@ def main():
         time.sleep(5)
         remaining -= 5
 
-    console.print()
     if co2_port:
         co2_port.close()
 
