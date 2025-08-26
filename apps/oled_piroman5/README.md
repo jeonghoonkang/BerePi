@@ -3,7 +3,6 @@
 Simple example using **piroman5** Raspberry Pi OLED driver (based on `luma.oled`) to show the current IP address and timestamp on a small OLED screen. The fan on BCM pin 18 of the piroman5 max board is automatically controlled based on the CPU temperature and can be limited to a percentage of a two-minute interval with the ``--fan-duty`` option.
 
 
-
 ## Installation
 
 Install the required Python packages with pip (use `sudo` on Raspberry Pi OS):
@@ -33,14 +32,8 @@ Each run updates the OLED with the current IP address and the date/time (includi
 
 The display's last line shows the configured fan duty and updates every five seconds with the remaining time in the two-minute interval, e.g. ``Duty: 75%/120s L115s``.
 
+The line above the duty information shows the current CO₂ concentration read from a serial sensor (e.g. ``CO2 450ppm``).
 
-```bash
-* * * * * /usr/bin/python3 /path/to/ip_display.py --fan-duty 75
-```
-
-Each run updates the OLED with the current IP address and the date/time (including seconds). The fan is powered on when the script starts. It remains on whenever the CPU temperature is 50 °C or higher and, when cooler, runs only for the specified portion of the minute.
-
-The display also shows the current fan duty setting as ``Duty: <percentage>/60s`` on the last line.
 
 ### to do
 - all run code for FAN control without any code by Hardware control
