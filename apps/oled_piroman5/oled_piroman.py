@@ -9,7 +9,7 @@ import time
 from serial.tools import list_ports
 
 BNAME = "/home/tinyos/devel_opment/"
-LOG_DIR = BNAME + "selfcloud/apps/log"
+LOG_DIR = BNAME + "BerePi/apps/logger"
 
 sys.path.append(LOG_DIR)
 
