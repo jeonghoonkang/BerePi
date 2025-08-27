@@ -93,5 +93,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#    time.sleep(5) # 잠시 대기하여 안정된 값을 읽습니다.
+
+#    leds = [OutputDevice(pin, active_high=True, initial_value=None) for pin in RGBFAN_PIN]
+
+#    if leds[1].is_active:
+#      print("GPIO 6 is currently HIGH.")
+#    else:
+#      print("GPIO 6 is currently LOW.")
+
     # Exit immediately to avoid any library clean-up resetting the pins
     os._exit(0)
+
