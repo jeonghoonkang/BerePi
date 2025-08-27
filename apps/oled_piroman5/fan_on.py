@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python4
 """Simple helper to activate the CPU cooling fan and its RGB LEDs.
 
 Running this script will turn on the fan connected to BCM pin 18 and
@@ -82,6 +82,14 @@ def main():
     
     fan.on()
 
+    cpu_temp = CPUTemperature().temperature
+    fan_state = "ON" if fan.is_active else "OFF"
+    gpio6_state = "HIGH" if leds[1].is_active else "LOW"
+
+    console.print(f"[bold]CPU fan:[/bold] {fan_state}")
+    console.print(f"[bold]GPIO 6:[/bold] {gpio6_state}")
+    console.print(f"[bold]CPU temp:[/bold] {cpu_temp:.1f}\N{DEGREE SIGN}C")
+    console.print(f"[bold]Requested state:[/bold] {args.state.upper()}")
 
 if __name__ == "__main__":
     main()
