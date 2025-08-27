@@ -69,6 +69,7 @@ def main():
     console.print(f"[bold]CPU temp:[/bold] {cpu_temp:.1f}\N{DEGREE SIGN}C")
     console.print(f"[bold]Requested state:[/bold] {args.state.upper()}")
 
+<<<<<<< HEAD
     # Apply requested state
     if args.state == "on":
         fan.on()
@@ -78,6 +79,15 @@ def main():
         fan.off()
         for led in leds:
             led.off()
+=======
+    fan = cpu_fan_on()
+    led = led_fan_on()
+
+    fan.on()
+
+    while(1):
+      time.sleep(60)
+>>>>>>> 63862c8e (fix)
 
 
 if __name__ == "__main__":
