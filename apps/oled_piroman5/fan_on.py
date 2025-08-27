@@ -7,6 +7,7 @@ exit so the fan and LEDs stay on.
 """
 
 import atexit
+
 from gpiozero import OutputDevice, Device
 
 FAN_PIN = 18
@@ -30,6 +31,7 @@ def led_fan_on(pins=RGBFAN_PIN):
 
 def main():
     """Turn on the CPU fan and RGB LED fan."""
+
     if hasattr(Device, "_shutdown"):
         try:
             atexit.unregister(Device._shutdown)
@@ -37,6 +39,7 @@ def main():
             pass
     cpu_fan_on()
     led_fan_on()
+
 
 
 if __name__ == "__main__":

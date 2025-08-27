@@ -6,7 +6,7 @@
   - APP_URL= http://192.168.0.100:6875 부분을 설정해야함
   - 연결되는 모든 연결을 위 APP_URL로 다시 전송함 (웹브라우저에 10.0.0.7:26875 로 연결해도, {url}:26875 로 연결함)
  
-- admin@admin.com password
+- 초기 관리자 로그인 admin@admin.com password
 
 ### Backup
 
@@ -19,3 +19,11 @@ password=your_password
 ```
 
 `nocommit.ini` 파일은 버전에 포함되지 않으므로 필요에 따라 직접 생성해야 합니다.
+
+### Restore
+
+- sql 파일 restore
+  - docker exec -i bookstack_db  mysql -u bookstack -p'bookstack12' bookstack < "$BACKUP_DIR/bookstack.sql" 
+- 업로드 파일 restore
+  - sudo tar xvf uploads.tgz -C ~/server/docker/bookstack/
+  - uploads.tgz 은 <code> config/.... </code> 로 압축이 풀림

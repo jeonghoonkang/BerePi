@@ -8,6 +8,7 @@ fan runs continuously, but a different duty cycle (e.g. 75 or 50) may
 be specified via ``--fan-duty`` to run the fan only for part of the
 two-minute interval when the CPU temperature is below ``50°C``.
 
+
 Dependencies can be installed with::
 
     pip3 install -r requirements.txt
@@ -20,6 +21,7 @@ import serial
 import sys
 import time
 from serial.tools import list_ports
+
 
 BNAME = "/home/tinyos/devel_opment/"
 LOG_DIR = BNAME + "selfcloud/apps/log"
@@ -69,6 +71,7 @@ def parse_args():
         default=100,
         help=(
             "Percentage of the two-minute cycle to run the fan when the CPU "
+
             "temperature is below the threshold (0-100)."
         ),
     )
@@ -149,8 +152,14 @@ def main():
 
     fan = cpu_fan_on()
     rgb_leds = led_fan_on()
+
     cpu = CPUTemperature()
     console = Console()
+    try:
+        co2_port = serial.Serial("/dev/ttyUSB0", baudrate=9600, rtscts=True)
+        time.sleep(3)
+    except Exception:
+        co2_port = None
 
     co2_port = None
     try:
@@ -204,6 +213,7 @@ def main():
             draw.text((0, 12), now, font=font, fill=255)
             draw.text((0, 24), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
             draw.text((0, 36), co2_text, font=font, fill=255)
+
             draw.text(
                 (0, 48),
                 f"Duty: {args.fan_duty}%/{int(total_runtime)}s L{int(remaining)}s",
@@ -213,11 +223,13 @@ def main():
         console.log(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
             f"CPU: {temp:.1f}°C | CO2: {co2_ppm if co2_ppm is not None else 'N/A'}ppm | Fan: {fan_status}"
+
         )
         if remaining == 0:
             break
         time.sleep(5)
         remaining -= 5
+
     if co2_port:
         co2_port.close()
 
