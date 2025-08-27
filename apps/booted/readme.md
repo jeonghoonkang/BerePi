@@ -1,6 +1,6 @@
 # Booting 후 초기 작업
 
-- Crontab -e3
+- Crontab -e
   - @reboot sleep 5 && bash run.sh  
 
 
