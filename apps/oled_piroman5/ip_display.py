@@ -30,7 +30,6 @@ sys.path.append(LOG_DIR)
 
 import berepi_logger
 
-
 # piroman5 OLED driver, built on luma.oled
 from luma.core.interface.serial import i2c
 from luma.oled.device import ssd1306
