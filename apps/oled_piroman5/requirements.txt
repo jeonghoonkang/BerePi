@@ -1,4 +1,5 @@
 luma.oled
+luma.core
 Pillow
 gpiozero
-lume.core
+pyserial
