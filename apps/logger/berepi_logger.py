@@ -7,7 +7,7 @@ from logging.handlers import RotatingFileHandler
 import sys
 
 #logging.config.fileConfig('logging.conf')
-LOG_FILENAME = "/home/tinyos/devel/BerePi/logs/berelogger.log"
+LOG_FILENAME = "/home/tinyos/devel_opment/BerePi/logs/berelogger.log"
 #LOG_FILENAME = "/Users/tinyos/devel/BerePi/logs/berelogger.log"
 
 logger = logging.getLogger('BereLogger')

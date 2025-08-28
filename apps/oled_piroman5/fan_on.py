@@ -17,8 +17,15 @@ import time
 from gpiozero import CPUTemperature, OutputDevice, Device
 from rich.console import Console
 
-FAN_PIN = 18
-RGBFAN_PIN = (5, 6)
+from gpiozero.pins.lgpio import LGPIOFactory
+
+#FAN_PIN = 18
+FAN_PIN = 'BOARD12'
+#RGBFAN_PIN = (5, 6)
+RGBFAN_PIN = ('BOARD29', 'BOARD31')
+
+Device.pin_factory = LGPIOFactory(chip=0)  # gpiochip0 강제
+
 
 
 def parse_args():
@@ -102,6 +109,8 @@ if __name__ == "__main__":
 #      print("GPIO 6 is currently HIGH.")
 #    else:
 #      print("GPIO 6 is currently LOW.")
+    while (True):
+        time.sleep(120)
 
     # Exit immediately to avoid any library clean-up resetting the pins
     os._exit(0)

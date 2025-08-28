@@ -76,10 +76,10 @@ def main():
         console.print(
             "Connected USB ports: " + (", ".join(ports) if ports else "None")
         )
-        port_name = "/dev/ttyUSB0"
         if port_name not in ports and ports:
             port_name = ports[0]
         if port_name in ports:
+            port_name = "/dev/ttyUSB0"
             console.print(f"Using CO2 sensor port: {port_name}")
             co2_port = serial.Serial(port_name, baudrate=9600, rtscts=True)
             time.sleep(3)
