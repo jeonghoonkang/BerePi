@@ -578,7 +578,7 @@ if __name__=='__main__':
     layout = Layout()
     layout.split_column(
         Layout(progress, name="bar"),
-        Layout(Panel("", title="Logs <차리 파일이 없으면 공란 입니다> "), name="log"),
+        Layout(Panel("", title="Logs <처리 파일이 없으면 공란 입니다> "), name="log"),
     )    
 
 
@@ -586,7 +586,7 @@ if __name__=='__main__':
         task = progress.add_task("Processing", total=len(new_files))
         for file in new_files:
             logs.append(f"processing {file}")
-            layout["log"].update(Panel("\n".join(logs), title="차리 파일"))
+            layout["log"].update(Panel("\n".join(logs), title="처리 파일"))
 
             buff = test_func(file, run_flag)
 
