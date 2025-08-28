@@ -12,9 +12,12 @@ current CPU temperature using :mod:`rich` formatting.
 import atexit
 import os
 import argparse
-import time
 
 from gpiozero import CPUTemperature, OutputDevice, Device
+from gpiozero.pins.gpiod import GPIODFactory
+import time
+
+
 from rich.console import Console
 
 FAN_PIN = 18
@@ -41,6 +44,10 @@ def main():
 
     args = parse_args()
     console = Console()
+
+    # Use gpiod pin factory instead of lgpio
+    Device.pin_factory = GPIODFactory()
+
 
     # Prevent gpiozero from resetting the pin states on exit so the fan
     # remains running after this script terminates.
@@ -76,37 +83,23 @@ def main():
         for led in leds:
             led.on()
     else:
-        fan.on()
+        fan.off()
         for led in leds:
             led.off()
-        fan.off()
-    
-    cpu_temp = CPUTemperature().temperature
-    fan_state = "ON" if fan.is_active else "OFF"
-    gpio6_state = "HIGH" if leds[1].is_active else "LOW"
 
     console.print(f"[bold]CPU fan:[/bold] {fan_state}")
     console.print(f"[bold]GPIO 6:[/bold] {gpio6_state}")
     console.print(f"[bold]CPU temp:[/bold] {cpu_temp:.1f}\N{DEGREE SIGN}C")
     console.print(f"[bold]Requested state:[/bold] {args.state.upper()}")
-
+            
+            
     if args.state == "on":
         while (True):
             time.sleep(300) # 잠시 대기하여 안정된 값을 읽습니다.
 
 
+
 if __name__ == "__main__":
     main()
-
-    
-
-#    leds = [OutputDevice(pin, active_high=True, initial_value=None) for pin in RGBFAN_PIN]
-
-#    if leds[1].is_active:
-#      print("GPIO 6 is currently HIGH.")
-#    else:
-#      print("GPIO 6 is currently LOW.")
-
     # Exit immediately to avoid any library clean-up resetting the pins
     os._exit(0)
-
