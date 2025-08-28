@@ -76,12 +76,11 @@ def main():
         for led in leds:
             led.on()
     else:
-        fan.off()
+        fan.on()
         for led in leds:
             led.off()
+        fan.off()
     
-    fan.on()
-
     cpu_temp = CPUTemperature().temperature
     fan_state = "ON" if fan.is_active else "OFF"
     gpio6_state = "HIGH" if leds[1].is_active else "LOW"
@@ -91,10 +90,15 @@ def main():
     console.print(f"[bold]CPU temp:[/bold] {cpu_temp:.1f}\N{DEGREE SIGN}C")
     console.print(f"[bold]Requested state:[/bold] {args.state.upper()}")
 
+    if args.state == "on":
+        while (True):
+            time.sleep(300) # 잠시 대기하여 안정된 값을 읽습니다.
+
+
 if __name__ == "__main__":
     main()
 
-#    time.sleep(5) # 잠시 대기하여 안정된 값을 읽습니다.
+    
 
 #    leds = [OutputDevice(pin, active_high=True, initial_value=None) for pin in RGBFAN_PIN]
 
