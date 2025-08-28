@@ -143,7 +143,8 @@ def main():
     cpu = CPUTemperature()
     console = Console()
     try:
-        co2_port = serial.Serial("/dev/ttyUSB0", baudrate=9600, rtscts=True)
+        #co2_port = serial.Serial("/dev/ttyUSB0", baudrate=9600, rtscts=True)
+        co2_port = serial.Serial("/dev/ttyAMA10", baudrate=9600, rtscts=True)
         time.sleep(3)
     except Exception:
         co2_port = None
@@ -154,7 +155,7 @@ def main():
         console.print(
             "Connected USB ports: " + (", ".join(ports) if ports else "None")
         )
-        port_name = "/dev/ttyUSB0"
+        port_name = "/dev/ttyAMA10"
         if port_name not in ports and ports:
             port_name = ports[0]
         if port_name in ports:
