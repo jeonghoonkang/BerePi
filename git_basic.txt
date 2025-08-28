@@ -15,6 +15,13 @@ git pull --rebase origin main
 git reset --soft HEAD~1
 
 
+# Branch 현황, 현재 Branch
+git branch
+
+# Branch 생성, 이동, push (-u) 향후 git push 만 작성해도 동작
+git checkout -b {new_branch}
+git push -u origin {new_branch}
+
 worktree list
 # 1. 새로운 작업 디렉토리 생성
 git worktree add ../other-branch-dir other-branch
