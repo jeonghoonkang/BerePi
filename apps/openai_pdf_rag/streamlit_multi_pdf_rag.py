@@ -10,6 +10,7 @@ from PyPDF2 import PdfReader
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 
+
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF RAG Chat")
 st.caption(f"사용 모델: {MODEL_NAME}")
@@ -20,6 +21,7 @@ if not api_key:
     st.stop()
 
 client = OpenAI(api_key=api_key)
+
 
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
