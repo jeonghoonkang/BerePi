@@ -1,3 +1,5 @@
+
+#Author: Jeonghoon Kang 
 import argparse
 import PyPDF2
 from transformers import AutoTokenizer, AutoModelForCausalLM
