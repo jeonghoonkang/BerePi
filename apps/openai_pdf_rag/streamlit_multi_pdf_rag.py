@@ -1,26 +1,50 @@
+import subprocess
 import os
 from typing import List
 
 import numpy as np
 import streamlit as st
-from openai import OpenAI
+import ollama
 from PyPDF2 import PdfReader
-
-
-MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 
 
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF RAG Chat")
-st.caption(f"사용 모델: {MODEL_NAME}")
 
-api_key = st.text_input("OpenAI API 키", type="password")
-if not api_key:
-    st.info("OpenAI API 키를 입력하세요.")
-    st.stop()
+# 현재 설치된 모델 목록을 가져와 선택 박스에 표시
+available_models = [m["name"] for m in ollama.list().get("models", [])]
 
-client = OpenAI(api_key=api_key)
+# RAG에 사용할 생성 모델, 임베딩 모델, 일반 QA 모델을 각각 지정
+rag_model = (
+    st.selectbox("RAG 생성 모델", options=available_models)
+    if available_models
+    else st.text_input("RAG 생성 모델 이름")
+)
+embed_models = [m for m in available_models if "embed" in m]
+embed_model = (
+    st.selectbox("임베딩 모델", options=embed_models)
+    if embed_models
+    else st.text_input("임베딩 모델 이름", "nomic-embed-text")
+)
+direct_model = (
+    st.selectbox("일반 QA 모델", options=available_models)
+    if available_models
+    else st.text_input("일반 QA 모델 이름")
+)
+
+st.caption(f"RAG 모델: {rag_model} | 일반 모델: {direct_model}")
+
+st.markdown("### OSS 모델 다운로드")
+model_to_pull = st.text_input("모델 이름 입력")
+if st.button("모델 다운로드") and model_to_pull:
+    with st.spinner("모델 다운로드 중..."):
+        result = subprocess.run(
+            ["ollama", "pull", model_to_pull], capture_output=True, text=True
+        )
+    if result.returncode == 0:
+        st.success("다운로드 완료")
+    else:
+        st.error(result.stderr or "다운로드 실패")
 
 
 uploaded_files = st.file_uploader(
@@ -64,36 +88,40 @@ if uploaded_files:
 
     with st.spinner("임베딩 생성 중..."):
         for chunk in all_chunks:
-            emb = client.embeddings.create(
-                model=EMBED_MODEL,
-                input=[chunk],
-            ).data[0].embedding
+            emb = ollama.embeddings(model=embed_model, prompt=chunk)["embedding"]
+
             embeddings.append(np.array(emb))
     st.success("임베딩 생성 완료")
 
 st.markdown("---")
 question = st.text_input("질문을 입력하세요")
 
-if question and embeddings:
-    q_emb = client.embeddings.create(
-        model=EMBED_MODEL,
-        input=[question],
-    ).data[0].embedding
-    q_emb = np.array(q_emb)
+if question:
+    # RAG 기반 답변
+    if embeddings:
+        q_emb = ollama.embeddings(model=embed_model, prompt=question)["embedding"]
+        q_emb = np.array(q_emb)
 
-    sims = [
-        float(np.dot(q_emb, e) / (np.linalg.norm(q_emb) * np.linalg.norm(e)))
-        for e in embeddings
-    ]
-    top_indices = np.argsort(sims)[-3:][::-1]
-    context = "\n\n".join(all_chunks[i] for i in top_indices)
+        sims = [
+            float(np.dot(q_emb, e) / (np.linalg.norm(q_emb) * np.linalg.norm(e)))
+            for e in embeddings
+        ]
+        top_indices = np.argsort(sims)[-3:][::-1]
+        context = "\n\n".join(all_chunks[i] for i in top_indices)
 
-    prompt = (
-        "다음 문서 내용을 참고하여 질문에 답변하세요.\n\n" + context + "\n\n질문: " + question
-    )
-    with st.spinner("답변 생성 중..."):
-        completion = client.responses.create(model=MODEL_NAME, input=prompt)
-        answer = completion.output[0].content[0].text
-    st.text_area("답변", answer, height=200)
-elif question:
-    st.warning("먼저 PDF 파일을 업로드하세요.")
+        prompt = (
+            "다음 문서 내용을 참고하여 질문에 답변하세요.\n\n" + context + "\n\n질문: " + question
+        )
+        with st.spinner("RAG 답변 생성 중..."):
+            completion = ollama.generate(model=rag_model, prompt=prompt)
+            rag_answer = completion.get("response", "")
+        st.text_area("RAG 답변", rag_answer, height=200)
+    else:
+        st.warning("먼저 PDF 파일을 업로드하세요.")
+
+    # 비 RAG 일반 답변
+    with st.spinner("일반 답변 생성 중..."):
+        direct_completion = ollama.generate(model=direct_model, prompt=question)
+        direct_answer = direct_completion.get("response", "")
+    st.text_area("일반 모델 답변", direct_answer, height=200)
+
