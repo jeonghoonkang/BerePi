@@ -10,7 +10,7 @@
 
    pip install streamlit openai PyPDF2 numpy pandas fpdf
    ```
-   OpenAI API 키는 `OPENAI_API_KEY` 환경 변수 또는 `nocommit_key.txt` 파일을 통해
+   OpenAI API 키는 `OPENAI_API_KEY` 환경 변수 또는 `nocommit.txt` 파일을 통해
    설정할 수 있습니다.
 
 2. 앱 실행
