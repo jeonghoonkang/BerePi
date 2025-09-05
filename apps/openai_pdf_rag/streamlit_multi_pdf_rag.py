@@ -1,4 +1,5 @@
 import subprocess
+import os
 from typing import List
 
 import numpy as np
@@ -45,6 +46,7 @@ if st.button("모델 다운로드") and model_to_pull:
     else:
         st.error(result.stderr or "다운로드 실패")
 
+
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
 )
@@ -87,6 +89,7 @@ if uploaded_files:
     with st.spinner("임베딩 생성 중..."):
         for chunk in all_chunks:
             emb = ollama.embeddings(model=embed_model, prompt=chunk)["embedding"]
+
             embeddings.append(np.array(emb))
     st.success("임베딩 생성 완료")
 
@@ -121,3 +124,4 @@ if question:
         direct_completion = ollama.generate(model=direct_model, prompt=question)
         direct_answer = direct_completion.get("response", "")
     st.text_area("일반 모델 답변", direct_answer, height=200)
+
