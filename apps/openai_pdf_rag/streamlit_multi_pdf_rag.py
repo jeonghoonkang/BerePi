@@ -1,3 +1,4 @@
+
 import os
 from typing import List
 
@@ -33,9 +34,11 @@ st.title("📄 PDF RAG Chat")
 model = st.text_input("사용할 GPT 모델", "gpt-4o-mini")
 st.caption(f"사용 모델: {model}")
 
+
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
 )
+
 
 if uploaded_files:
     st.subheader("업로드된 파일")
@@ -76,6 +79,7 @@ if uploaded_files:
                 model="text-embedding-3-small", input=chunk
             )
             emb = emb_resp.data[0].embedding
+
             embeddings.append(np.array(emb))
     st.success("임베딩 생성 완료")
 
@@ -88,6 +92,7 @@ if question:
             model="text-embedding-3-small", input=question
         )
         q_emb = np.array(q_emb_resp.data[0].embedding)
+
 
         sims = [
             float(np.dot(q_emb, e) / (np.linalg.norm(q_emb) * np.linalg.norm(e)))
@@ -105,6 +110,7 @@ if question:
         with st.spinner("RAG 답변 생성 중..."):
             completion = client.responses.create(model=model, input=prompt)
         rag_answer = completion.output_text
+
         st.text_area("RAG 답변", rag_answer, height=200)
     else:
         st.warning("먼저 PDF 파일을 업로드하세요.")
@@ -112,5 +118,6 @@ if question:
     with st.spinner("일반 답변 생성 중..."):
         direct_completion = client.responses.create(model=model, input=question)
     direct_answer = direct_completion.output_text
+
     st.text_area("일반 모델 답변", direct_answer, height=200)
 
