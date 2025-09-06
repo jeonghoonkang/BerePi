@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from fpdf import FPDF
 
-import numpy as np
 import streamlit as st
 from openai import OpenAI
 from PyPDF2 import PdfReader
@@ -14,6 +13,7 @@ from PyPDF2 import PdfReader
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
+
 
 
 def get_gpu_info() -> str:
@@ -48,7 +48,11 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF 기반 Q&A")
 st.write(f"사용 가능한 GPU: {get_gpu_info()}")
-st.write("사용 모델: gpt-3.5-turbo")
+model_name = st.selectbox("모델 선택", list(MODEL_OPTIONS.keys()))
+model = MODEL_OPTIONS[model_name]
+if model_name in ["llama-3", "mistral"]:
+    ensure_model(model)
+st.write(f"사용 모델: {model_name}")
 
 if "docs" not in st.session_state:
     st.session_state.docs = None
@@ -214,7 +218,7 @@ if question:
         with st.spinner("답변 생성 중..."):
             start_t = time.perf_counter()
             resp = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=model,
                 messages=[{"role": "user", "content": question}],
             )
             elapsed_default = time.perf_counter() - start_t
@@ -254,7 +258,7 @@ if question:
                     start_pdf = time.perf_counter()
 
                     resp = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
+                        model=model,
                         messages=[{"role": "user", "content": prompt}],
                     )
                     elapsed_pdf = time.perf_counter() - start_pdf
