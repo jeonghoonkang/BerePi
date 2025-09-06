@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from fpdf import FPDF
 
-import numpy as np
 import streamlit as st
 from openai import BadRequestError, OpenAI
 from PyPDF2 import PdfReader
@@ -37,6 +36,7 @@ def ensure_model(repo_id: str) -> None:
             st.success("다운로드 완료")
         else:
             st.stop()
+
 
 
 def get_gpu_info() -> str:
@@ -92,6 +92,7 @@ def reset_app() -> None:
             del st.session_state[key]
     st.rerun()
 
+
 if "docs" not in st.session_state:
     st.session_state.docs = None
     st.session_state.embs = None
@@ -99,6 +100,81 @@ if "docs" not in st.session_state:
 
 if "history" not in st.session_state:
     st.session_state.history = []
+
+
+def cache_paths(filename: str):
+    base = os.path.splitext(filename)[0]
+    return {
+        "pdf": os.path.join(DATA_DIR, filename),
+        "txt": os.path.join(DATA_DIR, base + ".txt"),
+        "npz": os.path.join(DATA_DIR, base + ".npz"),
+        "base": base,
+    }
+
+
+def load_cached_data():
+    """Load cached PDFs and embeddings into session_state."""
+    st.session_state.docs = []
+    st.session_state.embs = []
+    st.session_state.pdf_text = ""
+    st.session_state.cached_files = []
+    for fname in sorted(os.listdir(DATA_DIR)):
+        if not fname.endswith(".npz"):
+            continue
+        base = os.path.splitext(fname)[0]
+        paths = cache_paths(base + ".pdf")
+        data = np.load(paths["npz"], allow_pickle=True)
+        chunks = data["chunks"].tolist()
+        embs = data["embeddings"]
+        st.session_state.docs.extend(chunks)
+        st.session_state.embs.extend(embs)
+        txt_path = paths["txt"]
+        if os.path.exists(txt_path):
+            with open(txt_path, "r", encoding="utf-8") as f:
+                st.session_state.pdf_text += f.read() + "\n"
+        st.session_state.cached_files.append(base)
+
+
+def save_pdf_and_embeddings(uploaded_file):
+    paths = cache_paths(uploaded_file.name)
+    if os.path.exists(paths["npz"]):
+        return
+    with open(paths["pdf"], "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    text = read_pdf(paths["pdf"])
+    with open(paths["txt"], "w", encoding="utf-8") as f:
+        f.write(text)
+    chunks = chunk_text(text)
+    embs = []
+    for chunk in chunks:
+        resp = client.embeddings.create(model="text-embedding-3-small", input=[chunk])
+        embs.append(np.array(resp.data[0].embedding))
+    np.savez(paths["npz"], chunks=np.array(chunks, dtype=object), embeddings=np.array(embs))
+
+
+def refresh_cache(selected_files):
+    for name in selected_files:
+        base = os.path.splitext(name)[0]
+        paths = cache_paths(name)
+        if os.path.exists(paths["pdf"]):
+            text = read_pdf(paths["pdf"])
+            with open(paths["txt"], "w", encoding="utf-8") as f:
+                f.write(text)
+            chunks = chunk_text(text)
+            embs = []
+            for chunk in chunks:
+                resp = client.embeddings.create(
+                    model="text-embedding-3-small", input=[chunk]
+                )
+                embs.append(np.array(resp.data[0].embedding))
+            np.savez(
+                paths["npz"],
+                chunks=np.array(chunks, dtype=object),
+                embeddings=np.array(embs),
+            )
+
+
+load_cached_data()
 
 
 def read_pdf(file) -> str:
@@ -129,6 +205,12 @@ uploaded_files = st.file_uploader(
 mode = st.radio("답변 모드", ["기본", "PDF 사용"])
 
 if uploaded_files:
+    st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
+    for uf in uploaded_files:
+        st.write(f"- {uf.name} ({uf.size / 1024:.1f} KB)")
+
     texts = []
     all_chunks = []
     for uf in uploaded_files:
@@ -145,7 +227,29 @@ if uploaded_files:
                 input=[chunk],
             )
             st.session_state.embs.append(np.array(resp.data[0].embedding))
+
     st.success("문서 로딩 완료")
+
+if st.session_state.get("cached_files"):
+    st.subheader("캐시된 PDF")
+    options = [f + ".pdf" for f in st.session_state.cached_files]
+    selected = st.multiselect("캐시 파일 선택", options)
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("선택 삭제") and selected:
+            for name in selected:
+                paths = cache_paths(name)
+                for ext in ("pdf", "txt", "npz"):
+                    p = paths[ext]
+                    if os.path.exists(p):
+                        os.remove(p)
+            load_cached_data()
+            st.success("삭제 완료")
+    with c2:
+        if st.button("선택 새로고침") and selected:
+            refresh_cache(selected)
+            load_cached_data()
+            st.success("새로고침 완료")
 
 st.markdown("---")
 if st.session_state.history:
@@ -179,6 +283,7 @@ if question:
             except BadRequestError as e:
                 log_error(str(e))
                 reset_app()
+
             elapsed_default = time.perf_counter() - start_t
             default_answer = resp.choices[0].message.content
             st.write(default_answer)
@@ -222,6 +327,7 @@ if question:
                     except BadRequestError as e:
                         log_error(str(e))
                         reset_app()
+
                     elapsed_pdf = time.perf_counter() - start_pdf
                     pdf_answer = resp.choices[0].message.content
                     st.write(pdf_answer)

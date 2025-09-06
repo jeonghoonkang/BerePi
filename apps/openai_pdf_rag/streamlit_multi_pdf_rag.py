@@ -79,6 +79,7 @@ def reset_app() -> None:
     st.rerun()
 
 
+
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
 )
@@ -86,8 +87,10 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
     for f in uploaded_files:
-        st.write(f"- {f.name}")
+        st.write(f"- {f.name} ({f.size / 1024:.1f} KB)")
 
 
 def read_pdf(file) -> str:
