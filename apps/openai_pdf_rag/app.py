@@ -1,3 +1,5 @@
+#Author : JeonghoonKang https://github.com/jeonghoonkang
+
 import os
 import io
 import subprocess
@@ -44,7 +46,22 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF 기반 Q&A")
 st.write(f"사용 가능한 GPU: {get_gpu_info()}")
-st.write("사용 모델: gpt-3.5-turbo")
+
+# 모델 선택 드롭다운 (요청: oss 사용)
+model_options = [
+    "gpt-3.5-turbo",
+    "oss",
+]
+selected_model = st.selectbox("모델 선택", model_options, index=0)
+st.write(f"사용 모델: {selected_model}")
+
+# 임베딩 모델 선택 드롭다운
+embedding_model_options = [
+    "text-embedding-3-small",
+    "text-embedding-3-large",
+]
+selected_embedding_model = st.selectbox("임베딩 모델 선택", embedding_model_options, index=0)
+st.write(f"임베딩 모델: {selected_embedding_model}")
 
 if "docs" not in st.session_state:
     st.session_state.docs = None
@@ -95,7 +112,7 @@ if uploaded_files:
     with st.spinner("임베딩 생성 중..."):
         for chunk in st.session_state.docs:
             resp = client.embeddings.create(
-                model="text-embedding-3-small",
+                model=selected_embedding_model,
                 input=[chunk],
             )
             st.session_state.embs.append(np.array(resp.data[0].embedding))
@@ -126,7 +143,7 @@ if question:
         with st.spinner("답변 생성 중..."):
             start_t = time.perf_counter()
             resp = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=selected_model,
                 messages=[{"role": "user", "content": question}],
             )
             elapsed_default = time.perf_counter() - start_t
@@ -143,7 +160,7 @@ if question:
                 with st.spinner("답변 생성 중..."):
                     q_emb = np.array(
                         client.embeddings.create(
-                            model="text-embedding-3-small", input=[question]
+                            model=selected_embedding_model, input=[question]
                         ).data[0].embedding
                     )
                     sims = [
@@ -166,7 +183,7 @@ if question:
                     start_pdf = time.perf_counter()
 
                     resp = client.chat.completions.create(
-                        model="gpt-3.5-turbo",
+                        model=selected_model,
                         messages=[{"role": "user", "content": prompt}],
                     )
                     elapsed_pdf = time.perf_counter() - start_pdf
@@ -186,6 +203,8 @@ if question:
         "question": question,
         "answer": default_answer,
         "elapsed": elapsed_default,
+        "model": selected_model,
+        "embedding_model": selected_embedding_model,
     }
     if pdf_answer:
         entry["pdf_answer"] = pdf_answer
@@ -225,5 +244,3 @@ if st.session_state.history:
                 file_name="qa_history.pdf",
                 mime="application/pdf",
             )
-
-
