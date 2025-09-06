@@ -24,6 +24,11 @@ vendor/      # Composer(PHP) 또는 기타 의존성 디렉토리
 #config.ini
 tmp_this.ini
 #secrets.py
+/hf_token/
+hf_token.txt
+/environment/
+nocommit.txt
+nocommit.ini
 
 # 특정 IDE/편집기 설정 파일
 .idea/       # IntelliJ IDEA
@@ -39,4 +44,4 @@ tmp_this.ini
 #my_secret_file.txt
 nocommit/
 __pycache__/
-environemnt/
+
