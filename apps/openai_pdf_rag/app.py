@@ -68,7 +68,7 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-st.set_page_config(page_title="PDF RAG Chat")
+st.set_page_config(page_title="PDF RAG System")
 st.title("📄 PDF 기반 Q&A")
 st.write(f"사용 가능한 GPU: {get_gpu_info()}")
 model_name = st.selectbox("모델 선택", list(MODEL_OPTIONS.keys()))
