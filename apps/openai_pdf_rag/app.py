@@ -78,7 +78,8 @@ def ensure_model(repo_id: str) -> None:
                 snapshot_download(
                     repo_id=repo_id,
                     local_dir=repo_id,
-                    resume_download=True,
+                    force_download=True,
+
                     token=token,
                 )
             except GatedRepoError:

@@ -71,7 +71,8 @@ def ensure_model(repo_id: str) -> None:
                 snapshot_download(
                     repo_id=repo_id,
                     local_dir=repo_id,
-                    resume_download=True,
+                    force_download=True,
+
                     token=token,
                 )
             except GatedRepoError:
@@ -152,6 +153,18 @@ st.caption(f"사용 모델: {model_name}")
 
 if "errors" not in st.session_state:
     st.session_state.errors = []
+
+
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
 
 
 def log_error(msg: str) -> None:
