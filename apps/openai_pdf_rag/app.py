@@ -166,10 +166,29 @@ uploaded_files = st.file_uploader(
 mode = st.radio("답변 모드", ["기본", "PDF 사용"])
 
 if uploaded_files:
-    with st.spinner("업로드 처리 중..."):
-        for uf in uploaded_files:
-            save_pdf_and_embeddings(uf)
-    load_cached_data()
+    st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
+    for uf in uploaded_files:
+        st.write(f"- {uf.name} ({uf.size / 1024:.1f} KB)")
+
+    texts = []
+    all_chunks = []
+    for uf in uploaded_files:
+        text = read_pdf(uf)
+        texts.append(text)
+        all_chunks.extend(chunk_text(text))
+    st.session_state.pdf_text = "\n\n".join(texts)
+    st.session_state.docs = all_chunks
+    st.session_state.embs = []
+    with st.spinner("임베딩 생성 중..."):
+        for chunk in st.session_state.docs:
+            resp = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=[chunk],
+            )
+            st.session_state.embs.append(np.array(resp.data[0].embedding))
+
     st.success("문서 로딩 완료")
 
 if st.session_state.get("cached_files"):
