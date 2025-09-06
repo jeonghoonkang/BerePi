@@ -52,6 +52,7 @@ def ensure_model(repo_id: str) -> None:
     try:
         from huggingface_hub import hf_hub_download, snapshot_download, login
         from huggingface_hub.utils import GatedRepoError
+
     except Exception:
         st.error("huggingface_hub 라이브러리가 필요합니다.")
         st.stop()
@@ -71,6 +72,7 @@ def ensure_model(repo_id: str) -> None:
                     repo_id=repo_id,
                     local_dir=repo_id,
                     force_download=True,
+
                     token=token,
                 )
             except GatedRepoError:
@@ -78,6 +80,7 @@ def ensure_model(repo_id: str) -> None:
                     "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
                 )
                 st.stop()
+
         if _verify_model_files(repo_id):
             st.success("다운로드 완료")
         else:
@@ -98,6 +101,7 @@ def ensure_model(repo_id: str) -> None:
             "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
         )
         st.stop()
+
     except Exception:
         if st.button(f"{repo_id} 다운로드"):
             _download()
@@ -115,6 +119,7 @@ def get_gpu_info() -> str:
         return f"{len(gpus)}개 ({', '.join(gpus)})" if gpus else "GPU 없음"
     except Exception:
         return "GPU 없음"
+
 
 def load_api_key() -> str | None:
     """Read the OpenAI API key from a nocommit.txt file."""
@@ -162,6 +167,29 @@ def reset_app() -> None:
     st.rerun()
 
 
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
+
+
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
+
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
 )
@@ -169,8 +197,10 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
     for f in uploaded_files:
-        st.write(f"- {f.name}")
+        st.write(f"- {f.name} ({f.size / 1024:.1f} KB)")
 
 
 def read_pdf(file) -> str:
