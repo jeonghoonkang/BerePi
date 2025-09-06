@@ -83,6 +83,12 @@ uploaded_files = st.file_uploader(
 mode = st.radio("답변 모드", ["기본", "PDF 사용"])
 
 if uploaded_files:
+    st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
+    for uf in uploaded_files:
+        st.write(f"- {uf.name} ({uf.size / 1024:.1f} KB)")
+
     texts = []
     all_chunks = []
     for uf in uploaded_files:
