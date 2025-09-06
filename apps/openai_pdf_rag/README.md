@@ -11,7 +11,9 @@
    pip install streamlit openai PyPDF2 numpy pandas fpdf
    ```
    OpenAI API 키는 `OPENAI_API_KEY` 환경 변수 또는 `nocommit.txt` 파일을 통해
-   설정할 수 있습니다.
+   설정할 수 있습니다. Gemma 등 허깅페이스에서 접근 제한이 있는 모델을
+   사용하려면 `HF_TOKEN` 환경 변수나 `hf_token.txt` 파일에 Hugging Face 토큰을
+   제공해야 합니다.
 
 2. 앱 실행
    ```bash

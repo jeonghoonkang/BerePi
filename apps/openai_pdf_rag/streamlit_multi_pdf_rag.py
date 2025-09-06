@@ -18,6 +18,21 @@ MODEL_OPTIONS = {
 }
 
 
+def load_hf_token() -> str | None:
+    token = os.getenv("HF_TOKEN")
+    if token:
+        return token.strip()
+    token_paths = [
+        os.path.join(os.path.dirname(__file__), "hf_token.txt"),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "hf_token.txt"),
+    ]
+    for path in token_paths:
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    return None
+
+
 def _verify_model_files(path: str) -> bool:
     config = os.path.join(path, "config.json")
     if not os.path.isfile(config) or os.path.getsize(config) <= 0:
@@ -33,17 +48,38 @@ def _verify_model_files(path: str) -> bool:
 
 def ensure_model(repo_id: str) -> None:
     if os.path.isdir(repo_id) and _verify_model_files(repo_id):
-
         return
     try:
-        from huggingface_hub import hf_hub_download, snapshot_download
+        from huggingface_hub import hf_hub_download, snapshot_download, login
+        from huggingface_hub.utils import GatedRepoError
+
     except Exception:
         st.error("huggingface_hub 라이브러리가 필요합니다.")
         st.stop()
 
+    token = load_hf_token()
+    if token:
+        try:
+            login(token=token)
+        except Exception:
+            st.error("Hugging Face 로그인 실패")
+            st.stop()
+
     def _download() -> None:
         with st.spinner("모델 다운로드 중..."):
-            snapshot_download(repo_id=repo_id, local_dir=repo_id, resume_download=True)
+            try:
+                snapshot_download(
+                    repo_id=repo_id,
+                    local_dir=repo_id,
+                    resume_download=True,
+                    token=token,
+                )
+            except GatedRepoError:
+                st.error(
+                    "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
+                )
+                st.stop()
+
         if _verify_model_files(repo_id):
             st.success("다운로드 완료")
         else:
@@ -51,9 +87,20 @@ def ensure_model(repo_id: str) -> None:
             st.stop()
 
     try:
-        hf_hub_download(repo_id=repo_id, filename="config.json", local_files_only=True)
+        hf_hub_download(
+            repo_id=repo_id,
+            filename="config.json",
+            local_files_only=True,
+            token=token,
+        )
         if not _verify_model_files(repo_id):
             _download()
+    except GatedRepoError:
+        st.error(
+            "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
+        )
+        st.stop()
+
     except Exception:
         if st.button(f"{repo_id} 다운로드"):
             _download()
@@ -105,6 +152,19 @@ st.caption(f"사용 모델: {model_name}")
 
 if "errors" not in st.session_state:
     st.session_state.errors = []
+
+
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
+
 
 def log_error(msg: str) -> None:
     st.session_state.errors.append(msg)
