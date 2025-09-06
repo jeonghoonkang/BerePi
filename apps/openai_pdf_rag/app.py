@@ -11,31 +11,9 @@ from openai import OpenAI
 from PyPDF2 import PdfReader
 
 
-MODEL_OPTIONS = {
-    "gpt-3.5-turbo": "gpt-3.5-turbo",
-    "gpt-4o-mini": "gpt-4o-mini",
-    "llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
-    "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
-}
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
 
-
-def ensure_model(repo_id: str) -> None:
-    if os.path.isdir(repo_id):
-        return
-    try:
-        from huggingface_hub import hf_hub_download, snapshot_download
-    except Exception:
-        st.error("huggingface_hub 라이브러리가 필요합니다.")
-        st.stop()
-    try:
-        hf_hub_download(repo_id=repo_id, filename="config.json", local_files_only=True)
-    except Exception:
-        if st.button(f"{repo_id} 다운로드"):
-            with st.spinner("모델 다운로드 중..."):
-                snapshot_download(repo_id=repo_id, local_dir=repo_id, resume_download=True)
-            st.success("다운로드 완료")
-        else:
-            st.stop()
 
 
 def get_gpu_info() -> str:
@@ -85,6 +63,81 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 
+def cache_paths(filename: str):
+    base = os.path.splitext(filename)[0]
+    return {
+        "pdf": os.path.join(DATA_DIR, filename),
+        "txt": os.path.join(DATA_DIR, base + ".txt"),
+        "npz": os.path.join(DATA_DIR, base + ".npz"),
+        "base": base,
+    }
+
+
+def load_cached_data():
+    """Load cached PDFs and embeddings into session_state."""
+    st.session_state.docs = []
+    st.session_state.embs = []
+    st.session_state.pdf_text = ""
+    st.session_state.cached_files = []
+    for fname in sorted(os.listdir(DATA_DIR)):
+        if not fname.endswith(".npz"):
+            continue
+        base = os.path.splitext(fname)[0]
+        paths = cache_paths(base + ".pdf")
+        data = np.load(paths["npz"], allow_pickle=True)
+        chunks = data["chunks"].tolist()
+        embs = data["embeddings"]
+        st.session_state.docs.extend(chunks)
+        st.session_state.embs.extend(embs)
+        txt_path = paths["txt"]
+        if os.path.exists(txt_path):
+            with open(txt_path, "r", encoding="utf-8") as f:
+                st.session_state.pdf_text += f.read() + "\n"
+        st.session_state.cached_files.append(base)
+
+
+def save_pdf_and_embeddings(uploaded_file):
+    paths = cache_paths(uploaded_file.name)
+    if os.path.exists(paths["npz"]):
+        return
+    with open(paths["pdf"], "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    text = read_pdf(paths["pdf"])
+    with open(paths["txt"], "w", encoding="utf-8") as f:
+        f.write(text)
+    chunks = chunk_text(text)
+    embs = []
+    for chunk in chunks:
+        resp = client.embeddings.create(model="text-embedding-3-small", input=[chunk])
+        embs.append(np.array(resp.data[0].embedding))
+    np.savez(paths["npz"], chunks=np.array(chunks, dtype=object), embeddings=np.array(embs))
+
+
+def refresh_cache(selected_files):
+    for name in selected_files:
+        base = os.path.splitext(name)[0]
+        paths = cache_paths(name)
+        if os.path.exists(paths["pdf"]):
+            text = read_pdf(paths["pdf"])
+            with open(paths["txt"], "w", encoding="utf-8") as f:
+                f.write(text)
+            chunks = chunk_text(text)
+            embs = []
+            for chunk in chunks:
+                resp = client.embeddings.create(
+                    model="text-embedding-3-small", input=[chunk]
+                )
+                embs.append(np.array(resp.data[0].embedding))
+            np.savez(
+                paths["npz"],
+                chunks=np.array(chunks, dtype=object),
+                embeddings=np.array(embs),
+            )
+
+
+load_cached_data()
+
+
 def read_pdf(file) -> str:
     text = ""
     reader = PdfReader(file)
@@ -113,23 +166,32 @@ uploaded_files = st.file_uploader(
 mode = st.radio("답변 모드", ["기본", "PDF 사용"])
 
 if uploaded_files:
-    texts = []
-    all_chunks = []
-    for uf in uploaded_files:
-        text = read_pdf(uf)
-        texts.append(text)
-        all_chunks.extend(chunk_text(text))
-    st.session_state.pdf_text = "\n\n".join(texts)
-    st.session_state.docs = all_chunks
-    st.session_state.embs = []
-    with st.spinner("임베딩 생성 중..."):
-        for chunk in st.session_state.docs:
-            resp = client.embeddings.create(
-                model="text-embedding-3-small",
-                input=[chunk],
-            )
-            st.session_state.embs.append(np.array(resp.data[0].embedding))
+    with st.spinner("업로드 처리 중..."):
+        for uf in uploaded_files:
+            save_pdf_and_embeddings(uf)
+    load_cached_data()
     st.success("문서 로딩 완료")
+
+if st.session_state.get("cached_files"):
+    st.subheader("캐시된 PDF")
+    options = [f + ".pdf" for f in st.session_state.cached_files]
+    selected = st.multiselect("캐시 파일 선택", options)
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("선택 삭제") and selected:
+            for name in selected:
+                paths = cache_paths(name)
+                for ext in ("pdf", "txt", "npz"):
+                    p = paths[ext]
+                    if os.path.exists(p):
+                        os.remove(p)
+            load_cached_data()
+            st.success("삭제 완료")
+    with c2:
+        if st.button("선택 새로고침") and selected:
+            refresh_cache(selected)
+            load_cached_data()
+            st.success("새로고침 완료")
 
 st.markdown("---")
 if st.session_state.history:
