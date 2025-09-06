@@ -11,15 +11,19 @@
    pip install streamlit openai PyPDF2 numpy pandas fpdf
    ```
    OpenAI API 키는 `OPENAI_API_KEY` 환경 변수 또는 `nocommit.txt` 파일을 통해
-   설정할 수 있습니다.
+   설정할 수 있습니다. Gemma 등 허깅페이스에서 접근 제한이 있는 모델을
+   사용하려면 `HF_TOKEN` 환경 변수나 `hf_token.txt` 파일에 Hugging Face 토큰을
+   제공해야 합니다.
 
 2. 앱 실행
    ```bash
    streamlit run app.py
    ```
 
-앱 상단에는 시스템에 설치된 GPU와 사용 중인 AI 모델(gpt-3.5-turbo)이 표시됩니다.
-또한 질문 입력란 위에 가로줄을 넣어 영역을 구분합니다.
+앱 상단에는 시스템에 설치된 GPU(개수 및 모델)와 선택한 AI 모델이 표시됩니다.
+또한 질문 입력란 위에 가로줄을 넣어 영역을 구분합니다. OpenAI 모델 외에도
+llama-3, mistral, gemma 등 OSS 모델을 선택할 수 있으며, 로컬에 모델이 없으면
+다운로드 버튼이 나타나고 다운로드 후 파일 무결성을 검사합니다.
 
 질문을 입력하면 첫 번째 영역에 기본 답변이 표시됩니다.
 
