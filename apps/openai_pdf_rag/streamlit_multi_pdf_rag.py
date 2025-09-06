@@ -4,9 +4,35 @@ from typing import List
 
 import numpy as np
 import streamlit as st
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from PyPDF2 import PdfReader
 
+
+MODEL_OPTIONS = {
+    "gpt-3.5-turbo": "gpt-3.5-turbo",
+    "gpt-4o-mini": "gpt-4o-mini",
+    "llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
+    "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+}
+
+
+def ensure_model(repo_id: str) -> None:
+    if os.path.isdir(repo_id):
+        return
+    try:
+        from huggingface_hub import hf_hub_download, snapshot_download
+    except Exception:
+        st.error("huggingface_hub 라이브러리가 필요합니다.")
+        st.stop()
+    try:
+        hf_hub_download(repo_id=repo_id, filename="config.json", local_files_only=True)
+    except Exception:
+        if st.button(f"{repo_id} 다운로드"):
+            with st.spinner("모델 다운로드 중..."):
+                snapshot_download(repo_id=repo_id, local_dir=repo_id, resume_download=True)
+            st.success("다운로드 완료")
+        else:
+            st.stop()
 
 def load_api_key() -> str | None:
     """Read the OpenAI API key from a nocommit.txt file."""
@@ -31,8 +57,26 @@ client = OpenAI(api_key=api_key)
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF RAG Chat")
 
-model = st.text_input("사용할 GPT 모델", "gpt-4o-mini")
-st.caption(f"사용 모델: {model}")
+model_name = st.selectbox("모델 선택", list(MODEL_OPTIONS.keys()))
+model = MODEL_OPTIONS[model_name]
+if model_name in ["llama-3", "mistral"]:
+    ensure_model(model)
+st.caption(f"사용 모델: {model_name}")
+
+if "errors" not in st.session_state:
+    st.session_state.errors = []
+
+
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
 
 
 uploaded_files = st.file_uploader(
@@ -108,7 +152,11 @@ if question:
             + question
         )
         with st.spinner("RAG 답변 생성 중..."):
-            completion = client.responses.create(model=model, input=prompt)
+            try:
+                completion = client.responses.create(model=model, input=prompt)
+            except BadRequestError as e:
+                log_error(str(e))
+                reset_app()
         rag_answer = completion.output_text
 
         st.text_area("RAG 답변", rag_answer, height=200)
@@ -116,8 +164,18 @@ if question:
         st.warning("먼저 PDF 파일을 업로드하세요.")
 
     with st.spinner("일반 답변 생성 중..."):
-        direct_completion = client.responses.create(model=model, input=question)
+        try:
+            direct_completion = client.responses.create(model=model, input=question)
+        except BadRequestError as e:
+            log_error(str(e))
+            reset_app()
     direct_answer = direct_completion.output_text
 
     st.text_area("일반 모델 답변", direct_answer, height=200)
+
+if st.session_state.errors:
+    st.markdown("---")
+    st.subheader("에러 메시지")
+    for err in st.session_state.errors[-3:]:
+        st.error(err)
 
