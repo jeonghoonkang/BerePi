@@ -80,6 +80,12 @@ def ensure_model(repo_id: str) -> None:
                     "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
                 )
                 st.stop()
+            except ValueError as e:
+                st.error(f"모델 다운로드 실패: {e}")
+                st.stop()
+            except Exception as e:
+                st.error(f"모델 다운로드 중 오류 발생: {e}")
+                st.stop()
 
         if _verify_model_files(repo_id):
             st.success("다운로드 완료")
@@ -101,6 +107,7 @@ def ensure_model(repo_id: str) -> None:
             "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
         )
         st.stop()
+
 
     except Exception:
         if st.button(f"{repo_id} 다운로드"):
@@ -158,6 +165,13 @@ if "errors" not in st.session_state:
 def log_error(msg: str) -> None:
     st.session_state.errors.append(msg)
     st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
 
 
 def reset_app() -> None:

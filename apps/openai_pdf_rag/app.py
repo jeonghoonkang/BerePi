@@ -87,6 +87,12 @@ def ensure_model(repo_id: str) -> None:
                     "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
                 )
                 st.stop()
+            except ValueError as e:
+                st.error(f"모델 다운로드 실패: {e}")
+                st.stop()
+            except Exception as e:
+                st.error(f"모델 다운로드 중 오류 발생: {e}")
+                st.stop()
 
         if _verify_model_files(repo_id):
             st.success("다운로드 완료")
