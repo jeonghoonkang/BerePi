@@ -7,12 +7,35 @@ import pandas as pd
 from fpdf import FPDF
 
 import streamlit as st
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from PyPDF2 import PdfReader
 
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+MODEL_OPTIONS = {
+    "gpt-3.5-turbo": "gpt-3.5-turbo",
+    "gpt-4o-mini": "gpt-4o-mini",
+    "llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
+    "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+}
+
+
+def ensure_model(repo_id: str) -> None:
+    if os.path.isdir(repo_id):
+        return
+    try:
+        from huggingface_hub import hf_hub_download, snapshot_download
+    except Exception:
+        st.error("huggingface_hub 라이브러리가 필요합니다.")
+        st.stop()
+    try:
+        hf_hub_download(repo_id=repo_id, filename="config.json", local_files_only=True)
+    except Exception:
+        if st.button(f"{repo_id} 다운로드"):
+            with st.spinner("모델 다운로드 중..."):
+                snapshot_download(repo_id=repo_id, local_dir=repo_id, resume_download=True)
+            st.success("다운로드 완료")
+        else:
+            st.stop()
 
 
 
@@ -53,6 +76,22 @@ model = MODEL_OPTIONS[model_name]
 if model_name in ["llama-3", "mistral"]:
     ensure_model(model)
 st.write(f"사용 모델: {model_name}")
+
+if "errors" not in st.session_state:
+    st.session_state.errors = []
+
+
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
+
 
 if "docs" not in st.session_state:
     st.session_state.docs = None
@@ -236,10 +275,15 @@ if question:
         st.subheader("1. 기본 답변")
         with st.spinner("답변 생성 중..."):
             start_t = time.perf_counter()
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": question}],
-            )
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": question}],
+                )
+            except BadRequestError as e:
+                log_error(str(e))
+                reset_app()
+
             elapsed_default = time.perf_counter() - start_t
             default_answer = resp.choices[0].message.content
             st.write(default_answer)
@@ -275,11 +319,15 @@ if question:
                         + question
                     )
                     start_pdf = time.perf_counter()
+                    try:
+                        resp = client.chat.completions.create(
+                            model=model,
+                            messages=[{"role": "user", "content": prompt}],
+                        )
+                    except BadRequestError as e:
+                        log_error(str(e))
+                        reset_app()
 
-                    resp = client.chat.completions.create(
-                        model=model,
-                        messages=[{"role": "user", "content": prompt}],
-                    )
                     elapsed_pdf = time.perf_counter() - start_pdf
                     pdf_answer = resp.choices[0].message.content
                     st.write(pdf_answer)
@@ -337,4 +385,8 @@ if st.session_state.history:
                 mime="application/pdf",
             )
 
-
+if st.session_state.errors:
+    st.markdown("---")
+    st.subheader("에러 메시지")
+    for err in st.session_state.errors[-3:]:
+        st.error(err)

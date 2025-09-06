@@ -4,7 +4,7 @@ from typing import List
 
 import numpy as np
 import streamlit as st
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from PyPDF2 import PdfReader
 
 
@@ -62,6 +62,22 @@ model = MODEL_OPTIONS[model_name]
 if model_name in ["llama-3", "mistral"]:
     ensure_model(model)
 st.caption(f"사용 모델: {model_name}")
+
+if "errors" not in st.session_state:
+    st.session_state.errors = []
+
+
+def log_error(msg: str) -> None:
+    st.session_state.errors.append(msg)
+    st.session_state.errors = st.session_state.errors[-3:]
+
+
+def reset_app() -> None:
+    for key in list(st.session_state.keys()):
+        if key != "errors":
+            del st.session_state[key]
+    st.rerun()
+
 
 
 uploaded_files = st.file_uploader(
@@ -139,7 +155,11 @@ if question:
             + question
         )
         with st.spinner("RAG 답변 생성 중..."):
-            completion = client.responses.create(model=model, input=prompt)
+            try:
+                completion = client.responses.create(model=model, input=prompt)
+            except BadRequestError as e:
+                log_error(str(e))
+                reset_app()
         rag_answer = completion.output_text
 
         st.text_area("RAG 답변", rag_answer, height=200)
@@ -147,8 +167,18 @@ if question:
         st.warning("먼저 PDF 파일을 업로드하세요.")
 
     with st.spinner("일반 답변 생성 중..."):
-        direct_completion = client.responses.create(model=model, input=question)
+        try:
+            direct_completion = client.responses.create(model=model, input=question)
+        except BadRequestError as e:
+            log_error(str(e))
+            reset_app()
     direct_answer = direct_completion.output_text
 
     st.text_area("일반 모델 답변", direct_answer, height=200)
+
+if st.session_state.errors:
+    st.markdown("---")
+    st.subheader("에러 메시지")
+    for err in st.session_state.errors[-3:]:
+        st.error(err)
 
