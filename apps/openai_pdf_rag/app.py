@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from fpdf import FPDF
 
-import numpy as np
 import streamlit as st
 from openai import OpenAI
 from PyPDF2 import PdfReader
