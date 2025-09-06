@@ -33,6 +33,7 @@ def _verify_model_files(path: str) -> bool:
 
 def ensure_model(repo_id: str) -> None:
     if os.path.isdir(repo_id) and _verify_model_files(repo_id):
+
         return
     try:
         from huggingface_hub import hf_hub_download, snapshot_download
@@ -71,6 +72,7 @@ def get_gpu_info() -> str:
     except Exception:
         return "GPU 없음"
 
+
 def load_api_key() -> str | None:
     """Read the OpenAI API key from a nocommit.txt file."""
     paths = [
@@ -104,7 +106,6 @@ st.caption(f"사용 모델: {model_name}")
 if "errors" not in st.session_state:
     st.session_state.errors = []
 
-
 def log_error(msg: str) -> None:
     st.session_state.errors.append(msg)
     st.session_state.errors = st.session_state.errors[-3:]
@@ -116,7 +117,6 @@ def reset_app() -> None:
             del st.session_state[key]
     st.rerun()
 
-
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
 )
@@ -124,8 +124,10 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
     for f in uploaded_files:
-        st.write(f"- {f.name}")
+        st.write(f"- {f.name} ({f.size / 1024:.1f} KB)")
 
 
 def read_pdf(file) -> str:
