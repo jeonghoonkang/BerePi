@@ -1,5 +1,6 @@
 
 import os
+import subprocess
 from typing import List
 
 import numpy as np
@@ -13,26 +14,64 @@ MODEL_OPTIONS = {
     "gpt-4o-mini": "gpt-4o-mini",
     "llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+    "gemma": "google/gemma-2b-it",
 }
 
 
+def _verify_model_files(path: str) -> bool:
+    config = os.path.join(path, "config.json")
+    if not os.path.isfile(config) or os.path.getsize(config) <= 0:
+        return False
+    weights = [f for f in os.listdir(path) if f.endswith((".bin", ".safetensors"))]
+    if not weights:
+        return False
+    for wf in weights:
+        if os.path.getsize(os.path.join(path, wf)) <= 0:
+            return False
+    return True
+
+
 def ensure_model(repo_id: str) -> None:
-    if os.path.isdir(repo_id):
+    if os.path.isdir(repo_id) and _verify_model_files(repo_id):
+
         return
     try:
         from huggingface_hub import hf_hub_download, snapshot_download
     except Exception:
         st.error("huggingface_hub 라이브러리가 필요합니다.")
         st.stop()
-    try:
-        hf_hub_download(repo_id=repo_id, filename="config.json", local_files_only=True)
-    except Exception:
-        if st.button(f"{repo_id} 다운로드"):
-            with st.spinner("모델 다운로드 중..."):
-                snapshot_download(repo_id=repo_id, local_dir=repo_id, resume_download=True)
+
+    def _download() -> None:
+        with st.spinner("모델 다운로드 중..."):
+            snapshot_download(repo_id=repo_id, local_dir=repo_id, resume_download=True)
+        if _verify_model_files(repo_id):
             st.success("다운로드 완료")
         else:
+            st.error("모델 파일 검증 실패")
             st.stop()
+
+    try:
+        hf_hub_download(repo_id=repo_id, filename="config.json", local_files_only=True)
+        if not _verify_model_files(repo_id):
+            _download()
+    except Exception:
+        if st.button(f"{repo_id} 다운로드"):
+            _download()
+        else:
+            st.stop()
+
+
+def get_gpu_info() -> str:
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            stderr=subprocess.DEVNULL,
+        )
+        gpus = [g for g in out.decode().strip().split("\n") if g]
+        return f"{len(gpus)}개 ({', '.join(gpus)})" if gpus else "GPU 없음"
+    except Exception:
+        return "GPU 없음"
+
 
 def load_api_key() -> str | None:
     """Read the OpenAI API key from a nocommit.txt file."""
@@ -56,16 +95,16 @@ client = OpenAI(api_key=api_key)
 
 st.set_page_config(page_title="PDF RAG Chat")
 st.title("📄 PDF RAG Chat")
+st.write(f"사용 가능한 GPU: {get_gpu_info()}")
 
 model_name = st.selectbox("모델 선택", list(MODEL_OPTIONS.keys()))
 model = MODEL_OPTIONS[model_name]
-if model_name in ["llama-3", "mistral"]:
+if model_name in ["llama-3", "mistral", "gemma"]:
     ensure_model(model)
 st.caption(f"사용 모델: {model_name}")
 
 if "errors" not in st.session_state:
     st.session_state.errors = []
-
 
 def log_error(msg: str) -> None:
     st.session_state.errors.append(msg)
@@ -77,8 +116,6 @@ def reset_app() -> None:
         if key != "errors":
             del st.session_state[key]
     st.rerun()
-
-
 
 uploaded_files = st.file_uploader(
     "PDF 파일을 업로드하세요", type="pdf", accept_multiple_files=True
