@@ -16,9 +16,7 @@ The script can also be used directly from the command line::
 
     python model_downloader.py --model gemma
 
-If authentication is required, place your Hugging Face token in
-``hf_token.txt`` (this directory or the repository root) or set the
-``HF_TOKEN`` environment variable.
+A Hugging Face token may be required for some models such as Llama.
 """
 from __future__ import annotations
 
@@ -27,35 +25,22 @@ import os
 from pathlib import Path
 from typing import Optional
 
+try:
+    from huggingface_hub import snapshot_download
+except ImportError as exc:  # pragma: no cover - handled at runtime
+    raise SystemExit(
+        "huggingface_hub package is required. Install with 'pip install huggingface_hub'."
+    ) from exc
+
 
 # Mapping of shorthand names to Hugging Face repositories.
 MODEL_REPOS = {
     "gemma": "google/gemma-2b",
     "gemma-7b": "google/gemma-7b",
-    "gemma-3-270m": "google/gemma-3-270m",
-    "gemma-3-4b-it": "google/gemma-3-4b-it",
     "llama": "meta-llama/Meta-Llama-3-8B",
     "llama-7b": "meta-llama/Llama-2-7b-hf",
-    "gpt-oss-120b": "openai/gpt-oss-120b",
-    "gpt-oss-20b": "openai/gpt-oss-20b",
-
     "qwen": "Qwen/Qwen-7B",
 }
-
-
-def _read_hf_token() -> Optional[str]:
-    """Retrieve Hugging Face token from file or environment."""
-    token = os.getenv("HF_TOKEN")
-    if token:
-        return token.strip()
-    token_paths = [
-        Path(__file__).resolve().parent / "hf_token.txt",
-        Path(__file__).resolve().parents[2] / "hf_token.txt",
-    ]
-    for path in token_paths:
-        if path.is_file():
-            return path.read_text().strip()
-    return None
 
 
 def download_model(model: str, base_dir: Optional[os.PathLike[str]] = None) -> Path:
@@ -78,19 +63,10 @@ def download_model(model: str, base_dir: Optional[os.PathLike[str]] = None) -> P
     target_dir = base / model
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError as exc:  # pragma: no cover - handled at runtime
-        raise SystemExit(
-            "huggingface_hub package is required. Install with 'pip install huggingface_hub'."
-        ) from exc
-
-    token = _read_hf_token()
     snapshot_download(
         repo_id=repo_id,
         local_dir=target_dir,
         local_dir_use_symlinks=False,
-        token=token,
     )
 
     return target_dir

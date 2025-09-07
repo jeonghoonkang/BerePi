@@ -28,11 +28,13 @@
 
 Use `model_downloader.py` to fetch and cache open-source models such as Gemma, Llama, Qwen, or OpenAI's GPT-OSS variants. Models are stored under `apps/deeplearning/models` and the function returns the path for reuse:
 
+
 ```
 python model_downloader.py --model gemma
 ```
 
 Supported shorthand names include `gemma-3-270m`, `gemma-3-4b-it`, `llama`, `llama-7b`, `qwen`, `gpt-oss-120b`, and `gpt-oss-20b`.
+
 
 Other applications can import `download_model` from `model_downloader` to obtain the local path.
 
