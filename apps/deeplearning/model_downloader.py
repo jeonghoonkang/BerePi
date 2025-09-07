@@ -37,8 +37,9 @@ MODEL_REPOS = {
     "llama": "meta-llama/Meta-Llama-3-8B",
     "llama-7b": "meta-llama/Llama-2-7b-hf",
     "gpt-oss-120b": "openai/gpt-oss-120b",
+    "openai/gpt-oss-120b": "openai/gpt-oss-120b",
     "gpt-oss-20b": "openai/gpt-oss-20b",
-
+    "openai/gpt-oss-20b": "openai/gpt-oss-20b",
     "qwen": "Qwen/Qwen-7B",
 }
 
@@ -98,7 +99,12 @@ def download_model(model: str, base_dir: Optional[os.PathLike[str]] = None) -> P
 
 def _cli() -> None:
     epilog_lines = ["Available models:"]
+    seen_repos = set()
     for name, repo in MODEL_REPOS.items():
+        if repo in seen_repos:
+            continue
+        seen_repos.add(repo)
+
         epilog_lines.append(f"  {name}: {repo}")
     parser = argparse.ArgumentParser(
         description="Download LLM models",
@@ -122,7 +128,12 @@ def _cli() -> None:
     )
     args = parser.parse_args()
     if args.list_models:
+        seen_repos = set()
         for name, repo in MODEL_REPOS.items():
+            if repo in seen_repos:
+                continue
+            seen_repos.add(repo)
+
             print(f"{name}: {repo}")
         return
     if not args.model:
