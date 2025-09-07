@@ -42,6 +42,7 @@ Supported shorthand names include `gemma-3-270m`, `gemma-3-4b-it`, `llama`, `lla
 You may also reference models by their full repo IDs, such as `openai/gpt-oss-120b`
 or `openai/gpt-oss-20b`.
 
+
 Other applications can import `download_model` from `model_downloader` to obtain the local path.
 
 If a model requires authentication, place your Hugging Face access token in a
