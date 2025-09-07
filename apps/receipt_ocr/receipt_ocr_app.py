@@ -296,6 +296,12 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
+    st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
+    for uf in uploaded_files:
+        st.write(f"- {uf.name} ({uf.size / 1024:.1f} KB)")
+
     new_receipts = process_receipts(uploaded_files)
     embed_receipts(new_receipts)
     if "receipts" in st.session_state:
