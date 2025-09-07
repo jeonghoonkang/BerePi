@@ -32,8 +32,13 @@ from typing import Optional
 MODEL_REPOS = {
     "gemma": "google/gemma-2b",
     "gemma-7b": "google/gemma-7b",
+    "gemma-3-270m": "google/gemma-3-270m",
+    "gemma-3-4b-it": "google/gemma-3-4b-it",
     "llama": "meta-llama/Meta-Llama-3-8B",
     "llama-7b": "meta-llama/Llama-2-7b-hf",
+    "gpt-oss-120b": "openai/gpt-oss-120b",
+    "gpt-oss-20b": "openai/gpt-oss-20b",
+
     "qwen": "Qwen/Qwen-7B",
 }
 
