@@ -97,10 +97,17 @@ def download_model(model: str, base_dir: Optional[os.PathLike[str]] = None) -> P
 
 
 def _cli() -> None:
-    parser = argparse.ArgumentParser(description="Download LLM models")
+    epilog_lines = ["Available models:"]
+    for name, repo in MODEL_REPOS.items():
+        epilog_lines.append(f"  {name}: {repo}")
+    parser = argparse.ArgumentParser(
+        description="Download LLM models",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="\n".join(epilog_lines),
+    )
     parser.add_argument(
         "--model",
-        required=True,
+
         help="Model name or Hugging Face repo_id (e.g., 'gemma' or 'google/gemma-7b').",
     )
     parser.add_argument(
@@ -108,7 +115,19 @@ def _cli() -> None:
         default=None,
         help="Base directory for storing models (defaults to 'apps/deeplearning/models').",
     )
+    parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="List supported model shorthands and exit.",
+    )
     args = parser.parse_args()
+    if args.list_models:
+        for name, repo in MODEL_REPOS.items():
+            print(f"{name}: {repo}")
+        return
+    if not args.model:
+        parser.error("--model is required unless --list-models is given")
+
     path = download_model(args.model, args.base_dir)
     print(f"Model downloaded to: {path}")
 
