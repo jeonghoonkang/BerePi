@@ -367,16 +367,16 @@ if question:
         with st.spinner("답변 생성 중..."):
             start_t = time.perf_counter()
             try:
-                resp = client.chat.completions.create(
+                resp = client.responses.create(
                     model=model,
-                    messages=[{"role": "user", "content": question}],
+                    input=question,
                 )
             except BadRequestError as e:
                 log_error(str(e))
                 reset_app()
 
             elapsed_default = time.perf_counter() - start_t
-            default_answer = resp.choices[0].message.content
+            default_answer = resp.output_text
             st.write(default_answer)
             st.write(f"⏱️ {elapsed_default:.2f}초")
 
@@ -411,16 +411,16 @@ if question:
                     )
                     start_pdf = time.perf_counter()
                     try:
-                        resp = client.chat.completions.create(
+                        resp = client.responses.create(
                             model=model,
-                            messages=[{"role": "user", "content": prompt}],
+                            input=prompt,
                         )
                     except BadRequestError as e:
                         log_error(str(e))
                         reset_app()
 
                     elapsed_pdf = time.perf_counter() - start_pdf
-                    pdf_answer = resp.choices[0].message.content
+                    pdf_answer = resp.output_text
                     st.write(pdf_answer)
                     st.write(f"⏱️ {elapsed_pdf:.2f}초")
 
