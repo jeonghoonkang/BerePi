@@ -25,6 +25,11 @@ def load_hf_token() -> str | None:
     token_paths = [
         os.path.join(os.path.dirname(__file__), "hf_token.txt"),
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "hf_token.txt"),
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "hf_token.txt",
+        ),
+
     ]
     for path in token_paths:
         if os.path.isfile(path):
@@ -107,7 +112,6 @@ def ensure_model(repo_id: str) -> None:
             "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
         )
         st.stop()
-
 
     except Exception:
         if st.button(f"{repo_id} 다운로드"):

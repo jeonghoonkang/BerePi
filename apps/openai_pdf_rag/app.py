@@ -27,6 +27,11 @@ def load_hf_token() -> str | None:
     token_paths = [
         os.path.join(os.path.dirname(__file__), "hf_token.txt"),
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "hf_token.txt"),
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "hf_token.txt",
+        ),
+
     ]
     for path in token_paths:
         if os.path.isfile(path):
