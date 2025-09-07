@@ -24,7 +24,7 @@
 - https://github.com/felixchenfy , https://github.com/felixchenfy/Realtime-Action-Recognition
 - https://github.com/eldar/pose-tensorflow
 
-## LLM model download
+## LLM model download from HF
 
 Use `download_model.py` to fetch and cache open-source models such as Gemma, Llama, Qwen, or OpenAI's GPT-OSS variants. Models are stored under `apps/deeplearning/models` and the function returns the path for reuse:
 
