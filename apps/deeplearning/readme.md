@@ -36,9 +36,11 @@ Run `--list-models` or check `--help` to see all supported shorthands:
 
 ```
 python model_downloader.py --list-models
+
 ```
 
 Supported shorthand names include `gemma-3-270m`, `gemma-3-4b-it`, `llama`, `llama-7b`, `qwen`, `gpt-oss-120b`, and `gpt-oss-20b`.
+
 
 Other applications can import `download_model` from `model_downloader` to obtain the local path.
 
