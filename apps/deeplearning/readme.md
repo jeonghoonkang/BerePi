@@ -33,3 +33,8 @@ python model_downloader.py --model gemma
 ```
 
 Other applications can import `download_model` from `model_downloader` to obtain the local path.
+
+If a model requires authentication, place your Hugging Face access token in a
+file named `hf_token.txt` (in this directory or the repository root) or set the
+`HF_TOKEN` environment variable. The downloader will read the token
+automatically when fetching models.
