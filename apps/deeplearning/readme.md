@@ -23,3 +23,18 @@
 - https://github.com/Guanghan/ROLO
 - https://github.com/felixchenfy , https://github.com/felixchenfy/Realtime-Action-Recognition
 - https://github.com/eldar/pose-tensorflow
+
+## LLM model download
+
+Use `model_downloader.py` to fetch and cache open-source models such as Gemma, Llama, or Qwen. Models are stored under `apps/deeplearning/models` and the function returns the path for reuse:
+
+```
+python model_downloader.py --model gemma
+```
+
+Other applications can import `download_model` from `model_downloader` to obtain the local path.
+
+If a model requires authentication, place your Hugging Face access token in a
+file named `hf_token.txt` (in this directory or the repository root) or set the
+`HF_TOKEN` environment variable. The downloader will read the token
+automatically when fetching models.
