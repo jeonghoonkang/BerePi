@@ -2,6 +2,7 @@ import os
 import io
 import subprocess
 import time
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from fpdf import FPDF
@@ -170,7 +171,9 @@ if "errors" not in st.session_state:
 
 
 def log_error(msg: str) -> None:
-    st.session_state.errors.append(msg)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.errors.append(f"[{timestamp}] {msg}")
+
     st.session_state.errors = st.session_state.errors[-3:]
 
 

@@ -2,6 +2,7 @@
 import os
 import subprocess
 from typing import List
+from datetime import datetime
 
 import numpy as np
 import streamlit as st
@@ -167,7 +168,8 @@ if "errors" not in st.session_state:
 
 
 def log_error(msg: str) -> None:
-    st.session_state.errors.append(msg)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.errors.append(f"[{timestamp}] {msg}")
     st.session_state.errors = st.session_state.errors[-3:]
 
 
