@@ -21,6 +21,7 @@ S2_TABLE            - Target table name
 S2_ID_FIELD         - Field name representing the identifier (default: "dev_id")
 S2_TIME_FIELD       - Field name representing the timestamp (default: "coll_dt")
 
+
 The table is expected to already exist in the database with columns matching
 those found in the CSV file.
 """
@@ -31,6 +32,7 @@ import csv
 import io
 import os
 import sys
+
 from dataclasses import dataclass
 from typing import Iterable, List, Tuple
 
@@ -38,6 +40,7 @@ from minio import Minio
 import pymysql
 
 csv.field_size_limit(min(sys.maxsize, 10 ** 7))
+
 @dataclass
 class MinioConfig:
     endpoint: str
@@ -62,6 +65,7 @@ class DBConfig:
 
 def read_csv_from_minio(cfg: MinioConfig) -> List[dict]:
     """Return sanitized rows from the CSV object stored in MinIO."""
+
     client = Minio(
         cfg.endpoint,
         access_key=cfg.access_key,
@@ -73,6 +77,7 @@ def read_csv_from_minio(cfg: MinioConfig) -> List[dict]:
         data = response.read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(data))
         return [sanitize_row(row) for row in reader]
+
     finally:
         response.close()
         response.release_conn()
@@ -81,6 +86,7 @@ def read_csv_from_minio(cfg: MinioConfig) -> List[dict]:
 def sanitize_row(row: dict) -> dict:
     """Convert empty strings to ``None`` so they become SQL NULL values."""
     return {k: (v if v != "" else None) for k, v in row.items()}
+
 
 
 def insert_rows(conn, table: str, rows: Iterable[dict]) -> None:
@@ -147,6 +153,7 @@ def main() -> None:  # pragma: no cover - convenience wrapper
         port=int(os.environ.get("S2_PORT", "3306")),
         id_field=os.environ.get("S2_ID_FIELD", "dev_id"),
         time_field=os.environ.get("S2_TIME_FIELD", "coll_dt"),
+
     )
 
     periods = load_csv_to_singlestore(minio_cfg, db_cfg)

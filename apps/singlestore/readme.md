@@ -11,3 +11,4 @@ Configuration is done via environment variables as documented in the script's
 module docstring. By default the script expects the identifier field to be
 `dev_id` and the timestamp field to be `coll_dt` as shown in the provided CSV
 header. Empty cells in the CSV are converted to SQL NULL values during upload.
+
