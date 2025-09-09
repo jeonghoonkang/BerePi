@@ -18,8 +18,9 @@ S2_USER             - Username for SingleStore
 S2_PASSWORD         - Password for SingleStore
 S2_DATABASE         - Target database name
 S2_TABLE            - Target table name
-S2_ID_FIELD         - Field name representing the identifier (default: "id")
-S2_TIME_FIELD       - Field name representing the timestamp (default: "timestamp")
+S2_ID_FIELD         - Field name representing the identifier (default: "dev_id")
+S2_TIME_FIELD       - Field name representing the timestamp (default: "coll_dt")
+
 
 The table is expected to already exist in the database with columns matching
 those found in the CSV file.
@@ -30,12 +31,15 @@ from __future__ import annotations
 import csv
 import io
 import os
+import sys
+
 from dataclasses import dataclass
 from typing import Iterable, List, Tuple
 
 from minio import Minio
 import pymysql
 
+csv.field_size_limit(min(sys.maxsize, 10 ** 7))
 
 @dataclass
 class MinioConfig:
@@ -55,12 +59,13 @@ class DBConfig:
     database: str
     table: str
     port: int = 3306
-    id_field: str = "id"
-    time_field: str = "timestamp"
+    id_field: str = "dev_id"
+    time_field: str = "coll_dt"
 
 
 def read_csv_from_minio(cfg: MinioConfig) -> List[dict]:
-    """Return rows from the CSV object stored in MinIO."""
+    """Return sanitized rows from the CSV object stored in MinIO."""
+
     client = Minio(
         cfg.endpoint,
         access_key=cfg.access_key,
@@ -71,10 +76,17 @@ def read_csv_from_minio(cfg: MinioConfig) -> List[dict]:
     try:
         data = response.read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(data))
-        return list(reader)
+        return [sanitize_row(row) for row in reader]
+
     finally:
         response.close()
         response.release_conn()
+
+
+def sanitize_row(row: dict) -> dict:
+    """Convert empty strings to ``None`` so they become SQL NULL values."""
+    return {k: (v if v != "" else None) for k, v in row.items()}
+
 
 
 def insert_rows(conn, table: str, rows: Iterable[dict]) -> None:
@@ -139,8 +151,9 @@ def main() -> None:  # pragma: no cover - convenience wrapper
         database=os.environ["S2_DATABASE"],
         table=os.environ["S2_TABLE"],
         port=int(os.environ.get("S2_PORT", "3306")),
-        id_field=os.environ.get("S2_ID_FIELD", "id"),
-        time_field=os.environ.get("S2_TIME_FIELD", "timestamp"),
+        id_field=os.environ.get("S2_ID_FIELD", "dev_id"),
+        time_field=os.environ.get("S2_TIME_FIELD", "coll_dt"),
+
     )
 
     periods = load_csv_to_singlestore(minio_cfg, db_cfg)

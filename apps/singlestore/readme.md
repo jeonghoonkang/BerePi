@@ -8,4 +8,7 @@ This module contains an example script `minio_to_singlestore.py` that:
    difference between the minimum and maximum timestamp values.
 
 Configuration is done via environment variables as documented in the script's
-module docstring.
+module docstring. By default the script expects the identifier field to be
+`dev_id` and the timestamp field to be `coll_dt` as shown in the provided CSV
+header. Empty cells in the CSV are converted to SQL NULL values during upload.
+
