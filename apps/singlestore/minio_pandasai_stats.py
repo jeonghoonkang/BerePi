@@ -10,6 +10,12 @@ Several ready-made analytics helpers are also provided, including seasonal and
 vehicle-type aggregations, per-trip distance summaries, simple state-of-charge
 usage over time, and speed-versus-power breakdowns.
 
+Beyond fetching a single object from MinIO, the script may also scan a local
+directory tree for CSV files, insert their contents into the database, and
+compare line, field, and ``dev_id`` counts with the resulting table to confirm
+successful ingestion.
+
+
 When configured with SingleStore credentials the CSV data is uploaded to the
 database and the processed object path is appended to ``processed_files.txt`` to
 avoid re-insertion on subsequent runs.  On startup the script also attempts to
@@ -46,6 +52,7 @@ The script requires the following environment variables:
 ``S2_PASSWORD``         – SingleStore password
 ``S2_DATABASE``         – Target database name
 ``S2_TABLE``            – Target table name
+``CSV_DIR``             – Root directory searched recursively for local CSV files (optional)
 ``PROCESSED_LOG``       – File tracking already-inserted MinIO objects
 ``DB_CONTAINER``        – Docker container name for the database service
 
@@ -163,6 +170,82 @@ def insert_dataframe_to_db(df: pd.DataFrame, cfg: DBConfig) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def count_db_entries(cfg: DBConfig, id_field: str) -> tuple[int, int, int]:
+    """Return total row count, unique ID count, and column count."""
+
+    try:
+        import pymysql
+    except Exception as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("pymysql is required for DB inspection") from exc
+
+    conn = pymysql.connect(
+        host=cfg.host,
+        user=cfg.user,
+        password=cfg.password,
+        database=cfg.database,
+        port=cfg.port,
+        cursorclass=pymysql.cursors.Cursor,
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) FROM {cfg.table}")
+            rows = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(DISTINCT {id_field}) FROM {cfg.table}")
+            ids = cur.fetchone()[0]
+            cur.execute(f"DESCRIBE {cfg.table}")
+            cols = len(cur.fetchall())
+        return rows, ids, cols
+    finally:
+        conn.close()
+
+
+def ingest_csv_directory(
+    root: Path, db_cfg: DBConfig, id_field: str, time_field: str
+) -> None:
+    """Insert all CSVs under ``root`` into the database with basic validation."""
+
+    if not root.exists():
+        return
+    for csv_path in root.rglob("*.csv"):
+        identifier = str(csv_path.resolve())
+        if was_file_processed(identifier):
+            continue
+        try:
+            df = pd.read_csv(csv_path)
+            if time_field in df.columns:
+                df[time_field] = pd.to_datetime(df[time_field])
+            line_count = len(df)
+            field_count = len(df.columns)
+            dev_id_count = df[id_field].nunique() if id_field in df.columns else 0
+            pre_rows, pre_ids, _ = count_db_entries(db_cfg, id_field)
+            insert_dataframe_to_db(df, db_cfg)
+            post_rows, post_ids, db_fields = count_db_entries(db_cfg, id_field)
+            inserted_rows = post_rows - pre_rows
+            inserted_ids = post_ids - pre_ids
+            mark_file_processed(identifier)
+            msg = (
+                f"{csv_path}: lines={line_count} ({inserted_rows} inserted), "
+                f"fields={field_count} ({db_fields} table), "
+                f"dev_ids={dev_id_count} ({inserted_ids} inserted)"
+            )
+            if inserted_rows != line_count or inserted_ids != dev_id_count or db_fields != field_count:
+                if st:
+                    st.warning(msg)
+                else:
+                    print(msg)
+            else:
+                if st:
+                    st.write(msg)
+                else:
+                    print(msg)
+        except Exception as exc:  # pragma: no cover - runtime failures
+            err = f"CSV ingestion failed for {csv_path}: {exc}"
+            if st:
+                st.warning(err)
+            else:
+                print(err)
 
 
 def read_csv_from_minio(cfg: MinioConfig, time_field: str) -> pd.DataFrame:
@@ -378,6 +461,11 @@ def main() -> None:  # pragma: no cover - entry point for streamlit
         table=os.environ.get("S2_TABLE", ""),
         port=int(os.environ.get("S2_PORT", "3306")),
     )
+
+    csv_dir = os.environ.get("CSV_DIR")
+    if csv_dir and db_cfg.host and db_cfg.table:
+        ingest_csv_directory(Path(csv_dir), db_cfg, id_field, time_field)
+
 
     df = read_csv_from_minio(cfg, time_field=time_field)
 
