@@ -15,6 +15,7 @@ database and the processed object path is appended to ``processed_files.txt`` to
 avoid re-insertion on subsequent runs.  On startup the script also attempts to
 start the configured database container so that the service is ready for use.
 
+
 It demonstrates how to compute statistics such as:
 
 * number of unique ``dev_id`` values
@@ -47,6 +48,7 @@ The script requires the following environment variables:
 ``S2_TABLE``            – Target table name
 ``PROCESSED_LOG``       – File tracking already-inserted MinIO objects
 ``DB_CONTAINER``        – Docker container name for the database service
+
 
 Running ``streamlit run minio_pandasai_stats.py`` will start a web interface
 that displays the statistics table and, when the user submits a prompt, shows
@@ -289,6 +291,7 @@ def speed_power_analysis(
     for col in (speed_field, power_field):
         if col not in df.columns:
             raise ValueError(f"{col} field not found")
+
 
     bins = [0, 20, 40, 60, 80, 100, 120, np.inf]
     labels = ["0-20", "20-40", "40-60", "60-80", "80-100", "100-120", "120+"]
