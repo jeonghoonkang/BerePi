@@ -15,10 +15,12 @@ directory tree for CSV files, insert their contents into the database, and
 compare line, field, and ``dev_id`` counts with the resulting table to confirm
 successful ingestion.
 
+
 When configured with SingleStore credentials the CSV data is uploaded to the
 database and the processed object path is appended to ``processed_files.txt`` to
 avoid re-insertion on subsequent runs.  On startup the script also attempts to
 start the configured database container so that the service is ready for use.
+
 
 It demonstrates how to compute statistics such as:
 
@@ -53,6 +55,7 @@ The script requires the following environment variables:
 ``CSV_DIR``             – Root directory searched recursively for local CSV files (optional)
 ``PROCESSED_LOG``       – File tracking already-inserted MinIO objects
 ``DB_CONTAINER``        – Docker container name for the database service
+
 
 Running ``streamlit run minio_pandasai_stats.py`` will start a web interface
 that displays the statistics table and, when the user submits a prompt, shows
@@ -372,6 +375,7 @@ def speed_power_analysis(
         if col not in df.columns:
             raise ValueError(f"{col} field not found")
 
+
     bins = [0, 20, 40, 60, 80, 100, 120, np.inf]
     labels = ["0-20", "20-40", "40-60", "60-80", "80-100", "100-120", "120+"]
     tmp = df.copy()
@@ -461,6 +465,7 @@ def main() -> None:  # pragma: no cover - entry point for streamlit
     csv_dir = os.environ.get("CSV_DIR")
     if csv_dir and db_cfg.host and db_cfg.table:
         ingest_csv_directory(Path(csv_dir), db_cfg, id_field, time_field)
+
 
     df = read_csv_from_minio(cfg, time_field=time_field)
 
