@@ -10,6 +10,12 @@ Several ready-made analytics helpers are also provided, including seasonal and
 vehicle-type aggregations, per-trip distance summaries, simple state-of-charge
 usage over time, and speed-versus-power breakdowns.
 
+When configured with SingleStore credentials the CSV data is uploaded to the
+database and the processed object path is appended to ``processed_files.txt`` to
+avoid re-insertion on subsequent runs.  On startup the script also attempts to
+start the configured database container so that the service is ready for use.
+
+
 It demonstrates how to compute statistics such as:
 
 * number of unique ``dev_id`` values
@@ -34,6 +40,15 @@ The script requires the following environment variables:
 ``SOC_FIELD``           – Column with state-of-charge values (optional)
 ``SPEED_FIELD``         – Column with speed readings (optional)
 ``POWER_FIELD``         – Column with power or energy usage (optional)
+``S2_HOST``             – SingleStore host for optional DB upload
+``S2_PORT``             – SingleStore port (optional)
+``S2_USER``             – SingleStore username
+``S2_PASSWORD``         – SingleStore password
+``S2_DATABASE``         – Target database name
+``S2_TABLE``            – Target table name
+``PROCESSED_LOG``       – File tracking already-inserted MinIO objects
+``DB_CONTAINER``        – Docker container name for the database service
+
 
 Running ``streamlit run minio_pandasai_stats.py`` will start a web interface
 that displays the statistics table and, when the user submits a prompt, shows
@@ -48,10 +63,15 @@ import io
 import os
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 
 import numpy as np
 import pandas as pd
 from minio import Minio
+
+PROCESSED_LOG = Path(
+    os.environ.get("PROCESSED_LOG", Path(__file__).with_name("processed_files.txt"))
+)
 
 try:  # pandas-ai and streamlit are optional so the module can compile without them
     import streamlit as st
@@ -71,6 +91,78 @@ class MinioConfig:
     bucket: str
     obj_name: str
     secure: bool = False
+
+
+@dataclass
+class DBConfig:
+    """Connection settings for the target database."""
+
+    host: str
+    user: str
+    password: str
+    database: str
+    table: str
+    port: int = 3306
+
+
+def start_db_container(name: str) -> None:
+    """Attempt to start the given Docker container.
+
+    Any errors are ignored so missing Docker setups do not break the app.
+    """
+
+    try:
+        subprocess.run(["docker", "start", name], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception:
+        pass
+
+
+def was_file_processed(identifier: str) -> bool:
+    """Return ``True`` if ``identifier`` is listed in ``PROCESSED_LOG``."""
+
+    if not PROCESSED_LOG.exists():
+        return False
+    return identifier in PROCESSED_LOG.read_text().splitlines()
+
+
+def mark_file_processed(identifier: str) -> None:
+    """Append ``identifier`` to ``PROCESSED_LOG``."""
+
+    PROCESSED_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with PROCESSED_LOG.open("a", encoding="utf-8") as fh:
+        fh.write(identifier + "\n")
+
+
+def insert_dataframe_to_db(df: pd.DataFrame, cfg: DBConfig) -> None:
+    """Insert the DataFrame rows into the configured database table."""
+
+    try:
+        import pymysql
+    except Exception as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("pymysql is required for DB insertion") from exc
+
+    rows = df.where(pd.notnull(df), None).to_dict("records")
+    if not rows:
+        return
+    conn = pymysql.connect(
+        host=cfg.host,
+        user=cfg.user,
+        password=cfg.password,
+        database=cfg.database,
+        port=cfg.port,
+        cursorclass=pymysql.cursors.Cursor,
+    )
+    try:
+        columns = list(rows[0].keys())
+        placeholders = ",".join(["%s"] * len(columns))
+        column_list = ",".join(columns)
+        sql = f"INSERT INTO {cfg.table} ({column_list}) VALUES ({placeholders})"
+        values = [tuple(row[col] for col in columns) for row in rows]
+        with conn.cursor() as cur:
+            cur.executemany(sql, values)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def read_csv_from_minio(cfg: MinioConfig, time_field: str) -> pd.DataFrame:
@@ -200,6 +292,7 @@ def speed_power_analysis(
         if col not in df.columns:
             raise ValueError(f"{col} field not found")
 
+
     bins = [0, 20, 40, 60, 80, 100, 120, np.inf]
     labels = ["0-20", "20-40", "40-60", "60-80", "80-100", "100-120", "120+"]
     tmp = df.copy()
@@ -257,6 +350,8 @@ def main() -> None:  # pragma: no cover - entry point for streamlit
     if st is None:
         raise RuntimeError("streamlit is required to run this script")
 
+    start_db_container(os.environ.get("DB_CONTAINER", "singlestore"))
+
     id_field = os.environ.get("ID_FIELD", "dev_id")
     time_field = os.environ.get("TIME_FIELD", "coll_dt")
     model_name = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
@@ -275,7 +370,25 @@ def main() -> None:  # pragma: no cover - entry point for streamlit
         secure=os.environ.get("MINIO_SECURE", "false").lower() == "true",
     )
 
+    db_cfg = DBConfig(
+        host=os.environ.get("S2_HOST", ""),
+        user=os.environ.get("S2_USER", ""),
+        password=os.environ.get("S2_PASSWORD", ""),
+        database=os.environ.get("S2_DATABASE", ""),
+        table=os.environ.get("S2_TABLE", ""),
+        port=int(os.environ.get("S2_PORT", "3306")),
+    )
+
     df = read_csv_from_minio(cfg, time_field=time_field)
+
+    processed_id = f"{cfg.bucket}/{cfg.obj_name}"
+    if db_cfg.host and db_cfg.table and not was_file_processed(processed_id):
+        try:
+            insert_dataframe_to_db(df, db_cfg)
+            mark_file_processed(processed_id)
+        except Exception as exc:  # pragma: no cover - runtime failures
+            st.warning(f"DB insert skipped: {exc}")
+
     stats = compute_stats(df, id_field=id_field, time_field=time_field)
 
     st.title("MinIO CSV statistics")
