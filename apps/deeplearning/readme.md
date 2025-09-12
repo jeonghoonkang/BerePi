@@ -51,3 +51,19 @@ If a model requires authentication, place your Hugging Face access token in a
 file named `hf_token.txt` (in this directory or the repository root) or set the
 `HF_TOKEN` environment variable. The downloader will read the token
 automatically when fetching models.
+
+## Quick Hugging Face test
+
+Use `hf_download_test.py` to fetch a popular model from the Hugging Face Hub and
+run a simple masked-word prediction. By default the script downloads
+`bert-base-uncased` and stores it under `apps/deeplearning/models`.
+
+```
+python hf_download_test.py
+```
+
+To try a smaller model like DistilBERT:
+
+```
+python hf_download_test.py --model distilbert-base-uncased
+```

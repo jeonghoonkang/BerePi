@@ -45,3 +45,4 @@ nocommit.ini
 nocommit/
 __pycache__/
 
+/apps/deeplearning/models/
