@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>LLM기반 QA 기술</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    textarea { width: 100%; }
+    pre { background: #f4f4f4; padding: 1em; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>LLM기반 QA 기술</h1>
+  <p>질문을 입력하면 LLM이 답변을 제공합니다.</p>
+  <textarea id="question" rows="4" placeholder="LLM에 질문을 입력하세요..."></textarea><br />
+  <button id="askBtn">질문하기</button>
+  <pre id="answer"></pre>
+  <script>
+    async function askLLM() {
+      const question = document.getElementById('question').value;
+      const apiKey = localStorage.getItem('openai_api_key');
+      if (!apiKey) {
+        alert('OpenAI API 키가 필요합니다. localStorage.openai_api_key 에 저장하세요.');
+        return;
+      }
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: question }]
+        })
+      });
+      const data = await res.json();
+      const answer = data?.choices?.[0]?.message?.content || '응답이 없습니다.';
+      document.getElementById('answer').textContent = answer;
+    }
+    document.getElementById('askBtn').addEventListener('click', askLLM);
+  </script>
+</body>
+</html>
