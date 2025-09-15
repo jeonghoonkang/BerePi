@@ -35,19 +35,28 @@ def list_csv_fields(
         progress.progress(100)
 
     results: List[Tuple[str, List[str]]] = []
-    for idx, name in enumerate(objs, 1):
-        response = client.get_object(bucket, name)
-        try:
-            df = pd.read_csv(response, nrows=0)
-            results.append((name, list(df.columns)))
-        finally:
-            response.close()
-            response.release_conn()
+    out_path = Path(__file__).resolve().parent / "scanned_dirs.txt"
+    written = set()
+    with open(out_path, "w", encoding="utf-8") as f:
+        for idx, name in enumerate(objs, 1):
+            directory = str(Path(name).parent)
+            if directory not in written:
+                f.write(f"{directory}\n")
+                written.add(directory)
 
-        if progress and total_files:
-            progress.progress(int(idx / total_files * 100))
-        if status:
-            status.text(f"{idx}/{total_files}")
+            response = client.get_object(bucket, name)
+            try:
+                df = pd.read_csv(response, nrows=0)
+                results.append((name, list(df.columns)))
+            finally:
+                response.close()
+                response.release_conn()
+
+            if progress and total_files:
+                progress.progress(int(idx / total_files * 100))
+            if status:
+                status.text(f"{idx}/{total_files}")
+
 
     return results
 
@@ -76,24 +85,33 @@ def field_stats(
 
     total_rows = 0
     missing = 0
-    for idx, name in enumerate(objs, 1):
-        response = client.get_object(bucket, name)
-        try:
-            try:
-                df = pd.read_csv(response, usecols=[field])
-            except ValueError:
-                # Field missing from this file; skip it
-                continue
-            total_rows += len(df)
-            missing += df[field].isna().sum()
-        finally:
-            response.close()
-            response.release_conn()
+    out_path = Path(__file__).resolve().parent / "scanned_dirs.txt"
+    written = set()
+    with open(out_path, "w", encoding="utf-8") as f:
+        for idx, name in enumerate(objs, 1):
+            directory = str(Path(name).parent)
+            if directory not in written:
+                f.write(f"{directory}\n")
+                written.add(directory)
 
-        if progress and total_files:
-            progress.progress(int(idx / total_files * 100))
-        if status:
-            status.text(f"{idx}/{total_files}")
+            response = client.get_object(bucket, name)
+            try:
+                try:
+                    df = pd.read_csv(response, usecols=[field])
+                except ValueError:
+                    # Field missing from this file; skip it
+                    continue
+                total_rows += len(df)
+                missing += df[field].isna().sum()
+            finally:
+                response.close()
+                response.release_conn()
+
+            if progress and total_files:
+                progress.progress(int(idx / total_files * 100))
+            if status:
+                status.text(f"{idx}/{total_files}")
+
 
     return total_rows, missing
 
