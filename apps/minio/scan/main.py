@@ -57,6 +57,7 @@ def list_csv_fields(
             if status:
                 status.text(f"{idx}/{total_files}")
 
+
     return results
 
 
@@ -110,6 +111,7 @@ def field_stats(
                 progress.progress(int(idx / total_files * 100))
             if status:
                 status.text(f"{idx}/{total_files}")
+
 
     return total_rows, missing
 
