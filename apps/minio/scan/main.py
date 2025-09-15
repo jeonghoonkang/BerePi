@@ -57,6 +57,7 @@ def list_csv_fields(
             if status:
                 status.text(f"{idx}/{total_files}")
 
+
     return results
 
 
@@ -111,6 +112,7 @@ def field_stats(
             if status:
                 status.text(f"{idx}/{total_files}")
 
+
     return total_rows, missing
 
 
@@ -145,11 +147,13 @@ if config:
     )
     st.write(conn_msg)
     print(conn_msg)
+
     client = get_client(
         config["endpoint"],
         config["access_key"],
         config["secret_key"],
         secure,
+
     )
 
 fields_tab, stats_tab = st.tabs(["List fields", "Field stats"])
