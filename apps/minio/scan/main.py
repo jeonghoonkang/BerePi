@@ -140,11 +140,20 @@ st.title("MinIO CSV scanner")
 config = load_config()
 client = None
 if config:
+    secure = bool(config.get("secure", False))
+    conn_msg = (
+        f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
+        f"(secure={secure})"
+    )
+    st.write(conn_msg)
+    print(conn_msg)
+
     client = get_client(
         config["endpoint"],
         config["access_key"],
         config["secret_key"],
-        bool(config.get("secure", False)),
+        secure,
+
     )
 
 fields_tab, stats_tab = st.tabs(["List fields", "Field stats"])
