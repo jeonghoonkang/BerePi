@@ -1,3 +1,4 @@
+import io
 import json
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -114,6 +115,51 @@ def field_stats(
     return total_rows, missing
 
 
+def copy_csv_without_field(
+    client: Minio,
+    src_bucket: str,
+    src_object: str,
+    field: str,
+    dest_object: str,
+    dest_bucket: Optional[str] = None,
+) -> Tuple[List[str], List[str]]:
+    """Copy ``src_object`` to ``dest_object`` without ``field``.
+
+    Returns the original and resulting field lists for confirmation.
+    """
+
+    if not dest_bucket:
+        dest_bucket = src_bucket
+
+    response = client.get_object(src_bucket, src_object)
+    try:
+        df = pd.read_csv(response)
+    finally:
+        response.close()
+        response.release_conn()
+
+    original_fields = list(df.columns)
+    if field not in df.columns:
+        raise ValueError(
+            f"Field '{field}' not found in {src_bucket}/{src_object}."
+        )
+
+    df = df.drop(columns=[field])
+    csv_data = df.to_csv(index=False)
+    data_bytes = csv_data.encode("utf-8")
+    data_stream = io.BytesIO(data_bytes)
+
+    client.put_object(
+        dest_bucket,
+        dest_object,
+        data_stream,
+        length=len(data_bytes),
+        content_type="text/csv",
+    )
+
+    return original_fields, list(df.columns)
+
+
 def load_config() -> dict:
     """Load connection settings from nocommit_minio.json.
 
@@ -167,7 +213,9 @@ if config:
         secure,
     )
 
-fields_tab, stats_tab = st.tabs(["List fields", "Field stats"])
+fields_tab, stats_tab, modify_tab = st.tabs(
+    ["List fields", "Field stats", "Copy without field"]
+)
 
 with fields_tab:
     bucket1 = st.text_input("Bucket", key="bucket1")
@@ -194,3 +242,46 @@ with stats_tab:
         st.write(f"Missing values: {missing}")
         if total:
             st.write(f"Missing ratio: {missing / total:.2%}")
+
+with modify_tab:
+    bucket3 = st.text_input("Source bucket", key="bucket3")
+    object_path = st.text_input("CSV object path", key="object_path")
+    field_to_remove = st.text_input("Field to remove", key="field_to_remove")
+    dest_bucket = st.text_input(
+        "Destination bucket (optional)", key="dest_bucket"
+    )
+    dest_object = st.text_input("Destination object name", key="dest_object")
+    if st.button("Copy CSV without field", key="copy_btn") and client:
+        if not bucket3 or not object_path or not field_to_remove or not dest_object:
+            st.error(
+                "Please provide bucket, object path, field, and destination object name."
+            )
+        else:
+            try:
+                original_fields, remaining_fields = copy_csv_without_field(
+                    client,
+                    bucket3,
+                    object_path,
+                    field_to_remove,
+                    dest_object,
+                    dest_bucket or None,
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+            except Exception as exc:  # pylint: disable=broad-except
+                st.error(f"Failed to copy object: {exc}")
+            else:
+                target_bucket = dest_bucket or bucket3
+                st.success(
+                    f"Copied to {target_bucket}/{dest_object} with field '{field_to_remove}' removed."
+                )
+                st.write("Original fields:")
+                st.write(", ".join(original_fields))
+                st.write("Remaining fields:")
+                st.write(", ".join(remaining_fields))
+                print(
+                    "Copied",
+                    f"{bucket3}/{object_path} -> {target_bucket}/{dest_object}",
+                    f"without field '{field_to_remove}'",
+                )
+
