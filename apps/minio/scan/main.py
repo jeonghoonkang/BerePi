@@ -284,3 +284,4 @@ with modify_tab:
                     f"{bucket3}/{object_path} -> {target_bucket}/{dest_object}",
                     f"without field '{field_to_remove}'",
                 )
+
