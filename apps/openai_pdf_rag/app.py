@@ -4,14 +4,130 @@ import os
 import io
 import subprocess
 import time
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from fpdf import FPDF
 
-import numpy as np
 import streamlit as st
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from PyPDF2 import PdfReader
+
+
+MODEL_OPTIONS = {
+    "gpt-3.5-turbo": "gpt-3.5-turbo",
+    "gpt-4o-mini": "gpt-4o-mini",
+    "llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
+    "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+    "gemma": "google/gemma-2b-it",
+}
+
+
+def load_hf_token() -> str | None:
+    token = os.getenv("HF_TOKEN")
+    if token:
+        return token.strip()
+    token_paths = [
+        os.path.join(os.path.dirname(__file__), "hf_token.txt"),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "hf_token.txt"),
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "hf_token.txt",
+        ),
+
+    ]
+    for path in token_paths:
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    return None
+
+
+def _verify_model_files(path: str) -> bool:
+    config = os.path.join(path, "config.json")
+    if not os.path.isfile(config) or os.path.getsize(config) <= 0:
+        return False
+    weight_files = [
+        f
+        for f in os.listdir(path)
+        if f.endswith((".bin", ".safetensors"))
+    ]
+    if not weight_files:
+        return False
+    for wf in weight_files:
+        if os.path.getsize(os.path.join(path, wf)) <= 0:
+            return False
+    return True
+
+
+def ensure_model(repo_id: str) -> None:
+    """Ensure that an OSS model is downloaded and valid before use."""
+    if os.path.isdir(repo_id) and _verify_model_files(repo_id):
+        return
+    try:
+        from huggingface_hub import hf_hub_download, snapshot_download, login
+        from huggingface_hub.utils import GatedRepoError
+
+    except Exception:
+        st.error("huggingface_hub 라이브러리가 필요합니다.")
+        st.stop()
+
+    token = load_hf_token()
+    if token:
+        try:
+            login(token=token)
+        except Exception:
+            st.error("Hugging Face 로그인 실패")
+            st.stop()
+
+    def _download() -> None:
+        with st.spinner("모델 다운로드 중..."):
+            try:
+                snapshot_download(
+                    repo_id=repo_id,
+                    local_dir=repo_id,
+                    force_download=True,
+
+                    token=token,
+                )
+            except GatedRepoError:
+                st.error(
+                    "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
+                )
+                st.stop()
+            except ValueError as e:
+                st.error(f"모델 다운로드 실패: {e}")
+                st.stop()
+            except Exception as e:
+                st.error(f"모델 다운로드 중 오류 발생: {e}")
+                st.stop()
+
+        if _verify_model_files(repo_id):
+            st.success("다운로드 완료")
+        else:
+            st.error("모델 파일 검증 실패")
+            st.stop()
+
+    try:
+        hf_hub_download(
+            repo_id=repo_id,
+            filename="config.json",
+            local_files_only=True,
+            token=token,
+        )
+        if not _verify_model_files(repo_id):
+            _download()
+    except GatedRepoError:
+        st.error(
+            "허깅페이스 토큰이 필요합니다. HF_TOKEN 환경변수 또는 hf_token.txt 파일을 설정하세요."
+        )
+        st.stop()
+    except Exception:
+        if st.button(f"{repo_id} 다운로드"):
+            _download()
+
+        else:
+            st.stop()
 
 
 def get_gpu_info() -> str:
@@ -20,9 +136,8 @@ def get_gpu_info() -> str:
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             stderr=subprocess.DEVNULL,
         )
-        gpus = out.decode().strip().split("\n")
-        gpus = [g for g in gpus if g]
-        return ", ".join(gpus) if gpus else "GPU 없음"
+        gpus = [g for g in out.decode().strip().split("\n") if g]
+        return f"{len(gpus)}개 ({', '.join(gpus)})" if gpus else "GPU 없음"
     except Exception:
         return "GPU 없음"
       
@@ -43,7 +158,7 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-st.set_page_config(page_title="PDF RAG Chat")
+st.set_page_config(page_title="PDF RAG System")
 st.title("📄 PDF 기반 Q&A")
 st.write(f"사용 가능한 GPU: {get_gpu_info()}")
 
@@ -63,6 +178,7 @@ embedding_model_options = [
 selected_embedding_model = st.selectbox("임베딩 모델 선택", embedding_model_options, index=0)
 st.write(f"임베딩 모델: {selected_embedding_model}")
 
+
 if "docs" not in st.session_state:
     st.session_state.docs = None
     st.session_state.embs = None
@@ -70,6 +186,81 @@ if "docs" not in st.session_state:
 
 if "history" not in st.session_state:
     st.session_state.history = []
+
+
+def cache_paths(filename: str):
+    base = os.path.splitext(filename)[0]
+    return {
+        "pdf": os.path.join(DATA_DIR, filename),
+        "txt": os.path.join(DATA_DIR, base + ".txt"),
+        "npz": os.path.join(DATA_DIR, base + ".npz"),
+        "base": base,
+    }
+
+
+def load_cached_data():
+    """Load cached PDFs and embeddings into session_state."""
+    st.session_state.docs = []
+    st.session_state.embs = []
+    st.session_state.pdf_text = ""
+    st.session_state.cached_files = []
+    for fname in sorted(os.listdir(DATA_DIR)):
+        if not fname.endswith(".npz"):
+            continue
+        base = os.path.splitext(fname)[0]
+        paths = cache_paths(base + ".pdf")
+        data = np.load(paths["npz"], allow_pickle=True)
+        chunks = data["chunks"].tolist()
+        embs = data["embeddings"]
+        st.session_state.docs.extend(chunks)
+        st.session_state.embs.extend(embs)
+        txt_path = paths["txt"]
+        if os.path.exists(txt_path):
+            with open(txt_path, "r", encoding="utf-8") as f:
+                st.session_state.pdf_text += f.read() + "\n"
+        st.session_state.cached_files.append(base)
+
+
+def save_pdf_and_embeddings(uploaded_file):
+    paths = cache_paths(uploaded_file.name)
+    if os.path.exists(paths["npz"]):
+        return
+    with open(paths["pdf"], "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    text = read_pdf(paths["pdf"])
+    with open(paths["txt"], "w", encoding="utf-8") as f:
+        f.write(text)
+    chunks = chunk_text(text)
+    embs = []
+    for chunk in chunks:
+        resp = client.embeddings.create(model="text-embedding-3-small", input=[chunk])
+        embs.append(np.array(resp.data[0].embedding))
+    np.savez(paths["npz"], chunks=np.array(chunks, dtype=object), embeddings=np.array(embs))
+
+
+def refresh_cache(selected_files):
+    for name in selected_files:
+        base = os.path.splitext(name)[0]
+        paths = cache_paths(name)
+        if os.path.exists(paths["pdf"]):
+            text = read_pdf(paths["pdf"])
+            with open(paths["txt"], "w", encoding="utf-8") as f:
+                f.write(text)
+            chunks = chunk_text(text)
+            embs = []
+            for chunk in chunks:
+                resp = client.embeddings.create(
+                    model="text-embedding-3-small", input=[chunk]
+                )
+                embs.append(np.array(resp.data[0].embedding))
+            np.savez(
+                paths["npz"],
+                chunks=np.array(chunks, dtype=object),
+                embeddings=np.array(embs),
+            )
+
+
+load_cached_data()
 
 
 def read_pdf(file) -> str:
@@ -100,6 +291,12 @@ uploaded_files = st.file_uploader(
 mode = st.radio("답변 모드", ["기본", "PDF 사용"])
 
 if uploaded_files:
+    st.subheader("업로드된 파일")
+    total_size = sum(f.size for f in uploaded_files)
+    st.write(f"총 {len(uploaded_files)}개 파일, {total_size / 1024:.1f} KB")
+    for uf in uploaded_files:
+        st.write(f"- {uf.name} ({uf.size / 1024:.1f} KB)")
+
     texts = []
     all_chunks = []
     for uf in uploaded_files:
@@ -116,7 +313,29 @@ if uploaded_files:
                 input=[chunk],
             )
             st.session_state.embs.append(np.array(resp.data[0].embedding))
+
     st.success("문서 로딩 완료")
+
+if st.session_state.get("cached_files"):
+    st.subheader("캐시된 PDF")
+    options = [f + ".pdf" for f in st.session_state.cached_files]
+    selected = st.multiselect("캐시 파일 선택", options)
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("선택 삭제") and selected:
+            for name in selected:
+                paths = cache_paths(name)
+                for ext in ("pdf", "txt", "npz"):
+                    p = paths[ext]
+                    if os.path.exists(p):
+                        os.remove(p)
+            load_cached_data()
+            st.success("삭제 완료")
+    with c2:
+        if st.button("선택 새로고침") and selected:
+            refresh_cache(selected)
+            load_cached_data()
+            st.success("새로고침 완료")
 
 st.markdown("---")
 if st.session_state.history:
@@ -146,8 +365,9 @@ if question:
                 model=selected_model,
                 messages=[{"role": "user", "content": question}],
             )
+
             elapsed_default = time.perf_counter() - start_t
-            default_answer = resp.choices[0].message.content
+            default_answer = resp.output_text
             st.write(default_answer)
             st.write(f"⏱️ {elapsed_default:.2f}초")
 
@@ -181,13 +401,22 @@ if question:
                         + question
                     )
                     start_pdf = time.perf_counter()
+                    try:
+                        resp = client.responses.create(
+                            model=model,
+                            input=prompt,
+                        )
+                    except BadRequestError as e:
+                        log_error(str(e))
+                        reset_app()
 
                     resp = client.chat.completions.create(
                         model=selected_model,
                         messages=[{"role": "user", "content": prompt}],
                     )
+
                     elapsed_pdf = time.perf_counter() - start_pdf
-                    pdf_answer = resp.choices[0].message.content
+                    pdf_answer = resp.output_text
                     st.write(pdf_answer)
                     st.write(f"⏱️ {elapsed_pdf:.2f}초")
 
@@ -244,3 +473,4 @@ if st.session_state.history:
                 file_name="qa_history.pdf",
                 mime="application/pdf",
             )
+
