@@ -1,12 +1,44 @@
+import importlib.util
 import io
 import json
+import subprocess
+import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+
+
+def ensure_packages(packages: Dict[str, str]) -> List[str]:
+    """Install any packages that are missing locally."""
+
+    missing = [
+        package
+        for module, package in packages.items()
+        if importlib.util.find_spec(module) is None
+    ]
+    if missing:
+        print("Installing required packages:", ", ".join(missing))
+        subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+    return missing
+
+
+REQUIRED_PACKAGES = {
+    "pandas": "pandas",
+    "streamlit": "streamlit",
+    "minio": "minio",
+}
+
+
+INSTALLED_PACKAGES = ensure_packages(REQUIRED_PACKAGES)
+
 
 import pandas as pd
 import streamlit as st
 from minio import Minio
 from streamlit.delta_generator import DeltaGenerator
+
+VENV_PATH_DISPLAY = "~/devel_opemnt/venv/bin"
+print(f"Virtual environment path: {VENV_PATH_DISPLAY}")
+
 
 
 def get_client(endpoint: str, access_key: str, secret_key: str, secure: bool) -> Minio:
@@ -169,32 +201,47 @@ def load_config() -> dict:
     """
 
     cfg_path = Path(__file__).resolve().parents[2] / "nocommit_minio.json"
-    try:
-        with open(cfg_path) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        msg = f"Configuration file not found: {cfg_path}"
+    required_fields = {
+        "endpoint": "your-minio-endpoint:port",
+        "access_key": "your-access-key",
+        "secret_key": "your-secret-key",
+        "secure": False,
+    }
+
+    if not cfg_path.exists():
+        cfg_path.write_text(json.dumps(required_fields, indent=4), encoding="utf-8")
+        msg = (
+            f"Configuration file not found. Created template configuration at {cfg_path}"
+        )
         st.error(msg)
-        required_fields = {
-            "endpoint": "your-minio-endpoint:port",
-            "access_key": "your-access-key",
-            "secret_key": "your-secret-key",
-            "secure": False,
-        }
         st.write(
-            "Create the file with the following JSON structure (the secure field is"
-            " optional; set it to true if your deployment uses HTTPS):"
+            "Update the following values in the generated file (set secure to true if"
+            " your deployment uses HTTPS):"
+
         )
         st.code(json.dumps(required_fields, indent=4), language="json")
         print(msg)
         print("Required configuration fields:")
         print(json.dumps(required_fields, indent=4))
+        return {}
+
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            return json.load(f)
+
     except json.JSONDecodeError as e:
         st.error(f"Invalid JSON in {cfg_path}: {e}")
     return {}
 
 
 st.title("MinIO CSV scanner")
+st.write(f"Virtual environment path: {VENV_PATH_DISPLAY}")
+
+if INSTALLED_PACKAGES:
+    st.success(
+        "Installed missing packages: " + ", ".join(sorted(set(INSTALLED_PACKAGES)))
+    )
+
 
 config = load_config()
 client = None
