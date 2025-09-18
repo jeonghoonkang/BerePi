@@ -1,3 +1,5 @@
+#Author : JeonghoonKang https://github.com/jeonghoonkang
+
 import os
 import io
 import subprocess
@@ -159,29 +161,22 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 st.set_page_config(page_title="PDF RAG System")
 st.title("📄 PDF 기반 Q&A")
 st.write(f"사용 가능한 GPU: {get_gpu_info()}")
-model_name = st.selectbox("모델 선택", list(MODEL_OPTIONS.keys()))
-model = MODEL_OPTIONS[model_name]
-if model_name in ["llama-3", "mistral", "gemma"]:
 
-    ensure_model(model)
-st.write(f"사용 모델: {model_name}")
+# 모델 선택 드롭다운 (요청: oss 사용)
+model_options = [
+    "gpt-3.5-turbo",
+    "oss",
+]
+selected_model = st.selectbox("모델 선택", model_options, index=0)
+st.write(f"사용 모델: {selected_model}")
 
-if "errors" not in st.session_state:
-    st.session_state.errors = []
-
-
-def log_error(msg: str) -> None:
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state.errors.append(f"[{timestamp}] {msg}")
-
-    st.session_state.errors = st.session_state.errors[-3:]
-
-
-def reset_app() -> None:
-    for key in list(st.session_state.keys()):
-        if key != "errors":
-            del st.session_state[key]
-    st.rerun()
+# 임베딩 모델 선택 드롭다운
+embedding_model_options = [
+    "text-embedding-3-small",
+    "text-embedding-3-large",
+]
+selected_embedding_model = st.selectbox("임베딩 모델 선택", embedding_model_options, index=0)
+st.write(f"임베딩 모델: {selected_embedding_model}")
 
 
 if "docs" not in st.session_state:
@@ -314,7 +309,7 @@ if uploaded_files:
     with st.spinner("임베딩 생성 중..."):
         for chunk in st.session_state.docs:
             resp = client.embeddings.create(
-                model="text-embedding-3-small",
+                model=selected_embedding_model,
                 input=[chunk],
             )
             st.session_state.embs.append(np.array(resp.data[0].embedding))
@@ -366,14 +361,10 @@ if question:
         st.subheader("1. 기본 답변")
         with st.spinner("답변 생성 중..."):
             start_t = time.perf_counter()
-            try:
-                resp = client.responses.create(
-                    model=model,
-                    input=question,
-                )
-            except BadRequestError as e:
-                log_error(str(e))
-                reset_app()
+            resp = client.chat.completions.create(
+                model=selected_model,
+                messages=[{"role": "user", "content": question}],
+            )
 
             elapsed_default = time.perf_counter() - start_t
             default_answer = resp.output_text
@@ -389,7 +380,7 @@ if question:
                 with st.spinner("답변 생성 중..."):
                     q_emb = np.array(
                         client.embeddings.create(
-                            model="text-embedding-3-small", input=[question]
+                            model=selected_embedding_model, input=[question]
                         ).data[0].embedding
                     )
                     sims = [
@@ -419,6 +410,11 @@ if question:
                         log_error(str(e))
                         reset_app()
 
+                    resp = client.chat.completions.create(
+                        model=selected_model,
+                        messages=[{"role": "user", "content": prompt}],
+                    )
+
                     elapsed_pdf = time.perf_counter() - start_pdf
                     pdf_answer = resp.output_text
                     st.write(pdf_answer)
@@ -436,6 +432,8 @@ if question:
         "question": question,
         "answer": default_answer,
         "elapsed": elapsed_default,
+        "model": selected_model,
+        "embedding_model": selected_embedding_model,
     }
     if pdf_answer:
         entry["pdf_answer"] = pdf_answer
@@ -476,8 +474,3 @@ if st.session_state.history:
                 mime="application/pdf",
             )
 
-if st.session_state.errors:
-    st.markdown("---")
-    st.subheader("에러 메시지")
-    for err in st.session_state.errors[-3:]:
-        st.error(err)
