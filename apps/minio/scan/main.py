@@ -195,12 +195,13 @@ def copy_csv_without_field(
 def load_config() -> dict:
     """Load connection settings from nocommit_minio.json.
 
-    The configuration file is expected at the repository root and should
-    contain ``endpoint``, ``access_key`` and ``secret_key`` keys. ``secure``
-    is optional and defaults to ``False``.
+    The configuration file is stored alongside this module in
+    ``apps/minio/scan`` and should contain ``endpoint``, ``access_key`` and
+    ``secret_key`` keys. ``secure`` is optional and defaults to ``False``.
     """
 
-    cfg_path = Path(__file__).resolve().parents[2] / "nocommit_minio.json"
+    cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
+
     required_fields = {
         "endpoint": "your-minio-endpoint:port",
         "access_key": "your-access-key",
