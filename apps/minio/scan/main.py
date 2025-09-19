@@ -30,6 +30,7 @@ REQUIRED_PACKAGES = {
 
 INSTALLED_PACKAGES = ensure_packages(REQUIRED_PACKAGES)
 
+
 import pandas as pd
 import streamlit as st
 from minio import Minio
@@ -37,6 +38,7 @@ from streamlit.delta_generator import DeltaGenerator
 
 VENV_PATH_DISPLAY = "~/devel_opemnt/venv/bin"
 print(f"Virtual environment path: {VENV_PATH_DISPLAY}")
+
 
 
 def get_client(endpoint: str, access_key: str, secret_key: str, secure: bool) -> Minio:
@@ -199,6 +201,7 @@ def load_config() -> dict:
     """
 
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
+
     required_fields = {
         "endpoint": "your-minio-endpoint:port",
         "access_key": "your-access-key",
@@ -215,6 +218,7 @@ def load_config() -> dict:
         st.write(
             "Update the following values in the generated file (set secure to true if"
             " your deployment uses HTTPS):"
+
         )
         st.code(json.dumps(required_fields, indent=4), language="json")
         print(msg)
@@ -225,6 +229,7 @@ def load_config() -> dict:
     try:
         with open(cfg_path, encoding="utf-8") as f:
             return json.load(f)
+
     except json.JSONDecodeError as e:
         st.error(f"Invalid JSON in {cfg_path}: {e}")
     return {}
@@ -237,6 +242,7 @@ if INSTALLED_PACKAGES:
     st.success(
         "Installed missing packages: " + ", ".join(sorted(set(INSTALLED_PACKAGES)))
     )
+
 
 config = load_config()
 client = None
@@ -326,3 +332,4 @@ with modify_tab:
                     f"{bucket3}/{object_path} -> {target_bucket}/{dest_object}",
                     f"without field '{field_to_remove}'",
                 )
+
