@@ -1,12 +1,12 @@
 import argparse
-
 import importlib.util
 import io
 import json
+import ssl as ssl_lib
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def ensure_packages(packages: Dict[str, str]) -> List[str]:
@@ -27,6 +27,8 @@ REQUIRED_PACKAGES = {
     "pandas": "pandas",
     "streamlit": "streamlit",
     "minio": "minio",
+    "urllib3": "urllib3",
+
 }
 
 
@@ -34,6 +36,7 @@ INSTALLED_PACKAGES = ensure_packages(REQUIRED_PACKAGES)
 
 import pandas as pd  # noqa: E402  # pylint: disable=wrong-import-position
 import streamlit as st  # noqa: E402  # pylint: disable=wrong-import-position
+import urllib3  # noqa: E402  # pylint: disable=wrong-import-position
 from minio import Minio  # noqa: E402  # pylint: disable=wrong-import-position
 from streamlit.delta_generator import DeltaGenerator  # noqa: E402  # pylint: disable=wrong-import-position
 
@@ -55,10 +58,109 @@ def running_in_streamlit() -> bool:
         return False
 
 
-def get_client(endpoint: str, access_key: str, secret_key: str, secure: bool) -> Minio:
+def parse_bool(value: Any, default: bool = False) -> bool:
+    """Convert a configuration value into a boolean."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off"}:
+            return False
+    return default
+
+
+def _normalize_path(value: Any) -> Optional[str]:
+    """Return a trimmed path string or ``None``."""
+
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    return None
+
+
+def resolve_ssl_options(
+    config: dict,
+) -> Tuple[bool, Dict[str, Any], Optional[urllib3.PoolManager], bool]:
+    """Normalize SSL options and prepare an optional HTTP client."""
+
+    secure = parse_bool(config.get("secure"), False)
+    ssl_config: Dict[str, Any] = {
+        "enabled": False,
+        "cert_check": True,
+        "ca_file": None,
+        "cert_file": None,
+        "key_file": None,
+    }
+
+    raw_ssl = config.get("ssl")
+    if isinstance(raw_ssl, dict):
+        ssl_config["enabled"] = parse_bool(raw_ssl.get("enabled"), False)
+        ssl_config["cert_check"] = parse_bool(raw_ssl.get("cert_check"), True)
+        ssl_config["ca_file"] = _normalize_path(raw_ssl.get("ca_file"))
+        ssl_config["cert_file"] = _normalize_path(raw_ssl.get("cert_file"))
+        ssl_config["key_file"] = _normalize_path(raw_ssl.get("key_file"))
+
+    has_custom_ssl_material = any(
+        ssl_config[name] for name in ("ca_file", "cert_file", "key_file")
+    )
+    if has_custom_ssl_material and not ssl_config["enabled"]:
+        ssl_config["enabled"] = True
+
+    secure = secure or ssl_config["enabled"]
+    cert_check = ssl_config["cert_check"]
+    http_client: Optional[urllib3.PoolManager] = None
+    if ssl_config["enabled"] and has_custom_ssl_material:
+        pool_kwargs: Dict[str, Any] = {
+            "cert_reqs": (
+                ssl_lib.CERT_REQUIRED if cert_check else ssl_lib.CERT_NONE
+            )
+        }
+        if ssl_config["ca_file"]:
+            pool_kwargs["ca_certs"] = ssl_config["ca_file"]
+        if ssl_config["cert_file"]:
+            pool_kwargs["cert_file"] = ssl_config["cert_file"]
+        if ssl_config["key_file"]:
+            pool_kwargs["key_file"] = ssl_config["key_file"]
+        http_client = urllib3.PoolManager(**pool_kwargs)
+
+    return secure, ssl_config, http_client, cert_check
+
+
+def format_ssl_display(ssl_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a user-friendly representation of SSL settings."""
+
+    return {
+        "enabled": ssl_config.get("enabled", False),
+        "cert_check": ssl_config.get("cert_check", True),
+        "ca_file": ssl_config.get("ca_file") or "(system default)",
+        "cert_file": ssl_config.get("cert_file") or "(not set)",
+        "key_file": ssl_config.get("key_file") or "(not set)",
+    }
+
+
+def get_client(
+    endpoint: str,
+    access_key: str,
+    secret_key: str,
+    secure: bool,
+    *,
+    http_client: Optional[urllib3.PoolManager] = None,
+    cert_check: bool = True,
+) -> Minio:
     """Return a MinIO client instance."""
 
-    return Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+    return Minio(
+        endpoint,
+        access_key=access_key,
+        secret_key=secret_key,
+        secure=secure,
+        http_client=http_client,
+        cert_check=cert_check,
+    )
+
 
 
 def list_csv_fields(
@@ -208,44 +310,55 @@ def copy_csv_without_field(
 
 
 def load_config(*, show_feedback: bool = True) -> dict:
-
-    """Load connection settings from nocommit_minio.json.
+    """Load connection settings from ``nocommit_minio.json``.
 
     The configuration file is stored alongside this module in
     ``apps/minio/scan`` and should contain ``endpoint``, ``access_key`` and
-    ``secret_key`` keys. ``secure`` is optional and defaults to ``False``.
+    ``secret_key`` keys. ``secure`` toggles HTTPS and defaults to ``False``.
+    For deployments that require custom TLS certificates, add an ``ssl``
+    section with ``enabled``, ``cert_check``, ``ca_file``, ``cert_file`` and
+    ``key_file`` entries.
     """
 
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
+    template_config = {
 
-    required_fields = {
         "endpoint": "your-minio-endpoint:port",
         "access_key": "your-access-key",
         "secret_key": "your-secret-key",
         "secure": False,
+        "ssl": {
+            "enabled": False,
+            "cert_check": True,
+            "ca_file": "path/to/ca.pem",
+            "cert_file": "path/to/client.crt",
+            "key_file": "path/to/client.key",
+        },
     }
 
     if not cfg_path.exists():
-        cfg_path.write_text(json.dumps(required_fields, indent=4), encoding="utf-8")
+        cfg_path.write_text(json.dumps(template_config, indent=4), encoding="utf-8")
+
         message = (
             f"Configuration file not found. Created template configuration at {cfg_path}"
         )
         print(message)
         print("Required configuration fields:")
-        print(json.dumps(required_fields, indent=4))
+
+        print(json.dumps(template_config, indent=4))
         if show_feedback:
             st.error(message)
             st.write(
                 "Update the following values in the generated file (set secure to true if"
-                " your deployment uses HTTPS):"
+                " your deployment uses HTTPS, and enable the ssl block when you use"
+                " custom certificates):"
             )
-            st.code(json.dumps(required_fields, indent=4), language="json")
+            st.code(json.dumps(template_config, indent=4), language="json")
         else:
             print(
                 "Update the generated configuration file with your MinIO credentials and"
                 " rerun the command."
             )
-
         return {}
 
     try:
@@ -274,18 +387,27 @@ def run_streamlit_app() -> None:
     if not config:
         return
 
-    secure = bool(config.get("secure", False))
+
+    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
-        f"(secure={secure})"
+        f"(secure={secure}, cert_check={cert_check})"
     )
     st.write(conn_msg)
     print(conn_msg)
+    if config.get("ssl") is not None:
+        ssl_display = format_ssl_display(ssl_config)
+        st.write("SSL options:")
+        st.json(ssl_display)
+        print("SSL options:", ssl_display)
     client = get_client(
         config["endpoint"],
         config["access_key"],
         config["secret_key"],
         secure,
+
+        http_client=http_client,
+        cert_check=cert_check,
     )
 
     fields_tab, stats_tab, modify_tab = st.tabs(
@@ -422,17 +544,24 @@ def run_cli() -> None:
     if not config:
         return
 
-    secure = bool(config.get("secure", False))
+
+    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
-        f"(secure={secure})"
+        f"(secure={secure}, cert_check={cert_check})"
     )
     print(conn_msg)
+    if config.get("ssl") is not None:
+        print("SSL options:", format_ssl_display(ssl_config))
+
     client = get_client(
         config["endpoint"],
         config["access_key"],
         config["secret_key"],
         secure,
+
+        http_client=http_client,
+        cert_check=cert_check,
     )
 
     if args.command == "list":
@@ -480,4 +609,3 @@ if running_in_streamlit():
     run_streamlit_app()
 elif __name__ == "__main__":
     run_cli()
-
