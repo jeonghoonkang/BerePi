@@ -20,15 +20,53 @@ import argparse
 import serial
 import sys
 import time
+from pathlib import Path
+import logging
+from logging.handlers import RotatingFileHandler
 from serial.tools import list_ports
 
 
-BNAME = "/home/tinyos/devel_opment/"
-LOG_DIR = BNAME + "BerePi/apps/logger"
+BNAME = Path("/home/tinyos/devel_opment")
+LOG_DIR = str(BNAME / "BerePi/apps/logger")
 
 sys.path.append(LOG_DIR)
 
 import berepi_logger
+
+
+def _configure_berepi_logger_fallback():
+    """Ensure berepi_logger uses the fallback log path when needed."""
+
+    primary_base = Path("/home/tinyos/devel")
+    if primary_base.exists():
+        return
+
+    fallback_log_path = Path("/home/tinyos/devel_opment/BerePi/logs/berelogger.log")
+    fallback_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if getattr(berepi_logger, "LOG_FILENAME", "") == str(fallback_log_path):
+        return
+
+    for handler in list(berepi_logger.logger.handlers):
+        berepi_logger.logger.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            pass
+
+    handler = RotatingFileHandler(
+        str(fallback_log_path), mode="a", maxBytes=200000, backupCount=9
+    )
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+    )
+    berepi_logger.logger.addHandler(handler)
+    berepi_logger.LOG_FILENAME = str(fallback_log_path)
+
+
+_configure_berepi_logger_fallback()
 
 # piroman5 OLED driver, built on luma.oled
 from luma.core.interface.serial import i2c

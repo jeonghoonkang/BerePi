@@ -1,4 +1,5 @@
 import argparse
+
 import importlib.util
 import io
 import json
@@ -35,6 +36,7 @@ import pandas as pd  # noqa: E402  # pylint: disable=wrong-import-position
 import streamlit as st  # noqa: E402  # pylint: disable=wrong-import-position
 from minio import Minio  # noqa: E402  # pylint: disable=wrong-import-position
 from streamlit.delta_generator import DeltaGenerator  # noqa: E402  # pylint: disable=wrong-import-position
+
 
 VENV_PATH_DISPLAY = "~/devel_opemnt/venv/bin"
 print(f"Virtual environment path: {VENV_PATH_DISPLAY}")
@@ -206,6 +208,7 @@ def copy_csv_without_field(
 
 
 def load_config(*, show_feedback: bool = True) -> dict:
+
     """Load connection settings from nocommit_minio.json.
 
     The configuration file is stored alongside this module in
@@ -214,6 +217,7 @@ def load_config(*, show_feedback: bool = True) -> dict:
     """
 
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
+
     required_fields = {
         "endpoint": "your-minio-endpoint:port",
         "access_key": "your-access-key",
@@ -241,6 +245,7 @@ def load_config(*, show_feedback: bool = True) -> dict:
                 "Update the generated configuration file with your MinIO credentials and"
                 " rerun the command."
             )
+
         return {}
 
     try:
@@ -475,3 +480,4 @@ if running_in_streamlit():
     run_streamlit_app()
 elif __name__ == "__main__":
     run_cli()
+
