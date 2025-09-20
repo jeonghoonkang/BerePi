@@ -28,6 +28,7 @@ REQUIRED_PACKAGES = {
     "streamlit": "streamlit",
     "minio": "minio",
     "urllib3": "urllib3",
+
 }
 
 
@@ -38,6 +39,7 @@ import streamlit as st  # noqa: E402  # pylint: disable=wrong-import-position
 import urllib3  # noqa: E402  # pylint: disable=wrong-import-position
 from minio import Minio  # noqa: E402  # pylint: disable=wrong-import-position
 from streamlit.delta_generator import DeltaGenerator  # noqa: E402  # pylint: disable=wrong-import-position
+
 
 VENV_PATH_DISPLAY = "~/devel_opemnt/venv/bin"
 print(f"Virtual environment path: {VENV_PATH_DISPLAY}")
@@ -158,6 +160,7 @@ def get_client(
         http_client=http_client,
         cert_check=cert_check,
     )
+
 
 
 def list_csv_fields(
@@ -319,6 +322,7 @@ def load_config(*, show_feedback: bool = True) -> dict:
 
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
     template_config = {
+
         "endpoint": "your-minio-endpoint:port",
         "access_key": "your-access-key",
         "secret_key": "your-secret-key",
@@ -334,11 +338,13 @@ def load_config(*, show_feedback: bool = True) -> dict:
 
     if not cfg_path.exists():
         cfg_path.write_text(json.dumps(template_config, indent=4), encoding="utf-8")
+
         message = (
             f"Configuration file not found. Created template configuration at {cfg_path}"
         )
         print(message)
         print("Required configuration fields:")
+
         print(json.dumps(template_config, indent=4))
         if show_feedback:
             st.error(message)
@@ -381,6 +387,7 @@ def run_streamlit_app() -> None:
     if not config:
         return
 
+
     secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
@@ -398,6 +405,7 @@ def run_streamlit_app() -> None:
         config["access_key"],
         config["secret_key"],
         secure,
+
         http_client=http_client,
         cert_check=cert_check,
     )
@@ -536,6 +544,7 @@ def run_cli() -> None:
     if not config:
         return
 
+
     secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
@@ -544,11 +553,13 @@ def run_cli() -> None:
     print(conn_msg)
     if config.get("ssl") is not None:
         print("SSL options:", format_ssl_display(ssl_config))
+
     client = get_client(
         config["endpoint"],
         config["access_key"],
         config["secret_key"],
         secure,
+
         http_client=http_client,
         cert_check=cert_check,
     )

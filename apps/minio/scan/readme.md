@@ -14,6 +14,7 @@
 
 1. `apps/minio/scan/` 디렉터리로 이동합니다.
 2. Streamlit 또는 CLI 방식으로 스크립트를 한 번 실행합니다. `nocommit_minio.json`이 없으면 템플릿이 자동으로 생성됩니다.
+
 3. 생성된 `nocommit_minio.json`을 열어 MinIO `endpoint`, `access_key`, `secret_key` 값을 입력하고, HTTPS를 사용하는 경우 `"secure": true`로 변경합니다. 사설 CA 사용이나 클라이언트 인증서가 필요하다면 `ssl` 블록을 활성화(`"enabled": true`)하고 `ca_file`·`cert_file`·`key_file` 경로 또는 `cert_check` 옵션을 원하는 값으로 조정합니다.【F:apps/minio/scan/main.py†L309-L366】
 
 ## Streamlit UI 실행
@@ -26,6 +27,7 @@ streamlit run apps/minio/scan/main.py
 
 1. **List fields** – 버킷과 선택적 경로(prefix)를 입력하면 각 CSV 객체와 해당 컬럼 이름을 나열합니다.
 2. **Field stats** – 버킷, 경로, 컬럼 이름을 지정하면 일치하는 모든 CSV에서 총 행 수와 누락(NaN/None) 수, 누락 비율을 계산합니다.
+
 3. **Copy without field** – 원본 버킷/객체와 제거할 컬럼, 대상 객체(필요 시 다른 버킷)를 입력하면 지정한 컬럼이 제외된 복사본을 생성합니다.【F:apps/minio/scan/main.py†L369-L475】
 
 각 탭은 CSV를 순회하는 동안 진행 상황을 갱신하며, 스캔이 끝날 때마다 같은 폴더에 `scanned_dirs.txt`를 업데이트하여 처리한 디렉터리를 기록합니다.【F:apps/minio/scan/main.py†L185-L206】【F:apps/minio/scan/main.py†L234-L259】

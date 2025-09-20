@@ -4,10 +4,29 @@
 import logging
 #import logging.config
 from logging.handlers import RotatingFileHandler
+import os
 import sys
 
 #logging.config.fileConfig('logging.conf')
-LOG_FILENAME = "/home/tinyos/devel/BerePi/logs/berelogger.log"
+PRIMARY_LOG_FILENAME = "/home/tinyos/devel/BerePi/logs/berelogger.log"
+SECONDARY_LOG_FILENAME = "/home/tinyos/devel_opment/BerePi/logs/berelogger.log"
+
+
+def _resolve_log_filename():
+    for candidate in (PRIMARY_LOG_FILENAME, SECONDARY_LOG_FILENAME):
+        candidate_dir = os.path.dirname(candidate)
+        if os.path.isdir(candidate_dir):
+            return candidate
+
+    warn_msg = (
+        "[WARN] BerePi logger cannot find a valid log directory.\n"
+        "Checked paths: {0}, {1}".format(PRIMARY_LOG_FILENAME, SECONDARY_LOG_FILENAME)
+    )
+    print(warn_msg)
+    sys.exit(1)
+
+
+LOG_FILENAME = _resolve_log_filename()
 #LOG_FILENAME = "/Users/tinyos/devel/BerePi/logs/berelogger.log"
 
 logger = logging.getLogger('BereLogger')
@@ -15,7 +34,7 @@ logger.setLevel(logging.DEBUG)
 
 # Choose TimeRoatatingFileHandler or RotatingFileHandler 
 #handler = logging.handlers.TimedRotatingFileHandler(filename=LOG_FILENAME, when="midnight", interval=1, encoding="utf-8")
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, mode='a', maxBytes=200000, backupCount=9)
+handler = RotatingFileHandler(LOG_FILENAME, mode='a', maxBytes=200000, backupCount=9)
 handler.formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 logger.addHandler(handler)
