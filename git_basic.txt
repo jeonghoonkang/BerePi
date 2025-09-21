@@ -21,6 +21,9 @@ git branch
 # Branch 생성, 이동, push (-u) 향후 git push 만 작성해도 동작
 git checkout -b {new_branch}
 git push -u origin {new_branch}
+# 단순 이동
+git checkout master 
+
 
 worktree list
 # 1. 새로운 작업 디렉토리 생성
