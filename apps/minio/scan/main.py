@@ -409,7 +409,9 @@ def run_streamlit_app() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    secure, http_client, cert_check = resolve_ssl_options(config)
+ 
+
 
     scheme = "https" if secure else "http"
     conn_msg = (
@@ -572,7 +574,7 @@ def run_cli() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    secure, http_client, cert_check = resolve_ssl_options(config)
 
     scheme = "https" if secure else "http"
     conn_msg = (
@@ -586,8 +588,8 @@ def run_cli() -> None:
         f"prefix={prefix_default or '(not set)'}"
     )
     print(config_summary)
-    if config.get("ssl") is not None:
-        print("SSL options:", format_ssl_display(ssl_config))
+    # if config.get("ssl") is not None:
+    #     print("SSL options:", format_ssl_display(ssl_config))
 
     client = get_client(
         config["endpoint"],
