@@ -38,6 +38,7 @@ import pandas as pd  # noqa: E402  # pylint: disable=wrong-import-position
 import streamlit as st  # noqa: E402  # pylint: disable=wrong-import-position
 import urllib3  # noqa: E402  # pylint: disable=wrong-import-position
 from minio import Minio  # noqa: E402  # pylint: disable=wrong-import-position
+from minio.error import S3Error  # noqa: E402  # pylint: disable=wrong-import-position
 from streamlit.delta_generator import DeltaGenerator  # noqa: E402  # pylint: disable=wrong-import-position
 
 
@@ -133,6 +134,44 @@ def get_client(
         cert_check=cert_check,
     )
 
+
+
+def verify_minio_connection(
+    client: Minio, bucket: Optional[str] = None
+) -> Tuple[bool, str, str]:
+    """Check whether a MinIO connection is usable."""
+
+    try:
+        if bucket:
+            if not client.bucket_exists(bucket):
+                return (
+                    False,
+                    f"Bucket '{bucket}' does not exist or access is denied.",
+                    "error",
+                )
+            return (
+                True,
+                f"Successfully connected to MinIO and verified bucket '{bucket}'.",
+                "success",
+            )
+        client.list_buckets()
+        return True, "Successfully connected to MinIO.", "success"
+    except S3Error as exc:  # pragma: no cover - network failure paths
+        if not bucket and exc.code == "AccessDenied":
+            return (
+                True,
+                "Connected to MinIO but bucket listing is not permitted for the provided credentials.",
+                "warning",
+            )
+        return (
+            False,
+            f"Failed to connect to MinIO: {exc.code} - {exc.message}",
+            "error",
+        )
+    except urllib3.exceptions.HTTPError as exc:  # pragma: no cover - network failure paths
+        return False, f"Failed to connect to MinIO: {exc}", "error"
+    except Exception as exc:  # pragma: no cover - network failure paths
+        return False, f"Failed to connect to MinIO: {exc}", "error"
 
 
 def list_csv_fields(
@@ -370,7 +409,8 @@ def run_streamlit_app() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, http_client, cert_check = resolve_ssl_options(config)
+    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+
     scheme = "https" if secure else "http"
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} via {scheme.upper()} "
@@ -385,6 +425,12 @@ def run_streamlit_app() -> None:
     )
     st.info(config_summary)
     print(config_summary)
+    if config.get("ssl") is not None:
+        ssl_display = format_ssl_display(ssl_config)
+        st.write("SSL options:")
+        st.json(ssl_display)
+        print("SSL options:", ssl_display)
+
     client = get_client(
         config["endpoint"],
         config["access_key"],
@@ -393,6 +439,20 @@ def run_streamlit_app() -> None:
         http_client=http_client,
         cert_check=cert_check,
     )
+
+    connection_ok, connection_message, level = verify_minio_connection(
+        client, bucket_default or None
+    )
+    if level == "warning":
+        st.warning(connection_message)
+        print(f"Warning: {connection_message}")
+    elif connection_ok:
+        st.success(connection_message)
+        print(connection_message)
+    else:
+        st.error(connection_message)
+        print(connection_message)
+        return
 
     fields_tab, stats_tab, modify_tab = st.tabs(
         ["List fields", "Field stats", "Copy without field"]
@@ -499,9 +559,6 @@ def run_cli() -> None:
     )
     parsed = parser.parse_args()
 
-    if not parsed.command:
-        parser.print_help()
-        return
 
     if INSTALLED_PACKAGES:
         print(
@@ -515,7 +572,8 @@ def run_cli() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, http_client, cert_check = resolve_ssl_options(config)
+    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+
     scheme = "https" if secure else "http"
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} via {scheme.upper()} "
@@ -528,6 +586,8 @@ def run_cli() -> None:
         f"prefix={prefix_default or '(not set)'}"
     )
     print(config_summary)
+    if config.get("ssl") is not None:
+        print("SSL options:", format_ssl_display(ssl_config))
 
     client = get_client(
         config["endpoint"],
@@ -537,6 +597,21 @@ def run_cli() -> None:
         http_client=http_client,
         cert_check=cert_check,
     )
+
+    connection_ok, connection_message, level = verify_minio_connection(
+        client, bucket_default or None
+    )
+    if level == "warning":
+        print(f"Warning: {connection_message}")
+    else:
+        print(connection_message)
+    if not connection_ok:
+        return
+
+    if not parsed.command:
+        parser.print_help()
+        return
+
 
     command_args = parsed.command_args
 
