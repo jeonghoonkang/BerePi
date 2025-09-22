@@ -38,6 +38,7 @@ import pandas as pd  # noqa: E402  # pylint: disable=wrong-import-position
 import streamlit as st  # noqa: E402  # pylint: disable=wrong-import-position
 import urllib3  # noqa: E402  # pylint: disable=wrong-import-position
 from minio import Minio  # noqa: E402  # pylint: disable=wrong-import-position
+from minio.error import S3Error  # noqa: E402  # pylint: disable=wrong-import-position
 from streamlit.delta_generator import DeltaGenerator  # noqa: E402  # pylint: disable=wrong-import-position
 
 
@@ -79,6 +80,22 @@ def _normalize_path(value: Any) -> Optional[str]:
         trimmed = value.strip()
         return trimmed or None
     return None
+
+
+def _normalize_bucket(value: Any) -> str:
+    """Return a sanitized bucket value or an empty string."""
+
+    if isinstance(value, str):
+        return value.strip()
+    return ""
+
+
+def _normalize_prefix(value: Any) -> str:
+    """Return a sanitized prefix value or an empty string."""
+
+    if isinstance(value, str):
+        return value.strip()
+    return ""
 
 
 def resolve_ssl_options(
@@ -161,6 +178,44 @@ def get_client(
         cert_check=cert_check,
     )
 
+
+
+def verify_minio_connection(
+    client: Minio, bucket: Optional[str] = None
+) -> Tuple[bool, str, str]:
+    """Check whether a MinIO connection is usable."""
+
+    try:
+        if bucket:
+            if not client.bucket_exists(bucket):
+                return (
+                    False,
+                    f"Bucket '{bucket}' does not exist or access is denied.",
+                    "error",
+                )
+            return (
+                True,
+                f"Successfully connected to MinIO and verified bucket '{bucket}'.",
+                "success",
+            )
+        client.list_buckets()
+        return True, "Successfully connected to MinIO.", "success"
+    except S3Error as exc:  # pragma: no cover - network failure paths
+        if not bucket and exc.code == "AccessDenied":
+            return (
+                True,
+                "Connected to MinIO but bucket listing is not permitted for the provided credentials.",
+                "warning",
+            )
+        return (
+            False,
+            f"Failed to connect to MinIO: {exc.code} - {exc.message}",
+            "error",
+        )
+    except urllib3.exceptions.HTTPError as exc:  # pragma: no cover - network failure paths
+        return False, f"Failed to connect to MinIO: {exc}", "error"
+    except Exception as exc:  # pragma: no cover - network failure paths
+        return False, f"Failed to connect to MinIO: {exc}", "error"
 
 
 def list_csv_fields(
@@ -315,9 +370,10 @@ def load_config(*, show_feedback: bool = True) -> dict:
     The configuration file is stored alongside this module in
     ``apps/minio/scan`` and should contain ``endpoint``, ``access_key`` and
     ``secret_key`` keys. ``secure`` toggles HTTPS and defaults to ``False``.
-    For deployments that require custom TLS certificates, add an ``ssl``
-    section with ``enabled``, ``cert_check``, ``ca_file``, ``cert_file`` and
-    ``key_file`` entries.
+    ``bucket`` and ``prefix`` provide optional defaults that are applied to the
+    CLI commands and Streamlit UI. For deployments that require custom TLS
+    certificates, add an ``ssl`` section with ``enabled``, ``cert_check``,
+    ``ca_file``, ``cert_file`` and ``key_file`` entries.
     """
 
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
@@ -327,6 +383,8 @@ def load_config(*, show_feedback: bool = True) -> dict:
         "access_key": "your-access-key",
         "secret_key": "your-secret-key",
         "secure": False,
+        "bucket": "your-bucket-name",
+        "prefix": "optional/path/prefix/",
         "ssl": {
             "enabled": False,
             "cert_check": True,
@@ -363,13 +421,18 @@ def load_config(*, show_feedback: bool = True) -> dict:
 
     try:
         with open(cfg_path, encoding="utf-8") as f:
-            return json.load(f)
+            config = json.load(f)
     except json.JSONDecodeError as exc:
         error_msg = f"Invalid JSON in {cfg_path}: {exc}"
         print(error_msg)
         if show_feedback:
             st.error(error_msg)
         return {}
+
+    config["bucket"] = _normalize_bucket(config.get("bucket"))
+    config["prefix"] = _normalize_prefix(config.get("prefix"))
+
+    return config
 
 
 def run_streamlit_app() -> None:
@@ -387,14 +450,24 @@ def run_streamlit_app() -> None:
     if not config:
         return
 
+    bucket_default = config.get("bucket", "") or ""
+    prefix_default = config.get("prefix", "") or ""
 
     secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    scheme = "https" if secure else "http"
     conn_msg = (
-        f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
-        f"(secure={secure}, cert_check={cert_check})"
+        f"Connecting to MinIO at {config['endpoint']} via {scheme.upper()} "
+        f"as {config['access_key']} (secure={secure}, cert_check={cert_check})"
     )
     st.write(conn_msg)
     print(conn_msg)
+    config_summary = (
+        "Configured defaults -> secure="
+        f"{secure} ({scheme}), bucket={bucket_default or '(not set)'}, "
+        f"prefix={prefix_default or '(not set)'}"
+    )
+    st.info(config_summary)
+    print(config_summary)
     if config.get("ssl") is not None:
         ssl_display = format_ssl_display(ssl_config)
         st.write("SSL options:")
@@ -410,13 +483,29 @@ def run_streamlit_app() -> None:
         cert_check=cert_check,
     )
 
+    connection_ok, connection_message, level = verify_minio_connection(
+        client, bucket_default or None
+    )
+    if level == "warning":
+        st.warning(connection_message)
+        print(f"Warning: {connection_message}")
+    elif connection_ok:
+        st.success(connection_message)
+        print(connection_message)
+    else:
+        st.error(connection_message)
+        print(connection_message)
+        return
+
     fields_tab, stats_tab, modify_tab = st.tabs(
         ["List fields", "Field stats", "Copy without field"]
     )
 
     with fields_tab:
-        bucket1 = st.text_input("Bucket", key="bucket1")
-        prefix1 = st.text_input("Path prefix", key="prefix1")
+        bucket1 = st.text_input("Bucket", value=bucket_default, key="bucket1")
+        prefix1 = st.text_input(
+            "Path prefix", value=prefix_default, key="prefix1"
+        )
         if st.button("Scan", key="scan_btn") and bucket1:
             progress = st.progress(0)
             status = st.empty()
@@ -426,8 +515,10 @@ def run_streamlit_app() -> None:
                 st.write(", ".join(fields))
 
     with stats_tab:
-        bucket2 = st.text_input("Bucket", key="bucket2")
-        prefix2 = st.text_input("Path prefix", key="prefix2")
+        bucket2 = st.text_input("Bucket", value=bucket_default, key="bucket2")
+        prefix2 = st.text_input(
+            "Path prefix", value=prefix_default, key="prefix2"
+        )
         field_name = st.text_input("Field name")
         if st.button("Analyze", key="analyze_btn") and bucket2 and field_name:
             progress = st.progress(0)
@@ -441,11 +532,15 @@ def run_streamlit_app() -> None:
                 st.write(f"Missing ratio: {missing / total:.2%}")
 
     with modify_tab:
-        bucket3 = st.text_input("Source bucket", key="bucket3")
+        bucket3 = st.text_input(
+            "Source bucket", value=bucket_default, key="bucket3"
+        )
         object_path = st.text_input("CSV object path", key="object_path")
         field_to_remove = st.text_input("Field to remove", key="field_to_remove")
         dest_bucket = st.text_input(
-            "Destination bucket (optional)", key="dest_bucket"
+            "Destination bucket (optional)",
+            value=bucket_default,
+            key="dest_bucket",
         )
         dest_object = st.text_input("Destination object name", key="dest_object")
         if st.button("Copy CSV without field", key="copy_btn"):
@@ -486,54 +581,26 @@ def run_streamlit_app() -> None:
 def run_cli() -> None:
     """Provide a CLI alternative to the Streamlit interface."""
 
+    prog_name = Path(__file__).name
     parser = argparse.ArgumentParser(
+        prog=prog_name,
         description=(
             "MinIO CSV utilities. Use `streamlit run main.py` for the web UI or the"
             " commands below for terminal usage."
-        )
+        ),
     )
-    subparsers = parser.add_subparsers(dest="command")
-
-    list_parser = subparsers.add_parser(
-        "list",
-        help="List CSV files and show their fields",
-    )
-    list_parser.add_argument("bucket", help="Bucket name")
-    list_parser.add_argument(
-        "prefix",
+    parser.add_argument(
+        "command",
         nargs="?",
-        default="",
-        help="Prefix path to scan (defaults to entire bucket)",
+        choices=["list", "stats", "copy"],
+        help="Command to execute",
     )
-
-    stats_parser = subparsers.add_parser(
-        "stats",
-        help="Show total rows and missing values for a field",
+    parser.add_argument(
+        "command_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments for the selected command",
     )
-    stats_parser.add_argument("bucket", help="Bucket name")
-    stats_parser.add_argument("field", help="Field/column to analyze")
-    stats_parser.add_argument(
-        "prefix",
-        nargs="?",
-        default="",
-        help="Prefix path to scan (defaults to entire bucket)",
-    )
-
-    copy_parser = subparsers.add_parser(
-        "copy",
-        help="Copy a CSV object while removing a column",
-    )
-    copy_parser.add_argument("src_bucket", help="Source bucket")
-    copy_parser.add_argument("src_object", help="Source CSV object path")
-    copy_parser.add_argument("field", help="Field/column to remove")
-    copy_parser.add_argument("dest_object", help="Destination object path")
-    copy_parser.add_argument(
-        "--dest-bucket",
-        dest="dest_bucket",
-        help="Destination bucket (defaults to the source bucket)",
-    )
-
-    args = parser.parse_args()
+    parsed = parser.parse_args()
 
     if INSTALLED_PACKAGES:
         print(
@@ -544,13 +611,22 @@ def run_cli() -> None:
     if not config:
         return
 
+    bucket_default = config.get("bucket", "") or ""
+    prefix_default = config.get("prefix", "") or ""
 
     secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    scheme = "https" if secure else "http"
     conn_msg = (
-        f"Connecting to MinIO at {config['endpoint']} as {config['access_key']} "
-        f"(secure={secure}, cert_check={cert_check})"
+        f"Connecting to MinIO at {config['endpoint']} via {scheme.upper()} "
+        f"as {config['access_key']} (secure={secure}, cert_check={cert_check})"
     )
     print(conn_msg)
+    config_summary = (
+        f"Configured defaults -> secure={secure} ({scheme}), "
+        f"bucket={bucket_default or '(not set)'}, "
+        f"prefix={prefix_default or '(not set)'}"
+    )
+    print(config_summary)
     if config.get("ssl") is not None:
         print("SSL options:", format_ssl_display(ssl_config))
 
@@ -564,8 +640,54 @@ def run_cli() -> None:
         cert_check=cert_check,
     )
 
-    if args.command == "list":
-        results = list_csv_fields(client, args.bucket, args.prefix)
+    connection_ok, connection_message, level = verify_minio_connection(
+        client, bucket_default or None
+    )
+    if level == "warning":
+        print(f"Warning: {connection_message}")
+    else:
+        print(connection_message)
+    if not connection_ok:
+        return
+
+    if not parsed.command:
+        parser.print_help()
+        return
+
+    command_args = parsed.command_args
+
+    if parsed.command == "list":
+        list_parser = argparse.ArgumentParser(
+            prog=f"{prog_name} list",
+            description="List CSV files and show their fields.",
+        )
+        list_parser.add_argument(
+            "bucket",
+            nargs="?",
+            default=None,
+            help="Bucket name (defaults to the value from nocommit_minio.json)",
+        )
+        list_parser.add_argument(
+            "prefix",
+            nargs="?",
+            default=None,
+            help="Prefix path to scan (defaults to the value from nocommit_minio.json)",
+        )
+        list_args = list_parser.parse_args(command_args)
+        bucket = list_args.bucket if list_args.bucket not in (None, "") else bucket_default
+        prefix = (
+            list_args.prefix if list_args.prefix is not None else prefix_default
+        )
+        if not bucket:
+            print(
+                "Bucket must be provided either in nocommit_minio.json or as an argument."
+            )
+            return
+        prefix = prefix or ""
+        print(
+            f"Using bucket='{bucket}', prefix='{prefix or '(none)'}' for list command."
+        )
+        results = list_csv_fields(client, bucket, prefix)
         if results:
             for path, fields in results:
                 print(f"{path}: {', '.join(fields)}")
@@ -575,29 +697,113 @@ def run_cli() -> None:
             )
         else:
             print("No CSV files found for the provided bucket and prefix.")
-    elif args.command == "stats":
-        total, missing = field_stats(client, args.bucket, args.prefix, args.field)
+    elif parsed.command == "stats":
+        stats_parser = argparse.ArgumentParser(
+            prog=f"{prog_name} stats",
+            description="Show total rows and missing values for a field.",
+        )
+        stats_parser.add_argument(
+            "--bucket",
+            dest="bucket_option",
+            help="Override the bucket (defaults to the value from nocommit_minio.json)",
+        )
+        stats_parser.add_argument(
+            "--prefix",
+            dest="prefix_option",
+            help="Override the prefix (defaults to the value from nocommit_minio.json)",
+        )
+        stats_parser.add_argument(
+            "--field",
+            dest="field_option",
+            help="Field/column to analyze (alternative to positional argument)",
+        )
+        stats_parser.add_argument(
+            "positionals",
+            nargs="*",
+            help="Positional arguments: [bucket] field [prefix]",
+        )
+        stats_args = stats_parser.parse_args(command_args)
+
+        bucket = stats_args.bucket_option or bucket_default
+        prefix = (
+            stats_args.prefix_option
+            if stats_args.prefix_option is not None
+            else prefix_default
+        )
+        field = stats_args.field_option
+        positionals = stats_args.positionals
+
+        if positionals:
+            if len(positionals) == 1:
+                if stats_args.bucket_option is not None or bucket_default:
+                    field = field or positionals[0]
+                else:
+                    bucket = positionals[0]
+            elif len(positionals) == 2:
+                if stats_args.bucket_option is not None:
+                    field = field or positionals[0]
+                    if stats_args.prefix_option is None:
+                        prefix = positionals[1]
+                else:
+                    bucket = positionals[0]
+                    field = field or positionals[1]
+            else:
+                bucket = positionals[0]
+                field = field or positionals[1]
+                if stats_args.prefix_option is None:
+                    prefix = " ".join(positionals[2:])
+
+        if not bucket:
+            print(
+                "Bucket must be provided either in nocommit_minio.json or as an argument."
+            )
+            return
+        if not field:
+            print(
+                "Field name is required. Provide it as a positional argument or via --field."
+            )
+            return
+
+        prefix = prefix or ""
+        print(
+            f"Using bucket='{bucket}', prefix='{prefix or '(none)'}', field='{field}' for stats command."
+        )
+        total, missing = field_stats(client, bucket, prefix, field)
         print(f"Total rows: {total}")
         print(f"Missing values: {missing}")
         if total:
             print(f"Missing ratio: {missing / total:.2%}")
-    elif args.command == "copy":
+    elif parsed.command == "copy":
+        copy_parser = argparse.ArgumentParser(
+            prog=f"{prog_name} copy",
+            description="Copy a CSV object while removing a column.",
+        )
+        copy_parser.add_argument("src_bucket", help="Source bucket")
+        copy_parser.add_argument("src_object", help="Source CSV object path")
+        copy_parser.add_argument("field", help="Field/column to remove")
+        copy_parser.add_argument("dest_object", help="Destination object path")
+        copy_parser.add_argument(
+            "--dest-bucket",
+            dest="dest_bucket",
+            help="Destination bucket (defaults to the source bucket)",
+        )
+        copy_args = copy_parser.parse_args(command_args)
         try:
             original_fields, remaining_fields = copy_csv_without_field(
                 client,
-                args.src_bucket,
-                args.src_object,
-                args.field,
-                args.dest_object,
-                args.dest_bucket,
+                copy_args.src_bucket,
+                copy_args.src_object,
+                copy_args.field,
+                copy_args.dest_object,
+                copy_args.dest_bucket,
             )
         except ValueError as exc:
             print(f"Error: {exc}")
             return
         print(
             "Copied",
-            f"{args.src_bucket}/{args.src_object} -> {(args.dest_bucket or args.src_bucket)}/{args.dest_object}",
-            f"without field '{args.field}'",
+            f"{copy_args.src_bucket}/{copy_args.src_object} -> {(copy_args.dest_bucket or copy_args.src_bucket)}/{copy_args.dest_object}",
+            f"without field '{copy_args.field}'",
         )
         print("Original fields:", ", ".join(original_fields))
         print("Remaining fields:", ", ".join(remaining_fields))
