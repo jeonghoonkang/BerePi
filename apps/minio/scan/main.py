@@ -498,7 +498,7 @@ def run_streamlit_app() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    secure, http_client, cert_check = resolve_ssl_options(config)
     connection = establish_connection(
         config,
         secure,
@@ -685,7 +685,7 @@ def run_cli() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    secure, http_client, cert_check = resolve_ssl_options(config)
     connection = establish_connection(
         config,
         secure,
