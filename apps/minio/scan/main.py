@@ -5,6 +5,7 @@ import json
 import ssl as ssl_lib
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -172,6 +173,94 @@ def verify_minio_connection(
         return False, f"Failed to connect to MinIO: {exc}", "error"
     except Exception as exc:  # pragma: no cover - network failure paths
         return False, f"Failed to connect to MinIO: {exc}", "error"
+
+
+_HTTPS_REQUIRED_TOKEN = "client sent an http request to an https server"
+
+
+def _should_retry_with_https(message: str) -> bool:
+    """Return ``True`` when the error indicates HTTPS is required."""
+
+    return _HTTPS_REQUIRED_TOKEN in message.lower()
+
+
+@dataclass
+class ConnectionAttempt:
+    """Details about a MinIO connection attempt."""
+
+    client: Optional[Minio]
+    secure: bool
+    success: bool
+    level: str
+    message: str
+    fallback_attempted: bool = False
+    initial_error: Optional[str] = None
+
+    @property
+    def is_viable(self) -> bool:
+        """Return ``True`` when the connection can be used."""
+
+        return self.success or self.level == "warning"
+
+
+def establish_connection(
+    config: dict,
+    secure: bool,
+    http_client: Optional[urllib3.PoolManager],
+    cert_check: bool,
+    bucket: Optional[str],
+) -> ConnectionAttempt:
+    """Create a MinIO client and ensure the connection works."""
+
+    client = get_client(
+        config["endpoint"],
+        config["access_key"],
+        config["secret_key"],
+        secure,
+        http_client=http_client,
+        cert_check=cert_check,
+    )
+    success, message, level = verify_minio_connection(client, bucket)
+    if success or level == "warning":
+        return ConnectionAttempt(
+            client=client,
+            secure=secure,
+            success=success,
+            level=level,
+            message=message,
+        )
+
+    if not secure and _should_retry_with_https(message):
+        fallback_client = get_client(
+            config["endpoint"],
+            config["access_key"],
+            config["secret_key"],
+            True,
+            http_client=http_client,
+            cert_check=cert_check,
+        )
+        fallback_success, fallback_message, fallback_level = verify_minio_connection(
+            fallback_client, bucket
+        )
+        fallback_viable = fallback_success or fallback_level == "warning"
+        return ConnectionAttempt(
+            client=fallback_client if fallback_viable else None,
+            secure=True,
+            success=fallback_success,
+            level=fallback_level,
+            message=fallback_message,
+            fallback_attempted=True,
+            initial_error=message,
+        )
+
+    return ConnectionAttempt(
+        client=None,
+        secure=secure,
+        success=success,
+        level=level,
+        message=message,
+    )
+
 
 
 def list_csv_fields(
@@ -409,20 +498,26 @@ def run_streamlit_app() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, http_client, cert_check = resolve_ssl_options(config)
- 
-
-
-    scheme = "https" if secure else "http"
+    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    connection = establish_connection(
+        config,
+        secure,
+        http_client,
+        cert_check,
+        bucket_default or None,
+    )
+    active_scheme = "https" if connection.secure else "http"
     conn_msg = (
-        f"Connecting to MinIO at {config['endpoint']} via {scheme.upper()} "
-        f"as {config['access_key']} (secure={secure}, cert_check={cert_check})"
+        f"Connecting to MinIO at {config['endpoint']} via {active_scheme.upper()} "
+        f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
     )
     st.write(conn_msg)
     print(conn_msg)
+    configured_scheme = "https" if secure else "http"
     config_summary = (
         "Configured defaults -> secure="
-        f"{secure} ({scheme}), bucket={bucket_default or '(not set)'}, "
+        f"{secure} ({configured_scheme}), bucket={bucket_default or '(not set)'}, "
+
         f"prefix={prefix_default or '(not set)'}"
     )
     st.info(config_summary)
@@ -432,15 +527,31 @@ def run_streamlit_app() -> None:
         st.write("SSL options:")
         st.json(ssl_display)
         print("SSL options:", ssl_display)
+    if connection.fallback_attempted and connection.initial_error:
+        fallback_lines = [
+            "Initial HTTP connection attempt failed:",
+            connection.initial_error,
+            'Retried with HTTPS because the server requires TLS. Update "secure": true in nocommit_minio.json to avoid this retry.',
+        ]
+        fallback_message = "\n".join(fallback_lines)
+        st.warning(fallback_message)
+        print(fallback_message)
+    if connection.level == "warning":
+        st.warning(connection.message)
+        print(f"Warning: {connection.message}")
+    elif connection.success:
+        st.success(connection.message)
+        print(connection.message)
+    else:
+        st.error(connection.message)
+        print(connection.message)
+        return
 
-    client = get_client(
-        config["endpoint"],
-        config["access_key"],
-        config["secret_key"],
-        secure,
-        http_client=http_client,
-        cert_check=cert_check,
-    )
+    if not connection.client:
+        return
+
+    client = connection.client
+
 
     connection_ok, connection_message, level = verify_minio_connection(
         client, bucket_default or None
@@ -574,48 +685,52 @@ def run_cli() -> None:
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
-    secure, http_client, cert_check = resolve_ssl_options(config)
-
-    scheme = "https" if secure else "http"
+    secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+    connection = establish_connection(
+        config,
+        secure,
+        http_client,
+        cert_check,
+        bucket_default or None,
+    )
+    active_scheme = "https" if connection.secure else "http"
     conn_msg = (
-        f"Connecting to MinIO at {config['endpoint']} via {scheme.upper()} "
-        f"as {config['access_key']} (secure={secure}, cert_check={cert_check})"
+        f"Connecting to MinIO at {config['endpoint']} via {active_scheme.upper()} "
+        f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
     )
     print(conn_msg)
+    configured_scheme = "https" if secure else "http"
     config_summary = (
-        f"Configured defaults -> secure={secure} ({scheme}), "
+        f"Configured defaults -> secure={secure} ({configured_scheme}), "
+
         f"bucket={bucket_default or '(not set)'}, "
         f"prefix={prefix_default or '(not set)'}"
     )
     print(config_summary)
-    # if config.get("ssl") is not None:
-    #     print("SSL options:", format_ssl_display(ssl_config))
-
-    client = get_client(
-        config["endpoint"],
-        config["access_key"],
-        config["secret_key"],
-        secure,
-        http_client=http_client,
-        cert_check=cert_check,
-    )
-
-    connection_ok, connection_message, level = verify_minio_connection(
-        client, bucket_default or None
-    )
-    if level == "warning":
-        print(f"Warning: {connection_message}")
+    if config.get("ssl") is not None:
+        print("SSL options:", format_ssl_display(ssl_config))
+    if connection.fallback_attempted and connection.initial_error:
+        fallback_lines = [
+            "Initial HTTP connection attempt failed:",
+            connection.initial_error,
+            'Retried with HTTPS because the server requires TLS. Update "secure": true in nocommit_minio.json to avoid this retry.',
+        ]
+        print("\n".join(fallback_lines))
+    if connection.level == "warning":
+        print(f"Warning: {connection.message}")
     else:
-        print(connection_message)
-    if not connection_ok:
+        print(connection.message)
+    if not connection.is_viable or not connection.client:
         return
+
+    client = connection.client
 
     if not parsed.command:
         parser.print_help()
         return
 
-
     command_args = parsed.command_args
+
 
     if parsed.command == "list":
         list_parser = argparse.ArgumentParser(
