@@ -101,62 +101,18 @@ def _normalize_prefix(value: Any) -> str:
 
 def resolve_ssl_options(
     config: dict,
-) -> Tuple[bool, Dict[str, Any], Optional[urllib3.PoolManager], bool]:
+) -> Tuple[bool, Optional[urllib3.PoolManager], bool]:
     """Normalize SSL options and prepare an optional HTTP client."""
 
-    secure = parse_bool(config.get("secure"), False)
-    ssl_config: Dict[str, Any] = {
-        "enabled": False,
-        "cert_check": True,
-        "ca_file": None,
-        "cert_file": None,
-        "key_file": None,
-    }
-
-    raw_ssl = config.get("ssl")
-    if isinstance(raw_ssl, dict):
-        ssl_config["enabled"] = parse_bool(raw_ssl.get("enabled"), False)
-        ssl_config["cert_check"] = parse_bool(raw_ssl.get("cert_check"), True)
-        ssl_config["ca_file"] = _normalize_path(raw_ssl.get("ca_file"))
-        ssl_config["cert_file"] = _normalize_path(raw_ssl.get("cert_file"))
-        ssl_config["key_file"] = _normalize_path(raw_ssl.get("key_file"))
-
-    has_custom_ssl_material = any(
-        ssl_config[name] for name in ("ca_file", "cert_file", "key_file")
-    )
-    if has_custom_ssl_material and not ssl_config["enabled"]:
-        ssl_config["enabled"] = True
-
-    secure = secure or ssl_config["enabled"]
-    cert_check = ssl_config["cert_check"]
+    # 강제로 HTTP 사용 (secure=False)
+    secure = False
+    
+    # SSL 설정을 처리하지 않음 - 기본값만 사용
+    cert_check = True
     http_client: Optional[urllib3.PoolManager] = None
-    if ssl_config["enabled"] and has_custom_ssl_material:
-        pool_kwargs: Dict[str, Any] = {
-            "cert_reqs": (
-                ssl_lib.CERT_REQUIRED if cert_check else ssl_lib.CERT_NONE
-            )
-        }
-        if ssl_config["ca_file"]:
-            pool_kwargs["ca_certs"] = ssl_config["ca_file"]
-        if ssl_config["cert_file"]:
-            pool_kwargs["cert_file"] = ssl_config["cert_file"]
-        if ssl_config["key_file"]:
-            pool_kwargs["key_file"] = ssl_config["key_file"]
-        http_client = urllib3.PoolManager(**pool_kwargs)
 
-    return secure, ssl_config, http_client, cert_check
+    return secure, http_client, cert_check
 
-
-def format_ssl_display(ssl_config: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a user-friendly representation of SSL settings."""
-
-    return {
-        "enabled": ssl_config.get("enabled", False),
-        "cert_check": ssl_config.get("cert_check", True),
-        "ca_file": ssl_config.get("ca_file") or "(system default)",
-        "cert_file": ssl_config.get("cert_file") or "(not set)",
-        "key_file": ssl_config.get("key_file") or "(not set)",
-    }
 
 
 def get_client(
@@ -304,6 +260,7 @@ def establish_connection(
         level=level,
         message=message,
     )
+
 
 
 def list_csv_fields(
@@ -560,6 +517,7 @@ def run_streamlit_app() -> None:
     config_summary = (
         "Configured defaults -> secure="
         f"{secure} ({configured_scheme}), bucket={bucket_default or '(not set)'}, "
+
         f"prefix={prefix_default or '(not set)'}"
     )
     st.info(config_summary)
@@ -593,6 +551,21 @@ def run_streamlit_app() -> None:
         return
 
     client = connection.client
+
+
+    connection_ok, connection_message, level = verify_minio_connection(
+        client, bucket_default or None
+    )
+    if level == "warning":
+        st.warning(connection_message)
+        print(f"Warning: {connection_message}")
+    elif connection_ok:
+        st.success(connection_message)
+        print(connection_message)
+    else:
+        st.error(connection_message)
+        print(connection_message)
+        return
 
     fields_tab, stats_tab, modify_tab = st.tabs(
         ["List fields", "Field stats", "Copy without field"]
@@ -699,6 +672,7 @@ def run_cli() -> None:
     )
     parsed = parser.parse_args()
 
+
     if INSTALLED_PACKAGES:
         print(
             "Installed missing packages:", ", ".join(sorted(set(INSTALLED_PACKAGES)))
@@ -728,6 +702,7 @@ def run_cli() -> None:
     configured_scheme = "https" if secure else "http"
     config_summary = (
         f"Configured defaults -> secure={secure} ({configured_scheme}), "
+
         f"bucket={bucket_default or '(not set)'}, "
         f"prefix={prefix_default or '(not set)'}"
     )
@@ -755,6 +730,7 @@ def run_cli() -> None:
         return
 
     command_args = parsed.command_args
+
 
     if parsed.command == "list":
         list_parser = argparse.ArgumentParser(
