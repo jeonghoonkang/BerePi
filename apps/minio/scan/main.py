@@ -575,7 +575,7 @@ def copy_csv_without_field(
     return original_fields, list(df.columns)
 
 
-def load_config(*, show_feedback: bool = True) -> dict:
+def load_config(*, show_feedback: bool = True, quiet: bool = False) -> dict:
     """Load connection settings from ``nocommit_minio.json``.
 
     The configuration file is stored alongside this module in
@@ -607,6 +607,8 @@ def load_config(*, show_feedback: bool = True) -> dict:
     }
 
     if not cfg_path.exists():
+        if quiet:
+            return {}
         cfg_path.write_text(json.dumps(template_config, indent=4), encoding="utf-8")
 
         message = (
@@ -635,6 +637,8 @@ def load_config(*, show_feedback: bool = True) -> dict:
         with open(cfg_path, encoding="utf-8") as f:
             config = json.load(f)
     except json.JSONDecodeError as exc:
+        if quiet:
+            return {}
         error_msg = f"Invalid JSON in {cfg_path}: {exc}"
         print(error_msg)
         if show_feedback:
@@ -842,7 +846,7 @@ def run_cli() -> None:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["list", "stats", "copy"],
+        choices=["connect", "list", "stats", "copy"],
         help="Command to execute",
     )
     parser.add_argument(
@@ -853,64 +857,87 @@ def run_cli() -> None:
     parsed = parser.parse_args()
 
 
-    if INSTALLED_PACKAGES:
+    is_connect_cmd = parsed.command == "connect"
+
+    if INSTALLED_PACKAGES and not is_connect_cmd:
         print(
             "Installed missing packages:", ", ".join(sorted(set(INSTALLED_PACKAGES)))
         )
 
-    config = load_config(show_feedback=False)
+    config = load_config(show_feedback=False, quiet=is_connect_cmd)
     if not config:
+        if is_connect_cmd:
+            print(
+                "FAILED: Configuration missing or invalid. "
+                "Please configure apps/minio/scan/nocommit_minio.json"
+            )
         return
 
     bucket_default = config.get("bucket", "") or ""
     prefix_default = config.get("prefix", "") or ""
 
     secure, http_client, cert_check = resolve_ssl_options(config)
-    connection = establish_connection(
-        config,
-        secure,
-        http_client,
-        cert_check,
-        bucket_default or None,
-    )
+    try:
+        connection = establish_connection(
+            config,
+            secure,
+            http_client,
+            cert_check,
+            bucket_default or None,
+        )
+    except KeyError as exc:
+        if is_connect_cmd:
+            print(f"FAILED: Missing required config key: {exc}")
+            return
+        else:
+            print(f"Configuration error: missing key {exc}")
+            return
     host, port = _extract_host_port(config.get("endpoint", ""), config.get("port"))
     display_endpoint = _compose_endpoint(host, port)
-    active_scheme = "https" if connection.secure else "http"
-    conn_msg = (
-        f"Connecting to MinIO at {display_endpoint} via {active_scheme.upper()} "
-        f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
-    )
-    print(conn_msg)
-    configured_scheme = "https" if secure else "http"
-    config_summary = (
-        f"Configured defaults -> secure={secure} ({configured_scheme}), "
-
-        f"bucket={bucket_default or '(not set)'}, "
-        f"prefix={prefix_default or '(not set)'}"
-    )
-    print(config_summary)
-    if config.get("ssl") is not None:
-        print("SSL options:", format_ssl_display(config.get("ssl")))
-    if connection.endpoint_fallback_attempted and connection.endpoint_initial_error:
-        print(
-            "Endpoint seems to be the Console port. Retried on API port. "
-            "Please update 'port' in nocommit_minio.json to the S3 API port (e.g., 9000)."
-        )
-        if connection.endpoint_used:
-            print(f"Adjusted endpoint used: {connection.endpoint_used}")
-    if connection.fallback_attempted and connection.initial_error:
-        fallback_lines = [
-            "Initial HTTP connection attempt failed:",
-            connection.initial_error,
-            'Retried with HTTPS because the server requires TLS. Update "secure": true in nocommit_minio.json to avoid this retry.',
-        ]
-        print("\n".join(fallback_lines))
-    if connection.level == "warning":
-        print(f"Warning: {connection.message}")
-    else:
-        print(connection.message)
-    if not connection.is_viable or not connection.client:
+    if is_connect_cmd:
+        # Minimal connectivity check output
+        if connection.is_viable and connection.client:
+            print("SUCCESS: Connected to MinIO.")
+        else:
+            print(f"FAILED: {connection.message}")
         return
+    else:
+        active_scheme = "https" if connection.secure else "http"
+        conn_msg = (
+            f"Connecting to MinIO at {display_endpoint} via {active_scheme.upper()} "
+            f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
+        )
+        print(conn_msg)
+        configured_scheme = "https" if secure else "http"
+        config_summary = (
+            f"Configured defaults -> secure={secure} ({configured_scheme}), "
+
+            f"bucket={bucket_default or '(not set)'}, "
+            f"prefix={prefix_default or '(not set)'}"
+        )
+        print(config_summary)
+        if config.get("ssl") is not None:
+            print("SSL options:", format_ssl_display(config.get("ssl")))
+        if connection.endpoint_fallback_attempted and connection.endpoint_initial_error:
+            print(
+                "Endpoint seems to be the Console port. Retried on API port. "
+                "Please update 'port' in nocommit_minio.json to the S3 API port (e.g., 9000)."
+            )
+            if connection.endpoint_used:
+                print(f"Adjusted endpoint used: {connection.endpoint_used}")
+        if connection.fallback_attempted and connection.initial_error:
+            fallback_lines = [
+                "Initial HTTP connection attempt failed:",
+                connection.initial_error,
+                'Retried with HTTPS because the server requires TLS. Update "secure": true in nocommit_minio.json to avoid this retry.',
+            ]
+            print("\n".join(fallback_lines))
+        if connection.level == "warning":
+            print(f"Warning: {connection.message}")
+        else:
+            print(connection.message)
+        if not connection.is_viable or not connection.client:
+            return
 
     client = connection.client
 
@@ -921,7 +948,10 @@ def run_cli() -> None:
     command_args = parsed.command_args
 
 
-    if parsed.command == "list":
+    if parsed.command == "connect":
+        # Already handled above; keep for completeness
+        return
+    elif parsed.command == "list":
         list_parser = argparse.ArgumentParser(
             prog=f"{prog_name} list",
             description="List CSV files and show their fields.",
