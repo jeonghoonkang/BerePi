@@ -1,4 +1,5 @@
 import argparse
+import os
 import importlib.util
 import io
 import json
@@ -114,6 +115,44 @@ def resolve_ssl_options(
     return secure, http_client, cert_check
 
 
+def format_ssl_display(ssl_config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return a safe, UI-friendly summary of SSL options.
+
+    - Coerces booleans using existing helpers
+    - Summarizes file paths by existence and readability, without reading files
+    """
+
+    if not isinstance(ssl_config, dict):
+        return {"enabled": False}
+
+    enabled = parse_bool(ssl_config.get("enabled"), False)
+    cert_check = parse_bool(ssl_config.get("cert_check"), True)
+
+    def summarize_path(value: Any) -> Dict[str, Any]:
+        norm = _normalize_path(value)
+        if not norm:
+            return {"set": False}
+        p = Path(norm).expanduser()
+        exists = p.exists()
+        is_file = p.is_file() if exists else False
+        readable = os.access(p, os.R_OK) if exists else False
+        return {
+            "set": True,
+            "path": str(p),
+            "exists": exists,
+            "is_file": is_file,
+            "readable": readable,
+        }
+
+    return {
+        "enabled": enabled,
+        "cert_check": cert_check,
+        "ca_file": summarize_path(ssl_config.get("ca_file")),
+        "cert_file": summarize_path(ssl_config.get("cert_file")),
+        "key_file": summarize_path(ssl_config.get("key_file")),
+    }
+
+
 
 def get_client(
     endpoint: str,
@@ -176,12 +215,71 @@ def verify_minio_connection(
 
 
 _HTTPS_REQUIRED_TOKEN = "client sent an http request to an https server"
+_API_PORT_HINT_TOKEN = "s3 api requests must be made to api port"
 
 
 def _should_retry_with_https(message: str) -> bool:
     """Return ``True`` when the error indicates HTTPS is required."""
 
     return _HTTPS_REQUIRED_TOKEN in message.lower()
+
+
+def _indicates_console_port(message: str) -> bool:
+    """Return ``True`` when the error suggests the console port was used."""
+
+    return _API_PORT_HINT_TOKEN in message.lower()
+
+
+def _suggest_api_port(port: Optional[int]) -> Optional[int]:
+    """Suggest S3 API port for a known console port (e.g., 9001 -> 9000)."""
+
+    if port is None:
+        return None
+    mapping = {9001: 9000, 9090: 9000}
+    return mapping.get(port)
+
+
+def _parse_int(value: Any) -> Optional[int]:
+    try:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int,)):
+            return int(value)
+        if isinstance(value, str):
+            v = value.strip()
+            if v.startswith("+") or v.startswith("-"):
+                if v[1:].isdigit():
+                    return int(v)
+            elif v.isdigit():
+                return int(v)
+        return None
+    except Exception:
+        return None
+
+
+def _extract_host_port(endpoint: str, explicit_port: Any) -> Tuple[str, Optional[int]]:
+    """Return (host, port) where host excludes port if present.
+
+    If `explicit_port` is provided and valid, it takes precedence.
+    """
+
+    host = (endpoint or "").strip()
+    port = _parse_int(explicit_port)
+    if port is not None:
+        # Ensure host has no trailing :port
+        if ":" in host and host.rsplit(":", 1)[-1].isdigit():
+            host = host.rsplit(":", 1)[0]
+        return host, port
+
+    if ":" in host:
+        h, p = host.rsplit(":", 1)
+        if p.isdigit():
+            return h, int(p)
+    return host, None
+
+
+def _compose_endpoint(host: str, port: Optional[int]) -> str:
+    return f"{host}:{port}" if port is not None else host
 
 
 @dataclass
@@ -195,6 +293,10 @@ class ConnectionAttempt:
     message: str
     fallback_attempted: bool = False
     initial_error: Optional[str] = None
+    # Port/endpoint fallback (e.g., console -> API port)
+    endpoint_used: Optional[str] = None
+    endpoint_fallback_attempted: bool = False
+    endpoint_initial_error: Optional[str] = None
 
     @property
     def is_viable(self) -> bool:
@@ -212,8 +314,11 @@ def establish_connection(
 ) -> ConnectionAttempt:
     """Create a MinIO client and ensure the connection works."""
 
+    # Build endpoint from host + (optional) port field
+    host, port = _extract_host_port(config.get("endpoint", ""), config.get("port"))
+    endpoint = _compose_endpoint(host, port)
     client = get_client(
-        config["endpoint"],
+        endpoint,
         config["access_key"],
         config["secret_key"],
         secure,
@@ -228,11 +333,12 @@ def establish_connection(
             success=success,
             level=level,
             message=message,
+            endpoint_used=endpoint,
         )
 
     if not secure and _should_retry_with_https(message):
         fallback_client = get_client(
-            config["endpoint"],
+            endpoint,
             config["access_key"],
             config["secret_key"],
             True,
@@ -251,7 +357,66 @@ def establish_connection(
             message=fallback_message,
             fallback_attempted=True,
             initial_error=message,
+            endpoint_used=endpoint if fallback_viable else None,
         )
+
+    # Detect console-port usage and retry on common API port
+    if _indicates_console_port(message):
+        new_port = _suggest_api_port(port)
+        if new_port is None:
+            # Try default mapping from known console port 9001 if no port detected
+            new_port = 9000
+        new_endpoint = _compose_endpoint(host, new_port)
+        if new_endpoint and new_endpoint != endpoint:
+            api_client = get_client(
+                new_endpoint,
+                config["access_key"],
+                config["secret_key"],
+                secure,
+                http_client=http_client,
+                cert_check=cert_check,
+            )
+            api_success, api_message, api_level = verify_minio_connection(
+                api_client, bucket
+            )
+            api_viable = api_success or api_level == "warning"
+            if api_viable:
+                return ConnectionAttempt(
+                    client=api_client,
+                    secure=secure,
+                    success=api_success,
+                    level=api_level,
+                    message=api_message,
+                    endpoint_fallback_attempted=True,
+                    endpoint_initial_error=message,
+                    endpoint_used=new_endpoint,
+                )
+            # Try HTTPS on API port if HTTP failed with TLS-required hint
+            if not secure and _should_retry_with_https(api_message):
+                https_client = get_client(
+                    new_endpoint,
+                    config["access_key"],
+                    config["secret_key"],
+                    True,
+                    http_client=http_client,
+                    cert_check=cert_check,
+                )
+                https_ok, https_msg, https_level = verify_minio_connection(
+                    https_client, bucket
+                )
+                https_viable = https_ok or https_level == "warning"
+                return ConnectionAttempt(
+                    client=https_client if https_viable else None,
+                    secure=True,
+                    success=https_ok,
+                    level=https_level,
+                    message=https_msg,
+                    fallback_attempted=True,
+                    initial_error=api_message,
+                    endpoint_fallback_attempted=True,
+                    endpoint_initial_error=message,
+                    endpoint_used=new_endpoint if https_viable else None,
+                )
 
     return ConnectionAttempt(
         client=None,
@@ -259,6 +424,7 @@ def establish_connection(
         success=success,
         level=level,
         message=message,
+        endpoint_used=endpoint,
     )
 
 
@@ -424,7 +590,8 @@ def load_config(*, show_feedback: bool = True) -> dict:
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
     template_config = {
 
-        "endpoint": "your-minio-endpoint:port",
+        "endpoint": "your-minio-endpoint",
+        "port": 9000,
         "access_key": "your-access-key",
         "secret_key": "your-secret-key",
         "secure": False,
@@ -506,9 +673,12 @@ def run_streamlit_app() -> None:
         cert_check,
         bucket_default or None,
     )
+    # Show composed endpoint (host + port if provided)
+    host, port = _extract_host_port(config.get("endpoint", ""), config.get("port"))
+    display_endpoint = _compose_endpoint(host, port)
     active_scheme = "https" if connection.secure else "http"
     conn_msg = (
-        f"Connecting to MinIO at {config['endpoint']} via {active_scheme.upper()} "
+        f"Connecting to MinIO at {display_endpoint} via {active_scheme.upper()} "
         f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
     )
     st.write(conn_msg)
@@ -523,10 +693,20 @@ def run_streamlit_app() -> None:
     st.info(config_summary)
     print(config_summary)
     if config.get("ssl") is not None:
-        ssl_display = format_ssl_display(ssl_config)
+        ssl_display = format_ssl_display(config.get("ssl"))
         st.write("SSL options:")
         st.json(ssl_display)
         print("SSL options:", ssl_display)
+    if connection.endpoint_fallback_attempted and connection.endpoint_initial_error:
+        st.warning(
+            "Endpoint appears to be the Console port. Retried on API port. "
+            "Update 'port' in nocommit_minio.json to the S3 API port (e.g., 9000)."
+        )
+        st.write(f"Connected using adjusted endpoint: {connection.endpoint_used}")
+        print(
+            "Retried on API port due to console-port error; "
+            f"using endpoint {connection.endpoint_used}."
+        )
     if connection.fallback_attempted and connection.initial_error:
         fallback_lines = [
             "Initial HTTP connection attempt failed:",
@@ -693,9 +873,11 @@ def run_cli() -> None:
         cert_check,
         bucket_default or None,
     )
+    host, port = _extract_host_port(config.get("endpoint", ""), config.get("port"))
+    display_endpoint = _compose_endpoint(host, port)
     active_scheme = "https" if connection.secure else "http"
     conn_msg = (
-        f"Connecting to MinIO at {config['endpoint']} via {active_scheme.upper()} "
+        f"Connecting to MinIO at {display_endpoint} via {active_scheme.upper()} "
         f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
     )
     print(conn_msg)
@@ -708,7 +890,14 @@ def run_cli() -> None:
     )
     print(config_summary)
     if config.get("ssl") is not None:
-        print("SSL options:", format_ssl_display(ssl_config))
+        print("SSL options:", format_ssl_display(config.get("ssl")))
+    if connection.endpoint_fallback_attempted and connection.endpoint_initial_error:
+        print(
+            "Endpoint seems to be the Console port. Retried on API port. "
+            "Please update 'port' in nocommit_minio.json to the S3 API port (e.g., 9000)."
+        )
+        if connection.endpoint_used:
+            print(f"Adjusted endpoint used: {connection.endpoint_used}")
     if connection.fallback_attempted and connection.initial_error:
         fallback_lines = [
             "Initial HTTP connection attempt failed:",
