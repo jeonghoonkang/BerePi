@@ -590,12 +590,12 @@ def load_config(*, show_feedback: bool = True, quiet: bool = False) -> dict:
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
     template_config = {
 
-        "endpoint": "your-minio-endpoint",
+        "endpoint": "your_minio_endpoint",
         "port": 9000,
-        "access_key": "your-access-key",
-        "secret_key": "your-secret-key",
+        "access_key": "your_access_key",
+        "secret_key": "your_secret_key",
         "secure": False,
-        "bucket": "your-bucket-name",
+        "bucket": "your_bucket_name",
         "prefix": "optional/path/prefix/",
         "ssl": {
             "enabled": False,
