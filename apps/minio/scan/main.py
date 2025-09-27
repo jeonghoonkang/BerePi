@@ -1,4 +1,5 @@
 import argparse
+import os
 import importlib.util
 import io
 import json
@@ -101,62 +102,56 @@ def _normalize_prefix(value: Any) -> str:
 
 def resolve_ssl_options(
     config: dict,
-) -> Tuple[bool, Dict[str, Any], Optional[urllib3.PoolManager], bool]:
+) -> Tuple[bool, Optional[urllib3.PoolManager], bool]:
     """Normalize SSL options and prepare an optional HTTP client."""
 
-    secure = parse_bool(config.get("secure"), False)
-    ssl_config: Dict[str, Any] = {
-        "enabled": False,
-        "cert_check": True,
-        "ca_file": None,
-        "cert_file": None,
-        "key_file": None,
-    }
-
-    raw_ssl = config.get("ssl")
-    if isinstance(raw_ssl, dict):
-        ssl_config["enabled"] = parse_bool(raw_ssl.get("enabled"), False)
-        ssl_config["cert_check"] = parse_bool(raw_ssl.get("cert_check"), True)
-        ssl_config["ca_file"] = _normalize_path(raw_ssl.get("ca_file"))
-        ssl_config["cert_file"] = _normalize_path(raw_ssl.get("cert_file"))
-        ssl_config["key_file"] = _normalize_path(raw_ssl.get("key_file"))
-
-    has_custom_ssl_material = any(
-        ssl_config[name] for name in ("ca_file", "cert_file", "key_file")
-    )
-    if has_custom_ssl_material and not ssl_config["enabled"]:
-        ssl_config["enabled"] = True
-
-    secure = secure or ssl_config["enabled"]
-    cert_check = ssl_config["cert_check"]
+    # 강제로 HTTP 사용 (secure=False)
+    secure = False
+    
+    # SSL 설정을 처리하지 않음 - 기본값만 사용
+    cert_check = True
     http_client: Optional[urllib3.PoolManager] = None
-    if ssl_config["enabled"] and has_custom_ssl_material:
-        pool_kwargs: Dict[str, Any] = {
-            "cert_reqs": (
-                ssl_lib.CERT_REQUIRED if cert_check else ssl_lib.CERT_NONE
-            )
+
+    return secure, http_client, cert_check
+
+
+def format_ssl_display(ssl_config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return a safe, UI-friendly summary of SSL options.
+
+    - Coerces booleans using existing helpers
+    - Summarizes file paths by existence and readability, without reading files
+    """
+
+    if not isinstance(ssl_config, dict):
+        return {"enabled": False}
+
+    enabled = parse_bool(ssl_config.get("enabled"), False)
+    cert_check = parse_bool(ssl_config.get("cert_check"), True)
+
+    def summarize_path(value: Any) -> Dict[str, Any]:
+        norm = _normalize_path(value)
+        if not norm:
+            return {"set": False}
+        p = Path(norm).expanduser()
+        exists = p.exists()
+        is_file = p.is_file() if exists else False
+        readable = os.access(p, os.R_OK) if exists else False
+        return {
+            "set": True,
+            "path": str(p),
+            "exists": exists,
+            "is_file": is_file,
+            "readable": readable,
         }
-        if ssl_config["ca_file"]:
-            pool_kwargs["ca_certs"] = ssl_config["ca_file"]
-        if ssl_config["cert_file"]:
-            pool_kwargs["cert_file"] = ssl_config["cert_file"]
-        if ssl_config["key_file"]:
-            pool_kwargs["key_file"] = ssl_config["key_file"]
-        http_client = urllib3.PoolManager(**pool_kwargs)
-
-    return secure, ssl_config, http_client, cert_check
-
-
-def format_ssl_display(ssl_config: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a user-friendly representation of SSL settings."""
 
     return {
-        "enabled": ssl_config.get("enabled", False),
-        "cert_check": ssl_config.get("cert_check", True),
-        "ca_file": ssl_config.get("ca_file") or "(system default)",
-        "cert_file": ssl_config.get("cert_file") or "(not set)",
-        "key_file": ssl_config.get("key_file") or "(not set)",
+        "enabled": enabled,
+        "cert_check": cert_check,
+        "ca_file": summarize_path(ssl_config.get("ca_file")),
+        "cert_file": summarize_path(ssl_config.get("cert_file")),
+        "key_file": summarize_path(ssl_config.get("key_file")),
     }
+
 
 
 def get_client(
@@ -222,10 +217,12 @@ def verify_minio_connection(
 _HTTPS_REQUIRED_TOKEN = "client sent an http request to an https server"
 
 
+
 def _should_retry_with_https(message: str) -> bool:
     """Return ``True`` when the error indicates HTTPS is required."""
 
     return _HTTPS_REQUIRED_TOKEN in message.lower()
+
 
 
 @dataclass
@@ -239,6 +236,7 @@ class ConnectionAttempt:
     message: str
     fallback_attempted: bool = False
     initial_error: Optional[str] = None
+
 
     @property
     def is_viable(self) -> bool:
@@ -258,6 +256,7 @@ def establish_connection(
 
     client = get_client(
         config["endpoint"],
+
         config["access_key"],
         config["secret_key"],
         secure,
@@ -272,11 +271,13 @@ def establish_connection(
             success=success,
             level=level,
             message=message,
+
         )
 
     if not secure and _should_retry_with_https(message):
         fallback_client = get_client(
             config["endpoint"],
+
             config["access_key"],
             config["secret_key"],
             True,
@@ -297,6 +298,7 @@ def establish_connection(
             initial_error=message,
         )
 
+
     return ConnectionAttempt(
         client=None,
         secure=secure,
@@ -304,6 +306,7 @@ def establish_connection(
         level=level,
         message=message,
     )
+
 
 
 def list_csv_fields(
@@ -452,7 +455,7 @@ def copy_csv_without_field(
     return original_fields, list(df.columns)
 
 
-def load_config(*, show_feedback: bool = True) -> dict:
+def load_config(*, show_feedback: bool = True, quiet: bool = False) -> dict:
     """Load connection settings from ``nocommit_minio.json``.
 
     The configuration file is stored alongside this module in
@@ -467,11 +470,13 @@ def load_config(*, show_feedback: bool = True) -> dict:
     cfg_path = Path(__file__).resolve().parent / "nocommit_minio.json"
     template_config = {
 
-        "endpoint": "your-minio-endpoint:port",
-        "access_key": "your-access-key",
-        "secret_key": "your-secret-key",
+        "endpoint": "your_minio_endpoint",
+        "port": 9000,
+        "access_key": "your_access_key",
+        "secret_key": "your_secret_key",
         "secure": False,
         "bucket": "your-bucket-name",
+
         "prefix": "optional/path/prefix/",
         "ssl": {
             "enabled": False,
@@ -483,6 +488,8 @@ def load_config(*, show_feedback: bool = True) -> dict:
     }
 
     if not cfg_path.exists():
+        if quiet:
+            return {}
         cfg_path.write_text(json.dumps(template_config, indent=4), encoding="utf-8")
 
         message = (
@@ -511,6 +518,8 @@ def load_config(*, show_feedback: bool = True) -> dict:
         with open(cfg_path, encoding="utf-8") as f:
             config = json.load(f)
     except json.JSONDecodeError as exc:
+        if quiet:
+            return {}
         error_msg = f"Invalid JSON in {cfg_path}: {exc}"
         print(error_msg)
         if show_feedback:
@@ -542,6 +551,7 @@ def run_streamlit_app() -> None:
     prefix_default = config.get("prefix", "") or ""
 
     secure, ssl_config, http_client, cert_check = resolve_ssl_options(config)
+
     connection = establish_connection(
         config,
         secure,
@@ -552,6 +562,7 @@ def run_streamlit_app() -> None:
     active_scheme = "https" if connection.secure else "http"
     conn_msg = (
         f"Connecting to MinIO at {config['endpoint']} via {active_scheme.upper()} "
+
         f"as {config['access_key']} (secure={connection.secure}, cert_check={cert_check})"
     )
     st.write(conn_msg)
@@ -560,15 +571,17 @@ def run_streamlit_app() -> None:
     config_summary = (
         "Configured defaults -> secure="
         f"{secure} ({configured_scheme}), bucket={bucket_default or '(not set)'}, "
+
         f"prefix={prefix_default or '(not set)'}"
     )
     st.info(config_summary)
     print(config_summary)
     if config.get("ssl") is not None:
-        ssl_display = format_ssl_display(ssl_config)
+        ssl_display = format_ssl_display(config.get("ssl"))
         st.write("SSL options:")
         st.json(ssl_display)
         print("SSL options:", ssl_display)
+
     if connection.fallback_attempted and connection.initial_error:
         fallback_lines = [
             "Initial HTTP connection attempt failed:",
@@ -593,6 +606,7 @@ def run_streamlit_app() -> None:
         return
 
     client = connection.client
+
 
     fields_tab, stats_tab, modify_tab = st.tabs(
         ["List fields", "Field stats", "Copy without field"]
@@ -690,6 +704,7 @@ def run_cli() -> None:
         "command",
         nargs="?",
         choices=["list", "stats", "copy"],
+
         help="Command to execute",
     )
     parser.add_argument(
@@ -699,13 +714,19 @@ def run_cli() -> None:
     )
     parsed = parser.parse_args()
 
-    if INSTALLED_PACKAGES:
+
+    if INSTALLED_PACKAGES and not is_connect_cmd:
         print(
             "Installed missing packages:", ", ".join(sorted(set(INSTALLED_PACKAGES)))
         )
 
-    config = load_config(show_feedback=False)
+    config = load_config(show_feedback=False, quiet=is_connect_cmd)
     if not config:
+        if is_connect_cmd:
+            print(
+                "FAILED: Configuration missing or invalid. "
+                "Please configure apps/minio/scan/nocommit_minio.json"
+            )
         return
 
     bucket_default = config.get("bucket", "") or ""
@@ -757,6 +778,7 @@ def run_cli() -> None:
     command_args = parsed.command_args
 
     if parsed.command == "list":
+
         list_parser = argparse.ArgumentParser(
             prog=f"{prog_name} list",
             description="List CSV files and show their fields.",
