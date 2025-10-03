@@ -119,7 +119,7 @@ The line above the duty information shows the current CO₂ concentration read f
 - something
   
 ### SUDO , GPIO preperation
-- sudo adduser {user} gpio
+- sudo adduser {user} gpio 이 없다면, 아래줄 그룹 생성 부터 
 - sudo addgroup gpio
 - sudo adduser {user} gpio
 - sudo vim /etc/udev/rules.d/99-gpio.rules
