@@ -12,7 +12,7 @@
 
 #CASE FAN (LED FAN)
 #output GPIO6 = 1
-echo -n "chang output, current="
+echo -n "change output, current="
 gpioget gpiochip4 6
 
 gpioset gpiochip4 6=1
