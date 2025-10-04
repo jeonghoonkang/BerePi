@@ -1,5 +1,7 @@
 import lgpio
 
+print ("lgpio test")
+
 for target in (0, '/dev/gpiochip0', 'gpiochip0', 'pinctrl-rp1'):
     try:
         h = lgpio.gpiochip_open(target)
@@ -9,7 +11,12 @@ for target in (0, '/dev/gpiochip0', 'gpiochip0', 'pinctrl-rp1'):
         print("FAIL:", target, e)
 
 
+
+
 import gpiod
+
+print ("gpiod test")
+
 
 for target in (0, '/dev/gpiochip0', 'gpiochip0', 'pinctrl-rp1'):
     try:
