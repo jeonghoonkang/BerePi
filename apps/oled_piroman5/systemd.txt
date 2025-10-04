@@ -1,0 +1,15 @@
+cat /etc/systemd/system/gpio-pin6.service 
+
+[Unit]
+Description=Set Pironman 5 Fan GPIO 6 to High on Boot
+After=multi-user.target
+ConditionPathExists=/usr/bin/gpioset
+
+[Service]
+ExecStart=/usr/bin/gpioset --mode=signal gpiochip4 6=1
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
