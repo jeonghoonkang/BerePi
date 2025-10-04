@@ -115,8 +115,10 @@ The display's last line shows the configured fan duty and updates every five sec
 The line above the duty information shows the current CO₂ concentration read from a serial sensor (e.g. ``CO2 450ppm``).
 
 
-### to do
-- something
+### Fan On 
+
+- 
+- 
   
 ### SUDO , GPIO preperation
 - sudo adduser {user} gpio 이 없다면, 아래줄 그룹 생성 부터 
