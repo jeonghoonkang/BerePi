@@ -117,8 +117,8 @@ The line above the duty information shows the current CO₂ concentration read f
 
 ### Fan On 
 
-- 
-- 
+- <img width="1141" height="989" alt="image" src="https://github.com/user-attachments/assets/b3a39d49-f4e1-4729-9540-8cfae2a80d16" />
+
   
 ### SUDO , GPIO preperation
 - sudo adduser {user} gpio 이 없다면, 아래줄 그룹 생성 부터 
