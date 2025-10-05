@@ -133,10 +133,14 @@ The line above the duty information shows the current CO₂ concentration read f
 - pyserial 설치 확인 방법
 - serial 패키지와 혼용되어 충돌이 일어나는 경우가 발생
 - 확인방법
-  <pre>
+<pre>
 /usr/bin/python3.12 - <<'PY'
 import serial, serial.tools.list_ports as lp
 print("pyserial:", serial.__version__)
 print([ (p.device, p.description) for p in lp.comports() ])
 PY
-  </pre>
+</pre>
+
+- 설치
+  - <code> /usr/bin/python3.12 -m pip install pyserial </code>
+    
