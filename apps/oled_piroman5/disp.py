@@ -12,6 +12,7 @@ two-minute interval when the CPU temperature is below ``50°C``.
 Dependencies can be installed with::
 
     pip3 install -r requirements.txt
+    sudo pip3 install luma.oled
 """
 
 from datetime import datetime
@@ -28,6 +29,9 @@ from serial.tools import list_ports
 
 BNAME = Path("/home/tinyos/devel_opment")
 LOG_DIR = str(BNAME / "BerePi/apps/logger")
+
+Tcycle = 180
+Tdiff = 10 
 
 sys.path.append(LOG_DIR)
 
@@ -199,7 +203,6 @@ def main():
     except Exception:
         co2_port = None
 
-    co2_port = None
     try:
         ports = [p.device for p in list_ports.comports()]
         console.print(
@@ -220,7 +223,7 @@ def main():
     # Determine IP address once; update other values in the loop
     ip = get_ip_address("eth0")
 
-    total_runtime = 120
+    total_runtime = Tcycle
     fan_on_duration = total_runtime * args.fan_duty / 100
     remaining = total_runtime
 
@@ -229,7 +232,7 @@ def main():
     device = ssd1306(serial)
     font = ImageFont.load_default()
 
-    while remaining >= 0:
+    while remaining >= 5: #5sec remaining but, early finish to avoid overlaping in crontab
         temp = cpu.temperature
         #if temp >= TEMP_THRESHOLD or remaining > total_runtime - fan_on_duration:
         #    fan.on()
@@ -249,7 +252,7 @@ def main():
         with canvas(device) as draw:
             draw.text((0, 0), ip, font=font, fill=255)
             draw.text((0, 12), now, font=font, fill=255)
-            #draw.text((0, 24), f"CPU {temp:.1f}C F:{fan_status}", font=font, fill=255)
+            draw.text((0, 24), f"CPU {temp:.1f}C ", font=font, fill=255)
             draw.text((0, 36), co2_text, font=font, fill=255)
 
             draw.text(
@@ -260,13 +263,11 @@ def main():
             )
         console.log(
             f"OLED display 중입니다... 남은 시간: {remaining}초 | "
-            #f"CPU: {temp:.1f}°C | CO2: {co2_ppm if co2_ppm is not None else 'N/A'}ppm | Fan: {fan_status}"
+            f"CPU: {temp:.1f}°C | CO2: {co2_ppm if co2_ppm is not None else 'N/A'}ppm"
 
         )
-        if remaining == 0:
-            break
-        time.sleep(5)
-        remaining -= 5
+        time.sleep(Tdiff)
+        remaining -= Tdiff
 
     if co2_port:
         co2_port.close()
