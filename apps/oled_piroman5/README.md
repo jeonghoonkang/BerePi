@@ -120,7 +120,7 @@ The line above the duty information shows the current CO₂ concentration read f
 - <img width="1141" height="989" alt="image" src="https://github.com/user-attachments/assets/b3a39d49-f4e1-4729-9540-8cfae2a80d16" />
 
   
-### SUDO , GPIO preperation
+### SUDO , GPIO preperation, Bash 에서 gpiod 사용
 - sudo adduser {user} gpio 이 없다면, 아래줄 그룹 생성 부터 
 - sudo addgroup gpio
 - sudo adduser {user} gpio
@@ -128,3 +128,15 @@ The line above the duty information shows the current CO₂ concentration read f
   - add below lines
   - SUBSYSTEM=="gpio", MODE="0660", GROUP="gpio"
   - SUBSYSTEM=="gpiomem", MODE="0660", GROUP="gpio"
+
+### Serial Port 사용방법
+- pyserial 설치 확인 방법
+- serial 패키지와 혼용되어 충돌이 일어나는 경우가 발생
+- 확인방법
+  <code>
+/usr/bin/python3.12 - <<'PY'
+import serial, serial.tools.list_ports as lp
+print("pyserial:", serial.__version__)
+print([ (p.device, p.description) for p in lp.comports() ])
+PY
+  </code>
