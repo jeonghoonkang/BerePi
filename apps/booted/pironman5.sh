@@ -16,7 +16,8 @@ echo -n "change output, current="
 gpioget gpiochip4 6
 
 echo -n "It will enter the infinit loop until rcv ctrl c"
-gpioset gpiochip4 --mode=signal 6=1
+gpioset --mode=exit gpiochip4  6=1
+gpioset --mode=exit gpiochip4  5=1
 
 echo -n " pin status GPIO6 >> " 
 gpioget gpiochip4 6
