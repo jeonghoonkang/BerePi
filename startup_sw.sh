@@ -22,3 +22,7 @@ alias sr='screen'
 
 # alias
 # alias dockerps='sudo docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"'
+
+# visudo
+# sudo visudo 로 실행
+# %sudo   ALL=(ALL:ALL) NOPASSWD: ALL
