@@ -1,5 +1,6 @@
 #Author: https://github.com/jeonghoonkang
 
+import argparse
 import os
 from huggingface_hub import snapshot_download
 from typing import Optional
@@ -52,7 +53,20 @@ MODEL_NAME = "google/gemma-3-27b-it"
 LOCAL_MODEL_PATH = "/home/***/devel/model_down" # 원하는 로컬 경로 설정
 TOKEN_FILE_PATH = os.path.join(os.path.dirname(__file__), "nocommit.ini")
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Hugging Face Hub에서 모델을 다운로드합니다."
+    )
+    parser.add_argument(
+        "local_model_path",
+        help="모델을 저장할 로컬 경로",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = parse_args()
+    LOCAL_MODEL_PATH = args.local_model_path
     hf_token = read_token_from_file(TOKEN_FILE_PATH)
 
     download_gemma3_model(
