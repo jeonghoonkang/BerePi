@@ -7,7 +7,7 @@
 - PyTorch (CUDA 지원 버전 권장)
 
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 ```
 
 ## 실행 방법
