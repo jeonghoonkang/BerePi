@@ -20,12 +20,35 @@ class SimpleCNN(torch.nn.Module):
         return self.fc1(x)
 
 
-def select_device() -> torch.device:
-    """Return a CUDA device if available, otherwise CPU."""
+def select_device(preferred: str = "auto") -> torch.device:
+    """Return the device to benchmark on based on the user's preference."""
 
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
+    preferred = preferred.lower()
+
+    if preferred == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Allow passing full spec such as "cuda" or "cuda:1". Any CUDA request must be
+    # validated to avoid silently falling back to CPU.
+    if preferred.startswith("cuda"):
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA device requested but not available. Install a CUDA-enabled PyTorch "
+                "build and verify GPU drivers with `nvidia-smi`."
+            )
+
+        device = torch.device(preferred)
+        if device.index is not None and device.index >= torch.cuda.device_count():
+            raise RuntimeError(
+                f"CUDA device index {device.index} is out of range. "
+                f"Available device count: {torch.cuda.device_count()}."
+            )
+        return device
+
+    if preferred == "cpu":
+        return torch.device("cpu")
+
+    raise ValueError(f"Unsupported device option: {preferred}")
 
 
 def synchronize_if_cuda(device: torch.device) -> None:
@@ -46,17 +69,16 @@ def benchmark(
     batch_size: int,
     warmup_iters: int,
     benchmark_iters: int,
-    use_half: bool,
+    device: torch.device,
+    dtype: torch.dtype,
 ) -> Tuple[float, float]:
     """Run a simple throughput/latency benchmark.
 
     Returns a tuple containing the average latency (seconds) and throughput (samples/second).
     """
 
-    device = select_device()
     model = model.eval().to(device)
 
-    dtype = torch.float16 if use_half and device.type == "cuda" else torch.float32
     inputs = prepare_inputs(batch_size, device, dtype)
 
     if device.type == "cuda":
@@ -99,6 +121,38 @@ def print_results(
     print(f"Throughput      : {throughput:.2f} samples/sec")
 
 
+def print_gpu_environment() -> None:
+    """Display CUDA availability, PyTorch build information, and GPU inventory."""
+
+    print("=== PyTorch & CUDA Environment ===")
+    print(f"PyTorch version : {torch.__version__}")
+
+    cuda_available = torch.cuda.is_available()
+    print(f"CUDA available  : {cuda_available}")
+
+    if torch.version.cuda:
+        print(f"CUDA runtime    : {torch.version.cuda}")
+
+    cudnn_version = torch.backends.cudnn.version()
+    if cudnn_version is not None:
+        print(f"cuDNN version   : {cudnn_version}")
+
+    if not cuda_available:
+        return
+
+    device_count = torch.cuda.device_count()
+    print(f"Detected GPUs   : {device_count}")
+
+    for index in range(device_count):
+        props = torch.cuda.get_device_properties(index)
+        total_memory_gb = props.total_memory / (1024**3)
+        capability = f"{props.major}.{props.minor}"
+        print(
+            f"  [{index}] {props.name} | Compute Capability {capability} | "
+            f"{total_memory_gb:.2f} GB"
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PyTorch GPU inference benchmark")
     parser.add_argument("--batch-size", type=int, default=32, help="number of samples per batch")
@@ -109,23 +163,39 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="use float16 when running on GPU for faster throughput",
     )
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="device to benchmark on (auto, cpu, cuda, cuda:0, ...). Use 'cuda' to force GPU.",
+    )
+    parser.add_argument(
+        "--check-env",
+        action="store_true",
+        help="print PyTorch/CUDA 환경 정보를 확인하고 벤치마크를 실행하지 않음",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    device = select_device()
+
+    if args.check_env:
+        print_gpu_environment()
+        return
+
+    device = select_device(args.device)
     model = SimpleCNN()
+
+    dtype = torch.float16 if args.half and device.type == "cuda" else torch.float32
 
     avg_latency, throughput = benchmark(
         model=model,
         batch_size=args.batch_size,
         warmup_iters=args.warmup_iters,
         benchmark_iters=args.benchmark_iters,
-        use_half=args.half,
+        device=device,
+        dtype=dtype,
     )
-
-    dtype = torch.float16 if args.half and device.type == "cuda" else torch.float32
     print_results(
         device=device,
         batch_size=args.batch_size,
