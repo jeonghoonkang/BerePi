@@ -32,4 +32,3 @@ if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
 else
     echo "SSL certificate for $URL expires in $diff_days days" | telegram-send --stdin # should check telegram-send is working or not
 fi
-
