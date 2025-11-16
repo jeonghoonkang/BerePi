@@ -7,6 +7,7 @@
 # CONFIG_FILE="/path/to/custom.conf" ./video_converter.sh
 
 # 설정 파일 로드
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CONFIG_FILE="${BASH_SOURCE%.*}.conf"  # 스크립트와 동일한 이름의 .conf 파일 사용
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "설정 파일을 찾을 수 없습니다: $CONFIG_FILE" >&2
@@ -86,7 +87,7 @@ format_size() {
 
 # 함수: 로그 기록
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$MAIN_LOG"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SCRIPT_DIR: $SCRIPT_DIR] $1" >> "$MAIN_LOG"
 }
 
 # 시작 로그
