@@ -18,9 +18,8 @@
   - 캐릭터 LCD
   - NFC, T-money 연동
   - 진동센서
-  - 진행중
-    - Dust
-    - Camera, Motion, Detection
+  - Dust
+  - Camera, Motion, Detection
 -----
 
 
