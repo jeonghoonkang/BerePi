@@ -1,4 +1,4 @@
-## BerePi (Bere+RaspberryPi) software for intelligent personal AI computing system 
+## BerePi (Bere+RaspberryPi) software for intelligent personal AI computing machine 
 - Big data collection and analytics software tools based on RaspberryPi which is from IoT level computing system
 - Software stack for physical computing and intelligent SW service based on IoT data collection & processing (Big data)
 - Based on RaspberryPi distribution (hardware and software)
