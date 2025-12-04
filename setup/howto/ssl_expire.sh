@@ -2,6 +2,7 @@
 # Author : github.com/jeonghoonkang
 # Check if SSL certificate expires within 2 weeks
 
+
 usage() { echo "Usage: $0 [-p port] <domain>" >&2; exit 1; }
 
 PORT=443
