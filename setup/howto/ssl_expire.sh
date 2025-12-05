@@ -43,6 +43,8 @@ end_ts=$(date -d "$end_date" +%s)
 current_ts=$(date +%s)
 diff_days=$(( (end_ts - current_ts) / 86400 ))
 
+#if (Mac OSX)
+# formatted_end_date=$(date -r $(date -j -f "%Y-%m-%d" "$end_date" "+%s"))
 formatted_end_date=$(date -d "$end_date" '+%m월 %d일 %A')
 
 if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
