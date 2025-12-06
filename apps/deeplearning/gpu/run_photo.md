@@ -1,4 +1,7 @@
+# for the explanation
+ 
 # USB Cam input
+## Add run photo shot 
 
 ## Main Board
 - ![image](https://github.com/user-attachments/assets/fa877049-7e68-467f-af00-7493226adfe9)
