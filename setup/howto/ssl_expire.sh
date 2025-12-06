@@ -39,7 +39,7 @@ if [ -z "$end_date" ]; then
     exit 2
 fi
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
+if sw_vers -productName 2>/dev/null | grep -qi "macOS"; then
     end_ts=$(date -jf '%b %e %T %Y %Z' "$end_date" +%s)
     formatted_end_date=$(date -jf '%b %e %T %Y %Z' "$end_date" '+%m월 %d일 %A')
 else
