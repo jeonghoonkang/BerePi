@@ -2,20 +2,20 @@
 # Author : github.com/jeonghoonkang
 # Check if SSL certificate expires within 2 weeks
 
-usage() { echo "Usage: $0 [-p port] [-r] <domain>" >&2; exit 1; }
+usage() { echo "Usage: $0 -u <domain> [-p port] [-r]" >&2; exit 1; }
 
 PORT=443
 RAW_ONLY=false
-while getopts ":p:r" opt; do
+URL=""
+while getopts ":p:ru:" opt; do
     case "$opt" in
         p) PORT="$OPTARG" ;;
         r) RAW_ONLY=true ;;
+        u) URL="$OPTARG" ;;
         *) usage ;;
     esac
 done
 shift $((OPTIND-1))
-
-URL="$1"
 THRESHOLD_DAYS=14
 
 if [ -z "$URL" ]; then
@@ -39,13 +39,16 @@ if [ -z "$end_date" ]; then
     exit 2
 fi
 
-end_ts=$(date -d "$end_date" +%s)
+if command -v sw_vers >/dev/null 2>&1 && sw_vers -productName 2>/dev/null | grep -qi "macOS"; then
+    end_ts=$(date -jf '%b %e %T %Y %Z' "$end_date" +%s)
+    formatted_end_date=$(date -jf '%b %e %T %Y %Z' "$end_date" '+%m월 %d일 %A')
+else
+    end_ts=$(date -d "$end_date" +%s)
+    formatted_end_date=$(date -d "$end_date" '+%m월 %d일 %A')
+fi
+
 current_ts=$(date +%s)
 diff_days=$(( (end_ts - current_ts) / 86400 ))
-
-#if (Mac OSX)
-# formatted_end_date=$(date -r $(date -j -f "%Y-%m-%d" "$end_date" "+%s"))
-formatted_end_date=$(date -d "$end_date" '+%m월 %d일 %A')
 
 if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
     echo "SSL certificate for $URL:$PORT expires on $formatted_end_date (within 2 weeks)"
