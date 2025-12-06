@@ -2,13 +2,14 @@
 # Author : github.com/jeonghoonkang
 # Check if SSL certificate expires within 2 weeks
 
-
-usage() { echo "Usage: $0 [-p port] <domain>" >&2; exit 1; }
+usage() { echo "Usage: $0 [-p port] [-r] <domain>" >&2; exit 1; }
 
 PORT=443
-while getopts ":p:" opt; do
+RAW_ONLY=false
+while getopts ":p:r" opt; do
     case "$opt" in
         p) PORT="$OPTARG" ;;
+        r) RAW_ONLY=true ;;
         *) usage ;;
     esac
 done
@@ -21,8 +22,14 @@ if [ -z "$URL" ]; then
     usage
 fi
 
-echo "### starting openssl ###'
-echo "### It takes time ###'
+if [ "$RAW_ONLY" = true ]; then
+    openssl s_client -servername "$URL" -connect "$URL:$PORT" 2>/dev/null \
+        | openssl x509 -noout -enddate | cut -d= -f2
+    exit
+fi
+
+echo "### starting openssl ###'"
+echo "### It takes time ###'"
 
 end_date=$(openssl s_client -servername "$URL" -connect "$URL:$PORT" 2>/dev/null \
     | openssl x509 -noout -enddate | cut -d= -f2)
@@ -43,5 +50,3 @@ if [ "$diff_days" -le "$THRESHOLD_DAYS" ]; then
 else
     echo "SSL certificate for $URL:$PORT expires on $formatted_end_date"
 fi
-
-
