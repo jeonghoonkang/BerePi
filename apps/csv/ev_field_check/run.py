@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Sequence
 
 import pandas as pd
 
@@ -23,6 +23,9 @@ EXAMPLE_USAGE = """\
 
   # 시간 컬럼(time), 수치 컬럼(voltage, current) 그래프
   python apps/csv/ev_field_check/run.py sample.csv --time-field time --value-fields voltage current
+
+  # 여러 CSV 파일 필드 확인 (통합)
+  python apps/csv/ev_field_check/run.py --multi-file a.csv b.csv --list-only
 
   # 첫 유효 값을 기준으로 정규화하여 그래프
   python apps/csv/ev_field_check/run.py sample.csv --time-field time --value-fields voltage current --normalize
@@ -37,8 +40,15 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "csv_path",
+        nargs="?",
         type=Path,
-        help="읽을 CSV 파일 경로",
+        help="읽을 CSV 파일 경로 (단일)",
+    )
+    parser.add_argument(
+        "--multi-file",
+        nargs="+",
+        type=Path,
+        help="여러 CSV 파일 경로 (공백 구분). 지정하면 csv_path 대신 사용됩니다.",
     )
     parser.add_argument(
         "--time-field",
@@ -69,6 +79,17 @@ def load_csv(csv_path: Path):
     return pd.read_csv(csv_path)
 
 
+def load_multiple_csv(paths: Sequence[Path]):
+    dataframes = []
+    for path in paths:
+        try:
+            df = load_csv(path)
+            dataframes.append(df)
+        except Exception as exc:  # noqa: BLE001
+            raise type(exc)(f"{path}: {exc}") from exc
+    return dataframes
+
+
 def print_fields(field_names: List[str]):
     print("\n=== CSV 필드 목록 ===")
     for column in field_names:
@@ -76,9 +97,14 @@ def print_fields(field_names: List[str]):
     print("===================\n")
 
 
-def save_fields_to_txt(field_names: List[str], target_path: Path) -> Path:
-    output_path = target_path.with_name(f"{target_path.stem}_fields.txt")
-    output_path.write_text("\n".join(field_names), encoding="utf-8")
+def save_fields_to_txt(field_names: List[str], target_path: Path, *, filename: str | None = None) -> Path:
+    output_path = (
+        target_path.with_name(filename)
+        if filename is not None
+        else target_path.with_name(f"{target_path.stem}_fields.txt")
+    )
+    numbered = [f"{idx}: {name}" for idx, name in enumerate(field_names, start=1)]
+    output_path.write_text("\n".join(numbered), encoding="utf-8")
     return output_path
 
 
@@ -124,18 +150,38 @@ def plot_fields(df, time_field: str, value_fields: List[str]) -> None:
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
+    file_paths: List[Path] = []
+    if args.multi_file:
+        file_paths = list(args.multi_file)
+    elif args.csv_path:
+        file_paths = [args.csv_path]
+    else:
+        print("CSV 파일 경로를 지정해주세요 (단일 파일 또는 --multi-file 사용).")
+        return 1
+
     try:
-        df = load_csv(args.csv_path)
+        dataframes = load_multiple_csv(file_paths)
+        df = pd.concat(dataframes, ignore_index=True, sort=False)
     except Exception as exc:  # noqa: BLE001
         print(f"CSV 로드 실패: {exc}")
         return 1
 
-    field_names = list(df.columns)
+    field_names: List[str] = []
+    seen = set()
+    for frame in dataframes:
+        for col in frame.columns:
+            if col not in seen:
+                seen.add(col)
+                field_names.append(col)
     print_fields(field_names)
 
     if args.list_only:
         try:
-            saved_path = save_fields_to_txt(field_names, args.csv_path)
+            target = file_paths[0]
+            filename = None
+            if len(file_paths) > 1:
+                filename = f"{target.stem}_combined_fields.txt"
+            saved_path = save_fields_to_txt(field_names, target, filename=filename)
             print(f"필드명을 파일로 저장했습니다: {saved_path}")
         except Exception as exc:  # noqa: BLE001
             print(f"필드명 저장 실패: {exc}")
