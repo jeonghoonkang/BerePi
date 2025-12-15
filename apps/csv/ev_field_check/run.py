@@ -29,6 +29,9 @@ EXAMPLE_USAGE = """\
 
   # 첫 유효 값을 기준으로 정규화하여 그래프
   python apps/csv/ev_field_check/run.py sample.csv --time-field time --value-fields voltage current --normalize
+
+  # 필요한 컬럼만 추출하여 새 CSV 생성
+  python apps/csv/ev_field_check/run.py sample.csv --extract time voltage current
 """
 
 
@@ -64,6 +67,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         "--normalize",
         action="store_true",
         help="각 수치 컬럼을 첫 번째 유효 값으로 나누어 1.0 기준으로 정규화",
+    )
+    parser.add_argument(
+        "--extract",
+        nargs="+",
+        help="지정한 컬럼만 추출하여 새로운 CSV 파일로 저장",
     )
     parser.add_argument(
         "--list-only",
@@ -106,6 +114,23 @@ def save_fields_to_txt(field_names: List[str], target_path: Path, *, filename: s
     numbered = [f"{idx}: {name}" for idx, name in enumerate(field_names, start=1)]
     output_path.write_text("\n".join(numbered), encoding="utf-8")
     return output_path
+
+
+def extract_fields_to_csv(
+    df, fields: List[str], target_path: Path, *, filename: str | None = None
+) -> tuple[Path, List[str]]:
+    available = [field for field in fields if field in df.columns]
+    missing = [field for field in fields if field not in df.columns]
+    if not available:
+        raise KeyError("지정한 컬럼 중 추출할 수 있는 컬럼이 없습니다.")
+
+    output_path = (
+        target_path.with_name(filename)
+        if filename is not None
+        else target_path.with_name(f"{target_path.stem}_extracted.csv")
+    )
+    df[available].to_csv(output_path, index=False)
+    return output_path, missing
 
 
 def normalize_columns(df, columns: List[str]):
@@ -174,6 +199,21 @@ def main(argv: Iterable[str] | None = None) -> int:
                 seen.add(col)
                 field_names.append(col)
     print_fields(field_names)
+
+    if args.extract:
+        try:
+            target = file_paths[0]
+            filename = None
+            if len(file_paths) > 1:
+                filename = f"{target.stem}_combined_extracted.csv"
+            saved_path, missing = extract_fields_to_csv(df, args.extract, target, filename=filename)
+            print(f"추출된 컬럼을 저장했습니다: {saved_path}")
+            if missing:
+                print(f"다음 컬럼은 존재하지 않아 제외되었습니다: {', '.join(missing)}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"컬럼 추출 실패: {exc}")
+            return 1
+        return 0
 
     if args.list_only:
         try:
