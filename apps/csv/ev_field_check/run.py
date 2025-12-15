@@ -11,14 +11,30 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable, List, TYPE_CHECKING
+from typing import Iterable, List
 
-if TYPE_CHECKING:
-    import pandas as pd
+import pandas as pd
+
+
+EXAMPLE_USAGE = """\
+실행 예시:
+  # 필드만 확인
+  python apps/csv/ev_field_check/run.py sample.csv --list-only
+
+  # 시간 컬럼(time), 수치 컬럼(voltage, current) 그래프
+  python apps/csv/ev_field_check/run.py sample.csv --time-field time --value-fields voltage current
+
+  # 첫 유효 값을 기준으로 정규화하여 그래프
+  python apps/csv/ev_field_check/run.py sample.csv --time-field time --value-fields voltage current --normalize
+"""
 
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="CSV 시간/수치 필드 시각화 도구")
+    parser = argparse.ArgumentParser(
+        description="CSV 시간/수치 필드 시각화 도구",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=EXAMPLE_USAGE,
+    )
     parser.add_argument(
         "csv_path",
         type=Path,
@@ -48,18 +64,22 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 
 def load_csv(csv_path: Path):
-    import pandas as pd
-
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV 파일을 찾을 수 없습니다: {csv_path}")
     return pd.read_csv(csv_path)
 
 
-def print_fields(df):
+def print_fields(field_names: List[str]):
     print("\n=== CSV 필드 목록 ===")
-    for column in df.columns:
+    for column in field_names:
         print(column)
     print("===================\n")
+
+
+def save_fields_to_txt(field_names: List[str], target_path: Path) -> Path:
+    output_path = target_path.with_name(f"{target_path.stem}_fields.txt")
+    output_path.write_text("\n".join(field_names), encoding="utf-8")
+    return output_path
 
 
 def normalize_columns(df, columns: List[str]):
@@ -110,9 +130,15 @@ def main(argv: Iterable[str] | None = None) -> int:
         print(f"CSV 로드 실패: {exc}")
         return 1
 
-    print_fields(df)
+    field_names = list(df.columns)
+    print_fields(field_names)
 
     if args.list_only:
+        try:
+            saved_path = save_fields_to_txt(field_names, args.csv_path)
+            print(f"필드명을 파일로 저장했습니다: {saved_path}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"필드명 저장 실패: {exc}")
         return 0
 
     if not args.time_field or not args.value_fields:
