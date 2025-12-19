@@ -32,3 +32,10 @@ pip install pandas matplotlib
   ```bash
   python apps/csv/ev_field_check/run.py sample.csv --extract time voltage current
   ```
+
+- 조건을 추가해 필요한 컬럼만 추출하기 (예: status가 OK이고 temp > 30)
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --extract time temp status \
+    --extract-filter "status=OK" --extract-filter "temp>30"
+  ```

@@ -32,6 +32,10 @@ EXAMPLE_USAGE = """\
 
   # 필요한 컬럼만 추출하여 새 CSV 생성
   python apps/csv/ev_field_check/run.py sample.csv --extract time voltage current
+
+  # 조건을 걸어 필요한 컬럼만 추출 (예: status가 OK이고 temp > 30)
+  python apps/csv/ev_field_check/run.py sample.csv --extract time temp status \
+    --extract-filter "status=OK" --extract-filter "temp>30"
 """
 
 
@@ -72,6 +76,12 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         "--extract",
         nargs="+",
         help="지정한 컬럼만 추출하여 새로운 CSV 파일로 저장",
+    )
+    parser.add_argument(
+        "--extract-filter",
+        action="append",
+        metavar="FIELD[OP]VALUE",
+        help="추출 전에 필터를 적용합니다 (예: status=OK, temp>30, voltage<3.6). 여러 번 지정 가능",
     )
     parser.add_argument(
         "--list-only",
@@ -131,6 +141,68 @@ def extract_fields_to_csv(
     )
     df[available].to_csv(output_path, index=False)
     return output_path, missing
+
+
+def parse_filter_expression(expr: str) -> tuple[str, str, str]:
+    operators = ["<=", ">=", "==", "!=", "<", ">", "="]
+    for op in operators:
+        if op in expr:
+            field, value = expr.split(op, 1)
+            field, value = field.strip(), value.strip()
+            if not field or not value:
+                raise ValueError(f"필터 표현식이 올바르지 않습니다: '{expr}'")
+            return field, op, value
+    raise ValueError(
+        "필터 표현식이 올바르지 않습니다. 예: status=OK, voltage>3.6, temp<=25"
+    )
+
+
+def apply_extract_filters(df, filters: List[str]):
+    if not filters:
+        return df
+
+    mask = pd.Series(True, index=df.index)
+    for expr in filters:
+        field, op, raw_value = parse_filter_expression(expr)
+        if field not in df.columns:
+            raise KeyError(f"필터 필드 '{field}'을(를) 찾을 수 없습니다.")
+
+        series = df[field]
+
+        try:
+            numeric_value = float(raw_value)
+            value_is_numeric = True
+        except ValueError:
+            value_is_numeric = False
+            numeric_value = None
+
+        if op in {">", "<", ">=", "<="}:
+            if not value_is_numeric:
+                raise ValueError(f"'{op}' 비교는 숫자 값과 함께 사용해야 합니다: {raw_value}")
+            comparable = pd.to_numeric(series, errors="coerce")
+            if op == ">":
+                condition = comparable > numeric_value
+            elif op == "<":
+                condition = comparable < numeric_value
+            elif op == ">=":
+                condition = comparable >= numeric_value
+            else:
+                condition = comparable <= numeric_value
+        elif op in {"=", "=="}:
+            if value_is_numeric:
+                comparable = pd.to_numeric(series, errors="coerce")
+                if comparable.notna().any():
+                    condition = comparable == numeric_value
+                else:
+                    condition = series.astype(str) == raw_value
+            else:
+                condition = series.astype(str) == raw_value
+        else:  # op == "!="
+            condition = series.astype(str) != raw_value
+
+        mask &= condition.fillna(False)
+
+    return df[mask]
 
 
 def normalize_columns(df, columns: List[str]):
@@ -200,13 +272,24 @@ def main(argv: Iterable[str] | None = None) -> int:
                 field_names.append(col)
     print_fields(field_names)
 
+    filtered_df = df
+    if args.extract_filter:
+        try:
+            filtered_df = apply_extract_filters(df, args.extract_filter)
+            print(f"필터 적용 후 행 수: {len(filtered_df)} / {len(df)}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"필터 적용 실패: {exc}")
+            return 1
+
     if args.extract:
         try:
             target = file_paths[0]
             filename = None
             if len(file_paths) > 1:
                 filename = f"{target.stem}_combined_extracted.csv"
-            saved_path, missing = extract_fields_to_csv(df, args.extract, target, filename=filename)
+            saved_path, missing = extract_fields_to_csv(
+                filtered_df, args.extract, target, filename=filename
+            )
             print(f"추출된 컬럼을 저장했습니다: {saved_path}")
             if missing:
                 print(f"다음 컬럼은 존재하지 않아 제외되었습니다: {', '.join(missing)}")
