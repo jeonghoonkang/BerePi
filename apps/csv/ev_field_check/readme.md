@@ -33,6 +33,14 @@ pip install pandas matplotlib
   python apps/csv/ev_field_check/run.py sample.csv --extract time voltage current
   ```
 
+  - 기본 저장 파일명: `sample_extracted.csv` (여러 파일을 합치면 `a_combined_extracted.csv`)
+
+- 선택한 컬럼을 새 이름으로 저장하며 추출하기
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --extract time voltage --extract-output filtered.csv
+  ```
+
 - 조건을 추가해 필요한 컬럼만 추출하기 (예: status가 OK이고 temp > 30)
 
   ```bash

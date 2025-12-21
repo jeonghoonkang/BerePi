@@ -33,6 +33,9 @@ EXAMPLE_USAGE = """\
   # 필요한 컬럼만 추출하여 새 CSV 생성
   python apps/csv/ev_field_check/run.py sample.csv --extract time voltage current
 
+  # 출력 파일 이름을 지정해 추출
+  python apps/csv/ev_field_check/run.py sample.csv --extract time voltage --extract-output filtered.csv
+
   # 조건을 걸어 필요한 컬럼만 추출 (예: status가 OK이고 temp > 30)
   python apps/csv/ev_field_check/run.py sample.csv --extract time temp status \
     --extract-filter "status=OK" --extract-filter "temp>30"
@@ -76,6 +79,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         "--extract",
         nargs="+",
         help="지정한 컬럼만 추출하여 새로운 CSV 파일로 저장",
+    )
+    parser.add_argument(
+        "--extract-output",
+        type=str,
+        help="추출 결과를 저장할 CSV 파일 이름을 지정합니다",
     )
     parser.add_argument(
         "--extract-filter",
@@ -284,8 +292,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     if args.extract:
         try:
             target = file_paths[0]
-            filename = None
-            if len(file_paths) > 1:
+            filename = args.extract_output
+            if filename is None and len(file_paths) > 1:
                 filename = f"{target.stem}_combined_extracted.csv"
             saved_path, missing = extract_fields_to_csv(
                 filtered_df, args.extract, target, filename=filename
