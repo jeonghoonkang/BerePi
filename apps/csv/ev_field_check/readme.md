@@ -53,3 +53,16 @@ pip install pandas matplotlib
   python apps/csv/ev_field_check/run.py sample.csv --extract time temp status \
     --extract-filter "status=OK" --extract-filter "temp>30"
   ```
+
+- 별도 플로팅 스크립트로 CSV 그리기 (`plot.py`)
+
+  ```bash
+  # 시간 컬럼(time)을 x축으로 하고 나머지 모든 컬럼을 y축으로 표시
+  python apps/csv/ev_field_check/plot.py sample.csv --time-field time
+
+  # y축 컬럼을 지정하고, 여러 컬럼을 첫 유효 값 기준으로 정규화하여 표시
+  python apps/csv/ev_field_check/plot.py sample.csv --time-field time --y-fields voltage current --normalize
+
+  # 인자 파일(@args.txt)로부터 옵션을 읽어 실행 (파일 내 공백/줄바꿈 기준으로 인자 전달)
+  python apps/csv/ev_field_check/plot.py @apps/csv/ev_field_check/example_args.txt
+  ```
