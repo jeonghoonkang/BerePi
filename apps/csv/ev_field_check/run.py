@@ -92,6 +92,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         help="추출 전에 필터를 적용합니다 (예: status=OK, temp>30, voltage<3.6). 여러 번 지정 가능",
     )
     parser.add_argument(
+        "--details",
+        action="store_true",
+        help="총 행 수, 필드 개수, 시간 컬럼 표시를 포함한 상세 정보를 출력",
+    )
+    parser.add_argument(
         "--list-only",
         action="store_true",
         help="필드명만 출력하고 그래프는 그리지 않습니다",
@@ -120,6 +125,23 @@ def print_fields(field_names: List[str]):
     print("\n=== CSV 필드 목록 ===")
     for column in field_names:
         print(column)
+    print("===================\n")
+
+
+def print_details(field_names: List[str], df, time_field: str | None):
+    print("\n=== CSV 상세 정보 ===")
+    print(f"총 행 수: {len(df)}")
+    print(f"필드 개수: {len(field_names)}")
+    if time_field:
+        presence = "(존재)" if time_field in field_names else "(미발견)"
+        print(f"지정한 시간 컬럼: {time_field} {presence}")
+    else:
+        print("지정한 시간 컬럼: 없음")
+
+    print("필드 목록 (시간 컬럼은 * 표시):")
+    for column in field_names:
+        prefix = "* " if time_field and column == time_field else "- "
+        print(f"{prefix}{column}")
     print("===================\n")
 
 
@@ -278,7 +300,10 @@ def main(argv: Iterable[str] | None = None) -> int:
             if col not in seen:
                 seen.add(col)
                 field_names.append(col)
-    print_fields(field_names)
+    if args.details:
+        print_details(field_names, df, args.time_field)
+    else:
+        print_fields(field_names)
 
     filtered_df = df
     if args.extract_filter:

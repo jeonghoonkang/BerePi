@@ -27,6 +27,12 @@ pip install pandas matplotlib
   python apps/csv/ev_field_check/run.py --multi-file a.csv b.csv --list-only
   ```
 
+- CSV 요약 정보 확인하기 (행 수, 필드 수, 시간 컬럼 표시 포함)
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --details --time-field time
+  ```
+
 - 선택한 컬럼만 추출하여 새 CSV 생성하기
 
   ```bash
