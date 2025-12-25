@@ -39,6 +39,11 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="여러 수치 컬럼을 첫 유효 값으로 나누어 동일 기준으로 정규화",
     )
+    parser.add_argument(
+        "--drop-non-numeric",
+        action="store_true",
+        help="수치로 변환할 수 없는 컬럼을 제외하고 그립니다",
+    )
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
@@ -56,6 +61,26 @@ def select_y_fields(df: pd.DataFrame, time_field: str, y_fields: List[str] | Non
         return y_fields
 
     return [col for col in df.columns if col != time_field]
+
+
+def drop_non_numeric_fields(df: pd.DataFrame, y_fields: List[str]) -> tuple[pd.DataFrame, List[str], List[str]]:
+    numeric_fields: List[str] = []
+    excluded_fields: List[str] = []
+    cleaned_df = df.copy()
+
+    for field in y_fields:
+        series = cleaned_df[field]
+        numeric_series = pd.to_numeric(series, errors="coerce")
+        non_numeric_mask = series.notna() & numeric_series.isna()
+
+        if non_numeric_mask.any():
+            excluded_fields.append(field)
+            cleaned_df = cleaned_df.drop(columns=[field])
+        else:
+            cleaned_df[field] = numeric_series
+            numeric_fields.append(field)
+
+    return cleaned_df, numeric_fields, excluded_fields
 
 
 def normalize_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
@@ -108,7 +133,16 @@ def main(argv: Iterable[str] | None = None) -> int:
         print("y축에 사용할 컬럼이 없습니다. --y-fields 로 지정하거나 CSV 내용을 확인하세요.")
         return 1
 
-    plot_df = normalize_columns(df, y_fields) if args.normalize else df
+    plot_df = df
+    if args.drop_non_numeric:
+        plot_df, y_fields, excluded = drop_non_numeric_fields(plot_df, y_fields)
+        if excluded:
+            print("다음 컬럼은 비수치 값이 있어 제외되었습니다: " + ", ".join(excluded))
+        if not y_fields:
+            print("남은 수치 컬럼이 없습니다. CSV 데이터를 확인하세요.")
+            return 1
+
+    plot_df = normalize_columns(plot_df, y_fields) if args.normalize else plot_df
 
     try:
         plot_columns(plot_df, args.time_field, y_fields, normalized=args.normalize)
