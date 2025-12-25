@@ -13,6 +13,8 @@ import argparse
 from pathlib import Path
 from typing import Iterable, List
 
+import pandas.api.types as ptypes
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -83,6 +85,16 @@ def drop_non_numeric_fields(df: pd.DataFrame, y_fields: List[str]) -> tuple[pd.D
     return cleaned_df, numeric_fields, excluded_fields
 
 
+def ensure_boolean_numeric(df: pd.DataFrame, y_fields: List[str]) -> pd.DataFrame:
+    """Boolean 컬럼을 float으로 변환해 정규화/플롯 전에 수치형으로 맞춥니다."""
+
+    converted_df = df.copy()
+    for field in y_fields:
+        if field in converted_df.columns and ptypes.is_bool_dtype(converted_df[field]):
+            converted_df[field] = converted_df[field].astype(float)
+    return converted_df
+
+
 def normalize_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     normalized = df.copy()
     for col in columns:
@@ -134,6 +146,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 1
 
     plot_df = df
+    if args.drop_non_numeric and args.normalize:
+        plot_df = ensure_boolean_numeric(plot_df, y_fields)
+
     if args.drop_non_numeric:
         plot_df, y_fields, excluded = drop_non_numeric_fields(plot_df, y_fields)
         if excluded:

@@ -74,6 +74,9 @@ pip install pandas matplotlib
   # 비수치 데이터가 포함된 컬럼을 제외하고 그리기
   python apps/csv/ev_field_check/plot.py sample.csv --time-field time --drop-non-numeric
 
+  # 비수치 제외와 정규화를 함께 사용할 때, Boolean 컬럼은 자동으로 0/1로 변환 후 플롯
+  python apps/csv/ev_field_check/plot.py sample.csv --time-field time --y-fields flag_a flag_b --drop-non-numeric --normalize
+
   # 인자 파일(@args.txt)로부터 옵션을 읽어 실행 (파일 내 공백/줄바꿈 기준으로 인자 전달)
   python apps/csv/ev_field_check/plot.py @apps/csv/ev_field_check/example_args.txt
   ```
