@@ -86,6 +86,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         help="추출 결과를 저장할 CSV 파일 이름을 지정합니다",
     )
     parser.add_argument(
+        "--drop-non-numeric",
+        action="store_true",
+        help="추출 시 숫자가 아닌 값이 포함된 컬럼을 자동으로 제외",
+    )
+    parser.add_argument(
         "--extract-filter",
         action="append",
         metavar="FIELD[OP]VALUE",
@@ -156,13 +161,38 @@ def save_fields_to_txt(field_names: List[str], target_path: Path, *, filename: s
     return output_path
 
 
+def find_non_numeric_fields(df, fields: List[str]) -> List[str]:
+    non_numeric_fields: List[str] = []
+    for field in fields:
+        if field not in df.columns:
+            continue
+        series = df[field]
+        numeric = pd.to_numeric(series, errors="coerce")
+        has_non_numeric = (numeric.isna() & series.notna()).any()
+        if has_non_numeric:
+            non_numeric_fields.append(field)
+    return non_numeric_fields
+
+
 def extract_fields_to_csv(
-    df, fields: List[str], target_path: Path, *, filename: str | None = None
-) -> tuple[Path, List[str]]:
+    df,
+    fields: List[str],
+    target_path: Path,
+    *,
+    filename: str | None = None,
+    drop_non_numeric: bool = False,
+) -> tuple[Path, List[str], List[str]]:
     available = [field for field in fields if field in df.columns]
     missing = [field for field in fields if field not in df.columns]
     if not available:
         raise KeyError("지정한 컬럼 중 추출할 수 있는 컬럼이 없습니다.")
+
+    non_numeric_fields: List[str] = []
+    if drop_non_numeric:
+        non_numeric_fields = find_non_numeric_fields(df, available)
+        available = [field for field in available if field not in non_numeric_fields]
+        if not available:
+            raise KeyError("숫자가 아닌 값이 포함된 컬럼만 선택되어 추출할 수 없습니다.")
 
     output_path = (
         target_path.with_name(filename)
@@ -170,7 +200,7 @@ def extract_fields_to_csv(
         else target_path.with_name(f"{target_path.stem}_extracted.csv")
     )
     df[available].to_csv(output_path, index=False)
-    return output_path, missing
+    return output_path, missing, non_numeric_fields
 
 
 def parse_filter_expression(expr: str) -> tuple[str, str, str]:
@@ -320,12 +350,21 @@ def main(argv: Iterable[str] | None = None) -> int:
             filename = args.extract_output
             if filename is None and len(file_paths) > 1:
                 filename = f"{target.stem}_combined_extracted.csv"
-            saved_path, missing = extract_fields_to_csv(
-                filtered_df, args.extract, target, filename=filename
+            saved_path, missing, non_numeric = extract_fields_to_csv(
+                filtered_df,
+                args.extract,
+                target,
+                filename=filename,
+                drop_non_numeric=args.drop_non_numeric,
             )
             print(f"추출된 컬럼을 저장했습니다: {saved_path}")
             if missing:
                 print(f"다음 컬럼은 존재하지 않아 제외되었습니다: {', '.join(missing)}")
+            if non_numeric:
+                print(
+                    "다음 컬럼은 숫자가 아닌 값이 포함되어 제외되었습니다: "
+                    + ", ".join(non_numeric)
+                )
         except Exception as exc:  # noqa: BLE001
             print(f"컬럼 추출 실패: {exc}")
             return 1

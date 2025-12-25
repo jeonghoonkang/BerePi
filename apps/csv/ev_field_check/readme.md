@@ -41,6 +41,14 @@ pip install pandas matplotlib
 
   - 기본 저장 파일명: `sample_extracted.csv` (여러 파일을 합치면 `a_combined_extracted.csv`)
 
+- 추출 시 숫자가 아닌 값이 섞인 컬럼을 제외하기
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --extract voltage current --drop-non-numeric
+  ```
+
+  - 제외된 컬럼은 콘솔에 안내 메시지로 표시됩니다.
+
 - 선택한 컬럼을 새 이름으로 저장하며 추출하기
 
   ```bash
@@ -62,6 +70,9 @@ pip install pandas matplotlib
 
   # y축 컬럼을 지정하고, 여러 컬럼을 첫 유효 값 기준으로 정규화하여 표시
   python apps/csv/ev_field_check/plot.py sample.csv --time-field time --y-fields voltage current --normalize
+
+  # 비수치 데이터가 포함된 컬럼을 제외하고 그리기
+  python apps/csv/ev_field_check/plot.py sample.csv --time-field time --drop-non-numeric
 
   # 인자 파일(@args.txt)로부터 옵션을 읽어 실행 (파일 내 공백/줄바꿈 기준으로 인자 전달)
   python apps/csv/ev_field_check/plot.py @apps/csv/ev_field_check/example_args.txt
