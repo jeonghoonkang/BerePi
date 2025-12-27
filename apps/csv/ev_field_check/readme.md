@@ -49,6 +49,14 @@ pip install pandas matplotlib
 
   - 제외된 컬럼은 콘솔에 안내 메시지로 표시됩니다.
 
+- 숫자가 아닌 값이 있는 컬럼과 샘플 값 확인하기
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --drop-non-numeric-list
+  ```
+
+  - 각 컬럼의 앞쪽 5개, 마지막 5개 값이 함께 출력됩니다.
+
 - 선택한 컬럼을 새 이름으로 저장하며 추출하기
 
   ```bash

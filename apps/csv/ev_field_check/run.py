@@ -39,6 +39,9 @@ EXAMPLE_USAGE = """\
   # 조건을 걸어 필요한 컬럼만 추출 (예: status가 OK이고 temp > 30)
   python apps/csv/ev_field_check/run.py sample.csv --extract time temp status \
     --extract-filter "status=OK" --extract-filter "temp>30"
+
+  # 비숫자 컬럼과 앞/뒤 5개 샘플 값을 확인
+  python apps/csv/ev_field_check/run.py sample.csv --drop-non-numeric-list
 """
 
 
@@ -89,6 +92,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         "--drop-non-numeric",
         action="store_true",
         help="추출 시 숫자가 아닌 값이 포함된 컬럼을 자동으로 제외",
+    )
+    parser.add_argument(
+        "--drop-non-numeric-list",
+        action="store_true",
+        help="숫자가 아닌 값이 포함된 컬럼과 대표 값(앞쪽 5개, 뒤쪽 5개)을 확인",
     )
     parser.add_argument(
         "--extract-filter",
@@ -172,6 +180,24 @@ def find_non_numeric_fields(df, fields: List[str]) -> List[str]:
         if has_non_numeric:
             non_numeric_fields.append(field)
     return non_numeric_fields
+
+
+def print_non_numeric_field_samples(df, fields: List[str]):
+    non_numeric_fields = find_non_numeric_fields(df, fields)
+    if not non_numeric_fields:
+        print("숫자가 아닌 값이 포함된 컬럼이 없습니다.")
+        return
+
+    print("\n=== 숫자가 아닌 값이 포함된 컬럼 ===")
+    for field in non_numeric_fields:
+        series = df[field]
+        head_values = series.head(5).tolist()
+        tail_values = series.tail(5).tolist()
+
+        print(f"- {field}")
+        print(f"  앞쪽 5개: {head_values}")
+        print(f"  마지막 5개: {tail_values}")
+    print("===============================\n")
 
 
 def extract_fields_to_csv(
@@ -334,6 +360,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         print_details(field_names, df, args.time_field)
     else:
         print_fields(field_names)
+
+    if args.drop_non_numeric_list:
+        print_non_numeric_field_samples(df, field_names)
 
     filtered_df = df
     if args.extract_filter:
