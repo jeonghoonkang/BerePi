@@ -1,0 +1,7 @@
+sample.csv
+--time-field
+time
+--y-fields
+voltage
+current
+--normalize
