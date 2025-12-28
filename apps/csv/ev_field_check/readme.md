@@ -70,6 +70,13 @@ pip install pandas matplotlib
     --extract-filter "status=OK" --extract-filter "temp>30"
   ```
 
+- `example_args.txt` 파일의 인자를 그대로 사용하여 실행하기
+
+  ```bash
+  python apps/csv/ev_field_check/run.py $(cat apps/csv/ev_field_check/example_args.txt)
+  ```
+  - `example_args.txt`에는 `sample.csv --time-field time --y-fields voltage current --normalize`가 줄바꿈 단위로 기록되어 있어, 위 명령으로 동일한 인자가 전달됩니다.
+
 - 별도 플로팅 스크립트로 CSV 그리기 (`plot.py`)
 
   ```bash
