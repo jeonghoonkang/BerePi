@@ -57,6 +57,12 @@ pip install pandas matplotlib
 
   - 각 컬럼의 앞쪽 5개, 마지막 5개 값이 함께 출력됩니다.
 
+- 특정 컬럼 값 분포(고유 값+건수) 확인하기
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --value-counts status mode
+  ```
+
 - 선택한 컬럼을 새 이름으로 저장하며 추출하기
 
   ```bash

@@ -42,6 +42,9 @@ EXAMPLE_USAGE = """\
 
   # 비숫자 컬럼과 앞/뒤 5개 샘플 값을 확인
   python apps/csv/ev_field_check/run.py sample.csv --drop-non-numeric-list
+
+  # 특정 컬럼 값 분포를 확인
+  python apps/csv/ev_field_check/run.py sample.csv --value-counts status mode
 """
 
 
@@ -97,6 +100,12 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         "--drop-non-numeric-list",
         action="store_true",
         help="숫자가 아닌 값이 포함된 컬럼과 대표 값(앞쪽 5개, 뒤쪽 5개)을 확인",
+    )
+    parser.add_argument(
+        "--value-counts",
+        nargs="+",
+        metavar="FIELD",
+        help="선택한 컬럼의 값 종류와 개수를 출력",
     )
     parser.add_argument(
         "--extract-filter",
@@ -198,6 +207,21 @@ def print_non_numeric_field_samples(df, fields: List[str]):
         print(f"  앞쪽 5개: {head_values}")
         print(f"  마지막 5개: {tail_values}")
     print("===============================\n")
+
+
+def print_value_counts(df, fields: List[str]):
+    print("\n=== 필드 값 분포 ===")
+    for field in fields:
+        if field not in df.columns:
+            print(f"- {field}: 컬럼을 찾을 수 없습니다.")
+            continue
+
+        counts = df[field].value_counts(dropna=False)
+        print(f"- {field} (고유 {len(counts)}개)")
+        for value, count in counts.items():
+            label = "<NaN>" if pd.isna(value) else value
+            print(f"    {label}: {count}")
+    print("====================\n")
 
 
 def extract_fields_to_csv(
@@ -372,6 +396,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"필터 적용 실패: {exc}")
             return 1
+
+    if args.value_counts:
+        print_value_counts(filtered_df, args.value_counts)
 
     if args.extract:
         try:
