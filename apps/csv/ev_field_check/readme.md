@@ -63,6 +63,13 @@ pip install pandas matplotlib
   python apps/csv/ev_field_check/run.py sample.csv --value-counts status mode
   ```
 
+- 실행 로그를 파일(out_YYYYMMDD_HHMMSS.txt)로 함께 남기기
+
+  ```bash
+  python apps/csv/ev_field_check/run.py sample.csv --list-only --outputlog
+  ```
+  - 로그 파일은 현재 작업 디렉터리에 생성되며, 콘솔 출력과 동일한 내용을 담습니다.
+
 - 선택한 컬럼을 새 이름으로 저장하며 추출하기
 
   ```bash

@@ -11,6 +11,9 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from datetime import datetime
+import contextlib
+import io
 from typing import Iterable, List, Sequence
 
 import pandas as pd
@@ -45,6 +48,9 @@ EXAMPLE_USAGE = """\
 
   # 특정 컬럼 값 분포를 확인
   python apps/csv/ev_field_check/run.py sample.csv --value-counts status mode
+
+  # 실행 결과를 로그 파일(out_YYYYMMDD_HHMMSS.txt)로 저장
+  python apps/csv/ev_field_check/run.py sample.csv --list-only --outputlog
 """
 
 
@@ -106,6 +112,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         nargs="+",
         metavar="FIELD",
         help="선택한 컬럼의 값 종류와 개수를 출력",
+    )
+    parser.add_argument(
+        "--outputlog",
+        action="store_true",
+        help="실행 결과를 out_YYYYMMDD_HHMMSS.txt 파일로 저장",
     )
     parser.add_argument(
         "--extract-filter",
@@ -354,9 +365,24 @@ def plot_fields(df, time_field: str, value_fields: List[str]) -> None:
     plt.show()
 
 
-def main(argv: Iterable[str] | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
+class TeeWriter(io.TextIOBase):
+    def __init__(self, *streams: io.TextIOBase):
+        super().__init__()
+        self.streams = streams
 
+    def write(self, s: str) -> int:  # type: ignore[override]
+        written = 0
+        for stream in self.streams:
+            written = stream.write(s)
+            stream.flush()
+        return written
+
+    def flush(self) -> None:  # type: ignore[override]
+        for stream in self.streams:
+            stream.flush()
+
+
+def run_core(args: argparse.Namespace) -> int:
     file_paths: List[Path] = []
     if args.multi_file:
         file_paths = list(args.multi_file)
@@ -451,6 +477,28 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 1
 
     return 0
+
+
+def run_with_outputlog(args: argparse.Namespace) -> int:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = Path.cwd() / f"out_{timestamp}.txt"
+    buffer = io.StringIO()
+    tee_out = TeeWriter(sys.stdout, buffer)
+    tee_err = TeeWriter(sys.stderr, buffer)
+
+    with contextlib.redirect_stdout(tee_out), contextlib.redirect_stderr(tee_err):
+        exit_code = run_core(args)
+
+    log_path.write_text(buffer.getvalue(), encoding="utf-8")
+    print(f"실행 결과 로그를 저장했습니다: {log_path}")
+    return exit_code
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.outputlog:
+        return run_with_outputlog(args)
+    return run_core(args)
 
 
 if __name__ == "__main__":
