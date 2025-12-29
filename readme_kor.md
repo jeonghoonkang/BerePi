@@ -1,6 +1,6 @@
 ## BerePi (project)
 
-##### developer
+##### Developer
   - Jeonghoon Kang (https://github.com/jeonghoonkang), Philman Jeong (https://github.com/ipmstyle), Sukun Kim (https://github.com/sukunkim)
 
 ### Wireless Sensor Network which using RaspberryPi
