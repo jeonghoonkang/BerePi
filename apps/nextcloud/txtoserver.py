@@ -3,7 +3,7 @@
 Incrementally copy photos from Nextcloud server A (source) to server B (destination)
 without duplicates, using WebDAV.
 
-Configuration is loaded from input.confg (INI format). Example:
+Configuration is loaded from input.conf (INI format). Example:
 
 [source]
 url = https://nextcloud-a.example.com/remote.php/dav/files/username/
@@ -22,7 +22,7 @@ verify_ssl = true
 
 Usage:
   python3 txtoserver.py
-  python3 txtoserver.py /path/to/input.confg
+  python3 txtoserver.py /path/to/input.conf
 """
 
 from __future__ import annotations
@@ -39,6 +39,12 @@ from webdav3.client import Client
 from webdav3.exceptions import WebDavException
 
 ConfigInfo = Tuple[Optional[int], Optional[str], Optional[dt.datetime]]
+
+
+def print_usage() -> None:
+    print("Usage:")
+    print("  python3 txtoserver.py")
+    print("  python3 txtoserver.py /path/to/input.conf")
 
 
 def load_config(path: str) -> configparser.ConfigParser:
@@ -144,7 +150,8 @@ def upload_file(src_client: Client, dest_client: Client, src_path: str, dest_pat
 
 
 def main() -> int:
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "input.confg"
+    print_usage()
+    config_path = sys.argv[1] if len(sys.argv) > 1 else "input.conf"
     try:
         config = load_config(config_path)
     except FileNotFoundError as exc:
