@@ -33,6 +33,7 @@ import configparser
 import datetime as dt
 import os
 import posixpath
+import subprocess
 import sys
 import tempfile
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -156,6 +157,33 @@ def upload_file(src_client: Client, dest_client: Client, src_path: str, dest_pat
         dest_client.upload_sync(remote_path=dest_path, local_path=tmp_file.name)
 
 
+def run_source_propfind(section: configparser.SectionProxy, root: str) -> int:
+    url = section.get("url")
+    username = section.get("username")
+    password = section.get("password")
+    if not url or not username or not password:
+        print("Missing source connection details for PROPFIND.")
+        return 1
+    propfind_url = url.rstrip("/")
+    if root:
+        propfind_url = f"{propfind_url}/{root.lstrip('/')}"
+    command = [
+        "curl",
+        "-X",
+        "PROPFIND",
+        "-u",
+        f"{username}:{password}",
+        "-H",
+        "Depth: 1",
+        propfind_url,
+    ]
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+    return result.returncode
+
+
 def run_connection_test(client: Client, root: str, label: str) -> None:
     try:
         client.list(root, get_info=True)
@@ -181,6 +209,11 @@ def main() -> int:
 
     src_root = normalize_root(src_section.get("root", ""))
     dest_root = normalize_root(dest_section.get("root", ""))
+
+    propfind_code = run_source_propfind(src_section, src_root)
+    if propfind_code != 0:
+        print(f"Source PROPFIND failed with exit code {propfind_code}.")
+        return propfind_code
 
     src_client = build_client(src_section, verify_ssl)
     dest_client = build_client(dest_section, verify_ssl)
