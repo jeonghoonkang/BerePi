@@ -45,6 +45,8 @@ def print_usage() -> None:
     print("Usage:")
     print("  python3 txtoserver.py")
     print("  python3 txtoserver.py /path/to/input.conf")
+    print("  python3 txtoserver.py --conn_test")
+    print("  python3 txtoserver.py /path/to/input.conf --conn_test")
 
 
 def load_config(path: str) -> configparser.ConfigParser:
@@ -149,9 +151,19 @@ def upload_file(src_client: Client, dest_client: Client, src_path: str, dest_pat
         dest_client.upload_sync(remote_path=dest_path, local_path=tmp_file.name)
 
 
+def run_connection_test(client: Client, root: str, label: str) -> None:
+    try:
+        client.list(root, get_info=True)
+    except WebDavException as exc:
+        raise RuntimeError(f"Connection test failed for {label}: {exc}") from exc
+    print(f"Connection test succeeded for {label}.")
+
+
 def main() -> int:
     print_usage()
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "input.conf"
+    args = [arg for arg in sys.argv[1:] if arg != "--conn_test"]
+    conn_test = "--conn_test" in sys.argv[1:]
+    config_path = args[0] if args else "input.conf"
     try:
         config = load_config(config_path)
     except FileNotFoundError as exc:
@@ -167,6 +179,15 @@ def main() -> int:
 
     src_client = build_client(src_section, verify_ssl)
     dest_client = build_client(dest_section, verify_ssl)
+
+    if conn_test:
+        try:
+            run_connection_test(src_client, src_root, "source")
+            run_connection_test(dest_client, dest_root, "destination")
+        except RuntimeError as exc:
+            print(exc)
+            return 1
+        return 0
 
     print("Scanning source server...")
     src_entries = list_tree(src_client, src_root)
