@@ -6,14 +6,16 @@ without duplicates, using WebDAV.
 Configuration is loaded from input.conf (INI format). Example:
 
 [source]
-url = https://nextcloud-a.example.com/remote.php/dav/files/username/
+webdav_hostname = https://nextcloud-a.example.com
+webdav_root = /remote.php/dav/files/username/
 port = 443
 username = user_a
 password = pass_a
 root = Photos
 
 [destination]
-url = https://nextcloud-b.example.com/remote.php/dav/files/username/
+webdav_hostname = https://nextcloud-b.example.com
+webdav_root = /remote.php/dav/files/username/
 port = 443
 username = user_b
 password = pass_b
@@ -62,7 +64,8 @@ def load_config(path: str) -> configparser.ConfigParser:
 
 def build_client(section: configparser.SectionProxy, verify_ssl: bool) -> Client:
     options = {
-        "webdav_hostname": section.get("url"),
+        "webdav_hostname": section.get("webdav_hostname"),
+        "webdav_root": section.get("webdav_root"),
         "webdav_login": section.get("username"),
         "webdav_password": section.get("password"),
         "verbose": False,
@@ -158,13 +161,14 @@ def upload_file(src_client: Client, dest_client: Client, src_path: str, dest_pat
 
 
 def run_source_propfind(section: configparser.SectionProxy, root: str) -> int:
-    url = section.get("url")
+    hostname = section.get("webdav_hostname")
+    webdav_root = section.get("webdav_root")
     username = section.get("username")
     password = section.get("password")
-    if not url or not username or not password:
+    if not hostname or not webdav_root or not username or not password:
         print("Missing source connection details for PROPFIND.")
         return 1
-    propfind_url = url.rstrip("/")
+    propfind_url = f"{hostname.rstrip('/')}/{webdav_root.strip('/')}"
     if root:
         propfind_url = f"{propfind_url}/{root.lstrip('/')}"
     command = [
