@@ -7,12 +7,14 @@ Configuration is loaded from input.conf (INI format). Example:
 
 [source]
 url = https://nextcloud-a.example.com/remote.php/dav/files/username/
+port = 443
 username = user_a
 password = pass_a
 root = Photos
 
 [destination]
 url = https://nextcloud-b.example.com/remote.php/dav/files/username/
+port = 443
 username = user_b
 password = pass_b
 root = Photos
@@ -64,6 +66,9 @@ def build_client(section: configparser.SectionProxy, verify_ssl: bool) -> Client
         "webdav_password": section.get("password"),
         "verbose": False,
     }
+    port = section.get("port", fallback="").strip()
+    if port:
+        options["webdav_port"] = int(port)
     client = Client(options)
     client.verify = verify_ssl
     return client
