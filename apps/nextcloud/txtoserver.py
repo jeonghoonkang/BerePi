@@ -196,6 +196,24 @@ def run_connection_test(client: Client, root: str, label: str) -> None:
     print(f"Connection test succeeded for {label}.")
 
 
+def validate_paths(
+    section: configparser.SectionProxy,
+    root: str,
+    label: str,
+) -> str:
+    hostname = section.get("webdav_hostname", "")
+    webdav_root = section.get("webdav_root", "")
+    full_path = f"{hostname.rstrip('/')}/{webdav_root.strip('/')}"
+    if root:
+        full_path = f"{full_path}/{root.lstrip('/')}"
+    print(f"{label} path check:")
+    print(f"  webdav_hostname = {hostname}")
+    print(f"  webdav_root = {webdav_root}")
+    print(f"  root = {root}")
+    print(f"  composed = {full_path}")
+    return full_path
+
+
 def main() -> int:
     print_usage()
     args = [arg for arg in sys.argv[1:] if arg != "--conn_test"]
@@ -213,6 +231,9 @@ def main() -> int:
 
     src_root = normalize_root(src_section.get("root", ""))
     dest_root = normalize_root(dest_section.get("root", ""))
+
+    validate_paths(src_section, src_root, "Source")
+    validate_paths(dest_section, dest_root, "Destination")
 
     propfind_code = run_source_propfind(src_section, src_root)
     if propfind_code != 0:
