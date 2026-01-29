@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from typing import Mapping
 
 import pyodbc
 
@@ -13,6 +13,13 @@ def _connect(connection_string: str) -> pyodbc.Connection:
 
 def fetch_all_employees(connection_string: str) -> list[Mapping[str, str]]:
     """Return employee rows matching the stored procedure result set."""
+    # Original T-SQL stored procedure:
+    # CREATE PROCEDURE HumanResources.uspGetAllEmployees
+    # AS
+    #     SET NOCOUNT ON;
+    #     SELECT LastName, FirstName, JobTitle, Department
+    #     FROM HumanResources.vEmployeeDepartment;
+    # GO
     query = """
         SELECT LastName, FirstName, JobTitle, Department
         FROM HumanResources.vEmployeeDepartment;
