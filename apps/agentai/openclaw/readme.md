@@ -1,2 +1,2 @@
-## for the personal agent
+## the personal agent
 - https://github.com/openclaw/openclaw
