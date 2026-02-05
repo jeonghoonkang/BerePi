@@ -97,10 +97,13 @@ def parse_time(value: Optional[str]) -> Optional[dt.datetime]:
 def list_tree(client: Client, root: str) -> List[Dict[str, object]]:
     items: List[Dict[str, object]] = []
     queue = [root]
+    #print("dest root", root)
+    #print("queue", queue)
     while queue:
         current = queue.pop(0)
         try:
             entries = client.list(current, get_info=True)
+            print ("entries", entries)
         except WebDavException as exc:
             raise RuntimeError(f"Failed to list {current}: {exc}") from exc
         for entry in entries:
@@ -258,6 +261,7 @@ def main() -> int:
 
     print("Scanning destination server...")
     dest_entries = list_tree(dest_client, dest_root)
+    print(dest_root, dest_entries)
     dest_map = build_info_map(dest_entries)
 
     uploaded = 0
