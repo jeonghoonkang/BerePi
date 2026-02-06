@@ -24,6 +24,9 @@ root = Photos
 [settings]
 verify_ssl = true
 
+webdav_hostname = https://keties.mooo.com:22443
+# port 작성방법 
+
 Usage:
   python3 txtoserver.py
   python3 txtoserver.py /path/to/input.conf
