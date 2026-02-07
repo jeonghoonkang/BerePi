@@ -1,5 +1,4 @@
 """Streamlit app for local LLM RAG pipeline.
-
 This app allows users to:
 - Load a local LLM from a given path.
 - Build a RAG pipeline on PDF documents stored in a directory.
