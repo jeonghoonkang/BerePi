@@ -105,6 +105,14 @@ def relative_from_root(src_path: str, src_root: str) -> Optional[str]:
     return None
 
 
+def is_directory(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return bool(value)
+
+
 def parse_time(value: Optional[str]) -> Optional[dt.datetime]:
     if not value:
         return None
@@ -119,6 +127,7 @@ def parse_time(value: Optional[str]) -> Optional[dt.datetime]:
 def list_tree(client: Client, root: str) -> List[Dict[str, object]]:
     items: List[Dict[str, object]] = []
     queue = [root]
+    normalized_root = normalize_remote_path(root)
     while queue:
         current = queue.pop(0)
         try:
@@ -129,10 +138,23 @@ def list_tree(client: Client, root: str) -> List[Dict[str, object]]:
             entry_path = entry.get("path")
             if isinstance(entry_path, str) and normalize_remote_path(entry_path) == normalize_remote_path(current):
                 continue
-            if entry.get("isdir"):
-                queue.append(entry.get("path"))
+
+            if not isinstance(entry_path, str):
+                continue
+
+            entry_rel = relative_from_root(entry_path, normalized_root)
+            if entry_rel is None:
+                continue
+
+            if is_directory(entry.get("isdir")):
+                next_dir = posixpath.join(normalized_root, entry_rel) if normalized_root else entry_rel
+                queue.append(next_dir)
             else:
-                items.append(entry)
+                normalized_entry = dict(entry)
+                normalized_entry["path"] = (
+                    posixpath.join(normalized_root, entry_rel) if normalized_root else entry_rel
+                )
+                items.append(normalized_entry)
     return items
 
 
