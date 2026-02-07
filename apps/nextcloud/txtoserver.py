@@ -83,6 +83,28 @@ def normalize_root(root: str) -> str:
     return root
 
 
+def normalize_remote_path(path: str) -> str:
+    return path.strip("/")
+
+
+def relative_from_root(src_path: str, src_root: str) -> Optional[str]:
+    normalized_path = normalize_remote_path(src_path)
+    if not src_root:
+        return normalized_path
+
+    root_prefix = f"{src_root}/"
+    if normalized_path == src_root:
+        return ""
+    if normalized_path.startswith(root_prefix):
+        return normalized_path[len(root_prefix):]
+
+    marker = f"/{root_prefix}"
+    marker_index = normalized_path.find(marker)
+    if marker_index >= 0:
+        return normalized_path[marker_index + len(marker):]
+    return None
+
+
 def parse_time(value: Optional[str]) -> Optional[dt.datetime]:
     if not value:
         return None
@@ -97,17 +119,15 @@ def parse_time(value: Optional[str]) -> Optional[dt.datetime]:
 def list_tree(client: Client, root: str) -> List[Dict[str, object]]:
     items: List[Dict[str, object]] = []
     queue = [root]
-    #print("dest root", root)
-    #print("queue", queue)
     while queue:
         current = queue.pop(0)
         try:
             entries = client.list(current, get_info=True)
-            print ("entries", entries)
         except WebDavException as exc:
             raise RuntimeError(f"Failed to list {current}: {exc}") from exc
         for entry in entries:
-            if entry.get("path") == current:
+            entry_path = entry.get("path")
+            if isinstance(entry_path, str) and normalize_remote_path(entry_path) == normalize_remote_path(current):
                 continue
             if entry.get("isdir"):
                 queue.append(entry.get("path"))
@@ -122,11 +142,12 @@ def build_info_map(entries: Iterable[Dict[str, object]]) -> Dict[str, ConfigInfo
         path = entry.get("path")
         if not isinstance(path, str):
             continue
+        normalized_path = normalize_remote_path(path)
         size = entry.get("size")
         size_int = int(size) if size is not None else None
         etag = entry.get("etag") if isinstance(entry.get("etag"), str) else None
         modified = parse_time(entry.get("modified") if isinstance(entry.get("modified"), str) else None)
-        info_map[path] = (size_int, etag, modified)
+        info_map[normalized_path] = (size_int, etag, modified)
     return info_map
 
 
@@ -261,7 +282,6 @@ def main() -> int:
 
     print("Scanning destination server...")
     dest_entries = list_tree(dest_client, dest_root)
-    print(dest_root, dest_entries)
     dest_map = build_info_map(dest_entries)
 
     uploaded = 0
@@ -271,10 +291,18 @@ def main() -> int:
         src_path = entry.get("path")
         if not isinstance(src_path, str):
             continue
-        rel_path = src_path[len(src_root):].lstrip("/") if src_root else src_path
+        normalized_src_path = normalize_remote_path(src_path)
+        rel_path = relative_from_root(src_path, src_root)
+        if rel_path is None:
+            print(
+                "Skipping unexpected source path "
+                f"'{src_path}' (normalized='{normalized_src_path}'), root='{src_root}'"
+            )
+            skipped += 1
+            continue
         dest_path = posixpath.join(dest_root, rel_path) if dest_root else rel_path
-        src_info = build_info_map([entry]).get(src_path, (None, None, None))
-        dest_info = dest_map.get(dest_path)
+        src_info = build_info_map([entry]).get(normalized_src_path, (None, None, None))
+        dest_info = dest_map.get(normalize_remote_path(dest_path))
         if should_upload(src_info, dest_info):
             print(f"Uploading {src_path} -> {dest_path}")
             upload_file(src_client, dest_client, src_path, dest_path)
