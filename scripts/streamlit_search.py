@@ -2,7 +2,6 @@ import streamlit as st
 import re
 from pathlib import Path
 
-
 def highlight_term(line: str, term: str) -> str:
     """Return HTML string with search term highlighted."""
     escaped = re.escape(term)

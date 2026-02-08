@@ -15,7 +15,6 @@ import tempfile
 from pathlib import Path
 from typing import List
 
-
 def ensure_binary(name: str, packages: List[str]) -> str:
     """Return path to executable, installing packages when missing."""
     path = shutil.which(name)

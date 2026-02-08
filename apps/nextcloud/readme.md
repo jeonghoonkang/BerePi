@@ -1,5 +1,8 @@
 # Nextcloud File Syncronization System
 
+## App 종류
+- txtoserver.py 여러지점에서 하나의 서버로 데이터를 전송, dav 프로토콜 사용
+
 ## Nextcloud server by docker-compose 
 - 설치 및 설정
   - https://github.com/jeonghoonkang/BerePi/tree/master/apps/docker/docker_compose/nextcloud
