@@ -24,9 +24,6 @@ root = Photos
 [settings]
 verify_ssl = true
 
-webdav_hostname = https://keties.mooo.com:22443
-# port 작성방법 
-
 Usage:
   python3 txtoserver.py
   python3 txtoserver.py /path/to/input.conf
@@ -263,6 +260,24 @@ def validate_paths(
     return full_path
 
 
+def compose_remote_url(section: configparser.SectionProxy, remote_path: str) -> str:
+    hostname = section.get("webdav_hostname", "").rstrip("/")
+    webdav_root = section.get("webdav_root", "").strip("/")
+    normalized_path = normalize_remote_path(remote_path)
+    if webdav_root and normalized_path:
+        return f"{hostname}/{webdav_root}/{normalized_path}"
+    if webdav_root:
+        return f"{hostname}/{webdav_root}"
+    if normalized_path:
+        return f"{hostname}/{normalized_path}"
+    return hostname
+
+
+def append_skip_log(skip_file: str, src_url: str, dst_url: str) -> None:
+    with open(skip_file, "a", encoding="utf-8") as file:
+        file.write(f"src={src_url} | dst={dst_url}\n")
+
+
 def main() -> int:
     print_usage()
     args = [arg for arg in sys.argv[1:] if arg != "--conn_test"]
@@ -311,6 +326,7 @@ def main() -> int:
 
     uploaded = 0
     skipped = 0
+    skip_file = "skip.txt"
 
     for entry in src_entries:
         src_path = entry.get("path")
@@ -333,6 +349,10 @@ def main() -> int:
             upload_file(src_client, dest_client, src_path, dest_path)
             uploaded += 1
         else:
+            src_url = compose_remote_url(src_section, src_path)
+            dst_url = compose_remote_url(dest_section, dest_path)
+            append_skip_log(skip_file, src_url, dst_url)
+            print(f"Skipping existing file: {src_url} -> {dst_url}")
             skipped += 1
 
     print(f"Done. Uploaded: {uploaded}, Skipped: {skipped}.")
