@@ -1,6 +1,7 @@
 #!/bin/bash
 # Author : https://github.com/jeonghoonkang
 
+
 alias sr='screen'
 
 #sudo screen -dmS startup sudo sh /home/pi/devel/BerePi/apps/otsdb/local_start_tsdb.sh
