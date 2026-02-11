@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  tesla-battery-imbalance:
+    build: .
+    container_name: tesla-battery-imbalance
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
