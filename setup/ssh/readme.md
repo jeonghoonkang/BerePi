@@ -30,7 +30,7 @@ The key's randomart image is:
 </pre>
 
 
-### 키 변경되었을 경우 (ssh -R) ssh key 변경 (Mac OSX)
+### 키 변경되었을 경우 (ssh -R) ssh key 변경 (Mac OSX), ssh문제 
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "10.0.0.117"
 - ssh-keygen -f "/home/tinyos/.ssh/known_hosts" -R "[keties.iptime.org]:60000"
 - ssh key remove
