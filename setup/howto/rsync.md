@@ -8,11 +8,14 @@
   - rsync -avhz --progress --bwlimit=5120 --partial -v -e 'ssh -p ****' tinyos@**.**.**.**:webdav/media/send/$1 /hdd2/
     - **bwlimit 5120, 5 Mbps 의미  
 
+### ssh 자동 로그인 방법
+- ssh-keygen -t ed25519
+- 또는 ssh-keygen -t rsa -b 4096
+- ssh-copy-id -p 7022 
 
 ### 특정 시간 이후(또는 특정월)의 파일만 sync하는 방법
 - rsync --files-from=FILE
 <pre>
-
 
 
 1) 최근 30일 동안 추가 및 변경된 파일만 sync되기를 원하거나
