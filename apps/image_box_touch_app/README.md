@@ -3,8 +3,8 @@
 실행:
 
 ```bash
-pip install -r apps/application/requirements.txt
-streamlit run apps/application/app.py
+pip install -r apps/image_box_touch_app/requirements.txt
+streamlit run apps/image_box_touch_app/app.py
 ```
 
 기능:

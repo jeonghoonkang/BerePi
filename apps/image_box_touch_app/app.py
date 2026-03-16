@@ -296,7 +296,7 @@ def main() -> None:
         if st_canvas is None:
             st.error(
                 "`streamlit-drawable-canvas` 패키지가 필요합니다. "
-                "`pip install -r apps/application/requirements.txt` 후 실행해 주세요."
+                "`pip install -r apps/image_box_touch_app/requirements.txt` 후 실행해 주세요."
             )
             st.image(preview_image, caption="미리보기", use_container_width=True)
             return
