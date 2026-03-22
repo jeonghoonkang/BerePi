@@ -18,7 +18,7 @@ SOURCE_DIR = os.getenv("SOURCE_DIR")
 WEBDAV_URL = os.getenv("WEBDAV_URL")
 AUTH = (os.getenv("WEBDAV_USER"), os.getenv("WEBDAV_PW"))
 
-# to do
+# to do , fix it
 
 def upload_recent_files():
     now = datetime.now()
