@@ -29,10 +29,12 @@ TEMPERATURE="$(read_temp_celsius || true)"
 TIMESTAMP="$(date "+%Y-%m-%d %H:%M:%S")"
 
 if [ -z "$TEMPERATURE" ]; then
-  echo "$TIMESTAMP ERROR temperature_unavailable" >> "$LOG_FILE"
+  LOG_MESSAGE="$TIMESTAMP ERROR temperature_unavailable"
 else
-  echo "$TIMESTAMP ${TEMPERATURE}C" >> "$LOG_FILE"
+  LOG_MESSAGE="$TIMESTAMP ${TEMPERATURE}C"
 fi
+
+printf '%s\n' "$LOG_MESSAGE" | tee -a "$LOG_FILE"
 
 LINE_COUNT="$(wc -l < "$LOG_FILE" | tr -d ' ')"
 if [ "$LINE_COUNT" -gt "$MAX_LINES" ]; then
