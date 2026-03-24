@@ -3,7 +3,7 @@
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-LOG_FILE="$SCRIPT_DIR/log_temperaure.txt"
+LOG_FILE="$SCRIPT_DIR/log_temperature.txt"
 MAX_LINES=500
 
 read_temp_celsius() {
