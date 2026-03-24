@@ -11,6 +11,16 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 LOG_FILE="$SCRIPT_DIR/log_temperature.txt"
 MAX_LINES=500
 
+if [ "$(uname -s)" != "Linux" ]; then
+  echo "hardware system is not supported"
+  exit 1
+fi
+
+if ! command -v vcgencmd >/dev/null 2>&1 && [ ! -r /sys/class/thermal/thermal_zone0/temp ]; then
+  echo "hardware system is not supported"
+  exit 1
+fi
+
 read_temp_celsius() {
   if command -v vcgencmd >/dev/null 2>&1; then
     vcgencmd measure_temp | sed -E "s/^temp=([0-9.]+).*/\1/"
