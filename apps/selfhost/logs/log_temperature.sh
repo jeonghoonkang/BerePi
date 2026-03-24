@@ -2,6 +2,11 @@
 
 set -eu
 
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 LOG_FILE="$SCRIPT_DIR/log_temperature.txt"
 MAX_LINES=500
