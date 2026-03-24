@@ -1,1 +1,0 @@
-2026-03-24 21:48:40 ERROR temperature_unavailable
