@@ -8,6 +8,7 @@
   - rsync -avhz --progress --bwlimit=5120 --partial -v -e 'ssh -p ****' tinyos@**.**.**.**:webdav/media/send/$1 /hdd2/
     - **bwlimit 5120, 5 Mbps 의미  
 
+
 ### ssh 자동 로그인 방법
 - ssh-keygen -t ed25519
 - 또는 ssh-keygen -t rsa -b 4096
