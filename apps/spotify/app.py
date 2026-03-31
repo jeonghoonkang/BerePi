@@ -217,23 +217,60 @@ def main() -> None:
     init_session_state()
     st.title("Spotify 좋아요 음악 원격 플레이어")
     st.caption("Spotify 저장 트랙을 불러와 재생하고, Discogs 메타데이터를 함께 보여줍니다.")
+    with st.expander("사용 방법", expanded=True):
+        st.markdown(
+            """
+            ### 1. Spotify 연결 정보 입력 방법
+            1. [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)에 로그인합니다.
+            2. `Create app`으로 앱을 만든 뒤 `Client ID`와 `Client Secret`을 확인합니다.
+            3. 앱 설정의 Redirect URI에 이 앱 주소를 등록합니다.
+               예: `http://localhost:8501`
+            4. 왼쪽 `API 설정`에서 아래 값을 입력합니다.
+               `Spotify Client ID`: Spotify Developer Dashboard의 Client ID
+               `Spotify Client Secret`: Spotify Developer Dashboard의 Client Secret
+               `Spotify Redirect URI`: Spotify 앱 설정에 등록한 Redirect URI와 동일한 값
+            5. `Spotify 로그인` 버튼을 눌러 인증하면 저장한 좋아요 음악을 불러올 수 있습니다.
+
+            ### 2. Discogs ID, URL, 키 획득 및 입력 방법
+            1. [Discogs 개발자 설정](https://www.discogs.com/settings/developers)에 로그인해 Personal Access Token을 발급받습니다.
+            2. 이 앱에서 직접 입력하는 Discogs 값은 아래 두 개입니다.
+               `Discogs Token`: 발급받은 Personal Access Token
+               `Discogs User-Agent`: 요청 식별 문자열. 예: `BerePiSpotifyApp/1.0`
+            3. Discogs 검색 URL은 앱이 자동으로 사용합니다.
+               기본 API URL: `https://api.discogs.com`
+            4. Discogs 릴리스 ID와 상세 URL도 앱이 검색 결과에서 자동으로 찾습니다.
+               별도 입력이 필요하지 않으며, 조회 후 화면에 표시되는 상세 링크에서 확인할 수 있습니다.
+            """
+        )
 
     with st.sidebar:
         st.header("API 설정")
-        spotify_client_id = st.text_input("Spotify Client ID", value=get_env("SPOTIFY_CLIENT_ID"))
+        spotify_client_id = st.text_input(
+            "Spotify Client ID",
+            value=get_env("SPOTIFY_CLIENT_ID"),
+            help="Spotify Developer Dashboard에서 발급받은 Client ID를 입력합니다.",
+        )
         spotify_client_secret = st.text_input(
             "Spotify Client Secret",
             value=get_env("SPOTIFY_CLIENT_SECRET"),
             type="password",
+            help="Spotify Developer Dashboard의 Client Secret입니다. 비밀번호처럼 숨김 처리됩니다.",
         )
         spotify_redirect_uri = st.text_input(
             "Spotify Redirect URI",
             value=get_env("SPOTIFY_REDIRECT_URI", DEFAULT_REDIRECT_URI),
+            help="Spotify 앱 설정에 등록한 Redirect URI와 동일하게 입력해야 합니다.",
         )
-        discogs_token = st.text_input("Discogs Token", value=get_env("DISCOGS_TOKEN"), type="password")
+        discogs_token = st.text_input(
+            "Discogs Token",
+            value=get_env("DISCOGS_TOKEN"),
+            type="password",
+            help="Discogs developers 설정에서 발급받은 Personal Access Token을 입력합니다.",
+        )
         discogs_user_agent = st.text_input(
             "Discogs User-Agent",
             value=get_env("DISCOGS_USER_AGENT", "BerePiWebdavMusicApp/1.0"),
+            help="Discogs 요청 식별용 문자열입니다. 앱 이름/버전 형식을 권장합니다.",
         )
         max_tracks = st.slider("조회할 좋아요 트랙 수", min_value=10, max_value=100, value=DEFAULT_PAGE_SIZE, step=10)
 
