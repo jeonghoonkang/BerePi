@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import qrcode
+import socket
 import streamlit as st
 from streamlit_calendar import calendar
 
@@ -88,7 +89,11 @@ def _qr_image(payload: str):
     qr = qrcode.QRCode(box_size=8, border=2)
     qr.add_data(payload)
     qr.make(fit=True)
-    return qr.make_image(fill_color="black", back_color="white")
+    img = qr.make_image(fill_color="black", back_color="white")
+    # qrcode는 PilImage 래퍼를 반환할 수 있어 streamlit 호환 형태로 변환
+    if hasattr(img, "get_image"):
+        img = img.get_image()
+    return img
 
 
 def _ensure_default_rooms() -> None:
@@ -112,12 +117,55 @@ def _ui_room_settings() -> None:
 
 def _ui_base_url() -> str:
     st.sidebar.subheader("모바일 접속/QR")
-    return st.sidebar.text_input(
+    value = st.sidebar.text_input(
         "Base URL (선택)",
         value=st.session_state.get("base_url", ""),
         placeholder="예: http://192.168.0.10:8501",
         help="입력하면 QR에 URL(event_id 포함)이 들어갑니다. 비워두면 예약 요약 텍스트 QR을 만듭니다.",
     ).strip()
+
+    try:
+        port = int(st.get_option("server.port") or 8501)
+    except Exception:
+        port = 8501
+
+    st.sidebar.caption("현재 시스템 접속 주소(참고)")
+    ips = _detect_local_ips()
+    if ips:
+        lines = [f"http://{ip}:{port}" for ip in ips]
+        st.sidebar.code("\n".join(lines))
+    else:
+        st.sidebar.code(f"http://<PC_IP>:{port}")
+    return value
+
+
+def _detect_local_ips() -> list[str]:
+    ips: set[str] = set()
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if ip and not ip.startswith("127."):
+                ips.add(ip)
+    except Exception:
+        pass
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                ips.add(ip)
+        finally:
+            s.close()
+    except Exception:
+        pass
+
+    all_ips = sorted(ips)
+    preferred = [ip for ip in all_ips if ip.startswith("10.") or ip.startswith("192.")]
+    if preferred:
+        return preferred
+    return all_ips
 
 
 def _pick_room(rooms: list[db.Room], label: str, default_room_id: Optional[int] = None) -> int:
