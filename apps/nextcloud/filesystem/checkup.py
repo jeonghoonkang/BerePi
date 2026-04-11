@@ -27,6 +27,7 @@ verify_ssl = true
 Usage:
   python3 checkup.py
   python3 checkup.py /path/to/input.conf
+  python3 checkup.py checkup.sample.conf
   python3 checkup.py --conn_test
   python3 checkup.py --section source
   python3 checkup.py /path/to/input.conf --section destination
@@ -53,6 +54,7 @@ def print_usage() -> None:
     print("Usage:")
     print("  python3 checkup.py")
     print("  python3 checkup.py /path/to/input.conf")
+    print("  python3 checkup.py checkup.sample.conf")
     print("  python3 checkup.py --conn_test")
     print("  python3 checkup.py /path/to/input.conf --conn_test")
     print("  python3 checkup.py --section source")
