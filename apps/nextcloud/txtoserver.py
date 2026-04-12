@@ -45,6 +45,9 @@ from webdav3.exceptions import WebDavException
 
 ConfigInfo = Tuple[Optional[int], Optional[str], Optional[dt.datetime]]
 
+SUCCESS_COLOR = "\033[1;32m"
+RESET_COLOR = "\033[0m"
+
 
 def print_usage() -> None:
     print("Usage:")
@@ -239,7 +242,11 @@ def run_connection_test(client: Client, root: str, label: str) -> None:
         client.list(root, get_info=True)
     except WebDavException as exc:
         raise RuntimeError(f"Connection test failed for {label}: {exc}") from exc
-    print(f"Connection test succeeded for {label}.")
+    message = f" Connection test succeeded for {label}. "
+    border = "+" + "-" * len(message) + "+"
+    print(f"{SUCCESS_COLOR}{border}")
+    print(f"|{message}|")
+    print(f"{border}{RESET_COLOR}")
 
 
 def validate_paths(
