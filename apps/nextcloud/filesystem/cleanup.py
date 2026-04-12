@@ -2,13 +2,11 @@
 """
 Delete old files from a remote Nextcloud directory over WebDAV.
 
-Configuration is loaded from input.conf (INI format). It follows the same
-layout used by txtoserver.py and checkup.py.
+Configuration is loaded from input.conf (INI format).
 
 Usage:
   python3 cleanup.py /path/to/input.conf
   python3 cleanup.py /path/to/input.conf --days 1
-  python3 cleanup.py /path/to/input.conf --days 10 --section source
   python3 cleanup.py /path/to/input.conf --days 30 --confirm
 """
 
@@ -34,7 +32,7 @@ RESET_COLOR = "\033[0m"
 
 
 def highlight_label(label: str) -> str:
-    if label.lower() in {"source", "destination"}:
+    if label.lower() == "target":
         return f"{HIGHLIGHT_COLOR}{label}{SUCCESS_COLOR}"
     return label
 
@@ -43,7 +41,7 @@ def print_usage() -> None:
     print("Usage:")
     print("  python3 cleanup.py /path/to/input.conf")
     print("  python3 cleanup.py /path/to/input.conf --days 1")
-    print("  python3 cleanup.py /path/to/input.conf --days 10 --section source")
+    print("  python3 cleanup.py /path/to/input.conf --days 10")
     print("  python3 cleanup.py /path/to/input.conf --days 30 --confirm")
     print("  python3 cleanup.py /path/to/input.conf --conn_test")
 
@@ -237,11 +235,10 @@ def format_bytes(size: int) -> str:
     return f"{value:.2f} {units[unit_index]}"
 
 
-def parse_args(argv: List[str]) -> Tuple[str, int, str, bool, bool]:
+def parse_args(argv: List[str]) -> Tuple[str, int, bool, bool]:
     args = list(argv)
     config_path = "input.conf"
     days = 1
-    section_name = "all"
     conn_test = False
     auto_confirm = False
     positional: List[str] = []
@@ -257,11 +254,6 @@ def parse_args(argv: List[str]) -> Tuple[str, int, str, bool, bool]:
                 days = int(args[index])
             except ValueError as exc:
                 raise ValueError("--days requires a positive integer value") from exc
-        elif arg == "--section":
-            index += 1
-            if index >= len(args):
-                raise ValueError("--section requires one of: source, destination, all")
-            section_name = args[index].strip().lower()
         elif arg == "--conn_test":
             conn_test = True
         elif arg == "--confirm":
@@ -277,27 +269,9 @@ def parse_args(argv: List[str]) -> Tuple[str, int, str, bool, bool]:
         config_path = positional[0]
     if len(positional) > 1:
         raise ValueError("Too many positional arguments.")
-    if section_name not in {"source", "destination", "all"}:
-        raise ValueError("--section requires one of: source, destination, all")
     if days <= 0:
         raise ValueError("--days requires a positive integer value")
-    return config_path, days, section_name, conn_test, auto_confirm
-
-
-def target_sections(
-    config: configparser.ConfigParser,
-    section_name: str,
-) -> List[Tuple[str, configparser.SectionProxy]]:
-    if section_name == "all":
-        names = [name for name in ("source", "destination") if name in config]
-    else:
-        names = [section_name]
-
-    missing = [name for name in names if name not in config]
-    if missing:
-        raise KeyError(f"Missing config section(s): {', '.join(missing)}")
-
-    return [(name, config[name]) for name in names]
+    return config_path, days, conn_test, auto_confirm
 
 
 def find_candidates(
@@ -455,27 +429,21 @@ def cleanup_section(
 def main() -> int:
     print_usage()
     try:
-        config_path, days, section_name, conn_test, auto_confirm = parse_args(sys.argv[1:])
+        config_path, days, conn_test, auto_confirm = parse_args(sys.argv[1:])
         config = load_config(config_path)
-    except (FileNotFoundError, ValueError, KeyError) as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(exc)
         return 1
 
     verify_ssl = config.getboolean("settings", "verify_ssl", fallback=True)
     try:
-        sections = target_sections(config, section_name)
+        section = config["target"]
     except KeyError as exc:
-        print(exc)
+        print(f"Missing config section(s): {exc}")
         return 1
 
-    final_code = 0
-    for name, section in sections:
-        root = normalize_root(section.get("root", ""))
-        label = name.capitalize()
-        exit_code = cleanup_section(label, section, verify_ssl, root, days, conn_test, auto_confirm)
-        if exit_code != 0:
-            final_code = exit_code
-    return final_code
+    root = normalize_root(section.get("root", ""))
+    return cleanup_section("Target", section, verify_ssl, root, days, conn_test, auto_confirm)
 
 
 if __name__ == "__main__":

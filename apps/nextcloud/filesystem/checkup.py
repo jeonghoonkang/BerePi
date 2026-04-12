@@ -2,23 +2,14 @@
 """
 Inspect remote Nextcloud directories over WebDAV.
 
-Configuration is loaded from input.conf (INI format). It follows the same
-layout used by txtoserver.py:
+Configuration is loaded from input.conf (INI format).
 
-[source]
+[target]
 webdav_hostname = https://nextcloud-a.example.com
 webdav_root = /remote.php/dav/files/username/
 port = 443
 username = user_a
 password = pass_a
-root = Photos
-
-[destination]
-webdav_hostname = https://nextcloud-b.example.com
-webdav_root = /remote.php/dav/files/username/
-port = 443
-username = user_b
-password = pass_b
 root = Photos
 
 [settings]
@@ -29,8 +20,6 @@ Usage:
   python3 checkup.py /path/to/input.conf
   python3 checkup.py checkup.sample.conf
   python3 checkup.py --conn_test
-  python3 checkup.py --section source
-  python3 checkup.py /path/to/input.conf --section destination
 """
 
 from __future__ import annotations
@@ -55,7 +44,7 @@ RESET_COLOR = "\033[0m"
 
 
 def highlight_label(label: str) -> str:
-    if label.lower() in {"source", "destination"}:
+    if label.lower() == "target":
         return f"{HIGHLIGHT_COLOR}{label}{SUCCESS_COLOR}"
     return label
 
@@ -67,8 +56,6 @@ def print_usage() -> None:
     print("  python3 checkup.py checkup.sample.conf")
     print("  python3 checkup.py --conn_test")
     print("  python3 checkup.py /path/to/input.conf --conn_test")
-    print("  python3 checkup.py --section source")
-    print("  python3 checkup.py /path/to/input.conf --section destination")
 
 
 def load_config(path: str) -> configparser.ConfigParser:
@@ -328,10 +315,9 @@ def print_stats(label: str, section: configparser.SectionProxy, root: str, stats
         print(f"  newest_file_path: {newest_entry[0]}")
 
 
-def parse_args(argv: List[str]) -> Tuple[str, bool, str]:
+def parse_args(argv: List[str]) -> Tuple[str, bool]:
     args = list(argv)
     conn_test = False
-    section_name = "all"
     config_path = "input.conf"
     positional: List[str] = []
 
@@ -340,11 +326,6 @@ def parse_args(argv: List[str]) -> Tuple[str, bool, str]:
         arg = args[index]
         if arg == "--conn_test":
             conn_test = True
-        elif arg == "--section":
-            index += 1
-            if index >= len(args):
-                raise ValueError("--section requires one of: source, destination, all")
-            section_name = args[index].strip().lower()
         elif arg in {"-h", "--help"}:
             print_usage()
             raise SystemExit(0)
@@ -356,68 +337,48 @@ def parse_args(argv: List[str]) -> Tuple[str, bool, str]:
         config_path = positional[0]
     if len(positional) > 1:
         raise ValueError("Too many positional arguments.")
-    if section_name not in {"source", "destination", "all"}:
-        raise ValueError("--section requires one of: source, destination, all")
-    return config_path, conn_test, section_name
-
-
-def target_sections(
-    config: configparser.ConfigParser,
-    section_name: str,
-) -> List[Tuple[str, configparser.SectionProxy]]:
-    if section_name == "all":
-        names = [name for name in ("source", "destination") if name in config]
-    else:
-        names = [section_name]
-
-    missing = [name for name in names if name not in config]
-    if missing:
-        raise KeyError(f"Missing config section(s): {', '.join(missing)}")
-
-    return [(name, config[name]) for name in names]
+    return config_path, conn_test
 
 
 def main() -> int:
     print_usage()
     try:
-        config_path, conn_test, section_name = parse_args(sys.argv[1:])
+        config_path, conn_test = parse_args(sys.argv[1:])
         config = load_config(config_path)
-    except (FileNotFoundError, ValueError, KeyError) as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(exc)
         return 1
 
     verify_ssl = config.getboolean("settings", "verify_ssl", fallback=True)
-
     try:
-        sections = target_sections(config, section_name)
+        section = config["target"]
     except KeyError as exc:
-        print(exc)
+        print(f"Missing config section(s): {exc}")
         return 1
 
-    for name, section in sections:
-        root = normalize_root(section.get("root", ""))
-        label = name.capitalize()
-        validate_paths(section, root, label)
+    root = normalize_root(section.get("root", ""))
+    label = "Target"
+    validate_paths(section, root, label)
 
-        propfind_code = run_propfind(section, root)
-        if propfind_code != 0:
-            print(f"{label} PROPFIND failed with exit code {propfind_code}.")
-            return propfind_code
+    propfind_code = run_propfind(section, root)
+    if propfind_code != 0:
+        print(f"{label} PROPFIND failed with exit code {propfind_code}.")
+        return propfind_code
 
-        client = build_client(section, verify_ssl)
+    client = build_client(section, verify_ssl)
 
-        if conn_test:
-            try:
-                run_connection_test(client, root, name)
-            except RuntimeError as exc:
-                print(exc)
-                return 1
-            continue
+    if conn_test:
+        try:
+            run_connection_test(client, root, "target")
+        except RuntimeError as exc:
+            print(exc)
+            return 1
+        return 0
 
-        print(f"Scanning {label.lower()} server...")
-        entries = list_tree(client, root)
-        stats = build_stats(entries)
-        print_stats(label, section, root, stats)
+    print("Scanning target server...")
+    entries = list_tree(client, root)
+    stats = build_stats(entries)
+    print_stats(label, section, root, stats)
 
     return 0
 

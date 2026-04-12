@@ -17,7 +17,7 @@
 
 ## Config
 
-설정 파일은 INI 형식이며 `source`, `destination`, `settings` 섹션을 사용합니다.
+설정 파일은 INI 형식이며 `target`, `settings` 섹션을 사용합니다.
 
 주요 항목은 다음과 같습니다.
 
@@ -46,16 +46,10 @@ cp apps/nextcloud/filesystem/checkup.sample.conf apps/nextcloud/filesystem/my_ch
 python3 apps/nextcloud/filesystem/checkup.py apps/nextcloud/filesystem/my_checkup.conf
 ```
 
-`source`만 점검:
+점검 실행:
 
 ```bash
-python3 apps/nextcloud/filesystem/checkup.py /path/to/your.conf --section source
-```
-
-`destination`만 점검:
-
-```bash
-python3 apps/nextcloud/filesystem/checkup.py /path/to/your.conf --section destination
+python3 apps/nextcloud/filesystem/checkup.py /path/to/your.conf
 ```
 
 연결 테스트만 수행:
