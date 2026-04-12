@@ -1,4 +1,4 @@
-# Nextcloud Filesystem Tools
+# Nextcloud File system Tools
 
 `checkup.py`와 `cleanup.py`는 WebDAV로 원격 Nextcloud `target` 디렉터리를 점검하고 정리하는 스크립트입니다.
 
