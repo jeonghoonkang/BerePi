@@ -29,7 +29,14 @@ EntryInfo = Dict[str, object]
 CandidateInfo = Dict[str, object]
 
 SUCCESS_COLOR = "\033[1;32m"
+HIGHLIGHT_COLOR = "\033[1;33m"
 RESET_COLOR = "\033[0m"
+
+
+def highlight_label(label: str) -> str:
+    if label.lower() in {"source", "destination"}:
+        return f"{HIGHLIGHT_COLOR}{label}{SUCCESS_COLOR}"
+    return label
 
 
 def print_usage() -> None:
@@ -180,8 +187,9 @@ def run_connection_test(client: Client, root: str, label: str) -> None:
         client.list(root, get_info=True)
     except WebDavException as exc:
         raise RuntimeError(f"Connection test failed for {label}: {exc}") from exc
-    message = f" Connection test succeeded for {label}. "
-    border = "+" + "-" * len(message) + "+"
+    plain_message = f" Connection test succeeded for {label}. "
+    message = f" Connection test succeeded for {highlight_label(label)}. "
+    border = "+" + "-" * len(plain_message) + "+"
     print(f"{SUCCESS_COLOR}{border}")
     print(f"|{message}|")
     print(f"{border}{RESET_COLOR}")
