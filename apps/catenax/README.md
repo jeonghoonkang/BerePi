@@ -8,6 +8,30 @@
 - `sample_telemetry.json`: 협동로봇 텔레메트리 예제 입력
 - `server/app.py`: 텔레메트리 수신 및 JSON 파일 저장 백엔드
 
+## 서버 흐름도
+
+```mermaid
+flowchart TD
+    A["Cobot / PLC / Factory App"] -->|POST telemetry JSON| B["server/app.py<br/>TelemetryHandler.do_POST()"]
+    B --> C["validate_telemetry()"]
+    C -->|invalid| D["400 Bad Request<br/>validation errors"]
+    C -->|valid| E["store_telemetry()"]
+    E --> F["data/YYYY-MM-DD/*.json 저장"]
+    E --> G["data/latest.json 갱신"]
+    E --> H["201 Created<br/>stored response"]
+
+    I["Client / EDC Connector"] -->|GET latest| J["TelemetryHandler.do_GET()"]
+    I -->|GET recent list| J
+    J --> K["read_latest() 또는 read_recent()"]
+    K --> L["JSON 응답 반환"]
+
+    M["EDC HttpData Asset"] -->|source API| N["/api/v1/cobot/telemetry"]
+    N --> O["edc.py onboard"]
+    P["sample_telemetry.json 또는 저장된 telemetry"] --> Q["edc.py sync-aas"]
+    Q --> R["AASBridge.telemetry_to_submodel()"]
+    R --> S["AAS Submodel PUT"]
+```
+
 ## 1. 텔레메트리 서버 실행
 
 ```bash
