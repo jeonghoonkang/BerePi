@@ -37,6 +37,24 @@ input {
   padding: 24px;
 }
 
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  color: var(--accent-strong);
+  font-weight: 800;
+  text-decoration: none;
+  background:
+    linear-gradient(135deg, rgba(178, 69, 22, 0.12), rgba(255, 252, 245, 0.92)),
+    var(--panel);
+}
+
+.home-link:hover {
+  color: var(--ink);
+}
+
 .hero,
 .content-grid {
   display: grid;
