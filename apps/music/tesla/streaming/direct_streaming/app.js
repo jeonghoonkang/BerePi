@@ -33,6 +33,7 @@ const elements = {
   breadcrumb: document.querySelector("#breadcrumb"),
   directoryCount: document.querySelector("#directoryCount"),
   fileCount: document.querySelector("#fileCount"),
+  recursiveFileCount: document.querySelector("#recursiveFileCount"),
   addSelectedButton: document.querySelector("#addSelectedButton"),
   playQueueButton: document.querySelector("#playQueueButton"),
   clearQueueButton: document.querySelector("#clearQueueButton"),
@@ -246,6 +247,7 @@ async function loadDirectory() {
     state.entries = parseApacheDirectoryListing(html, targetUrl);
     applyFilter(elements.filterInput.value);
     renderBreadcrumb();
+    updateRecursiveFileCount(targetUrl, html);
     setStatus(`목록 준비 완료 (${state.entries.length}개 항목)`);
   } catch (error) {
     renderBrowser([]);
@@ -337,6 +339,17 @@ async function saveQueueToRemote() {
 }
 
 function parseApacheDirectoryListing(html, baseUrl) {
+  return parseDirectoryListingEntries(html, baseUrl)
+    .filter((entry) => entry.type === "directory" || isAudioFile(entry.name))
+    .sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "directory" ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function parseDirectoryListingEntries(html, baseUrl) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const links = Array.from(doc.querySelectorAll("a[href]"));
 
@@ -365,14 +378,7 @@ function parseApacheDirectoryListing(html, baseUrl) {
         type: isDirectory ? "directory" : "file",
       };
     })
-    .filter(Boolean)
-    .filter((entry) => entry.type === "directory" || isAudioFile(entry.name))
-    .sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === "directory" ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    .filter(Boolean);
 }
 
 function renderBrowser(entries) {
@@ -381,6 +387,7 @@ function renderBrowser(entries) {
   const files = entries.filter((entry) => entry.type === "file").length;
   elements.directoryCount.textContent = `${directories} folders`;
   elements.fileCount.textContent = `${files} files`;
+  elements.recursiveFileCount.textContent = "counting total files...";
 
   if (entries.length === 0) {
     const empty = document.createElement("p");
@@ -454,6 +461,43 @@ function renderBreadcrumb() {
       loadDirectory();
     });
   });
+}
+
+async function updateRecursiveFileCount(baseUrl, rootHtml) {
+  try {
+    const totalFiles = await countFilesRecursively(baseUrl, rootHtml, new Set());
+    elements.recursiveFileCount.textContent = `${totalFiles} total files`;
+  } catch (error) {
+    elements.recursiveFileCount.textContent = "total count unavailable";
+  }
+}
+
+async function countFilesRecursively(directoryUrl, html, visited) {
+  const normalizedUrl = new URL(directoryUrl).href;
+  if (visited.has(normalizedUrl)) {
+    return 0;
+  }
+  visited.add(normalizedUrl);
+
+  const entries = parseDirectoryListingEntries(html, normalizedUrl);
+  const fileCount = entries.filter((entry) => entry.type === "file").length;
+  const directories = entries.filter((entry) => entry.type === "directory");
+
+  let nestedCount = 0;
+  for (const directory of directories) {
+    try {
+      const response = await fetch(directory.url, buildFetchOptions());
+      if (!response.ok) {
+        continue;
+      }
+      const childHtml = await response.text();
+      nestedCount += await countFilesRecursively(directory.url, childHtml, visited);
+    } catch (error) {
+      continue;
+    }
+  }
+
+  return fileCount + nestedCount;
 }
 
 function renderQueue() {
