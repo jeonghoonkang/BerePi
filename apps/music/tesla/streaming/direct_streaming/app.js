@@ -196,7 +196,7 @@ async function loadDirectory() {
     return;
   }
 
-  const targetUrl = buildRequestUrl(state.currentPath);
+  const targetUrl = buildDisplayUrl(state.currentPath);
   setStatus("목록 불러오는 중");
   elements.currentPathInput.value = state.currentPath;
   syncLocation();
@@ -241,7 +241,7 @@ function parseApacheDirectoryListing(html, baseUrl) {
 
       return {
         name,
-        url: buildRequestUrl(pathname),
+        url: buildDisplayUrl(pathname),
         displayUrl: buildDisplayUrl(pathname),
         path: pathname,
         type: isDirectory ? "directory" : "file",
@@ -287,7 +287,7 @@ function renderBrowser(entries) {
 
     if (entry.type === "directory") {
       link.addEventListener("click", () => {
-        state.currentPath = relativePathFromRoot(entry.url);
+        state.currentPath = normalizeDirectoryPath(entry.path);
         elements.currentPathInput.value = state.currentPath;
         loadDirectory();
       });
@@ -446,23 +446,6 @@ function buildBaseUrl() {
   return base;
 }
 
-function buildRequestUrl(targetPath) {
-  const base = buildBaseUrl();
-  if (!base) {
-    return "";
-  }
-
-  const trimmedPath = targetPath.replace(/^\/+/, "");
-  const composed = new URL(trimmedPath, base.href);
-
-  if (state.username) {
-    composed.username = state.username;
-    composed.password = state.password;
-  }
-
-  return composed.href;
-}
-
 function buildDisplayUrl(targetPath) {
   const base = buildBaseUrl();
   if (!base) {
@@ -483,13 +466,6 @@ function buildFetchOptions() {
     Authorization: `Basic ${btoa(`${state.username}:${state.password}`)}`,
   };
   return options;
-}
-
-function relativePathFromRoot(targetUrl) {
-  const root = buildBaseUrl();
-  const target = new URL(targetUrl);
-  const relative = target.pathname.replace(root.pathname, "");
-  return normalizeDirectoryPath(relative);
 }
 
 function setStatus(text) {
