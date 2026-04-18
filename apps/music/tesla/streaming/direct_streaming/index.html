@@ -42,18 +42,24 @@
         <span>htaccess 암호</span>
         <input id="passwordInput" type="password" placeholder="password">
       </label>
+      <label class="field field-small">
+        <span>기억 암호</span>
+        <input id="rootMemoryPasswordInput" type="password" placeholder="remember key">
+      </label>
       <label class="field">
         <span>현재 경로</span>
         <input id="currentPathInput" type="text" placeholder="/">
       </label>
       <div class="toolbar-actions">
         <button id="loadButton" class="primary">불러오기</button>
+        <button id="saveRootMemoryButton" class="secondary">Root 기억 저장</button>
+        <button id="restoreRootMemoryButton" class="secondary">Root 기억 복원</button>
         <button id="upButton" class="secondary">상위 폴더</button>
         <button id="selectVisibleButton" class="secondary">보이는 곡 전체 선택</button>
         <button id="clearSelectionButton" class="secondary">선택 해제</button>
       </div>
       <p class="hint">
-        Apache 디렉토리 인덱스가 켜져 있고, 이 페이지에서 접근 가능한 같은 출처 URL을 사용하는 것이 가장 안정적입니다.
+        Apache 디렉토리 인덱스가 켜져 있고, 이 페이지에서 접근 가능한 같은 출처 URL을 사용하는 것이 가장 안정적입니다. Root 기억은 입력한 기억 암호가 맞을 때만 자동 복원됩니다.
       </p>
     </section>
 

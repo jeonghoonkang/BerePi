@@ -4,12 +4,14 @@ const SPOTIFY_TYPES = new Set(["track", "album", "playlist", "artist", "episode"
 const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
 const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
 const QUEUE_SETTINGS_STORAGE_KEY = "tesla_direct_streaming_queue_settings";
+const ROOT_MEMORY_STORAGE_KEY = "tesla_direct_streaming_root_memory";
 
 const state = {
   rootUrl: "",
   port: "",
   username: "",
   password: "",
+  rootMemoryPassword: "",
   queueUrl: "",
   queuePort: "",
   queueUsername: "",
@@ -27,12 +29,15 @@ const elements = {
   portInput: document.querySelector("#portInput"),
   usernameInput: document.querySelector("#usernameInput"),
   passwordInput: document.querySelector("#passwordInput"),
+  rootMemoryPasswordInput: document.querySelector("#rootMemoryPasswordInput"),
   queueUrlInput: document.querySelector("#queueUrlInput"),
   queuePortInput: document.querySelector("#queuePortInput"),
   queueUsernameInput: document.querySelector("#queueUsernameInput"),
   queuePasswordInput: document.querySelector("#queuePasswordInput"),
   currentPathInput: document.querySelector("#currentPathInput"),
   loadButton: document.querySelector("#loadButton"),
+  saveRootMemoryButton: document.querySelector("#saveRootMemoryButton"),
+  restoreRootMemoryButton: document.querySelector("#restoreRootMemoryButton"),
   upButton: document.querySelector("#upButton"),
   selectVisibleButton: document.querySelector("#selectVisibleButton"),
   clearSelectionButton: document.querySelector("#clearSelectionButton"),
@@ -63,7 +68,7 @@ const elements = {
   queueItemTemplate: document.querySelector("#queueItemTemplate"),
 };
 
-function init() {
+async function init() {
   const url = new URL(window.location.href);
   const storedQueueSettings = loadStoredQueueSettings();
   const requestedRoot = url.searchParams.get("root") || DEFAULT_ROOT_URL;
@@ -77,6 +82,7 @@ function init() {
   state.rootUrl = normalizeRootUrl(requestedRoot);
   state.port = normalizePort(requestedPort);
   state.username = requestedUsername;
+  state.rootMemoryPassword = "";
   state.queueUrl = normalizeQueueUrl(requestedQueueUrl);
   state.queuePort = normalizePort(requestedQueuePort);
   state.queueUsername = requestedQueueUsername;
@@ -86,6 +92,7 @@ function init() {
   elements.portInput.value = state.port;
   elements.usernameInput.value = state.username;
   elements.passwordInput.value = "";
+  elements.rootMemoryPasswordInput.value = "";
   elements.queueUrlInput.value = state.queueUrl;
   elements.queuePortInput.value = state.queuePort;
   elements.queueUsernameInput.value = state.queueUsername;
@@ -94,6 +101,7 @@ function init() {
   restoreQueueFromStorage();
 
   bindEvents();
+  await tryAutoRestoreRootMemory();
 
   if (state.rootUrl) {
     loadDirectory();
@@ -105,10 +113,7 @@ function init() {
 
 function bindEvents() {
   elements.loadButton.addEventListener("click", () => {
-    state.rootUrl = normalizeRootUrl(elements.rootUrlInput.value);
-    state.port = normalizePort(elements.portInput.value);
-    state.username = elements.usernameInput.value.trim();
-    state.password = elements.passwordInput.value;
+    syncRootStateFromInputs();
     state.queueUrl = normalizeQueueUrl(elements.queueUrlInput.value);
     state.queuePort = normalizePort(elements.queuePortInput.value);
     state.queueUsername = elements.queueUsernameInput.value.trim();
@@ -116,6 +121,21 @@ function bindEvents() {
     state.currentPath = normalizeDirectoryPath(elements.currentPathInput.value);
     syncQueueInputs();
     loadDirectory();
+  });
+
+  elements.saveRootMemoryButton.addEventListener("click", async () => {
+    syncRootStateFromInputs();
+    await saveRootMemory();
+  });
+
+  elements.restoreRootMemoryButton.addEventListener("click", async () => {
+    syncRootStateFromInputs();
+    await restoreRootMemory(true);
+  });
+
+  elements.rootMemoryPasswordInput.addEventListener("change", async () => {
+    syncRootStateFromInputs();
+    await restoreRootMemory(false);
   });
 
   elements.upButton.addEventListener("click", () => {
@@ -667,6 +687,20 @@ function normalizeRootUrl(value) {
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }
 
+function syncRootStateFromInputs() {
+  state.rootUrl = normalizeRootUrl(elements.rootUrlInput.value);
+  state.port = normalizePort(elements.portInput.value);
+  state.username = elements.usernameInput.value.trim();
+  state.password = elements.passwordInput.value;
+  state.rootMemoryPassword = elements.rootMemoryPasswordInput.value;
+}
+
+function syncRootInputs() {
+  elements.rootUrlInput.value = state.rootUrl;
+  elements.portInput.value = state.port;
+  elements.usernameInput.value = state.username;
+}
+
 function normalizeQueueUrl(value) {
   const trimmed = (value || "").trim();
   if (!trimmed) {
@@ -1037,6 +1071,140 @@ function loadStoredQueueSettings() {
   }
 }
 
+async function saveRootMemory() {
+  if (!state.rootMemoryPassword) {
+    setStatus("기억 암호 입력 필요");
+    return;
+  }
+
+  const payload = {
+    rootUrl: state.rootUrl,
+    port: state.port,
+    username: state.username,
+    password: state.password,
+    currentPath: state.currentPath,
+  };
+
+  try {
+    const encrypted = await encryptJsonPayload(payload, state.rootMemoryPassword);
+    window.localStorage.setItem(ROOT_MEMORY_STORAGE_KEY, JSON.stringify(encrypted));
+    setStatus("Root 기억 저장 완료");
+  } catch (error) {
+    setStatus("Root 기억 저장 실패");
+  }
+}
+
+async function restoreRootMemory(showStatus) {
+  if (!state.rootMemoryPassword) {
+    if (showStatus) {
+      setStatus("기억 암호 입력 필요");
+    }
+    return false;
+  }
+
+  const raw = window.localStorage.getItem(ROOT_MEMORY_STORAGE_KEY);
+  if (!raw) {
+    if (showStatus) {
+      setStatus("저장된 Root 기억 없음");
+    }
+    return false;
+  }
+
+  try {
+    const encrypted = JSON.parse(raw);
+    const restored = await decryptJsonPayload(encrypted, state.rootMemoryPassword);
+    state.rootUrl = normalizeRootUrl(restored.rootUrl || "");
+    state.port = normalizePort(restored.port || "");
+    state.username = restored.username || "";
+    state.password = restored.password || "";
+    state.currentPath = normalizeDirectoryPath(restored.currentPath || "/");
+    syncRootInputs();
+    elements.passwordInput.value = state.password;
+    elements.currentPathInput.value = state.currentPath;
+    if (showStatus) {
+      setStatus("Root 기억 복원 완료");
+    }
+    return true;
+  } catch (error) {
+    if (showStatus) {
+      setStatus("기억 암호 불일치 또는 복원 실패");
+    }
+    return false;
+  }
+}
+
+async function tryAutoRestoreRootMemory() {
+  if (!elements.rootMemoryPasswordInput.value) {
+    return;
+  }
+  syncRootStateFromInputs();
+  await restoreRootMemory(false);
+}
+
+async function encryptJsonPayload(payload, password) {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveAesKey(password, salt);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(JSON.stringify(payload)),
+  );
+
+  return {
+    salt: bytesToBase64(salt),
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
+  };
+}
+
+async function decryptJsonPayload(payload, password) {
+  const decoder = new TextDecoder();
+  const salt = base64ToBytes(payload.salt);
+  const iv = base64ToBytes(payload.iv);
+  const ciphertext = base64ToBytes(payload.ciphertext);
+  const key = await deriveAesKey(password, salt);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext,
+  );
+  return JSON.parse(decoder.decode(plaintext));
+}
+
+async function deriveAesKey(password, salt) {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+function bytesToBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+}
+
 function syncQueueStateFromInputs() {
   state.queueUrl = normalizeQueueUrl(elements.queueUrlInput.value);
   state.queuePort = normalizePort(elements.queuePortInput.value);
@@ -1051,4 +1219,4 @@ function syncQueueInputs() {
   elements.queueUsernameInput.value = state.queueUsername;
 }
 
-init();
+void init();
