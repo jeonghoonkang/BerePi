@@ -216,8 +216,11 @@ button:active {
 
 .summary {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
   font-weight: 600;
+  align-items: flex-end;
+  text-align: right;
 }
 
 .browser-list,
@@ -310,6 +313,12 @@ button:active {
   margin-bottom: 18px;
 }
 
+.queue-auth-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 12px;
+}
+
 .queue-import-actions,
 .queue-item-actions {
   display: flex;
@@ -400,6 +409,10 @@ button:active {
 
   .browser-panel {
     width: 100%;
+  }
+
+  .queue-auth-grid {
+    grid-template-columns: 1fr;
   }
 }
 

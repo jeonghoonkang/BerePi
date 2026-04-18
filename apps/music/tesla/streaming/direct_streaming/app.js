@@ -3,6 +3,7 @@ const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"];
 const SPOTIFY_TYPES = new Set(["track", "album", "playlist", "artist", "episode", "show"]);
 const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
 const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
+const QUEUE_SETTINGS_STORAGE_KEY = "tesla_direct_streaming_queue_settings";
 
 const state = {
   rootUrl: "",
@@ -10,6 +11,9 @@ const state = {
   username: "",
   password: "",
   queueUrl: "",
+  queuePort: "",
+  queueUsername: "",
+  queuePassword: "",
   currentPath: "/",
   entries: [],
   filteredEntries: [],
@@ -24,6 +28,9 @@ const elements = {
   usernameInput: document.querySelector("#usernameInput"),
   passwordInput: document.querySelector("#passwordInput"),
   queueUrlInput: document.querySelector("#queueUrlInput"),
+  queuePortInput: document.querySelector("#queuePortInput"),
+  queueUsernameInput: document.querySelector("#queueUsernameInput"),
+  queuePasswordInput: document.querySelector("#queuePasswordInput"),
   currentPathInput: document.querySelector("#currentPathInput"),
   loadButton: document.querySelector("#loadButton"),
   upButton: document.querySelector("#upButton"),
@@ -32,8 +39,8 @@ const elements = {
   filterInput: document.querySelector("#filterInput"),
   browserList: document.querySelector("#browserList"),
   breadcrumb: document.querySelector("#breadcrumb"),
-  directoryCount: document.querySelector("#directoryCount"),
-  fileCount: document.querySelector("#fileCount"),
+  visibleSummary: document.querySelector("#visibleSummary"),
+  originalSummary: document.querySelector("#originalSummary"),
   recursiveFileCount: document.querySelector("#recursiveFileCount"),
   addSelectedButton: document.querySelector("#addSelectedButton"),
   playQueueButton: document.querySelector("#playQueueButton"),
@@ -58,16 +65,21 @@ const elements = {
 
 function init() {
   const url = new URL(window.location.href);
+  const storedQueueSettings = loadStoredQueueSettings();
   const requestedRoot = url.searchParams.get("root") || DEFAULT_ROOT_URL;
   const requestedPort = url.searchParams.get("port") || "";
   const requestedUsername = url.searchParams.get("username") || "";
   const requestedQueueUrl = url.searchParams.get("queue_url") || loadStoredQueueUrl();
+  const requestedQueuePort = url.searchParams.get("queue_port") || storedQueueSettings.queuePort || "";
+  const requestedQueueUsername = url.searchParams.get("queue_username") || storedQueueSettings.queueUsername || "";
   const requestedPath = url.searchParams.get("path") || "/";
 
   state.rootUrl = normalizeRootUrl(requestedRoot);
   state.port = normalizePort(requestedPort);
   state.username = requestedUsername;
-  state.queueUrl = requestedQueueUrl;
+  state.queueUrl = normalizeQueueUrl(requestedQueueUrl);
+  state.queuePort = normalizePort(requestedQueuePort);
+  state.queueUsername = requestedQueueUsername;
   state.currentPath = normalizeDirectoryPath(requestedPath);
 
   elements.rootUrlInput.value = state.rootUrl;
@@ -75,6 +87,9 @@ function init() {
   elements.usernameInput.value = state.username;
   elements.passwordInput.value = "";
   elements.queueUrlInput.value = state.queueUrl;
+  elements.queuePortInput.value = state.queuePort;
+  elements.queueUsernameInput.value = state.queueUsername;
+  elements.queuePasswordInput.value = "";
   elements.currentPathInput.value = state.currentPath;
   restoreQueueFromStorage();
 
@@ -94,8 +109,12 @@ function bindEvents() {
     state.port = normalizePort(elements.portInput.value);
     state.username = elements.usernameInput.value.trim();
     state.password = elements.passwordInput.value;
-    state.queueUrl = elements.queueUrlInput.value.trim();
+    state.queueUrl = normalizeQueueUrl(elements.queueUrlInput.value);
+    state.queuePort = normalizePort(elements.queuePortInput.value);
+    state.queueUsername = elements.queueUsernameInput.value.trim();
+    state.queuePassword = elements.queuePasswordInput.value;
     state.currentPath = normalizeDirectoryPath(elements.currentPathInput.value);
+    syncQueueInputs();
     loadDirectory();
   });
 
@@ -149,17 +168,17 @@ function bindEvents() {
   });
 
   elements.loadQueueUrlButton.addEventListener("click", () => {
-    state.queueUrl = elements.queueUrlInput.value.trim();
+    syncQueueStateFromInputs();
     loadQueueFromRemote(false);
   });
 
   elements.appendQueueUrlButton.addEventListener("click", () => {
-    state.queueUrl = elements.queueUrlInput.value.trim();
+    syncQueueStateFromInputs();
     loadQueueFromRemote(true);
   });
 
   elements.saveQueueUrlButton.addEventListener("click", () => {
-    state.queueUrl = elements.queueUrlInput.value.trim();
+    syncQueueStateFromInputs();
     saveQueueToRemote();
   });
 
@@ -262,18 +281,17 @@ async function loadDirectory() {
 }
 
 async function loadQueueFromRemote(append) {
-  if (!elements.queueUrlInput.value.trim()) {
+  if (!state.queueUrl) {
     setStatus("Queue TXT URL 입력 필요");
     return;
   }
 
-  state.queueUrl = elements.queueUrlInput.value.trim();
   syncLocation();
-  persistQueueUrl();
+  persistQueueSettings();
   setStatus("Queue TXT 불러오는 중");
 
   try {
-    const response = await fetch(state.queueUrl, buildFetchOptions());
+    const response = await fetch(buildQueueRequestUrl(), buildQueueFetchOptions());
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -307,7 +325,7 @@ async function loadQueueFromRemote(append) {
 }
 
 async function saveQueueToRemote() {
-  if (!elements.queueUrlInput.value.trim()) {
+  if (!state.queueUrl) {
     setStatus("Queue TXT URL 입력 필요");
     return;
   }
@@ -317,14 +335,13 @@ async function saveQueueToRemote() {
     return;
   }
 
-  state.queueUrl = elements.queueUrlInput.value.trim();
   syncLocation();
-  persistQueueUrl();
+  persistQueueSettings();
   setStatus("Queue TXT 저장 중");
 
   try {
-    const fetchOptions = buildFetchOptions();
-    const response = await fetch(state.queueUrl, {
+    const fetchOptions = buildQueueFetchOptions();
+    const response = await fetch(buildQueueRequestUrl(), {
       ...fetchOptions,
       method: "PUT",
       headers: {
@@ -382,6 +399,7 @@ function parseDirectoryListingEntries(html, baseUrl) {
         displayUrl: buildDisplayUrl(pathname),
         path: pathname,
         type: isDirectory ? "directory" : "file",
+        sizeBytes: parseSizeBytes(anchor),
       };
     })
     .filter(Boolean);
@@ -389,11 +407,8 @@ function parseDirectoryListingEntries(html, baseUrl) {
 
 function renderBrowser(entries) {
   elements.browserList.innerHTML = "";
-  const directories = entries.filter((entry) => entry.type === "directory").length;
-  const files = entries.filter((entry) => entry.type === "file").length;
-  elements.directoryCount.textContent = `${directories} folders`;
-  elements.fileCount.textContent = `${files} files`;
-  elements.recursiveFileCount.textContent = "counting total files...";
+  updateSummary(entries, state.entries);
+  elements.recursiveFileCount.textContent = "전체 하위 파일 계산 중...";
 
   if (entries.length === 0) {
     const empty = document.createElement("p");
@@ -472,9 +487,9 @@ function renderBreadcrumb() {
 async function updateRecursiveFileCount(baseUrl, rootHtml) {
   try {
     const totalFiles = await countFilesRecursively(baseUrl, rootHtml, new Set());
-    elements.recursiveFileCount.textContent = `${totalFiles} total files`;
+    elements.recursiveFileCount.textContent = `전체 하위 파일: ${totalFiles} files`;
   } catch (error) {
-    elements.recursiveFileCount.textContent = "total count unavailable";
+    elements.recursiveFileCount.textContent = "전체 하위 파일: 계산 불가";
   }
 }
 
@@ -582,6 +597,62 @@ function applyFilter(keyword) {
   renderBrowser(state.filteredEntries);
 }
 
+function updateSummary(visibleEntries, allEntries) {
+  elements.visibleSummary.textContent = `표시: ${formatDirectoryAndFileSummary(visibleEntries)}`;
+  elements.originalSummary.textContent = `원본: ${formatDirectoryAndFileSummary(allEntries)}`;
+}
+
+function formatDirectoryAndFileSummary(entries) {
+  const directories = entries.filter((entry) => entry.type === "directory").length;
+  const files = entries.filter((entry) => entry.type === "file").length;
+  const totalSize = entries
+    .filter((entry) => entry.type === "file")
+    .reduce((sum, entry) => sum + (entry.sizeBytes || 0), 0);
+  return `${directories} folders · ${files} files · ${formatBytes(totalSize)}`;
+}
+
+function parseSizeBytes(anchor) {
+  const rowText = anchor.closest("tr, pre, li")?.textContent || anchor.parentElement?.textContent || "";
+  const withoutName = rowText.replace(anchor.textContent || "", " ");
+  const sizeMatch = withoutName.match(/(\d+(?:\.\d+)?)\s*(K|M|G|T)?B?\b/i);
+  if (!sizeMatch) {
+    return 0;
+  }
+
+  const value = Number.parseFloat(sizeMatch[1]);
+  if (Number.isNaN(value)) {
+    return 0;
+  }
+
+  const unit = (sizeMatch[2] || "").toUpperCase();
+  const multipliers = {
+    "": 1,
+    K: 1024,
+    M: 1024 ** 2,
+    G: 1024 ** 3,
+    T: 1024 ** 4,
+  };
+  return Math.round(value * (multipliers[unit] || 1));
+}
+
+function formatBytes(bytes) {
+  if (!bytes) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
 function isAudioFile(filename) {
   const lower = filename.toLowerCase();
   return AUDIO_EXTENSIONS.some((extension) => lower.endsWith(extension));
@@ -594,6 +665,22 @@ function normalizeRootUrl(value) {
 
   const trimmed = value.trim();
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+}
+
+function normalizeQueueUrl(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.href;
+  } catch (error) {
+    return trimmed;
+  }
 }
 
 function normalizePort(value) {
@@ -788,6 +875,28 @@ function buildFetchOptions() {
   return options;
 }
 
+function buildQueueRequestUrl() {
+  const parsed = new URL(state.queueUrl);
+  if (state.queuePort) {
+    parsed.port = state.queuePort;
+  }
+  parsed.username = "";
+  parsed.password = "";
+  return parsed.href;
+}
+
+function buildQueueFetchOptions() {
+  const options = { cache: "no-store" };
+  if (!state.queueUsername) {
+    return options;
+  }
+
+  options.headers = {
+    Authorization: `Basic ${btoa(`${state.queueUsername}:${state.queuePassword}`)}`,
+  };
+  return options;
+}
+
 function isSpotifyEntry(entry) {
   return entry && entry.type === "spotify";
 }
@@ -845,6 +954,16 @@ function syncLocation() {
   } else {
     url.searchParams.delete("queue_url");
   }
+  if (state.queuePort) {
+    url.searchParams.set("queue_port", state.queuePort);
+  } else {
+    url.searchParams.delete("queue_port");
+  }
+  if (state.queueUsername) {
+    url.searchParams.set("queue_username", state.queueUsername);
+  } else {
+    url.searchParams.delete("queue_username");
+  }
   url.searchParams.set("path", state.currentPath);
   window.history.replaceState({}, "", url);
 }
@@ -860,6 +979,15 @@ function persistQueue() {
 
 function persistQueueUrl() {
   window.localStorage.setItem(QUEUE_URL_STORAGE_KEY, state.queueUrl || "");
+}
+
+function persistQueueSettings() {
+  persistQueueUrl();
+  const payload = {
+    queuePort: state.queuePort || "",
+    queueUsername: state.queueUsername || "",
+  };
+  window.localStorage.setItem(QUEUE_SETTINGS_STORAGE_KEY, JSON.stringify(payload));
 }
 
 function restoreQueueFromStorage(showStatus = false) {
@@ -891,6 +1019,36 @@ function restoreQueueFromStorage(showStatus = false) {
 
 function loadStoredQueueUrl() {
   return window.localStorage.getItem(QUEUE_URL_STORAGE_KEY) || "";
+}
+
+function loadStoredQueueSettings() {
+  try {
+    const raw = window.localStorage.getItem(QUEUE_SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return { queuePort: "", queueUsername: "" };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      queuePort: parsed.queuePort || "",
+      queueUsername: parsed.queueUsername || "",
+    };
+  } catch (error) {
+    return { queuePort: "", queueUsername: "" };
+  }
+}
+
+function syncQueueStateFromInputs() {
+  state.queueUrl = normalizeQueueUrl(elements.queueUrlInput.value);
+  state.queuePort = normalizePort(elements.queuePortInput.value);
+  state.queueUsername = elements.queueUsernameInput.value.trim();
+  state.queuePassword = elements.queuePasswordInput.value;
+  syncQueueInputs();
+}
+
+function syncQueueInputs() {
+  elements.queueUrlInput.value = state.queueUrl;
+  elements.queuePortInput.value = state.queuePort;
+  elements.queueUsernameInput.value = state.queueUsername;
 }
 
 init();
