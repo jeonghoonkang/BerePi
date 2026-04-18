@@ -38,6 +38,7 @@ const elements = {
   clearQueueButton: document.querySelector("#clearQueueButton"),
   loadQueueUrlButton: document.querySelector("#loadQueueUrlButton"),
   appendQueueUrlButton: document.querySelector("#appendQueueUrlButton"),
+  saveQueueUrlButton: document.querySelector("#saveQueueUrlButton"),
   restoreQueueButton: document.querySelector("#restoreQueueButton"),
   queueList: document.querySelector("#queueList"),
   audioPlayer: document.querySelector("#audioPlayer"),
@@ -153,6 +154,11 @@ function bindEvents() {
   elements.appendQueueUrlButton.addEventListener("click", () => {
     state.queueUrl = elements.queueUrlInput.value.trim();
     loadQueueFromRemote(true);
+  });
+
+  elements.saveQueueUrlButton.addEventListener("click", () => {
+    state.queueUrl = elements.queueUrlInput.value.trim();
+    saveQueueToRemote();
   });
 
   elements.restoreQueueButton.addEventListener("click", () => {
@@ -289,6 +295,44 @@ async function loadQueueFromRemote(append) {
     setStatus(`${imported.length}곡 Queue 반영`);
   } catch (error) {
     setStatus(`Queue 로드 실패: ${error.message}`);
+  }
+}
+
+async function saveQueueToRemote() {
+  if (!elements.queueUrlInput.value.trim()) {
+    setStatus("Queue TXT URL 입력 필요");
+    return;
+  }
+
+  if (state.queue.length === 0) {
+    setStatus("저장할 Queue가 비어 있음");
+    return;
+  }
+
+  state.queueUrl = elements.queueUrlInput.value.trim();
+  syncLocation();
+  persistQueueUrl();
+  setStatus("Queue TXT 저장 중");
+
+  try {
+    const fetchOptions = buildFetchOptions();
+    const response = await fetch(state.queueUrl, {
+      ...fetchOptions,
+      method: "PUT",
+      headers: {
+        ...((fetchOptions.headers) || {}),
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+      body: serializeQueueText(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    setStatus(`${state.queue.length}곡 Queue 저장 완료`);
+  } catch (error) {
+    setStatus(`Queue 저장 실패: ${error.message}`);
   }
 }
 
@@ -513,6 +557,12 @@ function parseQueueText(text) {
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => createQueueEntry(line))
     .filter(Boolean);
+}
+
+function serializeQueueText() {
+  return state.queue
+    .map((entry) => entry.displayUrl || entry.url)
+    .join("\n");
 }
 
 function createQueueEntry(rawValue) {

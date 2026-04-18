@@ -88,10 +88,11 @@
           <div class="queue-import-actions">
             <button id="loadQueueUrlButton" class="primary">Queue 불러오기</button>
             <button id="appendQueueUrlButton" class="secondary">Queue 추가</button>
+            <button id="saveQueueUrlButton" class="secondary">현재 Queue 저장</button>
             <button id="restoreQueueButton" class="secondary">이전 Queue 복원</button>
           </div>
           <p class="hint">
-            TXT 파일은 한 줄에 하나씩 URL 또는 상대 경로를 넣으면 됩니다. 빈 줄과 `#` 주석은 무시합니다.
+            TXT 파일은 한 줄에 하나씩 URL 또는 상대 경로를 넣으면 됩니다. 빈 줄과 `#` 주석은 무시합니다. 저장은 서버가 `PUT` 업로드를 허용해야 합니다.
           </p>
         </div>
         <ol id="queueList" class="queue-list"></ol>
