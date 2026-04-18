@@ -1,11 +1,14 @@
 const DEFAULT_ROOT_URL = "";
 const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"];
+const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
+const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
 
 const state = {
   rootUrl: "",
   port: "",
   username: "",
   password: "",
+  queueUrl: "",
   currentPath: "/",
   entries: [],
   filteredEntries: [],
@@ -19,6 +22,7 @@ const elements = {
   portInput: document.querySelector("#portInput"),
   usernameInput: document.querySelector("#usernameInput"),
   passwordInput: document.querySelector("#passwordInput"),
+  queueUrlInput: document.querySelector("#queueUrlInput"),
   currentPathInput: document.querySelector("#currentPathInput"),
   loadButton: document.querySelector("#loadButton"),
   upButton: document.querySelector("#upButton"),
@@ -32,6 +36,9 @@ const elements = {
   addSelectedButton: document.querySelector("#addSelectedButton"),
   playQueueButton: document.querySelector("#playQueueButton"),
   clearQueueButton: document.querySelector("#clearQueueButton"),
+  loadQueueUrlButton: document.querySelector("#loadQueueUrlButton"),
+  appendQueueUrlButton: document.querySelector("#appendQueueUrlButton"),
+  restoreQueueButton: document.querySelector("#restoreQueueButton"),
   queueList: document.querySelector("#queueList"),
   audioPlayer: document.querySelector("#audioPlayer"),
   playerTitle: document.querySelector("#playerTitle"),
@@ -41,6 +48,7 @@ const elements = {
   statusText: document.querySelector("#statusText"),
   nowPlaying: document.querySelector("#nowPlaying"),
   itemTemplate: document.querySelector("#browserItemTemplate"),
+  queueItemTemplate: document.querySelector("#queueItemTemplate"),
 };
 
 function init() {
@@ -48,18 +56,22 @@ function init() {
   const requestedRoot = url.searchParams.get("root") || DEFAULT_ROOT_URL;
   const requestedPort = url.searchParams.get("port") || "";
   const requestedUsername = url.searchParams.get("username") || "";
+  const requestedQueueUrl = url.searchParams.get("queue_url") || loadStoredQueueUrl();
   const requestedPath = url.searchParams.get("path") || "/";
 
   state.rootUrl = normalizeRootUrl(requestedRoot);
   state.port = normalizePort(requestedPort);
   state.username = requestedUsername;
+  state.queueUrl = requestedQueueUrl;
   state.currentPath = normalizeDirectoryPath(requestedPath);
 
   elements.rootUrlInput.value = state.rootUrl;
   elements.portInput.value = state.port;
   elements.usernameInput.value = state.username;
   elements.passwordInput.value = "";
+  elements.queueUrlInput.value = state.queueUrl;
   elements.currentPathInput.value = state.currentPath;
+  restoreQueueFromStorage();
 
   bindEvents();
 
@@ -77,6 +89,7 @@ function bindEvents() {
     state.port = normalizePort(elements.portInput.value);
     state.username = elements.usernameInput.value.trim();
     state.password = elements.passwordInput.value;
+    state.queueUrl = elements.queueUrlInput.value.trim();
     state.currentPath = normalizeDirectoryPath(elements.currentPathInput.value);
     loadDirectory();
   });
@@ -116,6 +129,7 @@ function bindEvents() {
     const uniqueSelected = selected.filter((entry) => !existingUrls.has(entry.url));
     state.queue = [...state.queue, ...uniqueSelected];
     renderQueue();
+    persistQueue();
     setStatus(`${uniqueSelected.length}곡 큐에 추가`);
   });
 
@@ -127,7 +141,22 @@ function bindEvents() {
     elements.audioPlayer.removeAttribute("src");
     elements.audioPlayer.load();
     updateNowPlaying();
+    persistQueue();
     setStatus("큐 비움");
+  });
+
+  elements.loadQueueUrlButton.addEventListener("click", () => {
+    state.queueUrl = elements.queueUrlInput.value.trim();
+    loadQueueFromRemote(false);
+  });
+
+  elements.appendQueueUrlButton.addEventListener("click", () => {
+    state.queueUrl = elements.queueUrlInput.value.trim();
+    loadQueueFromRemote(true);
+  });
+
+  elements.restoreQueueButton.addEventListener("click", () => {
+    restoreQueueFromStorage(true);
   });
 
   elements.playQueueButton.addEventListener("click", () => {
@@ -215,6 +244,51 @@ async function loadDirectory() {
   } catch (error) {
     renderBrowser([]);
     setStatus(`로드 실패: ${error.message}`);
+  }
+}
+
+async function loadQueueFromRemote(append) {
+  if (!elements.queueUrlInput.value.trim()) {
+    setStatus("Queue TXT URL 입력 필요");
+    return;
+  }
+
+  state.queueUrl = elements.queueUrlInput.value.trim();
+  syncLocation();
+  persistQueueUrl();
+  setStatus("Queue TXT 불러오는 중");
+
+  try {
+    const response = await fetch(state.queueUrl, buildFetchOptions());
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const text = await response.text();
+    const imported = parseQueueText(text);
+    if (imported.length === 0) {
+      setStatus("Queue TXT에 곡이 없음");
+      return;
+    }
+
+    const nextQueue = append ? [...state.queue] : [];
+    const existingUrls = new Set(nextQueue.map((entry) => entry.url));
+    imported.forEach((entry) => {
+      if (!existingUrls.has(entry.url)) {
+        existingUrls.add(entry.url);
+        nextQueue.push(entry);
+      }
+    });
+
+    state.queue = nextQueue;
+    if (state.currentQueueIndex >= state.queue.length) {
+      state.currentQueueIndex = state.queue.length - 1;
+    }
+    renderQueue();
+    persistQueue();
+    setStatus(`${imported.length}곡 Queue 반영`);
+  } catch (error) {
+    setStatus(`Queue 로드 실패: ${error.message}`);
   }
 }
 
@@ -351,11 +425,24 @@ function renderQueue() {
   }
 
   state.queue.forEach((entry, index) => {
-    const item = document.createElement("li");
-    item.className = index === state.currentQueueIndex ? "active" : "";
-    item.textContent = `${index + 1}. ${entry.name}`;
-    item.addEventListener("click", () => playTrackAtIndex(index));
-    elements.queueList.appendChild(item);
+    const fragment = elements.queueItemTemplate.content.cloneNode(true);
+    const item = fragment.querySelector(".queue-item");
+    const trackButton = fragment.querySelector(".queue-track");
+    const urlNode = fragment.querySelector(".queue-url");
+    const upButton = fragment.querySelector(".queue-move-up");
+    const downButton = fragment.querySelector(".queue-move-down");
+    const removeButton = fragment.querySelector(".queue-remove");
+
+    item.classList.toggle("active", index === state.currentQueueIndex);
+    trackButton.textContent = `${index + 1}. ${entry.name}`;
+    urlNode.textContent = entry.displayUrl || entry.url;
+    trackButton.addEventListener("click", () => playTrackAtIndex(index));
+    upButton.disabled = index === 0;
+    downButton.disabled = index === state.queue.length - 1;
+    upButton.addEventListener("click", () => moveQueueItem(index, -1));
+    downButton.addEventListener("click", () => moveQueueItem(index, 1));
+    removeButton.addEventListener("click", () => removeQueueItem(index));
+    elements.queueList.appendChild(fragment);
   });
 
   updateNowPlaying();
@@ -417,6 +504,78 @@ function normalizeRootUrl(value) {
 
 function normalizePort(value) {
   return (value || "").trim().replace(/[^0-9]/g, "");
+}
+
+function parseQueueText(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .map((line) => createQueueEntry(line))
+    .filter(Boolean);
+}
+
+function createQueueEntry(rawValue) {
+  const resolvedUrl = resolveQueueUrl(rawValue);
+  if (!resolvedUrl) {
+    return null;
+  }
+
+  return {
+    name: extractFilename(resolvedUrl),
+    url: resolvedUrl,
+    displayUrl: resolvedUrl,
+    path: new URL(resolvedUrl).pathname,
+    type: "file",
+  };
+}
+
+function resolveQueueUrl(rawValue) {
+  try {
+    if (/^https?:\/\//i.test(rawValue)) {
+      return new URL(rawValue).href;
+    }
+    return buildDisplayUrl(normalizeDirectoryPath(rawValue));
+  } catch (error) {
+    return null;
+  }
+}
+
+function extractFilename(url) {
+  const pathname = new URL(url).pathname;
+  const parts = pathname.split("/").filter(Boolean);
+  return decodeURIComponent(parts[parts.length - 1] || url);
+}
+
+function moveQueueItem(index, delta) {
+  const nextIndex = index + delta;
+  if (nextIndex < 0 || nextIndex >= state.queue.length) {
+    return;
+  }
+
+  const [item] = state.queue.splice(index, 1);
+  state.queue.splice(nextIndex, 0, item);
+  if (state.currentQueueIndex === index) {
+    state.currentQueueIndex = nextIndex;
+  } else if (state.currentQueueIndex === nextIndex) {
+    state.currentQueueIndex = index;
+  }
+  renderQueue();
+  persistQueue();
+}
+
+function removeQueueItem(index) {
+  state.queue.splice(index, 1);
+  if (state.currentQueueIndex === index) {
+    state.currentQueueIndex = -1;
+    elements.audioPlayer.pause();
+    elements.audioPlayer.removeAttribute("src");
+    elements.audioPlayer.load();
+  } else if (state.currentQueueIndex > index) {
+    state.currentQueueIndex -= 1;
+  }
+  renderQueue();
+  persistQueue();
 }
 
 function normalizeDirectoryPath(value) {
@@ -489,8 +648,57 @@ function syncLocation() {
   } else {
     url.searchParams.delete("username");
   }
+  if (state.queueUrl) {
+    url.searchParams.set("queue_url", state.queueUrl);
+  } else {
+    url.searchParams.delete("queue_url");
+  }
   url.searchParams.set("path", state.currentPath);
   window.history.replaceState({}, "", url);
+}
+
+function persistQueue() {
+  const payload = {
+    queue: state.queue,
+    currentQueueIndex: state.currentQueueIndex,
+  };
+  window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(payload));
+  persistQueueUrl();
+}
+
+function persistQueueUrl() {
+  window.localStorage.setItem(QUEUE_URL_STORAGE_KEY, state.queueUrl || "");
+}
+
+function restoreQueueFromStorage(showStatus = false) {
+  try {
+    const raw = window.localStorage.getItem(QUEUE_STORAGE_KEY);
+    if (!raw) {
+      if (showStatus) {
+        setStatus("저장된 Queue 없음");
+      }
+      renderQueue();
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    state.queue = Array.isArray(parsed.queue) ? parsed.queue : [];
+    state.currentQueueIndex = Number.isInteger(parsed.currentQueueIndex) ? parsed.currentQueueIndex : -1;
+    renderQueue();
+    if (showStatus) {
+      setStatus(`이전 Queue 복원 (${state.queue.length}곡)`);
+    }
+  } catch (error) {
+    state.queue = [];
+    state.currentQueueIndex = -1;
+    renderQueue();
+    if (showStatus) {
+      setStatus("저장된 Queue 복원 실패");
+    }
+  }
+}
+
+function loadStoredQueueUrl() {
+  return window.localStorage.getItem(QUEUE_URL_STORAGE_KEY) || "";
 }
 
 init();

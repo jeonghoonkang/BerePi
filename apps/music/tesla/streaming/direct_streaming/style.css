@@ -304,6 +304,19 @@ button:active {
   padding-left: 24px;
 }
 
+.queue-import {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.queue-import-actions,
+.queue-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .queue-list li {
   padding: 14px 12px;
   border-radius: 16px;
@@ -314,6 +327,40 @@ button:active {
 .queue-list li.active {
   border-color: rgba(23, 77, 63, 0.32);
   background: rgba(23, 77, 63, 0.10);
+}
+
+.queue-item {
+  list-style: decimal;
+}
+
+.queue-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.queue-track {
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+  border-radius: 0;
+  text-align: left;
+  flex: 1 1 auto;
+}
+
+.queue-track:hover {
+  transform: none;
+  color: var(--accent-strong);
+}
+
+.queue-url {
+  margin: 8px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .audio-player {
