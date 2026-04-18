@@ -113,6 +113,14 @@
         </div>
       </div>
       <audio id="audioPlayer" controls preload="metadata" class="audio-player"></audio>
+      <iframe
+        id="spotifyPlayer"
+        class="spotify-player hidden"
+        src=""
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+      ></iframe>
+      <p id="playerHint" class="hint player-hint">로컬/서버 오디오와 Spotify 공유 링크를 같은 Queue에서 선택할 수 있습니다.</p>
     </section>
   </main>
 

@@ -368,6 +368,24 @@ button:active {
   margin-top: 16px;
 }
 
+.spotify-player {
+  width: 100%;
+  min-height: 352px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.player-hint {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.hidden {
+  display: none;
+}
+
 .hint {
   grid-column: 1 / -1;
   margin-bottom: 0;

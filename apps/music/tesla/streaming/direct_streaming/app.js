@@ -1,5 +1,6 @@
 const DEFAULT_ROOT_URL = "";
 const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"];
+const SPOTIFY_TYPES = new Set(["track", "album", "playlist", "artist", "episode", "show"]);
 const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
 const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
 
@@ -43,7 +44,9 @@ const elements = {
   restoreQueueButton: document.querySelector("#restoreQueueButton"),
   queueList: document.querySelector("#queueList"),
   audioPlayer: document.querySelector("#audioPlayer"),
+  spotifyPlayer: document.querySelector("#spotifyPlayer"),
   playerTitle: document.querySelector("#playerTitle"),
+  playerHint: document.querySelector("#playerHint"),
   playPauseButton: document.querySelector("#playPauseButton"),
   prevButton: document.querySelector("#prevButton"),
   nextButton: document.querySelector("#nextButton"),
@@ -139,9 +142,7 @@ function bindEvents() {
     state.queue = [];
     state.currentQueueIndex = -1;
     renderQueue();
-    elements.audioPlayer.pause();
-    elements.audioPlayer.removeAttribute("src");
-    elements.audioPlayer.load();
+    clearPlayers();
     updateNowPlaying();
     persistQueue();
     setStatus("큐 비움");
@@ -183,6 +184,11 @@ function bindEvents() {
   });
 
   elements.playPauseButton.addEventListener("click", () => {
+    if (state.queue.length > 0 && state.currentQueueIndex >= 0 && isSpotifyEntry(state.queue[state.currentQueueIndex])) {
+      setStatus("Spotify Embed은 내부 컨트롤 또는 다음 곡 버튼 사용");
+      return;
+    }
+
     if (!elements.audioPlayer.src && state.queue.length > 0) {
       playTrackAtIndex(Math.max(state.currentQueueIndex, 0));
       return;
@@ -543,14 +549,14 @@ function playTrackAtIndex(index) {
 
   state.currentQueueIndex = index;
   const entry = state.queue[index];
-  elements.audioPlayer.src = entry.url;
+  if (isSpotifyEntry(entry)) {
+    showSpotifyPlayer(entry);
+  } else {
+    showAudioPlayer(entry);
+  }
   elements.playerTitle.textContent = entry.name;
   updateNowPlaying();
   renderQueue();
-
-  elements.audioPlayer.play().catch(() => {
-    setStatus("브라우저 재생 차단. 화면 터치 후 다시 시도");
-  });
 }
 
 function updateNowPlaying() {
@@ -605,11 +611,16 @@ function parseQueueText(text) {
 
 function serializeQueueText() {
   return state.queue
-    .map((entry) => entry.displayUrl || entry.url)
+    .map((entry) => entry.sourceUrl || entry.displayUrl || entry.url)
     .join("\n");
 }
 
 function createQueueEntry(rawValue) {
+  const spotifyEntry = createSpotifyQueueEntry(rawValue);
+  if (spotifyEntry) {
+    return spotifyEntry;
+  }
+
   const resolvedUrl = resolveQueueUrl(rawValue);
   if (!resolvedUrl) {
     return null;
@@ -619,9 +630,67 @@ function createQueueEntry(rawValue) {
     name: extractFilename(resolvedUrl),
     url: resolvedUrl,
     displayUrl: resolvedUrl,
+    sourceUrl: rawValue,
     path: new URL(resolvedUrl).pathname,
     type: "file",
   };
+}
+
+function createSpotifyQueueEntry(rawValue) {
+  const spotifyMeta = parseSpotifyReference(rawValue);
+  if (!spotifyMeta) {
+    return null;
+  }
+
+  return {
+    name: `Spotify ${spotifyMeta.type} ${spotifyMeta.id}`,
+    url: spotifyMeta.embedUrl,
+    displayUrl: spotifyMeta.shareUrl,
+    sourceUrl: rawValue,
+    path: spotifyMeta.shareUrl,
+    type: "spotify",
+    spotifyType: spotifyMeta.type,
+    spotifyId: spotifyMeta.id,
+  };
+}
+
+function parseSpotifyReference(rawValue) {
+  try {
+    if (rawValue.startsWith("spotify:")) {
+      const parts = rawValue.split(":");
+      const type = parts[1];
+      const id = parts[2];
+      if (!SPOTIFY_TYPES.has(type) || !id) {
+        return null;
+      }
+      return {
+        type,
+        id,
+        shareUrl: `https://open.spotify.com/${type}/${id}`,
+        embedUrl: `https://open.spotify.com/embed/${type}/${id}`,
+      };
+    }
+
+    const url = new URL(rawValue);
+    if (url.hostname !== "open.spotify.com") {
+      return null;
+    }
+    const segments = url.pathname.split("/").filter(Boolean);
+    const embedIndex = segments[0] === "embed" ? 1 : 0;
+    const type = segments[embedIndex];
+    const id = segments[embedIndex + 1];
+    if (!SPOTIFY_TYPES.has(type) || !id) {
+      return null;
+    }
+    return {
+      type,
+      id,
+      shareUrl: `https://open.spotify.com/${type}/${id}`,
+      embedUrl: `https://open.spotify.com/embed/${type}/${id}`,
+    };
+  } catch (error) {
+    return null;
+  }
 }
 
 function resolveQueueUrl(rawValue) {
@@ -662,9 +731,7 @@ function removeQueueItem(index) {
   state.queue.splice(index, 1);
   if (state.currentQueueIndex === index) {
     state.currentQueueIndex = -1;
-    elements.audioPlayer.pause();
-    elements.audioPlayer.removeAttribute("src");
-    elements.audioPlayer.load();
+    clearPlayers();
   } else if (state.currentQueueIndex > index) {
     state.currentQueueIndex -= 1;
   }
@@ -719,6 +786,37 @@ function buildFetchOptions() {
     Authorization: `Basic ${btoa(`${state.username}:${state.password}`)}`,
   };
   return options;
+}
+
+function isSpotifyEntry(entry) {
+  return entry && entry.type === "spotify";
+}
+
+function showSpotifyPlayer(entry) {
+  clearPlayers();
+  elements.spotifyPlayer.src = entry.url;
+  elements.spotifyPlayer.classList.remove("hidden");
+  elements.playerHint.textContent = "Spotify 공유 링크는 Embed Player로 재생됩니다. 다음 곡 이동은 아래 버튼을 사용하세요.";
+  setStatus("Spotify Embed 재생 준비");
+}
+
+function showAudioPlayer(entry) {
+  clearPlayers();
+  elements.audioPlayer.src = entry.url;
+  elements.audioPlayer.classList.remove("hidden");
+  elements.playerHint.textContent = "서버 오디오는 브라우저 audio player로 재생됩니다.";
+  elements.audioPlayer.play().catch(() => {
+    setStatus("브라우저 재생 차단. 화면 터치 후 다시 시도");
+  });
+}
+
+function clearPlayers() {
+  elements.audioPlayer.pause();
+  elements.audioPlayer.removeAttribute("src");
+  elements.audioPlayer.load();
+  elements.audioPlayer.classList.add("hidden");
+  elements.spotifyPlayer.src = "";
+  elements.spotifyPlayer.classList.add("hidden");
 }
 
 function setStatus(text) {
