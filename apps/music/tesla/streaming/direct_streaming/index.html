@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tesla Direct Streaming</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Tesla Direct Streaming</p>
+        <h1>Apache 파일을 바로 골라<br>연속 재생합니다.</h1>
+        <p class="hero-copy">
+          서버 디렉토리를 탐색하고 여러 곡을 선택한 뒤 재생 큐를 만들어 차량 브라우저에서 순서대로 들을 수 있습니다.
+        </p>
+      </div>
+      <div class="status-card">
+        <div class="status-label">현재 상태</div>
+        <div id="statusText" class="status-text">대기 중</div>
+        <div id="nowPlaying" class="now-playing">재생 전</div>
+      </div>
+    </section>
+
+    <section class="toolbar card">
+      <label class="field">
+        <span>Root URL</span>
+        <input id="rootUrlInput" type="url" placeholder="https://server.example.com/music/">
+      </label>
+      <label class="field">
+        <span>현재 경로</span>
+        <input id="currentPathInput" type="text" placeholder="/">
+      </label>
+      <div class="toolbar-actions">
+        <button id="loadButton" class="primary">불러오기</button>
+        <button id="upButton" class="secondary">상위 폴더</button>
+        <button id="selectVisibleButton" class="secondary">보이는 곡 전체 선택</button>
+        <button id="clearSelectionButton" class="secondary">선택 해제</button>
+      </div>
+      <p class="hint">
+        Apache 디렉토리 인덱스가 켜져 있고, 이 페이지에서 접근 가능한 같은 출처 URL을 사용하는 것이 가장 안정적입니다.
+      </p>
+    </section>
+
+    <section class="content-grid">
+      <div class="browser-panel card">
+        <div class="panel-header">
+          <h2>디렉토리 탐색기</h2>
+          <div id="breadcrumb" class="breadcrumb"></div>
+        </div>
+        <div class="panel-toolbar">
+          <input id="filterInput" type="search" placeholder="파일명 필터">
+          <div class="summary">
+            <span id="directoryCount">0 folders</span>
+            <span id="fileCount">0 files</span>
+          </div>
+        </div>
+        <div id="browserList" class="browser-list"></div>
+      </div>
+
+      <div class="queue-panel card">
+        <div class="panel-header">
+          <h2>재생 큐</h2>
+          <div class="queue-actions">
+            <button id="addSelectedButton" class="primary">선택 곡 추가</button>
+            <button id="playQueueButton" class="accent">큐 재생</button>
+            <button id="clearQueueButton" class="secondary">큐 비우기</button>
+          </div>
+        </div>
+        <ol id="queueList" class="queue-list"></ol>
+      </div>
+    </section>
+
+    <section class="player card">
+      <div class="player-head">
+        <div>
+          <p class="player-label">Playback</p>
+          <h2 id="playerTitle">선택된 곡이 없습니다</h2>
+        </div>
+        <div class="player-controls">
+          <button id="prevButton" class="secondary">이전 곡</button>
+          <button id="playPauseButton" class="primary">재생 / 일시정지</button>
+          <button id="nextButton" class="secondary">다음 곡</button>
+        </div>
+      </div>
+      <audio id="audioPlayer" controls preload="metadata" class="audio-player"></audio>
+    </section>
+  </main>
+
+  <template id="browserItemTemplate">
+    <article class="browser-item">
+      <div class="item-main">
+        <div class="item-icon"></div>
+        <div class="item-meta">
+          <button class="item-link"></button>
+          <p class="item-subtitle"></p>
+        </div>
+      </div>
+      <label class="item-selector">
+        <input type="checkbox" class="item-checkbox">
+        <span>선택</span>
+      </label>
+    </article>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>
