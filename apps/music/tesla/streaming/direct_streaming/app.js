@@ -3,6 +3,9 @@ const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"];
 
 const state = {
   rootUrl: "",
+  port: "",
+  username: "",
+  password: "",
   currentPath: "/",
   entries: [],
   filteredEntries: [],
@@ -13,6 +16,9 @@ const state = {
 
 const elements = {
   rootUrlInput: document.querySelector("#rootUrlInput"),
+  portInput: document.querySelector("#portInput"),
+  usernameInput: document.querySelector("#usernameInput"),
+  passwordInput: document.querySelector("#passwordInput"),
   currentPathInput: document.querySelector("#currentPathInput"),
   loadButton: document.querySelector("#loadButton"),
   upButton: document.querySelector("#upButton"),
@@ -40,12 +46,19 @@ const elements = {
 function init() {
   const url = new URL(window.location.href);
   const requestedRoot = url.searchParams.get("root") || DEFAULT_ROOT_URL;
+  const requestedPort = url.searchParams.get("port") || "";
+  const requestedUsername = url.searchParams.get("username") || "";
   const requestedPath = url.searchParams.get("path") || "/";
 
   state.rootUrl = normalizeRootUrl(requestedRoot);
+  state.port = normalizePort(requestedPort);
+  state.username = requestedUsername;
   state.currentPath = normalizeDirectoryPath(requestedPath);
 
   elements.rootUrlInput.value = state.rootUrl;
+  elements.portInput.value = state.port;
+  elements.usernameInput.value = state.username;
+  elements.passwordInput.value = "";
   elements.currentPathInput.value = state.currentPath;
 
   bindEvents();
@@ -61,6 +74,9 @@ function init() {
 function bindEvents() {
   elements.loadButton.addEventListener("click", () => {
     state.rootUrl = normalizeRootUrl(elements.rootUrlInput.value);
+    state.port = normalizePort(elements.portInput.value);
+    state.username = elements.usernameInput.value.trim();
+    state.password = elements.passwordInput.value;
     state.currentPath = normalizeDirectoryPath(elements.currentPathInput.value);
     loadDirectory();
   });
@@ -180,13 +196,13 @@ async function loadDirectory() {
     return;
   }
 
-  const targetUrl = joinUrl(state.rootUrl, state.currentPath);
+  const targetUrl = buildRequestUrl(state.currentPath);
   setStatus("목록 불러오는 중");
   elements.currentPathInput.value = state.currentPath;
   syncLocation();
 
   try {
-    const response = await fetch(targetUrl, { cache: "no-store" });
+    const response = await fetch(targetUrl, buildFetchOptions());
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -225,7 +241,8 @@ function parseApacheDirectoryListing(html, baseUrl) {
 
       return {
         name,
-        url: url.href,
+        url: buildRequestUrl(pathname),
+        displayUrl: buildDisplayUrl(pathname),
         path: pathname,
         type: isDirectory ? "directory" : "file",
       };
@@ -266,7 +283,7 @@ function renderBrowser(entries) {
 
     icon.textContent = entry.type === "directory" ? "📁" : "♪";
     link.textContent = entry.name;
-    subtitle.textContent = entry.type === "directory" ? "폴더 열기" : entry.url;
+    subtitle.textContent = entry.type === "directory" ? "폴더 열기" : entry.displayUrl;
 
     if (entry.type === "directory") {
       link.addEventListener("click", () => {
@@ -398,6 +415,10 @@ function normalizeRootUrl(value) {
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }
 
+function normalizePort(value) {
+  return (value || "").trim().replace(/[^0-9]/g, "");
+}
+
 function normalizeDirectoryPath(value) {
   if (!value || value === "/") {
     return "/";
@@ -413,13 +434,59 @@ function getParentPath(path) {
   return segments.length ? `/${segments.join("/")}/` : "/";
 }
 
-function joinUrl(rootUrl, currentPath) {
-  const trimmedPath = currentPath.replace(/^\/+/, "");
-  return new URL(trimmedPath, rootUrl).href;
+function buildBaseUrl() {
+  if (!state.rootUrl) {
+    return "";
+  }
+
+  const base = new URL(state.rootUrl);
+  if (state.port) {
+    base.port = state.port;
+  }
+  return base;
+}
+
+function buildRequestUrl(targetPath) {
+  const base = buildBaseUrl();
+  if (!base) {
+    return "";
+  }
+
+  const trimmedPath = targetPath.replace(/^\/+/, "");
+  const composed = new URL(trimmedPath, base.href);
+
+  if (state.username) {
+    composed.username = state.username;
+    composed.password = state.password;
+  }
+
+  return composed.href;
+}
+
+function buildDisplayUrl(targetPath) {
+  const base = buildBaseUrl();
+  if (!base) {
+    return "";
+  }
+
+  const trimmedPath = targetPath.replace(/^\/+/, "");
+  return new URL(trimmedPath, base.href).href;
+}
+
+function buildFetchOptions() {
+  const options = { cache: "no-store" };
+  if (!state.username) {
+    return options;
+  }
+
+  options.headers = {
+    Authorization: `Basic ${btoa(`${state.username}:${state.password}`)}`,
+  };
+  return options;
 }
 
 function relativePathFromRoot(targetUrl) {
-  const root = new URL(state.rootUrl);
+  const root = buildBaseUrl();
   const target = new URL(targetUrl);
   const relative = target.pathname.replace(root.pathname, "");
   return normalizeDirectoryPath(relative);
@@ -435,6 +502,16 @@ function syncLocation() {
     url.searchParams.set("root", state.rootUrl);
   } else {
     url.searchParams.delete("root");
+  }
+  if (state.port) {
+    url.searchParams.set("port", state.port);
+  } else {
+    url.searchParams.delete("port");
+  }
+  if (state.username) {
+    url.searchParams.set("username", state.username);
+  } else {
+    url.searchParams.delete("username");
   }
   url.searchParams.set("path", state.currentPath);
   window.history.replaceState({}, "", url);

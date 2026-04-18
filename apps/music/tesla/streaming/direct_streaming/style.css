@@ -120,7 +120,7 @@ h1 {
 
 .toolbar {
   display: grid;
-  grid-template-columns: 1.3fr 1fr auto;
+  grid-template-columns: minmax(260px, 1.2fr) repeat(3, minmax(130px, 0.42fr)) minmax(220px, 0.9fr) auto;
   gap: 16px;
   align-items: end;
 }
@@ -130,6 +130,10 @@ h1 {
   flex-direction: column;
   gap: 8px;
   font-weight: 600;
+}
+
+.field-small input {
+  min-width: 0;
 }
 
 .field input,
@@ -182,13 +186,18 @@ button:active {
 }
 
 .content-grid {
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: minmax(0, 1024px) minmax(320px, 1fr);
+  align-items: start;
 }
 
 .browser-panel,
 .queue-panel {
   min-height: 520px;
   padding: 20px;
+}
+
+.browser-panel {
+  width: min(100%, 1024px);
 }
 
 .panel-header,
@@ -225,7 +234,7 @@ button:active {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
   padding: 16px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.72);
@@ -270,9 +279,18 @@ button:active {
 
 .item-link,
 .item-subtitle {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.item-subtitle {
+  margin-bottom: 0;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.item-selector {
+  padding-top: 4px;
 }
 
 .item-selector {
@@ -313,6 +331,10 @@ button:active {
   .content-grid,
   .toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .browser-panel {
+    width: 100%;
   }
 }
 
