@@ -1,4 +1,5 @@
 const DEFAULT_ROOT_URL = "";
+const APP_VERSION = "0480b6a8";
 const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"];
 const SPOTIFY_TYPES = new Set(["track", "album", "playlist", "artist", "episode", "show"]);
 const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
@@ -67,6 +68,7 @@ const elements = {
   nextButton: document.querySelector("#nextButton"),
   statusText: document.querySelector("#statusText"),
   nowPlaying: document.querySelector("#nowPlaying"),
+  appVersionBadge: document.querySelector("#appVersionBadge"),
   rootMemoryStorageStatus: document.querySelector("#rootMemoryStorageStatus"),
   rootMemorySavedStatus: document.querySelector("#rootMemorySavedStatus"),
   rootMemoryList: document.querySelector("#rootMemoryList"),
@@ -75,6 +77,7 @@ const elements = {
 };
 
 async function init() {
+  renderAppVersion();
   const url = new URL(window.location.href);
   const storedQueueSettings = loadStoredQueueSettings();
   const requestedRoot = url.searchParams.get("root") || DEFAULT_ROOT_URL;
@@ -116,6 +119,13 @@ async function init() {
     renderBrowser([]);
     setStatus("Root URL 입력 필요");
   }
+}
+
+function renderAppVersion() {
+  if (!elements.appVersionBadge) {
+    return;
+  }
+  elements.appVersionBadge.textContent = `v${APP_VERSION}`;
 }
 
 function bindEvents() {
