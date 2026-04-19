@@ -1078,8 +1078,9 @@ function loadStoredQueueSettings() {
 
 function updateRootMemoryDiagnostics() {
   const storageOk = isLocalStorageAvailable();
+  const cryptoOk = isWebCryptoAvailable();
   elements.rootMemoryStorageStatus.textContent = storageOk
-    ? "Storage 상태: 사용 가능"
+    ? `Storage 상태: 사용 가능 · Crypto: ${cryptoOk ? "가능" : "불가"}`
     : "Storage 상태: 사용 불가";
 
   const metaRaw = window.localStorage.getItem(ROOT_MEMORY_META_STORAGE_KEY);
@@ -1093,7 +1094,17 @@ function updateRootMemoryDiagnostics() {
     const meta = JSON.parse(metaRaw);
     const savedAt = formatStoredTimestamp(meta.savedAt);
     elements.rootMemorySavedStatus.textContent = `마지막 저장: ${savedAt}`;
+    if (meta.mode === "hash_only") {
+      elements.rootMemoryList.textContent = [
+        "저장 모드: hash_only",
+        "설명: Web Crypto가 없어 암호 확인용 해시만 저장됨",
+        "자동입력: 지원 안 함",
+        `저장 시각: ${savedAt}`,
+      ].join("\n");
+      return;
+    }
     elements.rootMemoryList.textContent = [
+      "저장 모드: encrypted",
       `Root URL: ${meta.rootUrl || "-"}`,
       `포트: ${meta.port || "-"}`,
       `ID: ${meta.username || "-"}`,
@@ -1117,6 +1128,15 @@ function isLocalStorageAvailable() {
   }
 }
 
+function isWebCryptoAvailable() {
+  return Boolean(
+    window.crypto &&
+    window.crypto.subtle &&
+    typeof window.crypto.subtle.encrypt === "function" &&
+    typeof window.crypto.subtle.decrypt === "function",
+  );
+}
+
 function formatStoredTimestamp(value) {
   if (!value) {
     return "-";
@@ -1126,6 +1146,16 @@ function formatStoredTimestamp(value) {
     return value;
   }
   return date.toLocaleString("ko-KR", { hour12: false });
+}
+
+function computePasswordVerifier(password) {
+  let hash = 2166136261;
+  const input = `${password}::tesla_direct_streaming_root_memory`;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16)}`;
 }
 
 async function saveRootMemory() {
@@ -1142,17 +1172,38 @@ async function saveRootMemory() {
     currentPath: state.currentPath,
   };
   const meta = {
-    rootUrl: state.rootUrl,
-    port: state.port,
-    username: state.username,
-    currentPath: state.currentPath,
     savedAt: new Date().toISOString(),
   };
 
   try {
+    if (!isWebCryptoAvailable()) {
+      window.localStorage.removeItem(ROOT_MEMORY_STORAGE_KEY);
+      window.localStorage.setItem(
+        ROOT_MEMORY_META_STORAGE_KEY,
+        JSON.stringify({
+          ...meta,
+          mode: "hash_only",
+          verifier: computePasswordVerifier(state.rootMemoryPassword),
+        }),
+      );
+      updateRootMemoryDiagnostics();
+      setStatus("Web Crypto 없음: 해시 확인만 저장됨, 자동입력 불가");
+      return;
+    }
+
     const encrypted = await encryptJsonPayload(payload, state.rootMemoryPassword);
     window.localStorage.setItem(ROOT_MEMORY_STORAGE_KEY, JSON.stringify(encrypted));
-    window.localStorage.setItem(ROOT_MEMORY_META_STORAGE_KEY, JSON.stringify(meta));
+    window.localStorage.setItem(
+      ROOT_MEMORY_META_STORAGE_KEY,
+      JSON.stringify({
+        ...meta,
+        mode: "encrypted",
+        rootUrl: state.rootUrl,
+        port: state.port,
+        username: state.username,
+        currentPath: state.currentPath,
+      }),
+    );
     updateRootMemoryDiagnostics();
     setStatus("Root 기억 저장 완료");
   } catch (error) {
@@ -1168,8 +1219,9 @@ async function restoreRootMemory(showStatus) {
     return false;
   }
 
+  const metaRaw = window.localStorage.getItem(ROOT_MEMORY_META_STORAGE_KEY);
   const raw = window.localStorage.getItem(ROOT_MEMORY_STORAGE_KEY);
-  if (!raw) {
+  if (!metaRaw && !raw) {
     updateRootMemoryDiagnostics();
     if (showStatus) {
       setStatus("저장된 Root 기억 없음");
@@ -1178,6 +1230,18 @@ async function restoreRootMemory(showStatus) {
   }
 
   try {
+    const meta = metaRaw ? JSON.parse(metaRaw) : null;
+    if (meta?.mode === "hash_only") {
+      const matches = meta.verifier === computePasswordVerifier(state.rootMemoryPassword);
+      updateRootMemoryDiagnostics();
+      if (showStatus) {
+        setStatus(matches
+          ? "암호는 일치하지만 HTTP/no-crypto 환경에서는 Root 자동입력 불가"
+          : "기억 암호 불일치 또는 복원 실패");
+      }
+      return false;
+    }
+
     const encrypted = JSON.parse(raw);
     const restored = await decryptJsonPayload(encrypted, state.rootMemoryPassword);
     state.rootUrl = normalizeRootUrl(restored.rootUrl || "");
