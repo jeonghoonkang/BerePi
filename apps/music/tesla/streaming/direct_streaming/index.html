@@ -103,10 +103,25 @@
           </div>
         </div>
         <div class="queue-import">
-          <label class="field">
-            <span>Queue 주소</span>
-            <input id="queueUrlInput" type="url" placeholder="https://server.example.com/playlist.txt">
-          </label>
+          <div class="queue-target-grid">
+            <label class="field">
+              <span>Queue 주소</span>
+              <input id="queueUrlInput" type="url" placeholder="https://server.example.com/playlists/">
+            </label>
+            <label class="field field-small">
+              <span>Playlist 파일명</span>
+              <input id="playlistNameInput" type="text" placeholder="playlist.txt">
+            </label>
+          </div>
+          <div class="queue-saved-grid">
+            <label class="field">
+              <span>저장된 Playlist</span>
+              <select id="queueHistorySelect">
+                <option value="">저장된 playlist 없음</option>
+              </select>
+            </label>
+            <button id="applyQueueHistoryButton" class="secondary" type="button">선택 적용</button>
+          </div>
           <div class="queue-auth-grid">
             <label class="field field-small">
               <span>Queue 포트</span>
@@ -128,7 +143,7 @@
             <button id="restoreQueueButton" class="secondary">이전 Queue 복원</button>
           </div>
           <p class="hint">
-            TXT 파일은 한 줄에 하나씩 URL 또는 상대 경로를 넣으면 됩니다. 빈 줄과 `#` 주석은 무시합니다. Queue 인증은 URL이 아니라 헤더로 전송됩니다.
+            Queue 주소는 저장 폴더 또는 기준 URL이고, Playlist 파일명은 별도로 바꿀 수 있습니다. TXT 파일 첫 줄은 반드시 `#TESLA_DIRECT_STREAMING_PLAYLIST` 여야 하며, 그 다음 줄부터 한 줄에 하나씩 URL 또는 상대 경로를 넣어야 합니다. 빈 줄과 `#` 주석은 무시합니다. 저장하거나 불러온 playlist 대상은 최대 20개까지 기억됩니다.
           </p>
         </div>
         <ol id="queueList" class="queue-list"></ol>

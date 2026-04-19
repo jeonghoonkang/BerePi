@@ -2,9 +2,13 @@ const DEFAULT_ROOT_URL = "";
 const APP_VERSION = "0480b6a8";
 const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"];
 const SPOTIFY_TYPES = new Set(["track", "album", "playlist", "artist", "episode", "show"]);
+const PLAYLIST_HEADER = "#TESLA_DIRECT_STREAMING_PLAYLIST";
+const DEFAULT_PLAYLIST_NAME = "playlist.txt";
 const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
 const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
 const QUEUE_SETTINGS_STORAGE_KEY = "tesla_direct_streaming_queue_settings";
+const QUEUE_HISTORY_STORAGE_KEY = "tesla_direct_streaming_queue_history";
+const QUEUE_HISTORY_LIMIT = 20;
 const ROOT_MEMORY_REMOTE_BASE_URL = "http://bigsoft.iptime.org:7080/webdav";
 const ROOT_MEMORY_REMOTE_FILE = "tesla_direct_streaming_root_memory.json";
 
@@ -15,6 +19,7 @@ const state = {
   password: "",
   rootMemoryPassword: "",
   queueUrl: "",
+  playlistName: DEFAULT_PLAYLIST_NAME,
   queuePort: "",
   queueUsername: "",
   queuePassword: "",
@@ -24,6 +29,7 @@ const state = {
   selectedFiles: new Map(),
   queue: [],
   currentQueueIndex: -1,
+  queueHistory: [],
   rootMemoryMeta: null,
   rootMemoryRemoteReachable: null,
 };
@@ -35,6 +41,9 @@ const elements = {
   passwordInput: document.querySelector("#passwordInput"),
   rootMemoryPasswordInput: document.querySelector("#rootMemoryPasswordInput"),
   queueUrlInput: document.querySelector("#queueUrlInput"),
+  playlistNameInput: document.querySelector("#playlistNameInput"),
+  queueHistorySelect: document.querySelector("#queueHistorySelect"),
+  applyQueueHistoryButton: document.querySelector("#applyQueueHistoryButton"),
   queuePortInput: document.querySelector("#queuePortInput"),
   queueUsernameInput: document.querySelector("#queueUsernameInput"),
   queuePasswordInput: document.querySelector("#queuePasswordInput"),
@@ -80,22 +89,27 @@ async function init() {
   renderAppVersion();
   const url = new URL(window.location.href);
   const storedQueueSettings = loadStoredQueueSettings();
+  const storedQueueUrl = loadStoredQueueUrl();
   const requestedRoot = url.searchParams.get("root") || DEFAULT_ROOT_URL;
   const requestedPort = url.searchParams.get("port") || "";
   const requestedUsername = url.searchParams.get("username") || "";
-  const requestedQueueUrl = url.searchParams.get("queue_url") || loadStoredQueueUrl();
+  const requestedQueueUrl = url.searchParams.get("queue_url") || storedQueueUrl;
+  const requestedPlaylistName = url.searchParams.get("playlist_name") || storedQueueSettings.queuePlaylistName || "";
   const requestedQueuePort = url.searchParams.get("queue_port") || storedQueueSettings.queuePort || "";
   const requestedQueueUsername = url.searchParams.get("queue_username") || storedQueueSettings.queueUsername || "";
   const requestedPath = url.searchParams.get("path") || "/";
+  const queueTarget = splitQueueTarget(requestedQueueUrl, requestedPlaylistName);
 
   state.rootUrl = normalizeRootUrl(requestedRoot);
   state.port = normalizePort(requestedPort);
   state.username = requestedUsername;
   state.rootMemoryPassword = "";
-  state.queueUrl = normalizeQueueUrl(requestedQueueUrl);
+  state.queueUrl = queueTarget.baseUrl;
+  state.playlistName = queueTarget.playlistName;
   state.queuePort = normalizePort(requestedQueuePort);
   state.queueUsername = requestedQueueUsername;
   state.currentPath = normalizeDirectoryPath(requestedPath);
+  state.queueHistory = loadStoredQueueHistory();
 
   elements.rootUrlInput.value = state.rootUrl;
   elements.portInput.value = state.port;
@@ -103,10 +117,12 @@ async function init() {
   elements.passwordInput.value = "";
   elements.rootMemoryPasswordInput.value = "";
   elements.queueUrlInput.value = state.queueUrl;
+  elements.playlistNameInput.value = state.playlistName;
   elements.queuePortInput.value = state.queuePort;
   elements.queueUsernameInput.value = state.queueUsername;
   elements.queuePasswordInput.value = "";
   elements.currentPathInput.value = state.currentPath;
+  renderQueueHistoryOptions();
   restoreQueueFromStorage();
   await refreshRootMemoryDiagnostics();
 
@@ -217,6 +233,14 @@ function bindEvents() {
   elements.saveQueueUrlButton.addEventListener("click", () => {
     syncQueueStateFromInputs();
     saveQueueToRemote();
+  });
+
+  elements.applyQueueHistoryButton.addEventListener("click", () => {
+    applySelectedQueueHistory();
+  });
+
+  elements.queueHistorySelect.addEventListener("change", () => {
+    applySelectedQueueHistory();
   });
 
   elements.restoreQueueButton.addEventListener("click", () => {
@@ -355,6 +379,7 @@ async function loadQueueFromRemote(append) {
     }
     renderQueue();
     persistQueue();
+    rememberQueueTarget();
     setStatus(`${imported.length}곡 Queue 반영`);
   } catch (error) {
     setStatus(`Queue 로드 실패: ${error.message}`);
@@ -392,6 +417,7 @@ async function saveQueueToRemote() {
       throw new Error(`HTTP ${response.status}`);
     }
 
+    rememberQueueTarget();
     setStatus(`${state.queue.length}곡 Queue 저장 완료`);
   } catch (error) {
     setStatus(`Queue 저장 실패: ${error.message}`);
@@ -734,22 +760,100 @@ function normalizeQueueUrl(value) {
   }
 }
 
+function normalizeQueueBaseUrl(value) {
+  const normalized = normalizeQueueUrl(value);
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || "";
+    if (parsed.pathname.endsWith("/") || (lastSegment && !lastSegment.includes("."))) {
+      if (!parsed.pathname.endsWith("/")) {
+        parsed.pathname = `${parsed.pathname}/`;
+      }
+      return parsed.href;
+    }
+    const rawSegments = parsed.pathname.split("/");
+    rawSegments.pop();
+    parsed.pathname = `${rawSegments.join("/") || ""}/`;
+    return parsed.href;
+  } catch (error) {
+    return normalized;
+  }
+}
+
+function normalizePlaylistName(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) {
+    return DEFAULT_PLAYLIST_NAME;
+  }
+  return trimmed.replace(/[\\/]+/g, "_");
+}
+
+function splitQueueTarget(queueUrl, playlistName = "") {
+  const normalizedQueueUrl = normalizeQueueUrl(queueUrl);
+  const normalizedPlaylistName = normalizePlaylistName(playlistName);
+  if (!normalizedQueueUrl) {
+    return {
+      baseUrl: "",
+      playlistName: normalizedPlaylistName,
+    };
+  }
+
+  try {
+    const parsed = new URL(normalizedQueueUrl);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || "";
+    if (parsed.pathname.endsWith("/") || (lastSegment && !lastSegment.includes("."))) {
+      if (!parsed.pathname.endsWith("/")) {
+        parsed.pathname = `${parsed.pathname}/`;
+      }
+      return {
+        baseUrl: parsed.href,
+        playlistName: normalizedPlaylistName,
+      };
+    }
+
+    const rawSegments = parsed.pathname.split("/");
+    const lastPart = decodeURIComponent(rawSegments[rawSegments.length - 1] || "");
+    rawSegments.pop();
+    parsed.pathname = `${rawSegments.join("/") || ""}/`;
+    return {
+      baseUrl: parsed.href,
+      playlistName: playlistName ? normalizedPlaylistName : normalizePlaylistName(lastPart || DEFAULT_PLAYLIST_NAME),
+    };
+  } catch (error) {
+    return {
+      baseUrl: normalizedQueueUrl,
+      playlistName: normalizedPlaylistName,
+    };
+  }
+}
+
 function normalizePort(value) {
   return (value || "").trim().replace(/[^0-9]/g, "");
 }
 
 function parseQueueText(text) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const firstContentLine = lines.find((line) => line);
+  if (firstContentLine !== PLAYLIST_HEADER) {
+    throw new Error(`playlist 헤더 없음 (${PLAYLIST_HEADER})`);
+  }
+
+  return lines
+    .slice(lines.indexOf(firstContentLine) + 1)
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => createQueueEntry(line))
     .filter(Boolean);
 }
 
 function serializeQueueText() {
-  return state.queue
-    .map((entry) => entry.sourceUrl || entry.displayUrl || entry.url)
+  return [PLAYLIST_HEADER, ...state.queue
+    .map((entry) => entry.sourceUrl || entry.displayUrl || entry.url)]
     .join("\n");
 }
 
@@ -931,6 +1035,7 @@ function buildQueueRequestUrl() {
   if (state.queuePort) {
     parsed.port = state.queuePort;
   }
+  parsed.pathname = new URL(state.playlistName, parsed.href).pathname;
   parsed.username = "";
   parsed.password = "";
   return parsed.href;
@@ -1021,6 +1126,11 @@ function syncLocation() {
   } else {
     url.searchParams.delete("queue_url");
   }
+  if (state.playlistName) {
+    url.searchParams.set("playlist_name", state.playlistName);
+  } else {
+    url.searchParams.delete("playlist_name");
+  }
   if (state.queuePort) {
     url.searchParams.set("queue_port", state.queuePort);
   } else {
@@ -1051,6 +1161,7 @@ function persistQueueUrl() {
 function persistQueueSettings() {
   persistQueueUrl();
   const payload = {
+    queuePlaylistName: state.playlistName || DEFAULT_PLAYLIST_NAME,
     queuePort: state.queuePort || "",
     queueUsername: state.queueUsername || "",
   };
@@ -1092,16 +1203,114 @@ function loadStoredQueueSettings() {
   try {
     const raw = window.localStorage.getItem(QUEUE_SETTINGS_STORAGE_KEY);
     if (!raw) {
-      return { queuePort: "", queueUsername: "" };
+      return { queuePlaylistName: DEFAULT_PLAYLIST_NAME, queuePort: "", queueUsername: "" };
     }
     const parsed = JSON.parse(raw);
     return {
+      queuePlaylistName: normalizePlaylistName(parsed.queuePlaylistName || DEFAULT_PLAYLIST_NAME),
       queuePort: parsed.queuePort || "",
       queueUsername: parsed.queueUsername || "",
     };
   } catch (error) {
-    return { queuePort: "", queueUsername: "" };
+    return { queuePlaylistName: DEFAULT_PLAYLIST_NAME, queuePort: "", queueUsername: "" };
   }
+}
+
+function loadStoredQueueHistory() {
+  try {
+    const raw = window.localStorage.getItem(QUEUE_HISTORY_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((entry) => ({
+        baseUrl: normalizeQueueBaseUrl(entry.baseUrl || entry.queueUrl || ""),
+        playlistName: normalizePlaylistName(entry.playlistName || DEFAULT_PLAYLIST_NAME),
+        queuePort: normalizePort(entry.queuePort || ""),
+        queueUsername: entry.queueUsername || "",
+        savedAt: entry.savedAt || "",
+      }))
+      .filter((entry) => entry.baseUrl);
+  } catch (error) {
+    return [];
+  }
+}
+
+function persistQueueHistory() {
+  window.localStorage.setItem(
+    QUEUE_HISTORY_STORAGE_KEY,
+    JSON.stringify(state.queueHistory.slice(0, QUEUE_HISTORY_LIMIT)),
+  );
+}
+
+function rememberQueueTarget() {
+  if (!state.queueUrl) {
+    return;
+  }
+
+  const nextEntry = {
+    baseUrl: state.queueUrl,
+    playlistName: normalizePlaylistName(state.playlistName),
+    queuePort: state.queuePort || "",
+    queueUsername: state.queueUsername || "",
+    savedAt: new Date().toISOString(),
+  };
+  const deduped = state.queueHistory.filter((entry) =>
+    !(
+      entry.baseUrl === nextEntry.baseUrl &&
+      entry.playlistName === nextEntry.playlistName &&
+      entry.queuePort === nextEntry.queuePort &&
+      entry.queueUsername === nextEntry.queueUsername
+    ));
+  state.queueHistory = [nextEntry, ...deduped].slice(0, QUEUE_HISTORY_LIMIT);
+  persistQueueHistory();
+  renderQueueHistoryOptions();
+}
+
+function renderQueueHistoryOptions() {
+  if (!elements.queueHistorySelect) {
+    return;
+  }
+
+  elements.queueHistorySelect.innerHTML = "";
+  if (state.queueHistory.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "저장된 playlist 없음";
+    elements.queueHistorySelect.appendChild(option);
+    return;
+  }
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "저장된 playlist 선택";
+  elements.queueHistorySelect.appendChild(placeholder);
+
+  state.queueHistory.forEach((entry, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `${entry.playlistName} · ${entry.baseUrl}`;
+    elements.queueHistorySelect.appendChild(option);
+  });
+}
+
+function applySelectedQueueHistory() {
+  const selectedIndex = Number.parseInt(elements.queueHistorySelect.value, 10);
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= state.queueHistory.length) {
+    return;
+  }
+
+  const entry = state.queueHistory[selectedIndex];
+  state.queueUrl = entry.baseUrl;
+  state.playlistName = entry.playlistName;
+  state.queuePort = entry.queuePort || "";
+  state.queueUsername = entry.queueUsername || "";
+  syncQueueInputs();
+  setStatus(`저장된 Playlist 적용: ${entry.playlistName}`);
 }
 
 function updateRootMemoryDiagnostics() {
@@ -1418,7 +1627,8 @@ function base64ToBytes(value) {
 }
 
 function syncQueueStateFromInputs() {
-  state.queueUrl = normalizeQueueUrl(elements.queueUrlInput.value);
+  state.queueUrl = normalizeQueueBaseUrl(elements.queueUrlInput.value);
+  state.playlistName = normalizePlaylistName(elements.playlistNameInput.value);
   state.queuePort = normalizePort(elements.queuePortInput.value);
   state.queueUsername = elements.queueUsernameInput.value.trim();
   state.queuePassword = elements.queuePasswordInput.value;
@@ -1427,6 +1637,7 @@ function syncQueueStateFromInputs() {
 
 function syncQueueInputs() {
   elements.queueUrlInput.value = state.queueUrl;
+  elements.playlistNameInput.value = state.playlistName;
   elements.queuePortInput.value = state.queuePort;
   elements.queueUsernameInput.value = state.queueUsername;
 }

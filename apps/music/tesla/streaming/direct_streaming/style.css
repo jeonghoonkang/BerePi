@@ -27,7 +27,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -175,6 +176,7 @@ h1 {
 }
 
 .field input,
+.field select,
 .panel-toolbar input {
   width: 100%;
   border: 1px solid rgba(71, 53, 33, 0.18);
@@ -371,6 +373,19 @@ button:active {
   margin-bottom: 18px;
 }
 
+.queue-target-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  gap: 12px;
+}
+
+.queue-saved-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
 .queue-auth-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(140px, 1fr));
@@ -470,6 +485,11 @@ button:active {
   }
 
   .queue-auth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .queue-target-grid,
+  .queue-saved-grid {
     grid-template-columns: 1fr;
   }
 }
