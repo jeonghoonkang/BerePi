@@ -5,6 +5,7 @@ const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
 const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
 const QUEUE_SETTINGS_STORAGE_KEY = "tesla_direct_streaming_queue_settings";
 const ROOT_MEMORY_STORAGE_KEY = "tesla_direct_streaming_root_memory";
+const ROOT_MEMORY_META_STORAGE_KEY = "tesla_direct_streaming_root_memory_meta";
 
 const state = {
   rootUrl: "",
@@ -64,6 +65,9 @@ const elements = {
   nextButton: document.querySelector("#nextButton"),
   statusText: document.querySelector("#statusText"),
   nowPlaying: document.querySelector("#nowPlaying"),
+  rootMemoryStorageStatus: document.querySelector("#rootMemoryStorageStatus"),
+  rootMemorySavedStatus: document.querySelector("#rootMemorySavedStatus"),
+  rootMemoryList: document.querySelector("#rootMemoryList"),
   itemTemplate: document.querySelector("#browserItemTemplate"),
   queueItemTemplate: document.querySelector("#queueItemTemplate"),
 };
@@ -99,6 +103,7 @@ async function init() {
   elements.queuePasswordInput.value = "";
   elements.currentPathInput.value = state.currentPath;
   restoreQueueFromStorage();
+  updateRootMemoryDiagnostics();
 
   bindEvents();
   await tryAutoRestoreRootMemory();
@@ -1071,6 +1076,58 @@ function loadStoredQueueSettings() {
   }
 }
 
+function updateRootMemoryDiagnostics() {
+  const storageOk = isLocalStorageAvailable();
+  elements.rootMemoryStorageStatus.textContent = storageOk
+    ? "Storage 상태: 사용 가능"
+    : "Storage 상태: 사용 불가";
+
+  const metaRaw = window.localStorage.getItem(ROOT_MEMORY_META_STORAGE_KEY);
+  if (!metaRaw) {
+    elements.rootMemorySavedStatus.textContent = "저장된 Root 기억 없음";
+    elements.rootMemoryList.textContent = "저장된 Root 기억 없음";
+    return;
+  }
+
+  try {
+    const meta = JSON.parse(metaRaw);
+    const savedAt = formatStoredTimestamp(meta.savedAt);
+    elements.rootMemorySavedStatus.textContent = `마지막 저장: ${savedAt}`;
+    elements.rootMemoryList.textContent = [
+      `Root URL: ${meta.rootUrl || "-"}`,
+      `포트: ${meta.port || "-"}`,
+      `ID: ${meta.username || "-"}`,
+      `현재 경로: ${meta.currentPath || "/"}`,
+      `저장 시각: ${savedAt}`,
+    ].join("\n");
+  } catch (error) {
+    elements.rootMemorySavedStatus.textContent = "저장된 Root 기억 메타데이터 손상";
+    elements.rootMemoryList.textContent = "저장된 Root 기억 메타데이터를 읽을 수 없습니다.";
+  }
+}
+
+function isLocalStorageAvailable() {
+  try {
+    const probeKey = "__tesla_direct_streaming_probe__";
+    window.localStorage.setItem(probeKey, "ok");
+    window.localStorage.removeItem(probeKey);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function formatStoredTimestamp(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("ko-KR", { hour12: false });
+}
+
 async function saveRootMemory() {
   if (!state.rootMemoryPassword) {
     setStatus("기억 암호 입력 필요");
@@ -1084,10 +1141,19 @@ async function saveRootMemory() {
     password: state.password,
     currentPath: state.currentPath,
   };
+  const meta = {
+    rootUrl: state.rootUrl,
+    port: state.port,
+    username: state.username,
+    currentPath: state.currentPath,
+    savedAt: new Date().toISOString(),
+  };
 
   try {
     const encrypted = await encryptJsonPayload(payload, state.rootMemoryPassword);
     window.localStorage.setItem(ROOT_MEMORY_STORAGE_KEY, JSON.stringify(encrypted));
+    window.localStorage.setItem(ROOT_MEMORY_META_STORAGE_KEY, JSON.stringify(meta));
+    updateRootMemoryDiagnostics();
     setStatus("Root 기억 저장 완료");
   } catch (error) {
     setStatus("Root 기억 저장 실패");
@@ -1104,6 +1170,7 @@ async function restoreRootMemory(showStatus) {
 
   const raw = window.localStorage.getItem(ROOT_MEMORY_STORAGE_KEY);
   if (!raw) {
+    updateRootMemoryDiagnostics();
     if (showStatus) {
       setStatus("저장된 Root 기억 없음");
     }
@@ -1121,11 +1188,13 @@ async function restoreRootMemory(showStatus) {
     syncRootInputs();
     elements.passwordInput.value = state.password;
     elements.currentPathInput.value = state.currentPath;
+    updateRootMemoryDiagnostics();
     if (showStatus) {
       setStatus("Root 기억 복원 완료");
     }
     return true;
   } catch (error) {
+    updateRootMemoryDiagnostics();
     if (showStatus) {
       setStatus("기억 암호 불일치 또는 복원 실패");
     }

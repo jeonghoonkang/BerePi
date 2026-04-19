@@ -163,6 +163,26 @@ h1 {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.memory-status {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.memory-list {
+  grid-column: 1 / -1;
+  padding: 16px 18px;
+}
+
+.memory-list-body {
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .toolbar-actions,
 .queue-actions,
 .player-controls {
