@@ -4,8 +4,8 @@ const SPOTIFY_TYPES = new Set(["track", "album", "playlist", "artist", "episode"
 const QUEUE_STORAGE_KEY = "tesla_direct_streaming_queue";
 const QUEUE_URL_STORAGE_KEY = "tesla_direct_streaming_queue_url";
 const QUEUE_SETTINGS_STORAGE_KEY = "tesla_direct_streaming_queue_settings";
-const ROOT_MEMORY_STORAGE_KEY = "tesla_direct_streaming_root_memory";
-const ROOT_MEMORY_META_STORAGE_KEY = "tesla_direct_streaming_root_memory_meta";
+const ROOT_MEMORY_REMOTE_BASE_URL = "http://bigsoft.iptime.org:7080/webdav";
+const ROOT_MEMORY_REMOTE_FILE = "tesla_direct_streaming_root_memory.json";
 
 const state = {
   rootUrl: "",
@@ -23,6 +23,8 @@ const state = {
   selectedFiles: new Map(),
   queue: [],
   currentQueueIndex: -1,
+  rootMemoryMeta: null,
+  rootMemoryRemoteReachable: null,
 };
 
 const elements = {
@@ -103,7 +105,7 @@ async function init() {
   elements.queuePasswordInput.value = "";
   elements.currentPathInput.value = state.currentPath;
   restoreQueueFromStorage();
-  updateRootMemoryDiagnostics();
+  await refreshRootMemoryDiagnostics();
 
   bindEvents();
   await tryAutoRestoreRootMemory();
@@ -936,6 +938,22 @@ function buildQueueFetchOptions() {
   return options;
 }
 
+function buildRootMemoryRemoteUrl() {
+  return `${ROOT_MEMORY_REMOTE_BASE_URL.replace(/\/+$/, "")}/${ROOT_MEMORY_REMOTE_FILE}`;
+}
+
+function buildRootMemoryFetchOptions() {
+  const options = { cache: "no-store" };
+  if (!state.username) {
+    return options;
+  }
+
+  options.headers = {
+    Authorization: `Basic ${btoa(`${state.username}:${state.password}`)}`,
+  };
+  return options;
+}
+
 function isSpotifyEntry(entry) {
   return entry && entry.type === "spotify";
 }
@@ -1077,21 +1095,23 @@ function loadStoredQueueSettings() {
 }
 
 function updateRootMemoryDiagnostics() {
-  const storageOk = isLocalStorageAvailable();
   const cryptoOk = isWebCryptoAvailable();
-  elements.rootMemoryStorageStatus.textContent = storageOk
-    ? `Storage 상태: 사용 가능 · Crypto: ${cryptoOk ? "가능" : "불가"}`
-    : "Storage 상태: 사용 불가";
+  const remoteStatus = state.rootMemoryRemoteReachable === null
+    ? "확인 중"
+    : state.rootMemoryRemoteReachable
+      ? "접근 가능"
+      : "접근 실패";
+  elements.rootMemoryStorageStatus.textContent =
+    `Storage 상태: 원격 WebDAV ${remoteStatus} · Crypto: ${cryptoOk ? "가능" : "불가"} · 저장 경로: ${buildRootMemoryRemoteUrl()}`;
 
-  const metaRaw = window.localStorage.getItem(ROOT_MEMORY_META_STORAGE_KEY);
-  if (!metaRaw) {
+  if (!state.rootMemoryMeta) {
     elements.rootMemorySavedStatus.textContent = "저장된 Root 기억 없음";
     elements.rootMemoryList.textContent = "저장된 Root 기억 없음";
     return;
   }
 
   try {
-    const meta = JSON.parse(metaRaw);
+    const meta = state.rootMemoryMeta;
     const savedAt = formatStoredTimestamp(meta.savedAt);
     elements.rootMemorySavedStatus.textContent = `마지막 저장: ${savedAt}`;
     if (meta.mode === "hash_only") {
@@ -1105,6 +1125,7 @@ function updateRootMemoryDiagnostics() {
     }
     elements.rootMemoryList.textContent = [
       "저장 모드: encrypted",
+      `원격 파일: ${buildRootMemoryRemoteUrl()}`,
       `Root URL: ${meta.rootUrl || "-"}`,
       `포트: ${meta.port || "-"}`,
       `ID: ${meta.username || "-"}`,
@@ -1114,17 +1135,6 @@ function updateRootMemoryDiagnostics() {
   } catch (error) {
     elements.rootMemorySavedStatus.textContent = "저장된 Root 기억 메타데이터 손상";
     elements.rootMemoryList.textContent = "저장된 Root 기억 메타데이터를 읽을 수 없습니다.";
-  }
-}
-
-function isLocalStorageAvailable() {
-  try {
-    const probeKey = "__tesla_direct_streaming_probe__";
-    window.localStorage.setItem(probeKey, "ok");
-    window.localStorage.removeItem(probeKey);
-    return true;
-  } catch (error) {
-    return false;
   }
 }
 
@@ -1176,38 +1186,44 @@ async function saveRootMemory() {
   };
 
   try {
+    const documentPayload = {
+      meta: null,
+      payload: null,
+    };
+
     if (!isWebCryptoAvailable()) {
-      window.localStorage.removeItem(ROOT_MEMORY_STORAGE_KEY);
-      window.localStorage.setItem(
-        ROOT_MEMORY_META_STORAGE_KEY,
-        JSON.stringify({
-          ...meta,
-          mode: "hash_only",
-          verifier: computePasswordVerifier(state.rootMemoryPassword),
-        }),
-      );
+      documentPayload.meta = {
+        ...meta,
+        mode: "hash_only",
+        verifier: computePasswordVerifier(state.rootMemoryPassword),
+      };
+      await writeRootMemoryRemote(documentPayload);
+      state.rootMemoryMeta = documentPayload.meta;
+      state.rootMemoryRemoteReachable = true;
       updateRootMemoryDiagnostics();
-      setStatus("Web Crypto 없음: 해시 확인만 저장됨, 자동입력 불가");
+      setStatus("Web Crypto 없음: 해시 확인만 원격 저장됨, 자동입력 불가");
       return;
     }
 
     const encrypted = await encryptJsonPayload(payload, state.rootMemoryPassword);
-    window.localStorage.setItem(ROOT_MEMORY_STORAGE_KEY, JSON.stringify(encrypted));
-    window.localStorage.setItem(
-      ROOT_MEMORY_META_STORAGE_KEY,
-      JSON.stringify({
-        ...meta,
-        mode: "encrypted",
-        rootUrl: state.rootUrl,
-        port: state.port,
-        username: state.username,
-        currentPath: state.currentPath,
-      }),
-    );
+    documentPayload.meta = {
+      ...meta,
+      mode: "encrypted",
+      rootUrl: state.rootUrl,
+      port: state.port,
+      username: state.username,
+      currentPath: state.currentPath,
+    };
+    documentPayload.payload = encrypted;
+    await writeRootMemoryRemote(documentPayload);
+    state.rootMemoryMeta = documentPayload.meta;
+    state.rootMemoryRemoteReachable = true;
     updateRootMemoryDiagnostics();
     setStatus("Root 기억 저장 완료");
   } catch (error) {
-    setStatus("Root 기억 저장 실패");
+    state.rootMemoryRemoteReachable = false;
+    updateRootMemoryDiagnostics();
+    setStatus(`Root 기억 저장 실패: ${error.message}`);
   }
 }
 
@@ -1219,18 +1235,20 @@ async function restoreRootMemory(showStatus) {
     return false;
   }
 
-  const metaRaw = window.localStorage.getItem(ROOT_MEMORY_META_STORAGE_KEY);
-  const raw = window.localStorage.getItem(ROOT_MEMORY_STORAGE_KEY);
-  if (!metaRaw && !raw) {
-    updateRootMemoryDiagnostics();
-    if (showStatus) {
-      setStatus("저장된 Root 기억 없음");
-    }
-    return false;
-  }
-
   try {
-    const meta = metaRaw ? JSON.parse(metaRaw) : null;
+    const remoteDocument = await readRootMemoryRemote();
+    const meta = remoteDocument.meta || null;
+    state.rootMemoryMeta = meta;
+    state.rootMemoryRemoteReachable = true;
+
+    if (!meta) {
+      updateRootMemoryDiagnostics();
+      if (showStatus) {
+        setStatus("저장된 Root 기억 없음");
+      }
+      return false;
+    }
+
     if (meta?.mode === "hash_only") {
       const matches = meta.verifier === computePasswordVerifier(state.rootMemoryPassword);
       updateRootMemoryDiagnostics();
@@ -1242,7 +1260,10 @@ async function restoreRootMemory(showStatus) {
       return false;
     }
 
-    const encrypted = JSON.parse(raw);
+    const encrypted = remoteDocument.payload;
+    if (!encrypted) {
+      throw new Error("저장된 payload 없음");
+    }
     const restored = await decryptJsonPayload(encrypted, state.rootMemoryPassword);
     state.rootUrl = normalizeRootUrl(restored.rootUrl || "");
     state.port = normalizePort(restored.port || "");
@@ -1258,9 +1279,10 @@ async function restoreRootMemory(showStatus) {
     }
     return true;
   } catch (error) {
+    state.rootMemoryRemoteReachable = false;
     updateRootMemoryDiagnostics();
     if (showStatus) {
-      setStatus("기억 암호 불일치 또는 복원 실패");
+      setStatus(`기억 암호 불일치 또는 복원 실패: ${error.message}`);
     }
     return false;
   }
@@ -1272,6 +1294,53 @@ async function tryAutoRestoreRootMemory() {
   }
   syncRootStateFromInputs();
   await restoreRootMemory(false);
+}
+
+async function readRootMemoryRemote() {
+  const response = await fetch(buildRootMemoryRemoteUrl(), buildRootMemoryFetchOptions());
+  if (response.status === 404) {
+    state.rootMemoryMeta = null;
+    return { meta: null, payload: null };
+  }
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const text = await response.text();
+  if (!text.trim()) {
+    return { meta: null, payload: null };
+  }
+
+  return JSON.parse(text);
+}
+
+async function writeRootMemoryRemote(documentPayload) {
+  const fetchOptions = buildRootMemoryFetchOptions();
+  const response = await fetch(buildRootMemoryRemoteUrl(), {
+    ...fetchOptions,
+    method: "PUT",
+    headers: {
+      ...((fetchOptions.headers) || {}),
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(documentPayload, null, 2),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+
+async function refreshRootMemoryDiagnostics() {
+  try {
+    const remoteDocument = await readRootMemoryRemote();
+    state.rootMemoryMeta = remoteDocument.meta || null;
+    state.rootMemoryRemoteReachable = true;
+  } catch (error) {
+    state.rootMemoryMeta = null;
+    state.rootMemoryRemoteReachable = false;
+  }
+  updateRootMemoryDiagnostics();
 }
 
 async function encryptJsonPayload(payload, password) {
