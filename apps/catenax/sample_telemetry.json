@@ -1,0 +1,31 @@
+{
+  "robot_id": "cobot-01",
+  "line_id": "line-a",
+  "station_id": "station-07",
+  "cycle_time_ms": 1825.4,
+  "power_watts": 438.7,
+  "program_name": "door-assembly-v2",
+  "status": "RUNNING",
+  "good_parts": 1280,
+  "reject_parts": 9,
+  "temperature_c": 42.8,
+  "vibration_mm_s": 1.9,
+  "pose": {
+    "x": 412.5,
+    "y": 88.2,
+    "z": 265.0,
+    "rx": 179.8,
+    "ry": -1.4,
+    "rz": 90.0
+  },
+  "joint_positions_deg": {
+    "j1": 10.5,
+    "j2": -24.0,
+    "j3": 66.7,
+    "j4": 12.1,
+    "j5": 84.4,
+    "j6": -9.3
+  },
+  "alarms": [],
+  "produced_at": "2025-01-15T08:30:00Z"
+}

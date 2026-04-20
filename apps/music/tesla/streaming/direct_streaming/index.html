@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tesla Direct Streaming</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <a class="home-link card" href="./">Tesla Direct Streaming 홈으로 이동</a>
+
+    <section class="hero">
+      <div>
+        <div class="hero-title-row">
+          <p class="eyebrow">Tesla Direct Streaming</p>
+          <span id="appVersionBadge" class="version-badge">v-</span>
+        </div>
+        <h1>개인 웹서버에서 HTTP 프로토콜로<br>연속 재생합니다.</h1>
+        <p class="hero-copy">
+          서버 디렉토리를 탐색하고 여러 곡을 선택한 뒤 재생 큐를 만들어 차량 브라우저에서 순서대로 들을 수 있습니다.
+        </p>
+      </div>
+      <div class="status-card">
+        <div class="status-label">현재 상태</div>
+        <div id="statusText" class="status-text">대기 중</div>
+        <div id="nowPlaying" class="now-playing">재생 전</div>
+      </div>
+    </section>
+
+    <section class="toolbar card">
+      <label class="field">
+        <span>Root URL</span>
+        <input id="rootUrlInput" type="url" placeholder="https://server.example.com/music/">
+      </label>
+      <label class="field field-small">
+        <span>포트</span>
+        <input id="portInput" type="text" inputmode="numeric" placeholder="8080">
+      </label>
+      <label class="field field-small">
+        <span>htaccess ID</span>
+        <input id="usernameInput" type="text" placeholder="user">
+      </label>
+      <label class="field field-small">
+        <span>htaccess 암호</span>
+        <input id="passwordInput" type="password" placeholder="password">
+      </label>
+      <label class="field field-small">
+        <span>기억 암호</span>
+        <input id="rootMemoryPasswordInput" type="password" placeholder="remember key">
+      </label>
+      <label class="field">
+        <span>현재 경로</span>
+        <input id="currentPathInput" type="text" placeholder="/">
+      </label>
+      <div class="toolbar-actions">
+        <button id="loadButton" class="primary">불러오기</button>
+        <button id="saveRootMemoryButton" class="secondary">Root 기억 저장</button>
+        <button id="restoreRootMemoryButton" class="secondary">Root 기억 복원</button>
+        <button id="upButton" class="secondary">상위 폴더</button>
+        <button id="selectVisibleButton" class="secondary">보이는 곡 전체 선택</button>
+        <button id="clearSelectionButton" class="secondary">선택 해제</button>
+      </div>
+      <p class="hint">
+        Apache 디렉토리 인덱스가 켜져 있고, 이 페이지에서 접근 가능한 같은 출처 URL을 사용하는 것이 가장 안정적입니다. Root 기억은 입력한 기억 암호가 맞을 때만 자동 복원됩니다. HTTP 환경에서 Web Crypto가 없으면 해시 확인만 저장하고 자동입력은 하지 않습니다.
+      </p>
+      <div class="memory-status">
+        <span id="rootMemoryStorageStatus">Storage 상태: 확인 중...</span>
+        <span id="rootMemorySavedStatus">저장된 Root 기억 없음</span>
+      </div>
+      <div class="memory-list card">
+        <div class="panel-header">
+          <h2>저장된 Root 기억</h2>
+        </div>
+        <div id="rootMemoryList" class="memory-list-body">저장된 Root 기억 없음</div>
+      </div>
+    </section>
+
+    <section class="content-grid">
+      <div class="browser-panel card">
+        <div class="panel-header">
+          <h2>디렉토리 탐색기</h2>
+          <div id="breadcrumb" class="breadcrumb"></div>
+        </div>
+        <div class="panel-toolbar">
+          <input id="filterInput" type="search" placeholder="파일명 필터">
+          <div class="summary">
+            <span id="visibleSummary">표시: 0 folders · 0 files · 0 B</span>
+            <span id="originalSummary">원본: 0 folders · 0 files · 0 B</span>
+            <span id="recursiveFileCount">전체 하위 파일: 0 files</span>
+          </div>
+        </div>
+        <div id="browserList" class="browser-list"></div>
+      </div>
+
+      <div class="queue-panel card">
+        <div class="panel-header">
+          <h2>재생 큐</h2>
+          <div class="queue-actions">
+            <button id="addSelectedButton" class="primary">선택 곡 추가</button>
+            <button id="playQueueButton" class="accent">큐 재생</button>
+            <button id="clearQueueButton" class="secondary">큐 비우기</button>
+          </div>
+        </div>
+        <div class="queue-import">
+          <div class="queue-target-grid">
+            <label class="field">
+              <span>Queue 주소</span>
+              <input id="queueUrlInput" type="url" placeholder="https://server.example.com/playlists/">
+            </label>
+            <label class="field field-small">
+              <span>Playlist 파일명</span>
+              <input id="playlistNameInput" type="text" placeholder="playlist.txt">
+            </label>
+          </div>
+          <div class="queue-saved-grid">
+            <label class="field">
+              <span>저장된 Playlist</span>
+              <select id="queueHistorySelect">
+                <option value="">저장된 playlist 없음</option>
+              </select>
+            </label>
+            <button id="applyQueueHistoryButton" class="secondary" type="button">선택 적용</button>
+          </div>
+          <div class="queue-auth-grid">
+            <label class="field field-small">
+              <span>Queue 포트</span>
+              <input id="queuePortInput" type="text" inputmode="numeric" placeholder="8080">
+            </label>
+            <label class="field field-small">
+              <span>Queue ID</span>
+              <input id="queueUsernameInput" type="text" placeholder="user">
+            </label>
+            <label class="field field-small">
+              <span>Queue 암호</span>
+              <input id="queuePasswordInput" type="password" placeholder="password">
+            </label>
+          </div>
+          <div class="queue-import-actions">
+            <button id="loadQueueUrlButton" class="primary">Queue 불러오기</button>
+            <button id="appendQueueUrlButton" class="secondary">Queue 추가</button>
+            <button id="saveQueueUrlButton" class="secondary">현재 Queue 저장</button>
+            <button id="restoreQueueButton" class="secondary">이전 Queue 복원</button>
+          </div>
+          <p class="hint">
+            Queue 주소는 저장 폴더 또는 기준 URL이고, Playlist 파일명은 별도로 바꿀 수 있습니다. TXT 파일 첫 줄은 반드시 `#TESLA_DIRECT_STREAMING_PLAYLIST` 여야 하며, 그 다음 줄부터 한 줄에 하나씩 URL 또는 상대 경로를 넣어야 합니다. 빈 줄과 `#` 주석은 무시합니다. 저장하거나 불러온 playlist 대상은 최대 20개까지 기억됩니다.
+          </p>
+        </div>
+        <ol id="queueList" class="queue-list"></ol>
+      </div>
+    </section>
+
+    <section class="player card">
+      <div class="player-head">
+        <div>
+          <p class="player-label">Playback</p>
+          <h2 id="playerTitle">선택된 곡이 없습니다</h2>
+        </div>
+        <div class="player-controls">
+          <button id="prevButton" class="secondary">이전 곡</button>
+          <button id="playPauseButton" class="primary">재생 / 일시정지</button>
+          <button id="nextButton" class="secondary">다음 곡</button>
+        </div>
+      </div>
+      <audio id="audioPlayer" controls preload="metadata" class="audio-player"></audio>
+      <iframe
+        id="spotifyPlayer"
+        class="spotify-player hidden"
+        src=""
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+      ></iframe>
+      <p id="playerHint" class="hint player-hint">로컬/서버 오디오와 Spotify 공유 링크를 같은 Queue에서 선택할 수 있습니다.</p>
+    </section>
+  </main>
+
+  <template id="browserItemTemplate">
+    <article class="browser-item">
+      <div class="item-main">
+        <div class="item-icon"></div>
+        <div class="item-meta">
+          <button class="item-link"></button>
+          <p class="item-subtitle"></p>
+        </div>
+      </div>
+      <label class="item-selector">
+        <input type="checkbox" class="item-checkbox">
+        <span>선택</span>
+      </label>
+    </article>
+  </template>
+
+  <template id="queueItemTemplate">
+    <li class="queue-item">
+      <div class="queue-row">
+        <button class="queue-track"></button>
+        <div class="queue-item-actions">
+          <button class="queue-move-up secondary">위</button>
+          <button class="queue-move-down secondary">아래</button>
+          <button class="queue-remove secondary">삭제</button>
+        </div>
+      </div>
+      <p class="queue-url"></p>
+    </li>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>

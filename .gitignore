@@ -21,6 +21,7 @@ vendor/      # Composer(PHP) 또는 기타 의존성 디렉토리
 
 # 환경 설정 파일 (민감 정보 포함 가능)
 #.env
+.env_this
 #config.ini
 tmp_this.ini
 #secrets.py
