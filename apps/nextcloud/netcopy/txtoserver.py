@@ -33,17 +33,60 @@ from __future__ import annotations
 
 import configparser
 import datetime as dt
+import hashlib
 import os
 import posixpath
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from webdav3.client import Client
 from webdav3.exceptions import WebDavException
 
 ConfigInfo = Tuple[Optional[int], Optional[str], Optional[dt.datetime]]
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_CONFIG = SCRIPT_DIR / "input.conf"
+DEFAULT_SKIP_LOG = SCRIPT_DIR / "skip.txt"
+
+COLOR_RESET = "\033[0m"
+COLOR_RED = "\033[31m"
+COLOR_GREEN = "\033[32m"
+COLOR_YELLOW = "\033[33m"
+
+
+@dataclass
+class Progress:
+    total_files: int = 0
+    total_bytes: int = 0
+    completed_files: int = 0
+    completed_bytes: int = 0
+
+
+def color_text(color: str, text: str) -> str:
+    return f"{color}{text}{COLOR_RESET}"
+
+
+def format_bytes(size: int) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    value = float(size)
+    for unit in units:
+        if value < 1024.0 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.2f} {unit}"
+        value /= 1024.0
+    return f"{size} B"
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 SUCCESS_COLOR = "\033[1;32m"
 HIGHLIGHT_COLOR = "\033[1;33m"
@@ -62,6 +105,7 @@ def print_usage() -> None:
     print("  python3 txtoserver.py /path/to/input.conf")
     print("  python3 txtoserver.py --conn_test")
     print("  python3 txtoserver.py /path/to/input.conf --conn_test")
+    print(f"Default config path: {DEFAULT_CONFIG}")
 
 
 def load_config(path: str) -> configparser.ConfigParser:
@@ -208,14 +252,6 @@ def should_upload(src_info: ConfigInfo, dest_info: Optional[ConfigInfo]) -> bool
     return False
 
 
-def upload_file(src_client: Client, dest_client: Client, src_path: str, dest_path: str) -> None:
-    dest_dir = posixpath.dirname(dest_path)
-    ensure_dirs(dest_client, dest_dir)
-    with tempfile.NamedTemporaryFile(prefix="nextcloud_sync_") as tmp_file:
-        src_client.download_sync(remote_path=src_path, local_path=tmp_file.name)
-        dest_client.upload_sync(remote_path=dest_path, local_path=tmp_file.name)
-
-
 def run_source_propfind(section: configparser.SectionProxy, root: str) -> int:
     hostname = section.get("webdav_hostname")
     webdav_root = section.get("webdav_root")
@@ -293,15 +329,64 @@ def append_skip_log(skip_file: str, src_url: str, dst_url: str) -> None:
         file.write(f"src={src_url} | dst={dst_url}\n")
 
 
+def get_entry_size(entry: Dict[str, object]) -> int:
+    size = entry.get("size")
+    if size is None:
+        return 0
+    try:
+        return int(size)
+    except (TypeError, ValueError):
+        return 0
+
+
+def print_transfer_summary(progress: Progress) -> None:
+    print(f"전송 대상: 파일 {progress.total_files}개, 용량 {format_bytes(progress.total_bytes)}")
+    print(
+        "전송 완료: "
+        f"파일 {progress.completed_files}/{progress.total_files}개, "
+        f"용량 {format_bytes(progress.completed_bytes)}/{format_bytes(progress.total_bytes)}"
+    )
+
+
+def upload_and_verify_file(
+    src_client: Client,
+    dest_client: Client,
+    src_path: str,
+    dest_path: str,
+) -> int:
+    dest_dir = posixpath.dirname(dest_path)
+    ensure_dirs(dest_client, dest_dir)
+    with tempfile.NamedTemporaryFile(prefix="nextcloud_src_") as src_tmp, tempfile.NamedTemporaryFile(
+        prefix="nextcloud_dst_"
+    ) as dest_tmp:
+        src_client.download_sync(remote_path=src_path, local_path=src_tmp.name)
+        src_hash = sha256_file(src_tmp.name)
+        src_size = os.path.getsize(src_tmp.name)
+
+        dest_client.upload_sync(remote_path=dest_path, local_path=src_tmp.name)
+        dest_client.download_sync(remote_path=dest_path, local_path=dest_tmp.name)
+        dest_hash = sha256_file(dest_tmp.name)
+        dest_size = os.path.getsize(dest_tmp.name)
+
+    if src_size != dest_size or src_hash != dest_hash:
+        raise RuntimeError(
+            "Verification failed after upload: "
+            f"{src_path} -> {dest_path} "
+            f"(src_size={src_size}, dest_size={dest_size})"
+        )
+    return src_size
+
+
 def main() -> int:
     print_usage()
     args = [arg for arg in sys.argv[1:] if arg != "--conn_test"]
     conn_test = "--conn_test" in sys.argv[1:]
-    config_path = args[0] if args else "input.conf"
+    config_path = args[0] if args else str(DEFAULT_CONFIG)
     try:
         config = load_config(config_path)
     except FileNotFoundError as exc:
         print(exc)
+        print(color_text(COLOR_RED, "종료 상태: 실패"))
         return 1
 
     verify_ssl = config.getboolean("settings", "verify_ssl", fallback=True)
@@ -317,6 +402,7 @@ def main() -> int:
     propfind_code = run_source_propfind(src_section, src_root)
     if propfind_code != 0:
         print(f"Source PROPFIND failed with exit code {propfind_code}.")
+        print(color_text(COLOR_RED, "종료 상태: 실패"))
         return propfind_code
 
     src_client = build_client(src_section, verify_ssl)
@@ -328,12 +414,15 @@ def main() -> int:
             run_connection_test(dest_client, dest_root, "destination")
         except RuntimeError as exc:
             print(exc)
+            print(color_text(COLOR_RED, "종료 상태: 실패"))
             return 1
+        print(color_text(COLOR_GREEN, "종료 상태: 성공"))
         return 0
 
     print("Scanning source server...")
     src_entries = list_tree(src_client, src_root)
     print(f"Found {len(src_entries)} files in source.")
+    src_map = build_info_map(src_entries)
 
     print("Scanning destination server...")
     dest_entries = list_tree(dest_client, dest_root)
@@ -341,7 +430,9 @@ def main() -> int:
 
     uploaded = 0
     skipped = 0
-    skip_file = "skip.txt"
+    failed = 0
+    skip_file = str(DEFAULT_SKIP_LOG)
+    progress = Progress()
 
     for entry in src_entries:
         src_path = entry.get("path")
@@ -357,12 +448,41 @@ def main() -> int:
             skipped += 1
             continue
         dest_path = posixpath.join(dest_root, rel_path) if dest_root else rel_path
-        src_info = build_info_map([entry]).get(normalized_src_path, (None, None, None))
+        src_info = src_map.get(normalized_src_path, (None, None, None))
+        dest_info = dest_map.get(normalize_remote_path(dest_path))
+        if should_upload(src_info, dest_info):
+            progress.total_files += 1
+            progress.total_bytes += get_entry_size(entry)
+    print_transfer_summary(progress)
+
+    for entry in src_entries:
+        src_path = entry.get("path")
+        if not isinstance(src_path, str):
+            continue
+        normalized_src_path = normalize_remote_path(src_path)
+        rel_path = relative_from_root(src_path, src_root)
+        if rel_path is None:
+            print(
+                "Skipping unexpected source path "
+                f"'{src_path}' (normalized='{normalized_src_path}'), root='{src_root}'"
+            )
+            skipped += 1
+            continue
+        dest_path = posixpath.join(dest_root, rel_path) if dest_root else rel_path
+        src_info = src_map.get(normalized_src_path, (None, None, None))
         dest_info = dest_map.get(normalize_remote_path(dest_path))
         if should_upload(src_info, dest_info):
             print(f"Uploading {src_path} -> {dest_path}")
-            upload_file(src_client, dest_client, src_path, dest_path)
+            try:
+                transferred_size = upload_and_verify_file(src_client, dest_client, src_path, dest_path)
+            except RuntimeError as exc:
+                print(color_text(COLOR_RED, f"FAILED: {exc}"))
+                failed += 1
+                continue
             uploaded += 1
+            progress.completed_files += 1
+            progress.completed_bytes += transferred_size
+            print_transfer_summary(progress)
         else:
             src_url = compose_remote_url(src_section, src_path)
             dst_url = compose_remote_url(dest_section, dest_path)
@@ -370,7 +490,14 @@ def main() -> int:
             print(f"Skipping existing file: {src_url} -> {dst_url}")
             skipped += 1
 
-    print(f"Done. Uploaded: {uploaded}, Skipped: {skipped}.")
+    print(f"Done. Uploaded: {uploaded}, Skipped: {skipped}, Failed: {failed}.")
+    if failed:
+        print(color_text(COLOR_RED, "종료 상태: 실패"))
+        return 1
+    if uploaded == 0:
+        print(color_text(COLOR_YELLOW, "종료 상태: 전송할 파일 없음"))
+        return 0
+    print(color_text(COLOR_GREEN, "종료 상태: 성공"))
     return 0
 
 
