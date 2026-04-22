@@ -7,14 +7,21 @@
 
 - `txtoserver.py`
   Nextcloud 간 파일 복사를 수행하는 메인 스크립트입니다.
+- `copytowebav.py`
+  로컬 파일 또는 디렉토리를 Nextcloud WebDAV로 업로드하는 스크립트입니다.
 - `input.sample.conf`
   설정 파일 샘플입니다. 실제 사용 시 `input.conf`로 복사해서 값을 채워 넣으면 됩니다.
+- `copytowebav.sample.conf`
+  로컬에서 Nextcloud로 올릴 때 사용하는 설정 샘플입니다.
 - `skip.txt`
   이미 동일하다고 판단되어 전송하지 않은 파일의 소스/목적지 URL을 기록하는 로그 파일입니다.
+- `copytowebav_skip.txt`
+  로컬에서 Nextcloud로 업로드할 때 건너뛴 파일의 로그 파일입니다.
 
 ## 주요 기능
 
 - WebDAV 기반 서버 간 파일 복사
+- 로컬 파일/디렉토리에서 Nextcloud로 업로드
 - 디렉토리 구조 자동 생성
 - 파일 크기, ETag, 수정 시간 비교를 통한 증분 복사
 - 전송 대상 파일 개수와 총 용량 출력
@@ -94,6 +101,8 @@ verify_ssl = true
 
 ## 실행 방법
 
+### 1. Nextcloud -> Nextcloud
+
 기본 설정 파일 사용:
 
 ```bash
@@ -119,6 +128,57 @@ python3 txtoserver.py --conn_test
 python3 txtoserver.py /path/to/input.conf --conn_test
 ```
 
+### 2. Local -> Nextcloud
+
+샘플 설정 파일을 복사합니다.
+
+```bash
+cd /Users/tinyos/devel_opment/BerePi/apps/nextcloud/netcopy
+cp copytowebav.sample.conf copytowebav.conf
+```
+
+예시:
+
+```ini
+[source]
+path = /data/photos
+
+[destination]
+webdav_hostname = https://nextcloud.example.com
+webdav_root = /remote.php/dav/files/username/
+port = 443
+username = user
+password = app_password
+root = Backup/Photos
+
+[settings]
+verify_ssl = true
+```
+
+기본 설정 파일 사용:
+
+```bash
+python3 copytowebav.py
+```
+
+직접 설정 파일 지정:
+
+```bash
+python3 copytowebav.py /path/to/copytowebav.conf
+```
+
+연결 테스트:
+
+```bash
+python3 copytowebav.py --conn_test
+```
+
+설정 파일을 지정해서 연결 테스트:
+
+```bash
+python3 copytowebav.py /path/to/copytowebav.conf --conn_test
+```
+
 ## 실행 흐름
 
 스크립트는 아래 순서로 동작합니다.
@@ -133,6 +193,8 @@ python3 txtoserver.py /path/to/input.conf --conn_test
 8. 업로드 직후 대상 파일을 다시 다운로드해 원본과 동일한지 검증합니다.
 9. 누적 완료 수량과 용량을 출력합니다.
 10. 모든 작업이 끝나면 성공, 실패, 전송 없음 상태를 컬러로 출력합니다.
+
+`copytowebav.py`는 흐름이 거의 같지만, source를 WebDAV 대신 로컬 파일 시스템에서 읽습니다. 파일 하나를 지정하면 그 파일만 올리고, 디렉토리를 지정하면 하위 파일을 재귀적으로 탐색해 상대 경로를 유지한 채 업로드합니다.
 
 ## 출력 메시지 예시
 
@@ -236,6 +298,19 @@ Uploading Photos/2026/a.jpg -> Backup/2026/a.jpg
 
 - `main()`
   설정 로드, 경로 확인, 서버 스캔, 비교, 업로드, 검증, 최종 종료 상태 출력까지 전체 흐름을 담당합니다.
+
+### `copytowebav.py`의 로컬 전송 관련 함수
+
+- `normalize_local_path()`
+  로컬 경로를 절대 경로로 정리합니다.
+- `get_local_files()`
+  지정한 파일 또는 디렉토리에서 업로드 대상 파일 목록을 수집합니다.
+- `validate_source_path()`
+  로컬 source 경로의 존재 여부와 타입을 확인합니다.
+- `validate_destination_path()`
+  대상 Nextcloud WebDAV 경로를 출력해 확인합니다.
+- `upload_and_verify_file()`
+  로컬 파일을 업로드한 뒤 대상 파일을 다시 내려받아 동일성을 검증합니다.
 
 ## 주의 사항
 
