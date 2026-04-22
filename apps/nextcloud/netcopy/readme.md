@@ -1,4 +1,4 @@
-# Netcopy
+# Netcopy for webdav, nextcloud
 
 `netcopy`는 Nextcloud WebDAV 서버 A의 파일을 서버 B로 증분 복사하는 도구입니다.  
 중복 전송을 줄이기 위해 파일 크기, ETag, 수정 시간을 비교하고, 업로드가 끝난 뒤에는 대상 파일을 다시 내려받아 해시와 크기를 확인합니다.
