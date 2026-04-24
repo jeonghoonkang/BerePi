@@ -139,6 +139,14 @@ if let items = pasteboard.pasteboardItems, !items.isEmpty {
         imageData = bitmap.representation(using: .png, properties: [:])
     }
 
+    if imageData == nil,
+       let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+       let image = images.first,
+       let tiffRepresentation = image.tiffRepresentation,
+       let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
+        imageData = bitmap.representation(using: .png, properties: [:])
+    }
+
     if let imageData, !imageData.isEmpty {
         payload["image_base64"] = imageData.base64EncodedString()
         appendType("image")
@@ -211,6 +219,17 @@ def save_config_parser(config_path: str, parser: configparser.ConfigParser) -> N
         os.makedirs(config_dir, exist_ok=True)
     with open(config_path, "w", encoding="utf-8") as handle:
         parser.write(handle)
+
+
+def get_preserved_input_value(section_name: str, key: str, current_value: str) -> str:
+    """Keep the current config value when the edit field is left blank."""
+
+    submitted_value = st.session_state.get(f"config_{section_name}_{key}", "")
+    if isinstance(submitted_value, str):
+        trimmed = submitted_value.strip()
+        if trimmed:
+            return trimmed
+    return current_value
 
 
 def ensure_remote_dir(client: Any, remote_dir: str) -> None:
@@ -395,13 +414,17 @@ def main() -> None:
                     for section_name in ("source", "destination"):
                         st.markdown(f"**[{section_name}]**")
                         for key in EDITABLE_CONFIG_KEYS:
-                            default_value = editor_parser.get(section_name, key, fallback="")
+                            current_value = editor_parser.get(section_name, key, fallback="")
                             is_secret = key == "password"
+                            session_key = f"config_{section_name}_{key}"
+                            if session_key not in st.session_state:
+                                st.session_state[session_key] = ""
                             st.text_input(
                                 f"{section_name}.{key}",
-                                value=default_value,
+                                value=st.session_state[session_key],
+                                placeholder=current_value,
                                 type="password" if is_secret else "default",
-                                key=f"config_{section_name}_{key}",
+                                key=session_key,
                             )
 
                     verify_ssl_default = editor_parser.getboolean(
@@ -424,7 +447,11 @@ def main() -> None:
                                 editor_parser.set(
                                     section_name,
                                     key,
-                                    st.session_state.get(f"config_{section_name}_{key}", "").strip(),
+                                    get_preserved_input_value(
+                                        section_name,
+                                        key,
+                                        editor_parser.get(section_name, key, fallback=""),
+                                    ),
                                 )
                         editor_parser.set(
                             "settings",
@@ -435,6 +462,9 @@ def main() -> None:
                     except Exception as exc:  # pragma: no cover - UI error path
                         st.error(f"설정 저장 실패: {exc}")
                     else:
+                        for section_name in ("source", "destination"):
+                            for key in EDITABLE_CONFIG_KEYS:
+                                st.session_state[f"config_{section_name}_{key}"] = ""
                         st.success(f"설정 저장 완료: {config_path}")
                         st.rerun()
 
