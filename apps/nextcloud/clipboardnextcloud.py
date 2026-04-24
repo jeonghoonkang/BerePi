@@ -104,19 +104,47 @@ func appendType(_ value: String) {
     payload["types"] = types
 }
 
-if let items = pasteboard.pasteboardItems, !items.isEmpty {
-    let firstItem = items[0]
+func setImagePayload(from image: NSImage) {
+    guard let tiffRepresentation = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffRepresentation),
+          let pngData = bitmap.representation(using: .png, properties: [:]),
+          !pngData.isEmpty else {
+        return
+    }
+    payload["image_base64"] = pngData.base64EncodedString()
+    payload["image_size"] = [
+        "width": Int(image.size.width),
+        "height": Int(image.size.height)
+    ]
+    appendType("image")
+}
 
-    if let text = firstItem.string(forType: .string), !text.isEmpty {
-        payload["text"] = text
-        appendType("text")
+let pasteboardTypeNames = pasteboard.types?.map { $0.rawValue } ?? []
+if !pasteboardTypeNames.isEmpty {
+    payload["pasteboard_types"] = pasteboardTypeNames
+}
+
+if let items = pasteboard.pasteboardItems, !items.isEmpty {
+    payload["item_count"] = items.count
+    payload["item_types"] = items.map { item in
+        item.types.map { $0.rawValue }
     }
 
-    if let htmlData = firstItem.data(forType: .html),
-       let html = String(data: htmlData, encoding: .utf8),
-       !html.isEmpty {
-        payload["html"] = html
-        appendType("html")
+    for item in items {
+        if payload["text"] == nil,
+           let text = item.string(forType: .string),
+           !text.isEmpty {
+            payload["text"] = text
+            appendType("text")
+        }
+
+        if payload["html"] == nil,
+           let htmlData = item.data(forType: .html),
+           let html = String(data: htmlData, encoding: .utf8),
+           !html.isEmpty {
+            payload["html"] = html
+            appendType("html")
+        }
     }
 
     var fileURLs: [String] = []
@@ -130,27 +158,44 @@ if let items = pasteboard.pasteboardItems, !items.isEmpty {
         appendType("file_urls")
     }
 
-    var imageData = firstItem.data(forType: .png)
-    if imageData == nil,
-       let tiffData = firstItem.data(forType: .tiff),
-       let image = NSImage(data: tiffData),
-       let tiffRepresentation = image.tiffRepresentation,
-       let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
-        imageData = bitmap.representation(using: .png, properties: [:])
+    if payload["image_base64"] == nil {
+        let imageTypesToCheck: [NSPasteboard.PasteboardType] = [
+            .png,
+            .tiff,
+            NSPasteboard.PasteboardType("public.png"),
+            NSPasteboard.PasteboardType("public.tiff")
+        ]
+        for item in items {
+            for type in imageTypesToCheck {
+                if let data = item.data(forType: type),
+                   let image = NSImage(data: data) {
+                    setImagePayload(from: image)
+                    break
+                }
+            }
+            if payload["image_base64"] != nil {
+                break
+            }
+        }
     }
+}
 
-    if imageData == nil,
-       let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-       let image = images.first,
-       let tiffRepresentation = image.tiffRepresentation,
-       let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
-        imageData = bitmap.representation(using: .png, properties: [:])
-    }
+if payload["image_base64"] == nil,
+   let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+   let image = images.first {
+    setImagePayload(from: image)
+}
 
-    if let imageData, !imageData.isEmpty {
-        payload["image_base64"] = imageData.base64EncodedString()
-        appendType("image")
-    }
+if payload["image_base64"] == nil,
+   let image = NSImage(pasteboard: pasteboard) {
+    setImagePayload(from: image)
+}
+
+if payload["text"] == nil,
+   let text = pasteboard.string(forType: .string),
+   !text.isEmpty {
+    payload["text"] = text
+    appendType("text")
 }
 
 let jsonData = try JSONSerialization.data(withJSONObject: payload, options: [])
@@ -350,6 +395,9 @@ def render_clipboard_preview(payload: Dict[str, Any]) -> None:
 
     types = payload.get("types") or []
     st.caption(f"감지된 타입: {', '.join(types) if types else '없음'}")
+    pasteboard_types = payload.get("pasteboard_types")
+    if isinstance(pasteboard_types, list) and pasteboard_types:
+        st.caption(f"raw pasteboard types: {', '.join(str(value) for value in pasteboard_types)}")
 
     warning = payload.get("warning")
     if isinstance(warning, str) and warning:
