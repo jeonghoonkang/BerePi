@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import configparser
 import importlib.util
 import json
 import os
@@ -54,6 +55,7 @@ from common import build_client, compose_remote_url, load_config, normalize_root
 APP_TITLE = "Clipboard to Nextcloud"
 DEFAULT_CONFIG = CURRENT_DIR / "input.conf"
 SUPPORTED_TARGET_SECTIONS = ("target", "destination")
+EDITABLE_CONFIG_KEYS = ("webdav_hostname", "webdav_root", "port", "username", "password", "root")
 
 
 def sanitize_filename(value: str) -> str:
@@ -179,6 +181,36 @@ def load_target_section(config_path: str) -> Tuple[Any, str, bool]:
     raise KeyError(
         f"Missing target section. Expected one of: {', '.join(SUPPORTED_TARGET_SECTIONS)}"
     )
+
+
+def load_config_parser(config_path: str) -> configparser.ConfigParser:
+    """Load the raw config parser for editing."""
+
+    parser = configparser.ConfigParser()
+    if os.path.exists(config_path):
+        parser.read(config_path)
+    return parser
+
+
+def ensure_config_sections(parser: configparser.ConfigParser) -> None:
+    """Create the editable sections when they do not exist."""
+
+    for section_name in ("source", "destination", "settings"):
+        if not parser.has_section(section_name):
+            parser.add_section(section_name)
+
+    if not parser.has_option("settings", "verify_ssl"):
+        parser.set("settings", "verify_ssl", "true")
+
+
+def save_config_parser(config_path: str, parser: configparser.ConfigParser) -> None:
+    """Write the edited config back to disk."""
+
+    config_dir = os.path.dirname(config_path)
+    if config_dir:
+        os.makedirs(config_dir, exist_ok=True)
+    with open(config_path, "w", encoding="utf-8") as handle:
+        parser.write(handle)
 
 
 def ensure_remote_dir(client: Any, remote_dir: str) -> None:
@@ -349,6 +381,62 @@ def main() -> None:
         st.header("설정")
         config_path = st.text_input("Config path", value=str(DEFAULT_CONFIG))
         st.caption("`[target]` 또는 `[destination]` 섹션을 사용합니다.")
+
+        try:
+            editor_parser = load_config_parser(config_path)
+            ensure_config_sections(editor_parser)
+        except Exception as exc:  # pragma: no cover - UI error path
+            st.error(f"설정 파일 로드 실패: {exc}")
+            editor_parser = None
+
+        if editor_parser is not None:
+            with st.expander("Config 편집", expanded=False):
+                with st.form("config_editor_form"):
+                    for section_name in ("source", "destination"):
+                        st.markdown(f"**[{section_name}]**")
+                        for key in EDITABLE_CONFIG_KEYS:
+                            default_value = editor_parser.get(section_name, key, fallback="")
+                            is_secret = key == "password"
+                            st.text_input(
+                                f"{section_name}.{key}",
+                                value=default_value,
+                                type="password" if is_secret else "default",
+                                key=f"config_{section_name}_{key}",
+                            )
+
+                    verify_ssl_default = editor_parser.getboolean(
+                        "settings",
+                        "verify_ssl",
+                        fallback=True,
+                    )
+                    st.checkbox(
+                        "settings.verify_ssl",
+                        value=verify_ssl_default,
+                        key="config_settings_verify_ssl",
+                    )
+
+                    save_clicked = st.form_submit_button("설정 파일 저장", use_container_width=True)
+
+                if save_clicked:
+                    try:
+                        for section_name in ("source", "destination"):
+                            for key in EDITABLE_CONFIG_KEYS:
+                                editor_parser.set(
+                                    section_name,
+                                    key,
+                                    st.session_state.get(f"config_{section_name}_{key}", "").strip(),
+                                )
+                        editor_parser.set(
+                            "settings",
+                            "verify_ssl",
+                            "true" if st.session_state.get("config_settings_verify_ssl", True) else "false",
+                        )
+                        save_config_parser(config_path, editor_parser)
+                    except Exception as exc:  # pragma: no cover - UI error path
+                        st.error(f"설정 저장 실패: {exc}")
+                    else:
+                        st.success(f"설정 저장 완료: {config_path}")
+                        st.rerun()
 
         try:
             section, root, verify_ssl = load_target_section(config_path)
