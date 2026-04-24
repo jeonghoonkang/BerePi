@@ -50,7 +50,7 @@ RESOURCE_DIR = CURRENT_DIR / "resource"
 if str(FILESYSTEM_DIR) not in sys.path:
     sys.path.insert(0, str(FILESYSTEM_DIR))
 
-from common import build_client, compose_remote_url, load_config, normalize_root  # noqa: E402
+from common import build_client, compose_browse_url, load_config, normalize_root  # noqa: E402
 
 
 APP_TITLE = "Clipboard to Nextcloud"
@@ -318,7 +318,6 @@ def remember_config_path(config_path: str) -> List[str]:
 
     save_config_path_history(updated_history)
     st.session_state.config_path_history = updated_history
-    st.session_state.config_path_selected = normalized_path
     st.session_state.config_path_value = normalized_path
     return updated_history
 
@@ -506,7 +505,7 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
 
-    return remote_path, compose_remote_url(section, remote_path)
+    return remote_path, compose_browse_url(section, remote_path)
 
 
 def render_clipboard_preview(payload: Dict[str, Any]) -> None:
@@ -569,13 +568,12 @@ def main() -> None:
     if "config_path_value" not in st.session_state:
         history = st.session_state.config_path_history
         st.session_state.config_path_value = history[0] if history else str(DEFAULT_CONFIG)
-    if "config_path_selected" not in st.session_state:
-        history = st.session_state.config_path_history
-        st.session_state.config_path_selected = (
-            st.session_state.config_path_value
-            if st.session_state.config_path_value in history
-            else (history[0] if history else "")
-        )
+    history = st.session_state.config_path_history
+    st.session_state.config_path_selected = (
+        st.session_state.config_path_value
+        if st.session_state.config_path_value in history
+        else (history[0] if history else "")
+    )
 
     st.write("Copy Machine BerePi")
     title_icon_col, title_text_col = st.columns([0.12, 0.88])

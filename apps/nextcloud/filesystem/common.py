@@ -8,6 +8,7 @@ import os
 import posixpath
 import subprocess
 from typing import Dict, List, Optional
+from urllib.parse import quote, urlencode
 
 from webdav3.client import Client
 from webdav3.exceptions import WebDavException
@@ -139,6 +140,20 @@ def compose_remote_url(section: configparser.SectionProxy, remote_path: str) -> 
     if normalized_path:
         return f"{hostname}/{normalized_path}"
     return hostname
+
+
+def compose_browse_url(section: configparser.SectionProxy, remote_path: str) -> str:
+    """Build a Nextcloud Files app URL for browser navigation."""
+
+    hostname = section.get("webdav_hostname", "").rstrip("/")
+    normalized_path = normalize_remote_path(remote_path)
+    directory_path, filename = posixpath.split(normalized_path)
+    query = {"dir": f"/{directory_path}" if directory_path else "/"}
+    if filename:
+        query["openfile"] = filename
+
+    encoded_query = urlencode(query, quote_via=quote, safe="/")
+    return f"{hostname}/index.php/apps/files/?{encoded_query}"
 
 
 def run_propfind(section: configparser.SectionProxy, root: str, depth: int = 1) -> int:
