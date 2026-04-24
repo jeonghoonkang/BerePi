@@ -1,4 +1,4 @@
-# Copy file to nextcloud server
+# Copy file to nextcloud server by curl
 - First create a .netrc file containing your credentials. For help about that please see https://linux.die.net/man/5/netrc 39
 My location for “.netrc” file is the homedirecty of the user running the script.
 
