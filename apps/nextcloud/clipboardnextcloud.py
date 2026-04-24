@@ -507,6 +507,35 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
     return remote_path, compose_browse_url(section, remote_path)
 
 
+def upload_selected_file(config_path: str, filename: str, file_bytes: bytes) -> Tuple[str, str]:
+    """Upload a user-selected file to Nextcloud and return path/url."""
+
+    section, root, verify_ssl = load_target_section(config_path)
+    client = build_client(section, verify_ssl)
+    ensure_remote_dir(client, root)
+
+    remote_name = Path(filename).name or "uploaded_file"
+    remote_path = posixpath.join(root, remote_name) if root else remote_name
+
+    temp_path: str | None = None
+    try:
+        suffix = Path(remote_name).suffix
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=suffix,
+            prefix="selected_file_",
+            delete=False,
+        ) as handle:
+            handle.write(file_bytes)
+            temp_path = handle.name
+        client.upload_sync(remote_path=remote_path, local_path=temp_path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+    return remote_path, compose_browse_url(section, remote_path)
+
+
 def render_clipboard_preview(payload: Dict[str, Any]) -> None:
     """Render clipboard contents in the Streamlit UI."""
 
@@ -567,6 +596,8 @@ def main() -> None:
     if "config_path_value" not in st.session_state:
         history = st.session_state.config_path_history
         st.session_state.config_path_value = history[0] if history else str(DEFAULT_CONFIG)
+    if "transfer_mode" not in st.session_state:
+        st.session_state.transfer_mode = "clipboard"
     history = st.session_state.config_path_history
     st.session_state.config_path_selected = (
         st.session_state.config_path_value
@@ -583,8 +614,18 @@ def main() -> None:
         st.title("Clipboard to Nextcloud")
     st.write("현재 macOS 클립보드를 미리 보고, Nextcloud 대상 디렉토리에 Markdown 파일로 업로드합니다.")
 
+    mode_col1, mode_col2, _ = st.columns([1, 1, 6])
+    with mode_col1:
+        if st.button("클립보드", use_container_width=True):
+            st.session_state.transfer_mode = "clipboard"
+    with mode_col2:
+        if st.button("파일전송", use_container_width=True):
+            st.session_state.transfer_mode = "file"
+
     if "clipboard_payload" not in st.session_state:
         st.session_state.clipboard_payload = read_clipboard_payload()
+
+    target_root_display = "/"
 
     with st.sidebar:
         st.header("설정")
@@ -671,6 +712,7 @@ def main() -> None:
         try:
             section, root, verify_ssl = load_target_section(config_path)
             remember_config_path(config_path)
+            target_root_display = root or "/"
             st.success("Nextcloud 설정을 읽었습니다.")
             st.code(
                 "\n".join(
@@ -685,40 +727,84 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - UI error path
             st.error(f"설정 확인 실패: {exc}")
 
-        if st.button("클립보드 새로고침", use_container_width=True):
+        if st.session_state.transfer_mode == "clipboard" and st.button("클립보드 새로고침", use_container_width=True):
             with st.spinner("클립보드 읽는 중..."):
                 st.session_state.clipboard_payload = read_clipboard_payload()
             st.rerun()
 
     payload = st.session_state.clipboard_payload
 
-    left_col, right_col = st.columns([1.2, 0.8])
+    if st.session_state.transfer_mode == "clipboard":
+        left_col, right_col = st.columns([1.2, 0.8])
 
-    with left_col:
-        st.subheader("클립보드 미리보기")
-        render_clipboard_preview(payload)
+        with left_col:
+            st.subheader("클립보드 미리보기")
+            render_clipboard_preview(payload)
 
-    with right_col:
-        st.subheader("업로드")
-        created_at = datetime.now().astimezone()
-        device_name = detect_device_name()
-        markdown_preview = build_markdown_content(
-            payload,
-            created_at,
-            device_name,
-            include_inline_image=False,
-            image_filename="[will upload as .png file]",
-        )
-        st.code(markdown_preview, language="markdown")
+        with right_col:
+            st.subheader("업로드")
+            created_at = datetime.now().astimezone()
+            device_name = detect_device_name()
+            markdown_preview = build_markdown_content(
+                payload,
+                created_at,
+                device_name,
+                include_inline_image=False,
+                image_filename="[will upload as .png file]",
+            )
+            st.code(markdown_preview, language="markdown")
 
-        if st.button("전송", type="primary", use_container_width=True):
-            try:
-                remote_path, remote_url = upload_markdown(config_path, payload)
-            except Exception as exc:  # pragma: no cover - UI error path
-                st.exception(exc)
+            if st.button("전송", type="primary", use_container_width=True):
+                try:
+                    remote_path, remote_url = upload_markdown(config_path, payload)
+                except Exception as exc:  # pragma: no cover - UI error path
+                    st.exception(exc)
+                else:
+                    st.success(f"업로드 완료: {remote_path}")
+                    st.markdown(f"[원격 URL 열기]({remote_url})")
+    else:
+        left_col, right_col = st.columns([1.1, 0.9])
+
+        with left_col:
+            st.subheader("파일 선택")
+            uploaded_file = st.file_uploader("업로드할 파일", label_visibility="collapsed")
+            if uploaded_file is not None:
+                st.write(f"파일명: {uploaded_file.name}")
+                st.write(f"크기: {uploaded_file.size:,} bytes")
+                if uploaded_file.type:
+                    st.write(f"MIME: {uploaded_file.type}")
+                if uploaded_file.type and uploaded_file.type.startswith("image/"):
+                    st.image(uploaded_file, caption=uploaded_file.name)
             else:
-                st.success(f"업로드 완료: {remote_path}")
-                st.markdown(f"[원격 URL 열기]({remote_url})")
+                st.info("전송할 파일을 선택해 주세요.")
+
+        with right_col:
+            st.subheader("업로드")
+            if uploaded_file is not None:
+                st.code(
+                    "\n".join(
+                        [
+                            f"filename: {uploaded_file.name}",
+                            f"size: {uploaded_file.size} bytes",
+                            f"target_root: {target_root_display}",
+                        ]
+                    ),
+                    language="text",
+                )
+                if st.button("파일 업로드", type="primary", use_container_width=True):
+                    try:
+                        remote_path, remote_url = upload_selected_file(
+                            config_path,
+                            uploaded_file.name,
+                            uploaded_file.getvalue(),
+                        )
+                    except Exception as exc:  # pragma: no cover - UI error path
+                        st.exception(exc)
+                    else:
+                        st.success(f"업로드 완료: {remote_path}")
+                        st.markdown(f"[원격 URL 열기]({remote_url})")
+            else:
+                st.caption("파일을 선택하면 업로드 정보가 표시됩니다.")
 
 
 if __name__ == "__main__":
