@@ -40,6 +40,21 @@ WebDAV 프로토콜을 사용하는 Nextcloud 클라이언트 애플리케이션
   - `python3 txtoserver.py /path/to/input.conf`
   - `python3 txtoserver.py --conn_test`
 
+#### clipboardnextcloud.py
+- **기능**: macOS 클립보드의 텍스트, HTML, 파일 URL, 이미지를 Streamlit 화면에 표시하고 Nextcloud에 Markdown 파일로 업로드
+- **주요 특징**:
+  - 현재 클립보드 내용 미리보기
+  - 이미지 클립보드를 PNG base64 형태로 Markdown에 포함
+  - 대상 Nextcloud 디렉토리에 `YYYYMMDD_HHMMSS_devicename_clipboard.md` 파일 생성
+  - `input.conf` 의 `[target]` 또는 `[destination]` 섹션 사용
+  - 필요한 패키지(`streamlit`, `webdavclient3`)가 없으면 실행 중 자동 설치 시도
+- **실행 방법**:
+  - `python3 -m streamlit run apps/nextcloud/clipboardnextcloud.py`
+  - 설정 파일을 기본값이 아닌 경로로 쓰려면 앱 실행 후 사이드바의 `Config path` 에서 변경
+- **설정 파일**:
+  - 기본 경로: `apps/nextcloud/input.conf`
+  - 예시 섹션: `[target]`, `[settings]`
+
 ### 3. Docker 구성 (compose_script/)
 Docker Compose를 이용한 Nextcloud 서버 설치 및 설정
 
