@@ -292,6 +292,17 @@ def ensure_remote_dir(client: Any, remote_dir: str) -> None:
 
 def build_markdown(payload: Dict[str, Any], created_at: datetime, device_name: str) -> str:
     """Build markdown content from clipboard payload."""
+    return build_markdown_content(payload, created_at, device_name, include_inline_image=True)
+
+
+def build_markdown_content(
+    payload: Dict[str, Any],
+    created_at: datetime,
+    device_name: str,
+    *,
+    include_inline_image: bool,
+) -> str:
+    """Build markdown content from clipboard payload."""
 
     has_content = False
     lines: List[str] = [
@@ -343,14 +354,20 @@ def build_markdown(payload: Dict[str, Any], created_at: datetime, device_name: s
     image_base64 = payload.get("image_base64")
     if isinstance(image_base64, str) and image_base64:
         has_content = True
-        lines.extend(
-            [
-                "## Image",
-                "",
-                f'<img alt="clipboard image" src="data:image/png;base64,{image_base64}" />',
-                "",
-            ]
-        )
+        image_size = payload.get("image_size")
+        size_text = ""
+        if isinstance(image_size, dict):
+            width = image_size.get("width")
+            height = image_size.get("height")
+            if isinstance(width, int) and isinstance(height, int):
+                size_text = f" ({width}x{height})"
+
+        lines.extend(["## Image", ""])
+        if include_inline_image:
+            lines.append(f'<img alt="clipboard image" src="data:image/png;base64,{image_base64}" />')
+        else:
+            lines.append(f"[clipboard image omitted from preview{size_text}]")
+        lines.append("")
 
     if not has_content:
         lines.extend(["클립보드에서 표시 가능한 텍스트/이미지 데이터를 찾지 못했습니다.", ""])
@@ -421,6 +438,12 @@ def render_clipboard_preview(payload: Dict[str, Any]) -> None:
     image_base64 = payload.get("image_base64")
     if isinstance(image_base64, str) and image_base64:
         st.subheader("이미지")
+        image_size = payload.get("image_size")
+        if isinstance(image_size, dict):
+            width = image_size.get("width")
+            height = image_size.get("height")
+            if isinstance(width, int) and isinstance(height, int):
+                st.caption(f"image size: {width}x{height}")
         st.image(base64.b64decode(image_base64), caption="Clipboard image preview")
 
     if not any(
@@ -533,7 +556,8 @@ def main() -> None:
             st.error(f"설정 확인 실패: {exc}")
 
         if st.button("클립보드 새로고침", use_container_width=True):
-            st.session_state.clipboard_payload = read_clipboard_payload()
+            with st.spinner("클립보드 읽는 중..."):
+                st.session_state.clipboard_payload = read_clipboard_payload()
             st.rerun()
 
     payload = st.session_state.clipboard_payload
@@ -548,7 +572,12 @@ def main() -> None:
         st.subheader("업로드")
         created_at = datetime.now().astimezone()
         device_name = detect_device_name()
-        markdown_preview = build_markdown(payload, created_at, device_name)
+        markdown_preview = build_markdown_content(
+            payload,
+            created_at,
+            device_name,
+            include_inline_image=False,
+        )
         st.code(markdown_preview, language="markdown")
 
         if st.button("전송", type="primary", use_container_width=True):
