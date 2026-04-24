@@ -54,6 +54,7 @@ from common import build_client, compose_remote_url, load_config, normalize_root
 
 APP_TITLE = "Clipboard to Nextcloud"
 DEFAULT_CONFIG = CURRENT_DIR / "input.conf"
+TITLE_IMAGE_PATH = Path("/Users/tinyos/Downloads/20260425_073215_minskangui-iMac.local_clipboard.png")
 SUPPORTED_TARGET_SECTIONS = ("target", "destination")
 EDITABLE_CONFIG_KEYS = ("webdav_hostname", "webdav_root", "port", "username", "password", "root")
 
@@ -498,6 +499,9 @@ def main() -> None:
     """Render the Streamlit app."""
 
     st.set_page_config(page_title=APP_TITLE, page_icon="📋", layout="wide")
+    st.write("Copy Machine BerePi")
+    if TITLE_IMAGE_PATH.exists():
+        st.image(str(TITLE_IMAGE_PATH), use_container_width=True)
     st.title("📋 Clipboard to Nextcloud")
     st.write("현재 macOS 클립보드를 미리 보고, Nextcloud 대상 디렉토리에 Markdown 파일로 업로드합니다.")
 
