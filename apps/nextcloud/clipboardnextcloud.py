@@ -46,6 +46,7 @@ import streamlit as st  # noqa: E402  # pylint: disable=wrong-import-position
 
 CURRENT_DIR = Path(__file__).resolve().parent
 FILESYSTEM_DIR = CURRENT_DIR / "filesystem"
+RESOURCE_DIR = CURRENT_DIR / "resource"
 if str(FILESYSTEM_DIR) not in sys.path:
     sys.path.insert(0, str(FILESYSTEM_DIR))
 
@@ -54,7 +55,9 @@ from common import build_client, compose_remote_url, load_config, normalize_root
 
 APP_TITLE = "Clipboard to Nextcloud"
 DEFAULT_CONFIG = CURRENT_DIR / "input.conf"
-TITLE_IMAGE_PATH = Path("/Users/tinyos/Downloads/20260425_073215_minskangui-iMac.local_clipboard.png")
+TITLE_IMAGE_PATH = RESOURCE_DIR / "clipboard_title_icon.png"
+CONFIG_HISTORY_PATH = RESOURCE_DIR / "config_path_history.json"
+CONFIG_HISTORY_LIMIT = 10
 SUPPORTED_TARGET_SECTIONS = ("target", "destination")
 EDITABLE_CONFIG_KEYS = ("webdav_hostname", "webdav_root", "port", "username", "password", "root")
 
@@ -265,6 +268,67 @@ def save_config_parser(config_path: str, parser: configparser.ConfigParser) -> N
         os.makedirs(config_dir, exist_ok=True)
     with open(config_path, "w", encoding="utf-8") as handle:
         parser.write(handle)
+
+
+def load_config_path_history() -> List[str]:
+    """Load the recently used config paths from disk."""
+
+    if not CONFIG_HISTORY_PATH.exists():
+        return []
+
+    try:
+        history = json.loads(CONFIG_HISTORY_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    if not isinstance(history, list):
+        return []
+
+    sanitized_history: List[str] = []
+    for value in history:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed and trimmed not in sanitized_history:
+                sanitized_history.append(trimmed)
+
+    return sanitized_history[:CONFIG_HISTORY_LIMIT]
+
+
+def save_config_path_history(paths: List[str]) -> None:
+    """Persist the recently used config paths."""
+
+    RESOURCE_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_HISTORY_PATH.write_text(
+        json.dumps(paths[:CONFIG_HISTORY_LIMIT], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def remember_config_path(config_path: str) -> List[str]:
+    """Promote the current config path to the front of the recent list."""
+
+    normalized_path = config_path.strip()
+    if not normalized_path:
+        return st.session_state.get("config_path_history", load_config_path_history())
+
+    current_history = st.session_state.get("config_path_history", load_config_path_history())
+    updated_history = [normalized_path]
+    updated_history.extend(path for path in current_history if path != normalized_path)
+    updated_history = updated_history[:CONFIG_HISTORY_LIMIT]
+
+    save_config_path_history(updated_history)
+    st.session_state.config_path_history = updated_history
+    st.session_state.config_path_selected = normalized_path
+    st.session_state.config_path_value = normalized_path
+    return updated_history
+
+
+def apply_selected_config_path() -> None:
+    """Copy the selected recent path into the editable input."""
+
+    selected_path = st.session_state.get("config_path_selected", "").strip()
+    if selected_path:
+        st.session_state.config_path_value = selected_path
 
 
 def get_preserved_input_value(section_name: str, key: str, current_value: str) -> str:
@@ -499,10 +563,27 @@ def main() -> None:
     """Render the Streamlit app."""
 
     st.set_page_config(page_title=APP_TITLE, page_icon="📋", layout="wide")
+
+    if "config_path_history" not in st.session_state:
+        st.session_state.config_path_history = load_config_path_history()
+    if "config_path_value" not in st.session_state:
+        history = st.session_state.config_path_history
+        st.session_state.config_path_value = history[0] if history else str(DEFAULT_CONFIG)
+    if "config_path_selected" not in st.session_state:
+        history = st.session_state.config_path_history
+        st.session_state.config_path_selected = (
+            st.session_state.config_path_value
+            if st.session_state.config_path_value in history
+            else (history[0] if history else "")
+        )
+
     st.write("Copy Machine BerePi")
-    if TITLE_IMAGE_PATH.exists():
-        st.image(str(TITLE_IMAGE_PATH), use_container_width=True)
-    st.title("📋 Clipboard to Nextcloud")
+    title_icon_col, title_text_col = st.columns([0.12, 0.88])
+    with title_icon_col:
+        if TITLE_IMAGE_PATH.exists():
+            st.image(str(TITLE_IMAGE_PATH), width=72)
+    with title_text_col:
+        st.title("Clipboard to Nextcloud")
     st.write("현재 macOS 클립보드를 미리 보고, Nextcloud 대상 디렉토리에 Markdown 파일로 업로드합니다.")
 
     if "clipboard_payload" not in st.session_state:
@@ -510,8 +591,17 @@ def main() -> None:
 
     with st.sidebar:
         st.header("설정")
-        config_path = st.text_input("Config path", value=str(DEFAULT_CONFIG))
-        st.caption("`[target]` 또는 `[destination]` 섹션을 사용합니다.")
+        history = st.session_state.config_path_history
+        if history:
+            st.selectbox(
+                "Recent config paths",
+                options=[""] + history,
+                format_func=lambda value: value if value else "직접 입력",
+                key="config_path_selected",
+                on_change=apply_selected_config_path,
+            )
+        config_path = st.text_input("Config path", key="config_path_value")
+        st.caption("최근 사용 경로는 최대 10개까지 저장됩니다. `[target]` 또는 `[destination]` 섹션을 사용합니다.")
 
         try:
             editor_parser = load_config_parser(config_path)
@@ -574,6 +664,7 @@ def main() -> None:
                     except Exception as exc:  # pragma: no cover - UI error path
                         st.error(f"설정 저장 실패: {exc}")
                     else:
+                        remember_config_path(config_path)
                         for section_name in ("source", "destination"):
                             for key in EDITABLE_CONFIG_KEYS:
                                 st.session_state[f"config_{section_name}_{key}"] = ""
@@ -582,6 +673,7 @@ def main() -> None:
 
         try:
             section, root, verify_ssl = load_target_section(config_path)
+            remember_config_path(config_path)
             st.success("Nextcloud 설정을 읽었습니다.")
             st.code(
                 "\n".join(
