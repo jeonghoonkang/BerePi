@@ -318,7 +318,6 @@ def remember_config_path(config_path: str) -> List[str]:
 
     save_config_path_history(updated_history)
     st.session_state.config_path_history = updated_history
-    st.session_state.config_path_value = normalized_path
     return updated_history
 
 
