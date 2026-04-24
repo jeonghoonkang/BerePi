@@ -292,7 +292,12 @@ def ensure_remote_dir(client: Any, remote_dir: str) -> None:
 
 def build_markdown(payload: Dict[str, Any], created_at: datetime, device_name: str) -> str:
     """Build markdown content from clipboard payload."""
-    return build_markdown_content(payload, created_at, device_name, include_inline_image=True)
+    return build_markdown_content(
+        payload,
+        created_at,
+        device_name,
+        include_inline_image=False,
+    )
 
 
 def build_markdown_content(
@@ -301,6 +306,7 @@ def build_markdown_content(
     device_name: str,
     *,
     include_inline_image: bool,
+    image_filename: str | None = None,
 ) -> str:
     """Build markdown content from clipboard payload."""
 
@@ -363,7 +369,9 @@ def build_markdown_content(
                 size_text = f" ({width}x{height})"
 
         lines.extend(["## Image", ""])
-        if include_inline_image:
+        if image_filename:
+            lines.append(f"- uploaded_file: {image_filename}{size_text}")
+        elif include_inline_image:
             lines.append(f'<img alt="clipboard image" src="data:image/png;base64,{image_base64}" />')
         else:
             lines.append(f"[clipboard image omitted from preview{size_text}]")
@@ -384,9 +392,38 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
 
     created_at = datetime.now().astimezone()
     device_name = detect_device_name()
-    filename = f"{created_at.strftime('%Y%m%d_%H%M%S')}_{device_name}_clipboard.md"
-    remote_path = posixpath.join(root, filename) if root else filename
-    markdown = build_markdown(payload, created_at, device_name)
+    timestamp = created_at.strftime('%Y%m%d_%H%M%S')
+    markdown_filename = f"{timestamp}_{device_name}_clipboard.md"
+    remote_path = posixpath.join(root, markdown_filename) if root else markdown_filename
+
+    image_base64 = payload.get("image_base64")
+    image_filename: str | None = None
+    image_temp_path: str | None = None
+    if isinstance(image_base64, str) and image_base64:
+        image_filename = f"{timestamp}_{device_name}_clipboard.png"
+        image_remote_path = posixpath.join(root, image_filename) if root else image_filename
+        try:
+            image_bytes = base64.b64decode(image_base64)
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                suffix=".png",
+                prefix="clipboard_image_",
+                delete=False,
+            ) as handle:
+                handle.write(image_bytes)
+                image_temp_path = handle.name
+            client.upload_sync(remote_path=image_remote_path, local_path=image_temp_path)
+        finally:
+            if image_temp_path and os.path.exists(image_temp_path):
+                os.unlink(image_temp_path)
+
+    markdown = build_markdown_content(
+        payload,
+        created_at,
+        device_name,
+        include_inline_image=False,
+        image_filename=image_filename,
+    )
 
     temp_path: str | None = None
     try:
@@ -577,6 +614,7 @@ def main() -> None:
             created_at,
             device_name,
             include_inline_image=False,
+            image_filename="[will upload as .png file]",
         )
         st.code(markdown_preview, language="markdown")
 
