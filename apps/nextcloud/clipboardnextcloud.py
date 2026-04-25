@@ -498,11 +498,23 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
     markdown_filename = f"{timestamp}_{device_name}_clipboard.md"
     remote_path = posixpath.join(root, markdown_filename) if root else markdown_filename
 
+    text = payload.get("text")
+    file_urls = payload.get("file_urls")
+    html = payload.get("html")
     image_base64 = payload.get("image_base64")
+    image_only = (
+        isinstance(image_base64, str)
+        and bool(image_base64)
+        and not (isinstance(text, str) and text.strip())
+        and not (isinstance(file_urls, list) and bool(file_urls))
+        and not (isinstance(html, str) and html.strip())
+    )
+
     image_filename: str | None = None
     image_temp_path: str | None = None
     if isinstance(image_base64, str) and image_base64:
-        image_filename = f"{timestamp}_{device_name}_clipboard.png"
+        image_prefix = "image_" if image_only else ""
+        image_filename = f"{image_prefix}{timestamp}_{device_name}_clipboard.png"
         image_remote_path = posixpath.join(root, image_filename) if root else image_filename
         try:
             image_bytes = base64.b64decode(image_base64)
@@ -518,6 +530,9 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
         finally:
             if image_temp_path and os.path.exists(image_temp_path):
                 os.unlink(image_temp_path)
+
+        if image_only:
+            return image_remote_path, compose_browse_url(section, image_remote_path)
 
     markdown = build_markdown_content(
         payload,
