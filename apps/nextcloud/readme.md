@@ -1,4 +1,4 @@
-# Nextcloud File Syncronization System
+# Nextcloud File Sync System
 
 ## 개요
 이 디렉토리는 Nextcloud 파일 동기화 시스템과 관련된 다양한 응용 소프트웨어를 포함합니다. 
