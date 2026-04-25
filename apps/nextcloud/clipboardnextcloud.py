@@ -1293,7 +1293,6 @@ def main() -> None:
                                 st.exception(exc)
                             else:
                                 st.session_state.server_file_delete_confirmed = False
-                                st.session_state.server_file_delete_targets = []
                                 st.success(f"삭제 완료: {deleted_count}개 파일")
                                 st.rerun()
                 else:
