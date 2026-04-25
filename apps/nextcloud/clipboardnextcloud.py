@@ -329,6 +329,12 @@ def apply_selected_config_path() -> None:
         st.session_state.config_path_value = selected_path
 
 
+def set_transfer_mode(mode: str) -> None:
+    """Switch the active transfer mode."""
+
+    st.session_state.transfer_mode = mode
+
+
 def get_preserved_input_value(section_name: str, key: str, current_value: str) -> str:
     """Keep the current config value when the edit field is left blank."""
 
@@ -616,19 +622,21 @@ def main() -> None:
 
     mode_col1, mode_col2, _ = st.columns([1, 1, 6])
     with mode_col1:
-        if st.button(
+        st.button(
             "클립보드",
             type="primary" if st.session_state.transfer_mode == "clipboard" else "secondary",
             use_container_width=True,
-        ):
-            st.session_state.transfer_mode = "clipboard"
+            on_click=set_transfer_mode,
+            args=("clipboard",),
+        )
     with mode_col2:
-        if st.button(
+        st.button(
             "파일전송",
             type="primary" if st.session_state.transfer_mode == "file" else "secondary",
             use_container_width=True,
-        ):
-            st.session_state.transfer_mode = "file"
+            on_click=set_transfer_mode,
+            args=("file",),
+        )
 
     if "clipboard_payload" not in st.session_state:
         st.session_state.clipboard_payload = read_clipboard_payload()
