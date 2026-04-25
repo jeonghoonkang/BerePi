@@ -925,7 +925,7 @@ def main() -> None:
         else (history[0] if history else "")
     )
 
-    st.write("Copy Machine BerePi")
+    #st.write("Copy Machine BerePi")
     title_icon_col, title_text_col = st.columns([0.12, 0.88])
     with title_icon_col:
         if TITLE_IMAGE_PATH.exists():
@@ -1045,9 +1045,6 @@ def main() -> None:
                         st.error(f"설정 저장 실패: {exc}")
                     else:
                         remember_config_path(config_path)
-                        for section_name in ("source", "destination"):
-                            for key in EDITABLE_CONFIG_KEYS:
-                                st.session_state[f"config_{section_name}_{key}"] = ""
                         st.success(f"설정 저장 완료: {config_path}")
                         st.rerun()
 
