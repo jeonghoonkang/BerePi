@@ -240,6 +240,39 @@ def load_target_section(config_path: str) -> Tuple[Any, str, bool]:
     )
 
 
+def load_file_transfer_target(config_path: str) -> Tuple[Any, str, bool]:
+    """Load the file-transfer target and force uploads into the upload subdirectory."""
+
+    config = load_config(config_path)
+    verify_ssl = config.getboolean("settings", "verify_ssl", fallback=True)
+
+    if "destination" not in config:
+        raise KeyError("Missing file-transfer target. Expected [destination] section.")
+
+    section = config["destination"]
+    root = normalize_root(section.get("root", ""))
+    if not root:
+        raise ValueError("destination.root is required for file transfer.")
+
+    upload_root = posixpath.join(root, "upload")
+    return section, upload_root, verify_ssl
+
+
+def show_alert_and_stop(message: str) -> None:
+    """Show an alert dialog when possible, then stop the current run."""
+
+    if hasattr(st, "dialog"):
+        @st.dialog("설정 필요")
+        def _dialog() -> None:
+            st.error(message)
+
+        _dialog()
+    else:
+        st.error(message)
+
+    st.stop()
+
+
 def load_config_parser(config_path: str) -> configparser.ConfigParser:
     """Load the raw config parser for editing."""
 
@@ -516,7 +549,7 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
 def upload_selected_file(config_path: str, filename: str, file_bytes: bytes) -> Tuple[str, str]:
     """Upload a user-selected file to Nextcloud and return path/url."""
 
-    section, root, verify_ssl = load_target_section(config_path)
+    section, root, verify_ssl = load_file_transfer_target(config_path)
     client = build_client(section, verify_ssl)
     ensure_remote_dir(client, root)
 
@@ -617,7 +650,10 @@ def main() -> None:
         if TITLE_IMAGE_PATH.exists():
             st.image(str(TITLE_IMAGE_PATH), width=72)
     with title_text_col:
-        st.title("Clipboard to Nextcloud")
+        st.markdown(
+            "<h1 style='font-size: 16px; margin: 0;'>Clipboard to Nextcloud</h1>",
+            unsafe_allow_html=True,
+        )
     st.write("현재 macOS 클립보드를 미리 보고, Nextcloud 대상 디렉토리에 Markdown 파일로 업로드합니다.")
 
     mode_col1, mode_col2, _ = st.columns([1, 1, 6])
@@ -642,6 +678,7 @@ def main() -> None:
         st.session_state.clipboard_payload = read_clipboard_payload()
 
     target_root_display = "/"
+    file_transfer_root_display = "/upload"
 
     with st.sidebar:
         st.header("설정")
@@ -743,12 +780,25 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - UI error path
             st.error(f"설정 확인 실패: {exc}")
 
+        file_transfer_error: str | None = None
+        try:
+            _, file_transfer_root, _ = load_file_transfer_target(config_path)
+            file_transfer_root_display = file_transfer_root or "/upload"
+        except Exception as exc:
+            file_transfer_root_display = "/upload"
+            file_transfer_error = str(exc)
+
         if st.session_state.transfer_mode == "clipboard" and st.button("클립보드 새로고침", use_container_width=True):
             with st.spinner("클립보드 읽는 중..."):
                 st.session_state.clipboard_payload = read_clipboard_payload()
             st.rerun()
 
     payload = st.session_state.clipboard_payload
+
+    if st.session_state.transfer_mode == "file" and file_transfer_error:
+        show_alert_and_stop(
+            "파일전송을 사용하려면 설정 파일의 [destination] 섹션에 root 값을 입력해 주세요."
+        )
 
     if st.session_state.transfer_mode == "clipboard":
         left_col, right_col = st.columns([1.2, 0.8])
@@ -802,7 +852,7 @@ def main() -> None:
                         [
                             f"filename: {uploaded_file.name}",
                             f"size: {uploaded_file.size} bytes",
-                            f"target_root: {target_root_display}",
+                            f"target_root: {file_transfer_root_display}",
                         ]
                     ),
                     language="text",
