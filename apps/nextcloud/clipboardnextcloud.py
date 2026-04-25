@@ -616,10 +616,18 @@ def main() -> None:
 
     mode_col1, mode_col2, _ = st.columns([1, 1, 6])
     with mode_col1:
-        if st.button("클립보드", use_container_width=True):
+        if st.button(
+            "클립보드",
+            type="primary" if st.session_state.transfer_mode == "clipboard" else "secondary",
+            use_container_width=True,
+        ):
             st.session_state.transfer_mode = "clipboard"
     with mode_col2:
-        if st.button("파일전송", use_container_width=True):
+        if st.button(
+            "파일전송",
+            type="primary" if st.session_state.transfer_mode == "file" else "secondary",
+            use_container_width=True,
+        ):
             st.session_state.transfer_mode = "file"
 
     if "clipboard_payload" not in st.session_state:
