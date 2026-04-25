@@ -830,6 +830,7 @@ def apply_server_file_selection() -> None:
     file_paths = st.session_state.get("server_file_paths", [])
     if selected in file_paths:
         st.session_state.server_file_index = file_paths.index(selected)
+    st.session_state.server_file_single_delete_confirmed = False
 
 
 def move_server_file(step: int) -> None:
@@ -842,6 +843,7 @@ def move_server_file(step: int) -> None:
     next_index = max(0, min(len(file_paths) - 1, current_index + step))
     st.session_state.server_file_index = next_index
     st.session_state.server_file_selected = file_paths[next_index]
+    st.session_state.server_file_single_delete_confirmed = False
 
 
 def render_clipboard_preview(payload: Dict[str, Any]) -> None:
@@ -914,6 +916,8 @@ def main() -> None:
         st.session_state.directory_transfer_path = ""
     if "server_file_delete_confirmed" not in st.session_state:
         st.session_state.server_file_delete_confirmed = False
+    if "server_file_single_delete_confirmed" not in st.session_state:
+        st.session_state.server_file_single_delete_confirmed = False
     history = st.session_state.config_path_history
     st.session_state.config_path_selected = (
         st.session_state.config_path_value
@@ -1328,7 +1332,25 @@ def main() -> None:
                     else:
                         st.code(str(preview["text"]), language="text")
                     st.markdown(f"[원격 URL 열기]({preview['browse_url']})")
+
+                    st.divider()
+                    if not st.session_state.server_file_single_delete_confirmed:
+                        if st.button("현재 파일 삭제 확인", use_container_width=True):
+                            st.session_state.server_file_single_delete_confirmed = True
+                            st.rerun()
+                    else:
+                        st.warning("현재 파일 삭제 확인이 완료되었습니다. 아래 버튼으로 실제 삭제를 실행합니다.")
+                        if st.button("현재 파일 삭제 실행", type="primary", use_container_width=True):
+                            try:
+                                deleted_count = delete_server_files(config_path, [selected_server_file])
+                            except Exception as exc:  # pragma: no cover - UI error path
+                                st.exception(exc)
+                            else:
+                                st.session_state.server_file_single_delete_confirmed = False
+                                st.success(f"삭제 완료: {deleted_count}개 파일")
+                                st.rerun()
             else:
+                st.session_state.server_file_single_delete_confirmed = False
                 st.caption("서버 파일을 선택하면 내용을 보여줍니다.")
 
 
