@@ -50,7 +50,7 @@ RESOURCE_DIR = CURRENT_DIR / "resource"
 if str(FILESYSTEM_DIR) not in sys.path:
     sys.path.insert(0, str(FILESYSTEM_DIR))
 
-from common import build_client, compose_browse_url, load_config, normalize_root  # noqa: E402
+from common import build_client, compose_browse_url, compose_remote_url, list_tree, load_config, normalize_root  # noqa: E402
 
 
 APP_TITLE = "Clipboard to Nextcloud"
@@ -256,6 +256,23 @@ def load_file_transfer_target(config_path: str) -> Tuple[Any, str, bool]:
 
     upload_root = posixpath.join(root, "upload")
     return section, upload_root, verify_ssl
+
+
+def load_destination_root_target(config_path: str) -> Tuple[Any, str, bool]:
+    """Load the destination root for server-side file browsing."""
+
+    config = load_config(config_path)
+    verify_ssl = config.getboolean("settings", "verify_ssl", fallback=True)
+
+    if "destination" not in config:
+        raise KeyError("Missing server file target. Expected [destination] section.")
+
+    section = config["destination"]
+    root = normalize_root(section.get("root", ""))
+    if not root:
+        raise ValueError("destination.root is required for server file browsing.")
+
+    return section, root, verify_ssl
 
 
 def show_alert_and_stop(message: str) -> None:
@@ -687,7 +704,7 @@ def upload_directory_tree(config_path: str, local_dir: str) -> Tuple[str, str, i
 def reset_transfer_confirmation(confirm_key: str) -> None:
     """Clear a stale confirmation marker for a transfer target."""
 
-    st.session_state[confirm_key] = ""
+    st.session_state[confirm_key] = False
 
 
 def bytes_to_text(size: int) -> str:
@@ -700,6 +717,131 @@ def bytes_to_text(size: int) -> str:
         value /= 1024.0
         unit_index += 1
     return f"{value:.1f} {units[unit_index]}"
+
+
+def list_server_files(config_path: str) -> Tuple[Any, str, List[str]]:
+    """List files under destination.root for server-side browsing."""
+
+    section, root, verify_ssl = load_destination_root_target(config_path)
+    client = build_client(section, verify_ssl)
+    entries = list_tree(client, root)
+    file_paths = sorted(
+        path
+        for entry in entries
+        if isinstance((path := entry.get("path")), str)
+    )
+    return section, root, file_paths
+
+
+def fetch_server_file_preview(config_path: str, remote_path: str) -> Dict[str, Any]:
+    """Download a remote file and prepare a preview payload."""
+
+    section, _, verify_ssl = load_destination_root_target(config_path)
+    client = build_client(section, verify_ssl)
+    suffix = Path(remote_path).suffix
+    temp_path: str | None = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=suffix,
+            prefix="server_file_preview_",
+            delete=False,
+        ) as handle:
+            temp_path = handle.name
+        client.download_sync(remote_path=remote_path, local_path=temp_path)
+        data = Path(temp_path).read_bytes()
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+    preview: Dict[str, Any] = {
+        "path": remote_path,
+        "size": len(data),
+        "suffix": suffix.lower(),
+        "browse_url": compose_browse_url(section, remote_path),
+    }
+
+    lower_suffix = suffix.lower()
+    if lower_suffix in {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}:
+        preview["kind"] = "image"
+        preview["bytes"] = data
+        return preview
+
+    if lower_suffix in {".md", ".txt", ".json", ".py", ".yaml", ".yml", ".csv", ".log", ".ini", ".conf", ".html"}:
+        preview["kind"] = "text"
+        preview["text"] = data.decode("utf-8", errors="replace")
+        return preview
+
+    preview["kind"] = "binary"
+    preview["text"] = data[:512].hex(" ")
+    return preview
+
+
+def delete_server_files(config_path: str, remote_paths: List[str]) -> int:
+    """Delete selected files from destination.root."""
+
+    section, _, verify_ssl = load_destination_root_target(config_path)
+    client = build_client(section, verify_ssl)
+    deleted = 0
+    for remote_path in remote_paths:
+        if not remote_path:
+            continue
+        delete_url = compose_remote_url(section, remote_path)
+        command = [
+            "curl",
+            "--fail",
+            "-X",
+            "DELETE",
+            "-u",
+            f"{section.get('username', '')}:{section.get('password', '')}",
+            delete_url,
+        ]
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            details = result.stderr.strip() or result.stdout.strip() or "unknown error"
+            raise RuntimeError(f"Failed to delete {remote_path}: {details}")
+        deleted += 1
+    return deleted
+
+
+def sync_server_file_selection(file_paths: List[str]) -> None:
+    """Keep the selected server file index within the current file list."""
+
+    if "server_file_index" not in st.session_state:
+        st.session_state.server_file_index = 0
+    if not file_paths:
+        st.session_state.server_file_index = 0
+        st.session_state.server_file_selected = ""
+        return
+
+    current_selected = st.session_state.get("server_file_selected", "")
+    if current_selected in file_paths:
+        st.session_state.server_file_index = file_paths.index(current_selected)
+    else:
+        st.session_state.server_file_index = min(st.session_state.server_file_index, len(file_paths) - 1)
+        st.session_state.server_file_selected = file_paths[st.session_state.server_file_index]
+
+
+def apply_server_file_selection() -> None:
+    """Update the current server file index from the selectbox choice."""
+
+    selected = st.session_state.get("server_file_selected", "")
+    file_paths = st.session_state.get("server_file_paths", [])
+    if selected in file_paths:
+        st.session_state.server_file_index = file_paths.index(selected)
+
+
+def move_server_file(step: int) -> None:
+    """Move the current server file selection forward or backward."""
+
+    file_paths = st.session_state.get("server_file_paths", [])
+    if not file_paths:
+        return
+    current_index = st.session_state.get("server_file_index", 0)
+    next_index = max(0, min(len(file_paths) - 1, current_index + step))
+    st.session_state.server_file_index = next_index
+    st.session_state.server_file_selected = file_paths[next_index]
 
 
 def render_clipboard_preview(payload: Dict[str, Any]) -> None:
@@ -770,6 +912,8 @@ def main() -> None:
         st.session_state.file_transfer_confirmed_dir = ""
     if "directory_transfer_path" not in st.session_state:
         st.session_state.directory_transfer_path = ""
+    if "server_file_delete_confirmed" not in st.session_state:
+        st.session_state.server_file_delete_confirmed = False
     history = st.session_state.config_path_history
     st.session_state.config_path_selected = (
         st.session_state.config_path_value
@@ -789,7 +933,7 @@ def main() -> None:
         )
     st.write("현재 macOS 클립보드를 미리 보고, Nextcloud 대상 디렉토리에 Markdown 파일로 업로드합니다.")
 
-    mode_col1, mode_col2, _ = st.columns([1, 1, 6])
+    mode_col1, mode_col2, mode_col3, _ = st.columns([1, 1, 1, 5])
     with mode_col1:
         st.button(
             "클립보드",
@@ -805,6 +949,14 @@ def main() -> None:
             use_container_width=True,
             on_click=set_transfer_mode,
             args=("file",),
+        )
+    with mode_col3:
+        st.button(
+            "서버파일",
+            type="primary" if st.session_state.transfer_mode == "server_files" else "secondary",
+            use_container_width=True,
+            on_click=set_transfer_mode,
+            args=("server_files",),
         )
 
     if "clipboard_payload" not in st.session_state:
@@ -932,6 +1084,15 @@ def main() -> None:
         show_alert_and_stop(
             "파일전송을 사용하려면 설정 파일의 [destination] 섹션에 root 값을 입력해 주세요."
         )
+    if st.session_state.transfer_mode == "server_files":
+        try:
+            _, destination_root_display, server_file_paths = list_server_files(config_path)
+            st.session_state.server_file_paths = server_file_paths
+            sync_server_file_selection(server_file_paths)
+        except Exception:
+            show_alert_and_stop(
+                "서버파일을 사용하려면 설정 파일의 [destination] 섹션에 root 값을 입력해 주세요."
+            )
 
     if st.session_state.transfer_mode == "clipboard":
         left_col, right_col = st.columns([1.2, 0.8])
@@ -961,7 +1122,7 @@ def main() -> None:
                 else:
                     st.success(f"업로드 완료: {remote_path}")
                     st.markdown(f"[원격 URL 열기]({remote_url})")
-    else:
+    elif st.session_state.transfer_mode == "file":
         left_col, right_col = st.columns([1.1, 0.9])
 
         directory_scan: Dict[str, Any] | None = None
@@ -1083,6 +1244,92 @@ def main() -> None:
                 st.caption("올바른 디렉토리 경로를 입력하면 업로드 확인 버튼이 표시됩니다.")
             else:
                 st.caption("디렉토리 경로를 입력하면 업로드 정보가 표시됩니다.")
+    else:
+        left_col, right_col = st.columns([1.0, 1.0])
+        server_file_paths = st.session_state.get("server_file_paths", [])
+
+        with left_col:
+            st.subheader("서버 파일 목록")
+            st.caption(f"destination.root: {destination_root_display}")
+            if server_file_paths:
+                st.selectbox(
+                    "파일 선택",
+                    options=server_file_paths,
+                    key="server_file_selected",
+                    on_change=apply_server_file_selection,
+                )
+                nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+                with nav_col1:
+                    st.button("⬅", use_container_width=True, on_click=move_server_file, args=(-1,))
+                with nav_col2:
+                    st.caption(
+                        f"{st.session_state.server_file_index + 1} / {len(server_file_paths)}"
+                    )
+                with nav_col3:
+                    st.button("➡", use_container_width=True, on_click=move_server_file, args=(1,))
+
+                delete_targets = st.multiselect(
+                    "삭제할 파일 선택",
+                    options=server_file_paths,
+                    key="server_file_delete_targets",
+                    on_change=reset_transfer_confirmation,
+                    args=("server_file_delete_confirmed",),
+                )
+                if delete_targets:
+                    if not st.session_state.server_file_delete_confirmed:
+                        if st.button("삭제 확인", use_container_width=True):
+                            st.session_state.server_file_delete_confirmed = True
+                            st.rerun()
+                    else:
+                        st.warning("삭제 확인이 완료되었습니다. 아래 버튼으로 실제 삭제를 실행합니다.")
+                        if st.button("삭제 실행", type="primary", use_container_width=True):
+                            try:
+                                deleted_count = delete_server_files(config_path, delete_targets)
+                            except Exception as exc:  # pragma: no cover - UI error path
+                                st.exception(exc)
+                            else:
+                                st.session_state.server_file_delete_confirmed = False
+                                st.session_state.server_file_delete_targets = []
+                                st.success(f"삭제 완료: {deleted_count}개 파일")
+                                st.rerun()
+                else:
+                    st.session_state.server_file_delete_confirmed = False
+            else:
+                st.info("destination.root 아래에 파일이 없습니다.")
+
+        with right_col:
+            st.subheader("파일 내용")
+            selected_server_file = st.session_state.get("server_file_selected", "")
+            if selected_server_file:
+                try:
+                    preview = fetch_server_file_preview(config_path, selected_server_file)
+                except Exception as exc:  # pragma: no cover - UI error path
+                    st.exception(exc)
+                else:
+                    st.code(
+                        "\n".join(
+                            [
+                                f"path: {preview['path']}",
+                                f"size: {bytes_to_text(int(preview['size']))}",
+                                f"type: {preview['kind']}",
+                            ]
+                        ),
+                        language="text",
+                    )
+                    if preview["kind"] == "image":
+                        st.image(preview["bytes"], caption=str(preview["path"]))
+                    elif preview["kind"] == "text":
+                        st.text_area(
+                            "server_file_text",
+                            str(preview["text"]),
+                            height=500,
+                            label_visibility="collapsed",
+                        )
+                    else:
+                        st.code(str(preview["text"]), language="text")
+                    st.markdown(f"[원격 URL 열기]({preview['browse_url']})")
+            else:
+                st.caption("서버 파일을 선택하면 내용을 보여줍니다.")
 
 
 if __name__ == "__main__":
