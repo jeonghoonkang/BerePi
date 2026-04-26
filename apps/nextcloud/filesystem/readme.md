@@ -7,6 +7,7 @@
 - `common.py`: 공통 설정 로딩, WebDAV 연결, 경로/시간 처리, 재귀 listing 유틸
 - `checkup.py`: 원격 Nextcloud 디렉터리 점검 스크립트
 - `cleanup.py`: 오래된 원격 파일 정리 스크립트
+- `cron_command_builder.html`: 점검/삭제/이동/분할 작업용 실행 명령과 `crontab` 라인을 생성하는 정적 HTML
 - `checkup.sample.conf`: 설정 샘플 파일
 
 ## Checkup
@@ -96,6 +97,16 @@ python3 apps/nextcloud/filesystem/cleanup.py /path/to/your.conf --days 30 --exec
 ```bash
 python3 apps/nextcloud/filesystem/cleanup.py /path/to/your.conf --conn_test
 ```
+
+## HTML Builder
+
+`cron_command_builder.html`은 브라우저에서 다음 작업의 명령 생성을 돕습니다.
+
+- `checkup.py` 점검 명령 생성
+- `cleanup.py --dry-run` / `--execute` 삭제 명령 생성
+- 오래된 파일 이동용 셸 명령 생성
+- 대용량 파일 분할용 셸 명령 생성
+- 위 명령을 감싼 `crontab` 라인 생성
 
 ## Output
 

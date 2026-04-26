@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nextcloud Filesystem Cron Builder</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: #fffaf2;
+      --panel-strong: #f1e4d1;
+      --text: #1f2933;
+      --muted: #5f6c7b;
+      --line: #d7c4ac;
+      --accent: #9a3412;
+      --accent-2: #1d4ed8;
+      --ok: #166534;
+      --warn: #92400e;
+      --shadow: 0 18px 45px rgba(84, 54, 20, 0.12);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Pretendard Variable", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(154, 52, 18, 0.16), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(29, 78, 216, 0.12), transparent 32%),
+        linear-gradient(180deg, #f8f1e7 0%, #efe4d4 100%);
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 32px auto 48px;
+    }
+
+    .hero {
+      padding: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      border-radius: 28px;
+      background: linear-gradient(135deg, rgba(255, 250, 242, 0.9), rgba(241, 228, 209, 0.95));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.3rem);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 860px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .panel {
+      background: rgba(255, 250, 242, 0.96);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel section {
+      padding: 22px;
+      border-top: 1px solid rgba(215, 196, 172, 0.55);
+    }
+
+    .panel section:first-child {
+      border-top: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.1rem;
+      letter-spacing: -0.03em;
+    }
+
+    .sub {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .fields.cron {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      font: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      padding: 11px 12px;
+      background: #fffdf8;
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--panel-strong);
+      color: var(--accent);
+      font-size: 0.83rem;
+      font-weight: 700;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      padding: 12px 14px;
+      font-weight: 700;
+      transition: transform 0.14s ease, background 0.14s ease;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #fff8f1;
+      border-color: var(--accent);
+    }
+
+    button.secondary {
+      background: #fff5e8;
+      color: var(--accent);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .hint,
+    .note {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .note strong {
+      color: var(--warn);
+    }
+
+    .result {
+      display: grid;
+      gap: 14px;
+    }
+
+    .result-box {
+      padding: 16px;
+      border-radius: 14px;
+      background: #fffdf8;
+      border: 1px solid var(--line);
+    }
+
+    .result-box h3 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    .status {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #effcf4;
+      color: var(--ok);
+      border: 1px solid rgba(22, 101, 52, 0.2);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .fields,
+      .fields.cron {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="row">
+        <span class="chip">Nextcloud WebDAV</span>
+        <span class="chip">Cron Builder</span>
+        <span class="chip">Static HTML</span>
+      </div>
+      <h1>점검, 삭제, 이동, 분할 명령을 한 번에 생성</h1>
+      <p>
+        `apps/nextcloud/filesystem/checkup.py`, `cleanup.py`를 중심으로 입력값을 조합해
+        실행 명령과 `crontab` 라인을 바로 만들어 주는 정적 HTML입니다.
+        삭제는 기존 Python 스크립트를 사용하고, 이동과 분할은 일반 셸 명령을 생성합니다.
+      </p>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <section>
+          <h2>작업 선택</h2>
+          <p class="sub">작업 유형에 따라 필요한 입력 필드와 생성되는 명령이 바뀝니다.</p>
+          <div class="fields">
+            <div class="field full">
+              <label for="actionType">작업 유형</label>
+              <select id="actionType">
+                <option value="checkup">점검: checkup.py 실행</option>
+                <option value="cleanup-dry">삭제 미리보기: cleanup.py --dry-run</option>
+                <option value="cleanup-exec">삭제 실행: cleanup.py --execute</option>
+                <option value="move">이동: 오래된 파일을 다른 경로로 이동</option>
+                <option value="split">분할: 큰 파일을 여러 조각으로 분할</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="jobName">작업 이름</label>
+              <input id="jobName" type="text" value="nextcloud-filesystem-job">
+            </div>
+            <div class="field">
+              <label for="shellPath">쉘 경로</label>
+              <input id="shellPath" type="text" value="/bin/bash">
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>일정 설정</h2>
+          <p class="sub">아래 다섯 칸이 그대로 crontab 앞부분으로 들어갑니다.</p>
+          <div class="fields cron">
+            <div class="field">
+              <label for="cronMinute">분</label>
+              <input id="cronMinute" type="text" value="0">
+            </div>
+            <div class="field">
+              <label for="cronHour">시</label>
+              <input id="cronHour" type="text" value="3">
+            </div>
+            <div class="field">
+              <label for="cronDay">일</label>
+              <input id="cronDay" type="text" value="*">
+            </div>
+            <div class="field">
+              <label for="cronMonth">월</label>
+              <input id="cronMonth" type="text" value="*">
+            </div>
+            <div class="field">
+              <label for="cronWeekday">요일</label>
+              <input id="cronWeekday" type="text" value="*">
+            </div>
+          </div>
+          <div class="fields" style="margin-top:14px;">
+            <div class="field">
+              <label for="cronPreset">빠른 예시</label>
+              <select id="cronPreset">
+                <option value="">직접 입력 유지</option>
+                <option value="0 3 * * *">매일 03:00</option>
+                <option value="0 */6 * * *">6시간마다</option>
+                <option value="30 1 * * 0">매주 일요일 01:30</option>
+                <option value="0 2 1 * *">매월 1일 02:00</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="startDate">기준 날짜 메모</label>
+              <input id="startDate" type="date">
+            </div>
+            <div class="field full">
+              <label for="logPath">로그 파일 경로</label>
+              <input id="logPath" type="text" value="/tmp/nextcloud-filesystem.log">
+            </div>
+          </div>
+          <p class="hint">`crontab`은 연도 개념이 없으므로, 날짜 입력은 메모와 설명 생성에만 사용합니다.</p>
+        </section>
+
+        <section>
+          <h2>명령 입력값</h2>
+          <p class="sub">삭제는 설정 파일 기반, 이동과 분할은 경로 기반 명령을 생성합니다.</p>
+          <div class="fields">
+            <div class="field full" id="configPathField">
+              <label for="configPath">설정 파일 경로</label>
+              <input id="configPath" type="text" value="/Users/tinyos/devel_opment/BerePi/apps/nextcloud/filesystem/input.conf">
+            </div>
+
+            <div class="field" id="retentionDaysField">
+              <label for="retentionDays">보관 일수</label>
+              <input id="retentionDays" type="number" min="1" value="30">
+            </div>
+
+            <div class="field" id="sourcePathField">
+              <label for="sourcePath">원본 경로</label>
+              <input id="sourcePath" type="text" value="/data/source">
+            </div>
+
+            <div class="field" id="destinationPathField">
+              <label for="destinationPath">대상 경로</label>
+              <input id="destinationPath" type="text" value="/data/archive">
+            </div>
+
+            <div class="field" id="namePatternField">
+              <label for="namePattern">파일 패턴</label>
+              <input id="namePattern" type="text" value="*">
+            </div>
+
+            <div class="field" id="splitModeField">
+              <label for="splitMode">분할 기준</label>
+              <select id="splitMode">
+                <option value="size">크기 기준</option>
+                <option value="lines">라인 수 기준</option>
+              </select>
+            </div>
+
+            <div class="field" id="splitValueField">
+              <label for="splitValue">분할 값</label>
+              <input id="splitValue" type="text" value="100M">
+            </div>
+
+            <div class="field" id="splitPrefixField">
+              <label for="splitPrefix">분할 파일 접두어</label>
+              <input id="splitPrefix" type="text" value="chunk_">
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="generateBtn" type="button">명령 생성</button>
+            <button class="secondary" id="copyCommandBtn" type="button">실행 명령 복사</button>
+            <button class="secondary" id="copyCronBtn" type="button">crontab 라인 복사</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="panel">
+        <section>
+          <h2>생성 결과</h2>
+          <p class="sub">아래 결과는 입력값 변경 시 다시 생성하면 됩니다.</p>
+          <div class="status" id="statusBox">
+            명령을 아직 생성하지 않았습니다.
+          </div>
+        </section>
+
+        <section class="result">
+          <div class="result-box">
+            <h3>실행 명령</h3>
+            <pre id="commandOutput"></pre>
+          </div>
+          <div class="result-box">
+            <h3>crontab 라인</h3>
+            <pre id="cronOutput"></pre>
+          </div>
+          <div class="result-box">
+            <h3>설명</h3>
+            <pre id="descriptionOutput"></pre>
+          </div>
+        </section>
+
+        <section>
+          <h2>주의 사항</h2>
+          <p class="note">
+            <strong>삭제 실행 모드</strong>는 `cleanup.py --execute`가 원래 `confirm` 입력을 요구하므로,
+            자동 실행용 명령은 `printf 'confirm\n'`을 앞에 붙여 생성합니다.
+          </p>
+          <p class="note">
+            이동과 분할은 현재 `filesystem` 폴더의 Python 기능이 아니라 일반 셸 명령 생성입니다.
+            실제 운영 전에는 샘플 경로로 한 번 수동 검증하는 편이 안전합니다.
+          </p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const actionType = document.getElementById("actionType");
+    const cronPreset = document.getElementById("cronPreset");
+    const fields = {
+      configPathField: document.getElementById("configPathField"),
+      retentionDaysField: document.getElementById("retentionDaysField"),
+      sourcePathField: document.getElementById("sourcePathField"),
+      destinationPathField: document.getElementById("destinationPathField"),
+      namePatternField: document.getElementById("namePatternField"),
+      splitModeField: document.getElementById("splitModeField"),
+      splitValueField: document.getElementById("splitValueField"),
+      splitPrefixField: document.getElementById("splitPrefixField")
+    };
+
+    const outputEls = {
+      status: document.getElementById("statusBox"),
+      command: document.getElementById("commandOutput"),
+      cron: document.getElementById("cronOutput"),
+      description: document.getElementById("descriptionOutput")
+    };
+
+    function shellQuote(value) {
+      return `'${String(value).replace(/'/g, `'\\''`)}'`;
+    }
+
+    function setVisible(element, visible) {
+      element.classList.toggle("hidden", !visible);
+    }
+
+    function updateVisibleFields() {
+      const mode = actionType.value;
+      const isCheckup = mode === "checkup";
+      const isCleanup = mode === "cleanup-dry" || mode === "cleanup-exec";
+      const isMove = mode === "move";
+      const isSplit = mode === "split";
+
+      setVisible(fields.configPathField, isCheckup || isCleanup);
+      setVisible(fields.retentionDaysField, isCleanup || isMove);
+      setVisible(fields.sourcePathField, isMove || isSplit);
+      setVisible(fields.destinationPathField, isMove || isSplit);
+      setVisible(fields.namePatternField, isMove);
+      setVisible(fields.splitModeField, isSplit);
+      setVisible(fields.splitValueField, isSplit);
+      setVisible(fields.splitPrefixField, isSplit);
+    }
+
+    function applyPreset() {
+      const value = cronPreset.value;
+      if (!value) {
+        return;
+      }
+      const [minute, hour, day, month, weekday] = value.split(" ");
+      document.getElementById("cronMinute").value = minute;
+      document.getElementById("cronHour").value = hour;
+      document.getElementById("cronDay").value = day;
+      document.getElementById("cronMonth").value = month;
+      document.getElementById("cronWeekday").value = weekday;
+    }
+
+    function getValues() {
+      return {
+        mode: actionType.value,
+        jobName: document.getElementById("jobName").value.trim() || "nextcloud-filesystem-job",
+        shellPath: document.getElementById("shellPath").value.trim() || "/bin/bash",
+        minute: document.getElementById("cronMinute").value.trim() || "*",
+        hour: document.getElementById("cronHour").value.trim() || "*",
+        day: document.getElementById("cronDay").value.trim() || "*",
+        month: document.getElementById("cronMonth").value.trim() || "*",
+        weekday: document.getElementById("cronWeekday").value.trim() || "*",
+        startDate: document.getElementById("startDate").value.trim(),
+        logPath: document.getElementById("logPath").value.trim() || "/tmp/nextcloud-filesystem.log",
+        configPath: document.getElementById("configPath").value.trim(),
+        retentionDays: document.getElementById("retentionDays").value.trim() || "30",
+        sourcePath: document.getElementById("sourcePath").value.trim(),
+        destinationPath: document.getElementById("destinationPath").value.trim(),
+        namePattern: document.getElementById("namePattern").value.trim() || "*",
+        splitMode: document.getElementById("splitMode").value,
+        splitValue: document.getElementById("splitValue").value.trim() || "100M",
+        splitPrefix: document.getElementById("splitPrefix").value.trim() || "chunk_"
+      };
+    }
+
+    function buildCommand(values) {
+      const logRedirect = `>> ${shellQuote(values.logPath)} 2>&1`;
+
+      if (values.mode === "checkup") {
+        return `python3 /Users/tinyos/devel_opment/BerePi/apps/nextcloud/filesystem/checkup.py ${shellQuote(values.configPath)} ${logRedirect}`;
+      }
+
+      if (values.mode === "cleanup-dry") {
+        return `python3 /Users/tinyos/devel_opment/BerePi/apps/nextcloud/filesystem/cleanup.py ${shellQuote(values.configPath)} --days ${values.retentionDays} --dry-run ${logRedirect}`;
+      }
+
+      if (values.mode === "cleanup-exec") {
+        return `printf 'confirm\\n' | python3 /Users/tinyos/devel_opment/BerePi/apps/nextcloud/filesystem/cleanup.py ${shellQuote(values.configPath)} --days ${values.retentionDays} --execute ${logRedirect}`;
+      }
+
+      if (values.mode === "move") {
+        return `find ${shellQuote(values.sourcePath)} -type f -name ${shellQuote(values.namePattern)} -mtime +${values.retentionDays} -print0 | xargs -0 -I{} mv "{}" ${shellQuote(values.destinationPath)}/ ${logRedirect}`;
+      }
+
+      const splitFlag = values.splitMode === "lines" ? `-l ${values.splitValue}` : `-b ${values.splitValue}`;
+      return `mkdir -p ${shellQuote(values.destinationPath)} && split ${splitFlag} ${shellQuote(values.sourcePath)} ${shellQuote(values.destinationPath.replace(/\/$/, "") + "/" + values.splitPrefix)} && echo "split completed" ${logRedirect}`;
+    }
+
+    function buildDescription(values) {
+      const lines = [];
+      lines.push(`작업 이름: ${values.jobName}`);
+      if (values.startDate) {
+        lines.push(`기준 날짜 메모: ${values.startDate}`);
+      }
+
+      if (values.mode === "checkup") {
+        lines.push(`동작: checkup.py로 원격 Nextcloud 경로 상태를 점검합니다.`);
+        lines.push(`설정 파일: ${values.configPath}`);
+      } else if (values.mode === "cleanup-dry") {
+        lines.push(`동작: ${values.retentionDays}일보다 오래된 파일 삭제 후보를 미리보기만 수행합니다.`);
+        lines.push(`설정 파일: ${values.configPath}`);
+      } else if (values.mode === "cleanup-exec") {
+        lines.push(`동작: ${values.retentionDays}일보다 오래된 파일을 실제 삭제합니다.`);
+        lines.push(`설정 파일: ${values.configPath}`);
+        lines.push(`주의: 자동 실행을 위해 confirm 입력을 파이프로 전달합니다.`);
+      } else if (values.mode === "move") {
+        lines.push(`동작: ${values.sourcePath}에서 ${values.retentionDays}일보다 오래된 파일 중 ${values.namePattern} 패턴을 ${values.destinationPath}로 이동합니다.`);
+      } else {
+        lines.push(`동작: ${values.sourcePath} 파일을 ${values.splitMode === "lines" ? "라인 수" : "크기"} 기준 ${values.splitValue} 단위로 분할합니다.`);
+        lines.push(`출력 경로: ${values.destinationPath}`);
+        lines.push(`분할 접두어: ${values.splitPrefix}`);
+      }
+
+      lines.push(`로그 파일: ${values.logPath}`);
+      return lines.join("\n");
+    }
+
+    function buildCronLine(values, command) {
+      const schedule = `${values.minute} ${values.hour} ${values.day} ${values.month} ${values.weekday}`;
+      const wrapped = `${values.shellPath} -lc ${shellQuote(command)}`;
+      const comment = `# ${values.jobName}${values.startDate ? ` | start-date-note=${values.startDate}` : ""}`;
+      return `${comment}\n${schedule} ${wrapped}`;
+    }
+
+    function generate() {
+      const values = getValues();
+      const command = buildCommand(values);
+      const cronLine = buildCronLine(values, command);
+      const description = buildDescription(values);
+
+      outputEls.command.textContent = command;
+      outputEls.cron.textContent = cronLine;
+      outputEls.description.textContent = description;
+      outputEls.status.textContent = "명령과 crontab 라인을 생성했습니다. 경로와 보관 일수는 실제 운영 값인지 다시 확인하세요.";
+    }
+
+    async function copyText(text) {
+      if (!text.trim()) {
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+    }
+
+    document.getElementById("generateBtn").addEventListener("click", generate);
+    document.getElementById("copyCommandBtn").addEventListener("click", async () => {
+      await copyText(outputEls.command.textContent);
+      outputEls.status.textContent = "실행 명령을 클립보드에 복사했습니다.";
+    });
+    document.getElementById("copyCronBtn").addEventListener("click", async () => {
+      await copyText(outputEls.cron.textContent);
+      outputEls.status.textContent = "crontab 라인을 클립보드에 복사했습니다.";
+    });
+    actionType.addEventListener("change", updateVisibleFields);
+    cronPreset.addEventListener("change", applyPreset);
+
+    updateVisibleFields();
+    generate();
+  </script>
+</body>
+</html>
