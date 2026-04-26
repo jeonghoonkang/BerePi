@@ -51,6 +51,14 @@ WebDAV 프로토콜을 사용하는 Nextcloud 클라이언트 애플리케이션
 - **실행 방법**:
   - `python3 -m streamlit run apps/nextcloud/clipboardnextcloud.py`
   - 설정 파일을 기본값이 아닌 경로로 쓰려면 앱 실행 후 사이드바의 `Config path` 에서 변경
+- **macOS 앱 생성**:
+  - `chmod +x apps/nextcloud/create_clipboardnextcloud_app.sh`
+  - 기본적으로 `/Users/tinyos/devel_opment/venv/bin/python` 이 존재하면 그 Python을 사용
+  - `apps/nextcloud/create_clipboardnextcloud_app.sh --python /path/to/venv/bin/python`
+  - 기본 출력 경로는 `$HOME/Applications/ClipboardNextcloud.app`
+  - 다른 위치에 만들려면 `apps/nextcloud/create_clipboardnextcloud_app.sh --python /path/to/venv/bin/python "/원하는/경로/ClipboardNextcloud.app"`
+  - 생성된 앱은 전용 포트 `localhost:8517` 기준으로 Streamlit을 실행하고, 필요 시 `127.0.0.1:8517`로도 접속을 시도
+  - `--python` 을 생략하면 생성 시점의 `python3` 경로를 그대로 저장하므로, 개발용 virtual environment를 쓰려면 해당 venv의 Python 경로를 명시하는 것이 안전
 - **설정 파일**:
   - 기본 경로: `apps/nextcloud/input.conf`
   - 예시 섹션: `[target]`, `[settings]`
