@@ -18,9 +18,10 @@ PLATFORM="${PLATFORM:-auto}"
 OUTPUT_PATH=""
 
 usage() {
-  printf 'Usage: %s [--platform macos|windows|auto] [--python /path/to/python] [output_path]\n' "$0" >&2
+  printf 'Usage: %s [win] [--platform macos|windows|auto] [--python /path/to/python] [output_path]\n' "$0" >&2
   printf '  macOS   output default: $HOME/Applications/ClipboardNextcloud.app\n' >&2
   printf '  Windows output default: ./ClipboardNextcloud (launcher folder)\n' >&2
+  printf '  win     shorthand for --platform windows\n' >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       fi
       PLATFORM="$2"
       shift 2
+      ;;
+    win)
+      PLATFORM="windows"
+      shift
       ;;
     -h|--help)
       usage
@@ -209,15 +214,19 @@ EOF
 }
 
 create_windows_launcher() {
-  local launcher_dir bat_path ps1_path python_escaped target_escaped
+  local launcher_dir bat_path ps1_path shortcut_path python_escaped target_escaped launcher_dir_windows bat_path_windows shortcut_path_windows
   launcher_dir="${OUTPUT_PATH:-$SCRIPT_DIR/ClipboardNextcloud}"
   bat_path="$launcher_dir/ClipboardNextcloud.bat"
   ps1_path="$launcher_dir/ClipboardNextcloud.ps1"
+  shortcut_path="$launcher_dir/ClipboardNextcloud.lnk"
 
   mkdir -p "$launcher_dir"
 
   python_escaped=$(printf '%s' "$PYTHON_BIN" | sed "s/'/''/g")
   target_escaped=$(printf '%s' "$TARGET_SCRIPT" | sed "s/'/''/g")
+  launcher_dir_windows=$(printf '%s' "$launcher_dir" | sed 's#/#\\#g')
+  bat_path_windows=$(printf '%s' "$bat_path" | sed 's#/#\\#g')
+  shortcut_path_windows=$(printf '%s' "$shortcut_path" | sed 's#/#\\#g')
 
   cat > "$ps1_path" <<EOF
 \$ErrorActionPreference = "Stop"
@@ -271,8 +280,24 @@ set "SCRIPT_DIR=%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%ClipboardNextcloud.ps1"
 EOF
 
+  if command -v powershell >/dev/null 2>&1; then
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "
+      \$shell = New-Object -ComObject WScript.Shell;
+      \$shortcut = \$shell.CreateShortcut('$shortcut_path_windows');
+      \$shortcut.TargetPath = '$bat_path_windows';
+      \$shortcut.WorkingDirectory = '$launcher_dir_windows';
+      \$shortcut.Description = 'Launch ClipboardNextcloud';
+      \$shortcut.Save();
+    " >/dev/null 2>&1 || printf 'Warning: Windows shortcut creation failed, launcher files were still generated.\n' >&2
+  else
+    printf 'Warning: powershell command not found, skipped .lnk shortcut creation.\n' >&2
+  fi
+
   printf 'Created Windows launcher directory: %s\n' "$launcher_dir"
   printf 'Run this file on Windows: %s\n' "$bat_path"
+  if [[ -f "$shortcut_path" ]]; then
+    printf 'Created Windows shortcut: %s\n' "$shortcut_path"
+  fi
 }
 
 TARGET_PLATFORM="$(detect_platform)"
