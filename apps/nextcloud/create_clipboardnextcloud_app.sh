@@ -231,15 +231,61 @@ create_windows_launcher() {
   cat > "$ps1_path" <<EOF
 \$ErrorActionPreference = "Stop"
 
-\$pythonBin = '$python_escaped'
+\$configuredPythonBin = '$python_escaped'
 \$targetScript = '$target_escaped'
 \$port = 8517
 \$url = "http://localhost:\$port"
 \$logDir = Join-Path \$env:LOCALAPPDATA "ClipboardNextcloud\\Logs"
 \$pidFile = Join-Path \$logDir "streamlit.pid"
 \$logFile = Join-Path \$logDir "streamlit.log"
+\$scriptDir = Split-Path -Parent \$MyInvocation.MyCommand.Path
+\$targetScriptFull = [System.IO.Path]::GetFullPath((Join-Path \$scriptDir \$targetScript))
+\$pythonCandidates = @()
+
+if (\$configuredPythonBin) {
+  \$pythonCandidates += \$configuredPythonBin
+}
+\$pythonCandidates += @("python", "py")
+
+function Resolve-PythonPath {
+  param([string[]]\$Candidates)
+
+  foreach (\$candidate in \$Candidates) {
+    if (-not \$candidate) {
+      continue
+    }
+
+    if (Test-Path -LiteralPath \$candidate) {
+      return (Resolve-Path -LiteralPath \$candidate).Path
+    }
+
+    try {
+      \$resolved = Get-Command \$candidate -ErrorAction Stop
+      if (\$resolved -and \$resolved.Source) {
+        return \$resolved.Source
+      }
+    } catch {
+    }
+  }
+
+  return \$null
+}
 
 New-Item -ItemType Directory -Force -Path \$logDir | Out-Null
+
+if (-not (Test-Path -LiteralPath \$targetScriptFull)) {
+  Write-Host "Target script not found: \$targetScriptFull"
+  Write-Host "Please regenerate launcher with the correct script path."
+  exit 1
+}
+
+\$pythonBin = Resolve-PythonPath -Candidates \$pythonCandidates
+if (-not \$pythonBin) {
+  Write-Host "Python executable not found."
+  Write-Host "Checked configured path: \$configuredPythonBin"
+  Write-Host "Also tried command names: python, py"
+  exit 1
+}
 
 if (Test-Path \$pidFile) {
   \$existingPid = (Get-Content \$pidFile -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
@@ -254,7 +300,7 @@ if (Test-Path \$pidFile) {
 }
 
 \$streamlitProcess = Start-Process -FilePath \$pythonBin `
-  -ArgumentList "-m", "streamlit", "run", \$targetScript, "--server.port", "\$port", "--server.address", "localhost", "--server.headless", "true", "--browser.gatherUsageStats", "false" `
+  -ArgumentList "-m", "streamlit", "run", \$targetScriptFull, "--server.port", "\$port", "--server.address", "localhost", "--server.headless", "true", "--browser.gatherUsageStats", "false" `
   -RedirectStandardOutput \$logFile -RedirectStandardError \$logFile -PassThru
 
 \$streamlitProcess.Id | Set-Content -Path \$pidFile
