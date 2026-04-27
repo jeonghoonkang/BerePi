@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -11,44 +11,105 @@ DEFAULT_VENV_PYTHON="/Users/tinyos/devel_opment/venv/bin/python"
 if [[ -x "$DEFAULT_VENV_PYTHON" ]]; then
   PYTHON_BIN="${PYTHON_BIN:-$DEFAULT_VENV_PYTHON}"
 else
-  PYTHON_BIN="${PYTHON_BIN:-$(command -v python3)}"
+  PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || true)}"
 fi
 
-if [[ "${1:-}" == "--python" ]]; then
-  if [[ $# -lt 2 ]]; then
-    printf 'Usage: %s [--python /path/to/python] [output_app_path]\n' "$0" >&2
+PLATFORM="${PLATFORM:-auto}"
+OUTPUT_PATH=""
+
+usage() {
+  printf 'Usage: %s [--platform macos|windows|auto] [--python /path/to/python] [output_path]\n' "$0" >&2
+  printf '  macOS   output default: $HOME/Applications/ClipboardNextcloud.app\n' >&2
+  printf '  Windows output default: ./ClipboardNextcloud (launcher folder)\n' >&2
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --python)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 1
+      fi
+      PYTHON_BIN="$2"
+      shift 2
+      ;;
+    --platform)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 1
+      fi
+      PLATFORM="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      if [[ -n "$OUTPUT_PATH" ]]; then
+        usage
+        exit 1
+      fi
+      OUTPUT_PATH="$1"
+      shift
+      ;;
+  esac
+done
+
+detect_platform() {
+  local uname_out
+  uname_out="$(uname -s)"
+
+  case "$PLATFORM" in
+    macos) echo "macos" ;;
+    windows) echo "windows" ;;
+    auto)
+      if [[ "$uname_out" == "Darwin" ]]; then
+        echo "macos"
+      elif [[ "$uname_out" =~ (MINGW|MSYS|CYGWIN) ]] || [[ -n "${WINDIR:-}" ]]; then
+        echo "windows"
+      else
+        echo "macos"
+      fi
+      ;;
+    *)
+      printf 'Unsupported platform: %s\n' "$PLATFORM" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+ensure_python() {
+  if [[ -z "${PYTHON_BIN:-}" ]] || [[ ! -x "$PYTHON_BIN" ]]; then
+    printf 'Python executable not found or not executable: %s\n' "${PYTHON_BIN:-<empty>}" >&2
     exit 1
   fi
-  PYTHON_BIN="$2"
-  shift 2
-fi
 
-APP_NAME="ClipboardNextcloud.app"
-APP_DIR="${1:-$HOME/Applications/$APP_NAME}"
-CONTENTS_DIR="$APP_DIR/Contents"
-MACOS_DIR="$CONTENTS_DIR/MacOS"
-RESOURCES_DIR="$CONTENTS_DIR/Resources"
-ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
-ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
-LAUNCHER_PATH="$MACOS_DIR/clipboardnextcloud"
-PLIST_PATH="$CONTENTS_DIR/Info.plist"
+  if ! "$PYTHON_BIN" -c 'import streamlit, webdav3' >/dev/null 2>&1; then
+    printf 'Selected Python cannot import required packages: %s\n' "$PYTHON_BIN" >&2
+    printf 'Install dependencies in that environment or pass --python with the correct virtualenv interpreter.\n' >&2
+    exit 1
+  fi
+}
 
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-rm -rf "$ICONSET_DIR"
+create_macos_app() {
+  local app_name app_dir contents_dir macos_dir resources_dir iconset_dir icon_file launcher_path plist_path
+  app_name="ClipboardNextcloud.app"
+  app_dir="${OUTPUT_PATH:-$HOME/Applications/$app_name}"
+  contents_dir="$app_dir/Contents"
+  macos_dir="$contents_dir/MacOS"
+  resources_dir="$contents_dir/Resources"
+  iconset_dir="$resources_dir/AppIcon.iconset"
+  icon_file="$resources_dir/AppIcon.icns"
+  launcher_path="$macos_dir/clipboardnextcloud"
+  plist_path="$contents_dir/Info.plist"
 
-if [[ ! -x "$PYTHON_BIN" ]]; then
-  printf 'Python executable not found or not executable: %s\n' "$PYTHON_BIN" >&2
-  exit 1
-fi
+  mkdir -p "$macos_dir" "$resources_dir"
+  rm -rf "$iconset_dir"
 
-if ! "$PYTHON_BIN" -c 'import streamlit, webdav3' >/dev/null 2>&1; then
-  printf 'Selected Python cannot import required packages: %s\n' "$PYTHON_BIN" >&2
-  printf 'Install dependencies in that environment or pass --python with the correct virtualenv interpreter.\n' >&2
-  exit 1
-fi
-
-cat > "$LAUNCHER_PATH" <<EOF
-#!/bin/zsh
+  cat > "$launcher_path" <<EOF
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -98,9 +159,9 @@ open "\$URL"
 exit 0
 EOF
 
-chmod +x "$LAUNCHER_PATH"
+  chmod +x "$launcher_path"
 
-cat > "$PLIST_PATH" <<EOF
+  cat > "$plist_path" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -131,20 +192,97 @@ cat > "$PLIST_PATH" <<EOF
 </plist>
 EOF
 
-if [[ -f "$ICON_PNG" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
-  mkdir -p "$ICONSET_DIR"
-  for size in 16 32 128 256 512; do
-    sips --resampleHeightWidth "$size" "$size" "$ICON_PNG" --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null
-    retina_size=$((size * 2))
-    sips --resampleHeightWidth "$retina_size" "$retina_size" "$ICON_PNG" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null
-  done
-  if ! iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE" 2>/dev/null; then
-    printf 'Warning: custom icon generation failed, continuing with default app icon.\n' >&2
+  if [[ -f "$ICON_PNG" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+    mkdir -p "$iconset_dir"
+    for size in 16 32 128 256 512; do
+      sips --resampleHeightWidth "$size" "$size" "$ICON_PNG" --out "$iconset_dir/icon_${size}x${size}.png" >/dev/null
+      retina_size=$((size * 2))
+      sips --resampleHeightWidth "$retina_size" "$retina_size" "$ICON_PNG" --out "$iconset_dir/icon_${size}x${size}@2x.png" >/dev/null
+    done
+    if ! iconutil -c icns "$iconset_dir" -o "$icon_file" 2>/dev/null; then
+      printf 'Warning: custom icon generation failed, continuing with default app icon.\n' >&2
+    fi
+    rm -rf "$iconset_dir"
   fi
-  rm -rf "$ICONSET_DIR"
-fi
 
-printf 'Created %s\n' "$APP_DIR"
+  printf 'Created macOS app: %s\n' "$app_dir"
+}
+
+create_windows_launcher() {
+  local launcher_dir bat_path ps1_path python_escaped target_escaped
+  launcher_dir="${OUTPUT_PATH:-$SCRIPT_DIR/ClipboardNextcloud}"
+  bat_path="$launcher_dir/ClipboardNextcloud.bat"
+  ps1_path="$launcher_dir/ClipboardNextcloud.ps1"
+
+  mkdir -p "$launcher_dir"
+
+  python_escaped=$(printf '%s' "$PYTHON_BIN" | sed "s/'/''/g")
+  target_escaped=$(printf '%s' "$TARGET_SCRIPT" | sed "s/'/''/g")
+
+  cat > "$ps1_path" <<EOF
+\$ErrorActionPreference = "Stop"
+
+\$pythonBin = '$python_escaped'
+\$targetScript = '$target_escaped'
+\$port = 8517
+\$url = "http://localhost:\$port"
+\$logDir = Join-Path \$env:LOCALAPPDATA "ClipboardNextcloud\\Logs"
+\$pidFile = Join-Path \$logDir "streamlit.pid"
+\$logFile = Join-Path \$logDir "streamlit.log"
+
+New-Item -ItemType Directory -Force -Path \$logDir | Out-Null
+
+if (Test-Path \$pidFile) {
+  \$existingPid = (Get-Content \$pidFile -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
+  if (\$existingPid) {
+    \$existingProcess = Get-Process -Id \$existingPid -ErrorAction SilentlyContinue
+    if (\$existingProcess) {
+      Start-Process \$url
+      exit 0
+    }
+  }
+  Remove-Item \$pidFile -ErrorAction SilentlyContinue
+}
+
+\$streamlitProcess = Start-Process -FilePath \$pythonBin `
+  -ArgumentList "-m", "streamlit", "run", \$targetScript, "--server.port", "\$port", "--server.address", "localhost", "--server.headless", "true", "--browser.gatherUsageStats", "false" `
+  -RedirectStandardOutput \$logFile -RedirectStandardError \$logFile -PassThru
+
+\$streamlitProcess.Id | Set-Content -Path \$pidFile
+
+for (\$i = 0; \$i -lt 30; \$i++) {
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri \$url -TimeoutSec 1 | Out-Null
+    Start-Process \$url
+    exit 0
+  } catch {
+    Start-Sleep -Seconds 1
+  }
+}
+
+Start-Process \$url
+exit 0
+EOF
+
+  cat > "$bat_path" <<EOF
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%ClipboardNextcloud.ps1"
+EOF
+
+  printf 'Created Windows launcher directory: %s\n' "$launcher_dir"
+  printf 'Run this file on Windows: %s\n' "$bat_path"
+}
+
+TARGET_PLATFORM="$(detect_platform)"
+ensure_python
+
+case "$TARGET_PLATFORM" in
+  macos) create_macos_app ;;
+  windows) create_windows_launcher ;;
+esac
+
 printf 'Target script: %s\n' "$TARGET_SCRIPT"
 printf 'Python executable: %s\n' "$PYTHON_BIN"
 printf '(파이썬 경로를 변경하려면) 아래 PYTHON_BIN 변수를 변경하세요.\n'
