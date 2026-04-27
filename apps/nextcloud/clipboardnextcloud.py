@@ -422,6 +422,12 @@ def build_dated_remote_root(root: str, created_at: datetime) -> str:
     return posixpath.join(root, date_dir) if root else date_dir
 
 
+def build_file_transfer_root(root: str, created_at: datetime) -> str:
+    """Return the dated upload root for file-transfer operations."""
+
+    return build_dated_remote_root(root, created_at)
+
+
 def build_markdown(payload: Dict[str, Any], created_at: datetime, device_name: str) -> str:
     """Build markdown content from clipboard payload."""
     return build_markdown_content(
@@ -598,7 +604,7 @@ def upload_selected_file(config_path: str, filename: str, file_bytes: bytes) -> 
     section, root, verify_ssl = load_file_transfer_target(config_path)
     client = build_client(section, verify_ssl)
     created_at = datetime.now().astimezone()
-    dated_root = build_dated_remote_root(root, created_at)
+    dated_root = build_file_transfer_root(root, created_at)
     ensure_remote_dir(client, dated_root)
 
     remote_name = Path(filename).name or "uploaded_file"
@@ -683,7 +689,7 @@ def upload_directory_tree(config_path: str, local_dir: str) -> Tuple[str, str, i
         raise NotADirectoryError(f"Local path is not a directory: {source_dir}")
 
     created_at = datetime.now().astimezone()
-    dated_root = build_dated_remote_root(root, created_at)
+    dated_root = build_file_transfer_root(root, created_at)
     remote_base_dir = posixpath.join(dated_root, source_dir.name) if dated_root else source_dir.name
     ensure_remote_dir(client, remote_base_dir)
 
@@ -1087,7 +1093,10 @@ def main() -> None:
         file_transfer_error: str | None = None
         try:
             _, file_transfer_root, _ = load_file_transfer_target(config_path)
-            file_transfer_root_display = file_transfer_root or "/upload"
+            file_transfer_root_display = build_file_transfer_root(
+                file_transfer_root,
+                datetime.now().astimezone(),
+            ) or "/upload"
         except Exception as exc:
             file_transfer_root_display = "/upload"
             file_transfer_error = str(exc)
