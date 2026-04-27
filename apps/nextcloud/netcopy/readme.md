@@ -23,6 +23,7 @@
 - WebDAV 기반 서버 간 파일 복사
 - 로컬 파일/디렉토리에서 Nextcloud로 업로드
 - 디렉토리 구조 자동 생성
+- `copytowebav.py` 대상 Nextcloud 루트 아래에 전송 날짜 디렉토리(`YYYY-MMDD`, 예: `2026-0427`) 자동 생성
 - 파일 크기, ETag, 수정 시간 비교를 통한 증분 복사
 - 전송 대상 파일 개수와 총 용량 출력
 - 전송 완료 파일 개수와 누적 용량 출력
@@ -193,6 +194,10 @@ python3 copytowebav.py /path/to/copytowebav.conf --conn_test
 8. 업로드 직후 대상 파일을 다시 다운로드해 원본과 동일한지 검증합니다.
 9. 누적 완료 수량과 용량을 출력합니다.
 10. 모든 작업이 끝나면 성공, 실패, 전송 없음 상태를 컬러로 출력합니다.
+
+`copytowebav.py`는 destination root 바로 아래가 아니라, 전송 시점 기준 날짜 디렉토리 `YYYY-MMDD`를 만든 뒤 그 아래에 파일을 복사합니다. 예를 들어 destination root가 `Backup/Photos`면 실제 업로드 위치는 `Backup/Photos/2026-0427/...` 형태가 됩니다.
+
+`txtoserver.py`는 날짜 디렉토리를 만들지 않고 destination root 바로 아래에 원래 상대 경로대로 복사합니다.
 
 `copytowebav.py`는 흐름이 거의 같지만, source를 WebDAV 대신 로컬 파일 시스템에서 읽습니다. 파일 하나를 지정하면 그 파일만 올리고, 디렉토리를 지정하면 하위 파일을 재귀적으로 탐색해 상대 경로를 유지한 채 업로드합니다.
 

@@ -425,6 +425,7 @@ def main() -> int:
     src_map = build_info_map(src_entries)
 
     print("Scanning destination server...")
+    ensure_dirs(dest_client, dest_root)
     dest_entries = list_tree(dest_client, dest_root)
     dest_map = build_info_map(dest_entries)
 

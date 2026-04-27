@@ -45,7 +45,8 @@ WebDAV 프로토콜을 사용하는 Nextcloud 클라이언트 애플리케이션
 - **주요 특징**:
   - 현재 클립보드 내용 미리보기
   - 이미지 클립보드를 PNG base64 형태로 Markdown에 포함
-  - 대상 Nextcloud 디렉토리에 `YYYYMMDD_HHMMSS_devicename_clipboard.md` 파일 생성
+  - 대상 Nextcloud 루트 아래에 날짜 디렉토리 `YYYY-MMDD`(예: `2026-0427`)를 만든 뒤 그 안에 업로드
+  - 클립보드 전송 시 `YYYYMMDD_HHMMSS_devicename_clipboard.md` 파일 생성
   - `input.conf` 의 `[target]` 또는 `[destination]` 섹션 사용
   - 필요한 패키지(`streamlit`, `webdavclient3`)가 없으면 실행 중 자동 설치 시도
 - **실행 방법**:

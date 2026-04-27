@@ -409,6 +409,19 @@ def ensure_remote_dir(client: Any, remote_dir: str) -> None:
             client.mkdir(current)
 
 
+def build_date_directory_name(created_at: datetime) -> str:
+    """Return the dated directory name used for uploads."""
+
+    return created_at.strftime("%Y-%m%d")
+
+
+def build_dated_remote_root(root: str, created_at: datetime) -> str:
+    """Append the dated directory under the configured remote root."""
+
+    date_dir = build_date_directory_name(created_at)
+    return posixpath.join(root, date_dir) if root else date_dir
+
+
 def build_markdown(payload: Dict[str, Any], created_at: datetime, device_name: str) -> str:
     """Build markdown content from clipboard payload."""
     return build_markdown_content(
@@ -507,13 +520,14 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
 
     section, root, verify_ssl = load_target_section(config_path)
     client = build_client(section, verify_ssl)
-    ensure_remote_dir(client, root)
 
     created_at = datetime.now().astimezone()
+    dated_root = build_dated_remote_root(root, created_at)
+    ensure_remote_dir(client, dated_root)
     device_name = detect_device_name()
     timestamp = created_at.strftime('%Y%m%d_%H%M%S')
     markdown_filename = f"{timestamp}_{device_name}_clipboard.md"
-    remote_path = posixpath.join(root, markdown_filename) if root else markdown_filename
+    remote_path = posixpath.join(dated_root, markdown_filename) if dated_root else markdown_filename
 
     text = payload.get("text")
     file_urls = payload.get("file_urls")
@@ -532,7 +546,7 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
     if isinstance(image_base64, str) and image_base64:
         image_prefix = "image_" if image_only else ""
         image_filename = f"{image_prefix}{timestamp}_{device_name}_clipboard.png"
-        image_remote_path = posixpath.join(root, image_filename) if root else image_filename
+        image_remote_path = posixpath.join(dated_root, image_filename) if dated_root else image_filename
         try:
             image_bytes = base64.b64decode(image_base64)
             with tempfile.NamedTemporaryFile(
@@ -583,10 +597,12 @@ def upload_selected_file(config_path: str, filename: str, file_bytes: bytes) -> 
 
     section, root, verify_ssl = load_file_transfer_target(config_path)
     client = build_client(section, verify_ssl)
-    ensure_remote_dir(client, root)
+    created_at = datetime.now().astimezone()
+    dated_root = build_dated_remote_root(root, created_at)
+    ensure_remote_dir(client, dated_root)
 
     remote_name = Path(filename).name or "uploaded_file"
-    remote_path = posixpath.join(root, remote_name) if root else remote_name
+    remote_path = posixpath.join(dated_root, remote_name) if dated_root else remote_name
 
     temp_path: str | None = None
     try:
@@ -666,7 +682,9 @@ def upload_directory_tree(config_path: str, local_dir: str) -> Tuple[str, str, i
     if not source_dir.is_dir():
         raise NotADirectoryError(f"Local path is not a directory: {source_dir}")
 
-    remote_base_dir = posixpath.join(root, source_dir.name) if root else source_dir.name
+    created_at = datetime.now().astimezone()
+    dated_root = build_dated_remote_root(root, created_at)
+    remote_base_dir = posixpath.join(dated_root, source_dir.name) if dated_root else source_dir.name
     ensure_remote_dir(client, remote_base_dir)
 
     uploaded_dir_count = 0

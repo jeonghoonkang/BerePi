@@ -138,6 +138,16 @@ def normalize_local_path(path: str) -> str:
     return os.path.abspath(os.path.expanduser(path))
 
 
+def build_date_directory_name(created_at: Optional[dt.datetime] = None) -> str:
+    timestamp = created_at or dt.datetime.now().astimezone()
+    return timestamp.strftime("%Y-%m%d")
+
+
+def build_dated_root(root: str, created_at: Optional[dt.datetime] = None) -> str:
+    date_dir = build_date_directory_name(created_at)
+    return posixpath.join(root, date_dir) if root else date_dir
+
+
 def parse_time(value: Optional[str]) -> Optional[dt.datetime]:
     if not value:
         return None
@@ -399,7 +409,8 @@ def main() -> int:
     verify_ssl = config.getboolean("settings", "verify_ssl", fallback=True)
     dest_section = config["destination"]
     dest_root = normalize_root(dest_section.get("root", ""))
-    validate_destination_path(dest_section, dest_root)
+    transfer_root = build_dated_root(dest_root)
+    validate_destination_path(dest_section, transfer_root)
     dest_client = build_client(dest_section, verify_ssl)
 
     if conn_test:
@@ -417,7 +428,8 @@ def main() -> int:
     print(f"Found {len(src_entries)} local files in source.")
 
     print("Scanning destination server...")
-    dest_entries = list_tree(dest_client, dest_root)
+    ensure_dirs(dest_client, transfer_root)
+    dest_entries = list_tree(dest_client, transfer_root)
     dest_map = build_info_map(dest_entries)
 
     progress = Progress()
@@ -428,7 +440,7 @@ def main() -> int:
 
     for entry in src_entries:
         relative_path = entry["relative_path"]
-        dest_path = posixpath.join(dest_root, relative_path) if dest_root else relative_path
+        dest_path = posixpath.join(transfer_root, relative_path) if transfer_root else relative_path
         src_info = (int(entry["size"]), None, entry["modified"])
         dest_info = dest_map.get(normalize_remote_path(dest_path))
         if should_upload(src_info, dest_info):
@@ -439,7 +451,7 @@ def main() -> int:
     for entry in src_entries:
         local_path = str(entry["path"])
         relative_path = str(entry["relative_path"])
-        dest_path = posixpath.join(dest_root, relative_path) if dest_root else relative_path
+        dest_path = posixpath.join(transfer_root, relative_path) if transfer_root else relative_path
         src_info = (int(entry["size"]), None, entry["modified"])
         dest_info = dest_map.get(normalize_remote_path(dest_path))
         if should_upload(src_info, dest_info):
