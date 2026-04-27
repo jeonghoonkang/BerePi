@@ -1158,16 +1158,30 @@ def main() -> None:
 
         with left_col:
             st.subheader("파일 선택")
-            uploaded_file = st.file_uploader("업로드할 파일", label_visibility="collapsed")
-            if uploaded_file is not None:
-                st.write(f"파일명: {uploaded_file.name}")
-                st.write(f"크기: {uploaded_file.size:,} bytes")
-                if uploaded_file.type:
-                    st.write(f"MIME: {uploaded_file.type}")
-                if uploaded_file.type and uploaded_file.type.startswith("image/"):
-                    st.image(uploaded_file, caption=uploaded_file.name)
+            uploaded_files = st.file_uploader(
+                "업로드할 파일",
+                accept_multiple_files=True,
+                label_visibility="collapsed",
+            ) or []
+            too_many_files = len(uploaded_files) > 10
+            selected_files = uploaded_files[:10]
+            if too_many_files:
+                st.error("파일은 한 번에 최대 10개까지 선택할 수 있습니다.")
+
+            if selected_files:
+                total_selected_size = sum(file.size for file in selected_files)
+                st.write(f"선택 파일 수: {len(selected_files)}")
+                st.write(f"총 크기: {bytes_to_text(total_selected_size)}")
+                for index, uploaded_file in enumerate(selected_files, start=1):
+                    st.write(f"{index}. {uploaded_file.name} ({uploaded_file.size:,} bytes)")
+                    if uploaded_file.type:
+                        st.caption(f"MIME: {uploaded_file.type}")
+                if len(selected_files) == 1:
+                    uploaded_file = selected_files[0]
+                    if uploaded_file.type and uploaded_file.type.startswith("image/"):
+                        st.image(uploaded_file, caption=uploaded_file.name)
             else:
-                st.info("전송할 파일을 선택해 주세요.")
+                st.info("전송할 파일을 최대 10개까지 선택해 주세요.")
 
             st.divider()
             st.subheader("디렉토리 스캔")
@@ -1194,14 +1208,21 @@ def main() -> None:
 
         with right_col:
             st.subheader("업로드")
-            if uploaded_file is not None:
-                current_file_signature = f"{uploaded_file.name}:{uploaded_file.size}"
+            if selected_files and not too_many_files:
+                current_file_signature = "|".join(
+                    f"{uploaded_file.name}:{uploaded_file.size}"
+                    for uploaded_file in selected_files
+                )
                 file_confirmed = st.session_state.file_transfer_confirmed_file == current_file_signature
                 st.code(
                     "\n".join(
                         [
-                            f"filename: {uploaded_file.name}",
-                            f"size: {uploaded_file.size} bytes",
+                            f"file_count: {len(selected_files)}",
+                            f"total_size: {bytes_to_text(sum(file.size for file in selected_files))}",
+                            *[
+                                f"file_{index}: {uploaded_file.name} ({uploaded_file.size} bytes)"
+                                for index, uploaded_file in enumerate(selected_files, start=1)
+                            ],
                             f"target_root: {file_transfer_root_display}",
                         ]
                     ),
@@ -1215,19 +1236,27 @@ def main() -> None:
                     st.warning("파일 업로드 확인이 완료되었습니다. 아래 버튼으로 실제 전송을 실행합니다.")
                     if st.button("파일 업로드 실행", type="primary", use_container_width=True):
                         try:
-                            remote_path, remote_url = upload_selected_file(
-                                config_path,
-                                uploaded_file.name,
-                                uploaded_file.getvalue(),
-                            )
+                            uploaded_results = [
+                                upload_selected_file(
+                                    config_path,
+                                    uploaded_file.name,
+                                    uploaded_file.getvalue(),
+                                )
+                                for uploaded_file in selected_files
+                            ]
                         except Exception as exc:  # pragma: no cover - UI error path
                             st.exception(exc)
                         else:
                             st.session_state.file_transfer_confirmed_file = ""
-                            st.success(f"업로드 완료: {remote_path}")
-                            st.markdown(f"[원격 URL 열기]({remote_url})")
+                            st.success(f"업로드 완료: {len(uploaded_results)}개 파일")
+                            for remote_path, remote_url in uploaded_results:
+                                st.write(remote_path)
+                                st.markdown(f"[원격 URL 열기]({remote_url})")
             else:
-                st.caption("파일을 선택하면 업로드 정보가 표시됩니다.")
+                if too_many_files:
+                    st.caption("선택 파일 수를 10개 이하로 줄이면 업로드 정보가 표시됩니다.")
+                else:
+                    st.caption("파일을 선택하면 업로드 정보가 표시됩니다.")
 
             st.divider()
             st.subheader("디렉토리 업로드")
