@@ -18,10 +18,9 @@ PLATFORM="${PLATFORM:-auto}"
 OUTPUT_PATH=""
 
 usage() {
-  printf 'Usage: %s [win] [--platform macos|windows|auto] [--python /path/to/python] [output_path]\n' "$0" >&2
+  printf 'Usage: %s [--platform macos|windows|auto] [--python /path/to/python] [output_path]\n' "$0" >&2
   printf '  macOS   output default: $HOME/Applications/ClipboardNextcloud.app\n' >&2
   printf '  Windows output default: ./ClipboardNextcloud (launcher folder)\n' >&2
-  printf '  win     shorthand for --platform windows\n' >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -41,10 +40,6 @@ while [[ $# -gt 0 ]]; do
       fi
       PLATFORM="$2"
       shift 2
-      ;;
-    win)
-      PLATFORM="windows"
-      shift
       ;;
     -h|--help)
       usage
