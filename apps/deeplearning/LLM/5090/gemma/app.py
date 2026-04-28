@@ -87,7 +87,7 @@ def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], i
     url = f"{host.rstrip('/')}/api/chat"
     payload = {
         "model": model,
-        "stream": False,
+        "stream": True,
         "messages": [
             {
                 "role": "system",
@@ -104,10 +104,28 @@ def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], i
         ],
     }
 
-    response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+    response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT, stream=True)
     response.raise_for_status()
-    data = response.json()
-    return data.get("message", {}).get("content", "").strip()
+    answer_parts: list[str] = []
+
+    for raw_line in response.iter_lines():
+        if not raw_line:
+            continue
+
+        if st.session_state.get("query_cancel_requested"):
+            response.close()
+            raise RuntimeError("Query stopped by user.")
+
+        event = json.loads(raw_line.decode("utf-8"))
+        message = event.get("message", {})
+        content = message.get("content", "")
+        if content:
+            answer_parts.append(content)
+
+        if event.get("done"):
+            break
+
+    return "".join(answer_parts).strip()
 
 
 def fetch_installed_models(host: str) -> dict[str, dict]:
@@ -445,6 +463,10 @@ def main() -> None:
 
     if "history" not in st.session_state:
         st.session_state.history = []
+    if "query_cancel_requested" not in st.session_state:
+        st.session_state.query_cancel_requested = False
+    if "last_elapsed_seconds" not in st.session_state:
+        st.session_state.last_elapsed_seconds = None
 
     prompt = st.text_area(
         "Prompt",
@@ -452,7 +474,20 @@ def main() -> None:
         placeholder="질문을 입력하세요. 엑셀 파일이나 이미지를 함께 올리면 같이 분석합니다.",
     )
     query_disabled = not prompt.strip()
-    query_submitted = st.button("Query Gemma", type="primary", disabled=query_disabled)
+    action_col, stop_col, elapsed_col = st.columns([1.2, 1.0, 1.8])
+    with action_col:
+        query_submitted = st.button("Query Gemma", type="primary", disabled=query_disabled, use_container_width=True)
+    with stop_col:
+        stop_requested = st.button("Stop", disabled=query_disabled, use_container_width=True)
+    with elapsed_col:
+        elapsed_label = "Elapsed time: -"
+        if st.session_state.last_elapsed_seconds is not None:
+            elapsed_label = f"Elapsed time: {st.session_state.last_elapsed_seconds:.2f} seconds"
+        st.markdown(f"**{elapsed_label}**")
+
+    if stop_requested:
+        st.session_state.query_cancel_requested = True
+        st.warning("Stop requested. The current query will stop when the next response chunk arrives.")
 
     uploaded_excels = st.file_uploader(
         "Excel files",
@@ -498,9 +533,11 @@ def main() -> None:
     if query_submitted:
         with st.spinner("Gemma is generating a response..."):
             try:
+                st.session_state.query_cancel_requested = False
                 start_time = time.perf_counter()
                 answer = call_ollama(host, model, prompt, excel_contexts, image_payloads)
                 elapsed_seconds = time.perf_counter() - start_time
+                st.session_state.last_elapsed_seconds = elapsed_seconds
                 st.session_state.history.append(
                     {
                         "prompt": prompt,
@@ -510,7 +547,11 @@ def main() -> None:
                     }
                 )
                 st.success("Response received")
-                st.info(f"Elapsed time: {elapsed_seconds:.2f} seconds")
+                st.rerun()
+            except RuntimeError as exc:
+                elapsed_seconds = time.perf_counter() - start_time
+                st.session_state.last_elapsed_seconds = elapsed_seconds
+                st.warning(str(exc))
             except requests.HTTPError as exc:
                 detail = exc.response.text if exc.response is not None else str(exc)
                 st.error(f"Ollama request failed: {detail}")
@@ -518,6 +559,8 @@ def main() -> None:
                 st.error(f"Failed to connect to Ollama at {host}: {exc}")
             except Exception as exc:
                 st.error(f"Unexpected error: {exc}")
+            finally:
+                st.session_state.query_cancel_requested = False
 
     if st.session_state.history:
         st.subheader("History")
