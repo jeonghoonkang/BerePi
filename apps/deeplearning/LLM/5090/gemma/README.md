@@ -1,11 +1,13 @@
 # Gemma 3 4B Streamlit App for RTX 5090
 
 This app runs a Streamlit UI on port `2280` and sends prompts to a local
-Ollama server using the `gemma3:4b` model by default.
+Ollama server using the `gemma3:4b` model by default. It can also use
+`qwen2.5-coder:7b` for coding-oriented prompts and tool calling.
 
 ## Features
 
 - Text chat with `gemma3:4b`
+- Optional coding model support with `qwen2.5-coder:7b`
 - Excel upload support for `.xlsx` and `.xls`
 - Image upload support for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`
 - External access with Streamlit bound to `0.0.0.0:2280`
@@ -46,6 +48,12 @@ ollama pull gemma3:4b
 ```
 
 You can also download a larger Gemma model directly from the Streamlit sidebar.
+
+For coding and file-tool prompts, you can also download:
+
+```bash
+ollama pull qwen2.5-coder:7b
+```
 
 ## Run
 

@@ -22,11 +22,13 @@ MAX_PREVIEW_ROWS = 20
 APP_DIR = Path(__file__).resolve().parent
 WORKSPACE_DIR = APP_DIR / "workspace"
 MAX_TOOL_FILE_BYTES = 1_000_000
-GEMMA_MODEL_OPTIONS = [
+MAX_TOOL_ROUNDS = 8
+SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
     "gemma3:12b",
     "gemma3:27b",
+    "qwen2.5-coder:7b",
 ]
 
 MODEL_MEMORY_GUIDE_GB = {
@@ -34,6 +36,7 @@ MODEL_MEMORY_GUIDE_GB = {
     "gemma3:4b": 8,
     "gemma3:12b": 20,
     "gemma3:27b": 40,
+    "qwen2.5-coder:7b": 8,
 }
 
 FILE_TOOLS = [
@@ -312,7 +315,7 @@ def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], i
         },
     ]
 
-    while True:
+    for _ in range(MAX_TOOL_ROUNDS):
         if st.session_state.get("query_cancel_requested"):
             raise RuntimeError("Query stopped by user.")
 
@@ -355,6 +358,8 @@ def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], i
                     "content": str(result),
                 }
             )
+
+    raise RuntimeError("Tool calling stopped after reaching the maximum tool round limit.")
 
 
 def fetch_installed_models(host: str) -> dict[str, dict]:
@@ -569,7 +574,7 @@ def render_sidebar() -> tuple[str, str]:
 
     installed_model_map = st.session_state.get("installed_models", {})
     installed_models = sorted(installed_model_map.keys())
-    model_candidates = list(dict.fromkeys(GEMMA_MODEL_OPTIONS + installed_models))
+    model_candidates = list(dict.fromkeys(SUPPORTED_MODEL_OPTIONS + installed_models))
     gpu_name, gpu_memory_gib, gpu_error = detect_gpu_info()
     recommended_model, compatible_models = recommend_models_for_gpu(gpu_memory_gib)
 
@@ -634,7 +639,7 @@ def render_sidebar() -> tuple[str, str]:
         st.rerun()
 
     st.sidebar.markdown("Recommended model options")
-    for option in GEMMA_MODEL_OPTIONS:
+    for option in SUPPORTED_MODEL_OPTIONS:
         required_gb = MODEL_MEMORY_GUIDE_GB.get(option)
         label = f"{option}  ({required_gb} GiB+ recommended)" if required_gb else option
         st.sidebar.code(label)
