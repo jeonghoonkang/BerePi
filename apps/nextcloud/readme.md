@@ -53,6 +53,8 @@ WebDAV 프로토콜을 사용하는 Nextcloud 클라이언트 애플리케이션
   - 클립보드 전송 시 `YYYYMMDD_HHMMSS_devicename_clipboard.md` 파일 생성
   - `input.conf` 의 `[target]` 또는 `[destination]` 섹션 사용
   - 필요한 패키지(`streamlit`, `webdavclient3`)가 없으면 실행 중 자동 설치 시도
+  - Telegram bot 메시지를 트리거로 사용하여 클립보드 전송 자동 실행 가능
+  - 여러 PC에 같은 앱이 떠 있어도 같은 Telegram 트리거는 Nextcloud 공용 claim 경로를 사용해 한 번만 처리
 - **실행 방법**:
   - `python3 -m streamlit run apps/nextcloud/clipboardnextcloud.py`
   - 설정 파일을 기본값이 아닌 경로로 쓰려면 앱 실행 후 사이드바의 `Config path` 에서 변경
@@ -70,7 +72,91 @@ WebDAV 프로토콜을 사용하는 Nextcloud 클라이언트 애플리케이션
   - `--python` 을 생략하면 생성 시점의 `python3` 경로를 그대로 저장하므로, 개발용 virtual environment를 쓰려면 해당 venv의 Python 경로를 명시하는 것이 안전
 - **설정 파일**:
   - 기본 경로: `apps/nextcloud/input.conf`
-  - 예시 섹션: `[target]`, `[settings]`
+  - 예시 섹션: `[target]`, `[destination]`, `[settings]`, `[telegram]`
+
+##### Telegram bot 연결 방법
+`clipboardnextcloud.py` 는 Telegram bot 으로 들어온 특정 메시지를 감지하면 현재 PC의 클립보드를 즉시 Nextcloud 로 업로드할 수 있습니다.
+
+1. Telegram bot 생성
+   - Telegram 에서 `@BotFather` 를 열고 `/newbot` 실행
+   - bot 이름과 username 을 입력
+   - 발급된 `bot token` 을 복사
+
+2. bot 과 대화 시작
+   - 방금 만든 bot 과 1:1 대화창을 열고 `Start` 를 누르거나 아무 메시지나 1회 전송
+   - 그룹에서 쓰고 싶다면 bot 을 그룹에 초대한 뒤, 그 그룹에 메시지를 1회 전송
+
+3. `chat_id` 확인
+   - 브라우저에서 아래 URL 호출
+   ```text
+   https://api.telegram.org/bot<BOT_TOKEN>/getUpdates
+   ```
+   - 응답 JSON 에서:
+     - 1:1 대화는 `message.chat.id`
+     - 그룹은 음수 형태의 `message.chat.id`
+   - 이 값을 `allowed_chat_id` 에 넣음
+
+4. `input.conf` 에 Telegram 섹션 추가
+   - 예시:
+   ```ini
+   [target]
+   webdav_hostname = https://nextcloud.example.com
+   webdav_root = /remote.php/dav/files/username/
+   port = 443
+   username = your_id
+   password = your_password
+   root = clipboard
+
+   [destination]
+   webdav_hostname = https://nextcloud.example.com
+   webdav_root = /remote.php/dav/files/username/
+   port = 443
+   username = your_id
+   password = your_password
+   root = clipboard
+
+   [settings]
+   verify_ssl = true
+
+   [telegram]
+   enabled = true
+   bot_token = 123456789:ABCDEF_your_bot_token
+   allowed_chat_id = 123456789
+   trigger_text = /clipboard
+   poll_interval_seconds = 5
+   reply_on_success = true
+   ```
+
+5. 항목 설명
+   - `enabled`: Telegram 트리거 사용 여부
+   - `bot_token`: `@BotFather` 가 발급한 토큰
+   - `allowed_chat_id`: 허용할 단일 chat id
+   - `trigger_text`: 이 문자열과 정확히 일치하는 메시지가 들어오면 전송 실행
+   - `poll_interval_seconds`: Telegram polling 주기. 기본 5초
+   - `reply_on_success`: 업로드 성공 시 bot 이 결과 메시지를 다시 보낼지 여부
+
+6. 앱 실행
+   ```bash
+   python3 -m streamlit run apps/nextcloud/clipboardnextcloud.py --server.headless true
+   ```
+   - 앱이 실행 중일 때만 Telegram polling 이 동작
+   - `클립보드` 탭의 업로드 영역에서 Telegram 상태 버튼 색이 바뀌며 트리거를 확인 가능
+
+7. 동작 방식
+   - Telegram 에서 `trigger_text` 와 동일한 메시지를 bot 으로 전송
+   - 앱이 메시지를 감지하면 현재 PC 클립보드를 읽고 Nextcloud 로 업로드
+   - 성공 시 Nextcloud 경로와 URL 을 bot 으로 회신 가능
+
+8. 여러 컴퓨터에서 동시 사용 시
+   - 여러 PC 에 같은 `bot_token` 과 `allowed_chat_id` 를 설정해도 같은 Telegram 메시지는 한 번만 처리되도록 구현됨
+   - 내부적으로 Nextcloud 의 `root/.telegram_trigger_claims/<chat_id>/<update_id>` 경로를 사용해 먼저 잡은 인스턴스만 업로드 수행
+   - 단, 어떤 PC 가 먼저 처리할지는 각 인스턴스의 polling 타이밍에 따라 달라짐
+   - 특정 PC 만 반응하게 하려면 `trigger_text` 를 기기별로 다르게 두는 방식이 가장 단순함
+
+9. 주의사항
+   - Telegram 트리거는 현재 앱이 떠 있는 PC 의 클립보드를 업로드함
+   - 앱을 처음 띄운 직전의 오래된 Telegram 메시지는 재실행하지 않도록 offset 상태를 `apps/nextcloud/resource/telegram_state.json` 에 저장
+   - macOS 에서 클립보드 이미지/파일 URL 감지는 시스템 권한 상태에 영향을 받을 수 있음
 
 ### 3. Docker 구성 (compose_script/)
 Docker Compose를 이용한 Nextcloud 서버 설치 및 설정

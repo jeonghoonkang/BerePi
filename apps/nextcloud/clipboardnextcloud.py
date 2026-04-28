@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import configparser
+import hashlib
 import importlib.util
 import json
 import os
@@ -14,9 +15,12 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 
 def ensure_packages(packages: Dict[str, str]) -> None:
@@ -57,9 +61,18 @@ APP_TITLE = "Clipboard to Nextcloud"
 DEFAULT_CONFIG = CURRENT_DIR / "input.conf"
 TITLE_IMAGE_PATH = RESOURCE_DIR / "clipboard_title_icon.png"
 CONFIG_HISTORY_PATH = RESOURCE_DIR / "config_path_history.json"
+TELEGRAM_STATE_PATH = RESOURCE_DIR / "telegram_state.json"
 CONFIG_HISTORY_LIMIT = 10
 SUPPORTED_TARGET_SECTIONS = ("target", "destination")
 EDITABLE_CONFIG_KEYS = ("webdav_hostname", "webdav_root", "port", "username", "password", "root")
+TELEGRAM_CONFIG_KEYS = (
+    "enabled",
+    "bot_token",
+    "allowed_chat_id",
+    "trigger_text",
+    "poll_interval_seconds",
+    "reply_on_success",
+)
 
 
 def sanitize_filename(value: str) -> str:
@@ -302,12 +315,20 @@ def load_config_parser(config_path: str) -> configparser.ConfigParser:
 def ensure_config_sections(parser: configparser.ConfigParser) -> None:
     """Create the editable sections when they do not exist."""
 
-    for section_name in ("source", "destination", "settings"):
+    for section_name in ("source", "destination", "settings", "telegram"):
         if not parser.has_section(section_name):
             parser.add_section(section_name)
 
     if not parser.has_option("settings", "verify_ssl"):
         parser.set("settings", "verify_ssl", "true")
+    if not parser.has_option("telegram", "enabled"):
+        parser.set("telegram", "enabled", "false")
+    if not parser.has_option("telegram", "trigger_text"):
+        parser.set("telegram", "trigger_text", "/clipboard")
+    if not parser.has_option("telegram", "poll_interval_seconds"):
+        parser.set("telegram", "poll_interval_seconds", "5")
+    if not parser.has_option("telegram", "reply_on_success"):
+        parser.set("telegram", "reply_on_success", "true")
 
 
 def save_config_parser(config_path: str, parser: configparser.ConfigParser) -> None:
@@ -369,6 +390,233 @@ def remember_config_path(config_path: str) -> List[str]:
     save_config_path_history(updated_history)
     st.session_state.config_path_history = updated_history
     return updated_history
+
+
+def load_telegram_state() -> Dict[str, int]:
+    """Load persisted Telegram polling offsets."""
+
+    if not TELEGRAM_STATE_PATH.exists():
+        return {}
+
+    try:
+        state = json.loads(TELEGRAM_STATE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    if not isinstance(state, dict):
+        return {}
+
+    sanitized: Dict[str, int] = {}
+    for key, value in state.items():
+        if isinstance(key, str) and isinstance(value, int):
+            sanitized[key] = value
+    return sanitized
+
+
+def save_telegram_state(state: Dict[str, int]) -> None:
+    """Persist Telegram polling offsets."""
+
+    RESOURCE_DIR.mkdir(parents=True, exist_ok=True)
+    TELEGRAM_STATE_PATH.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def get_telegram_state_key(config_path: str, allowed_chat_id: str, trigger_text: str) -> str:
+    """Build a stable state key for one Telegram trigger configuration."""
+
+    fingerprint = hashlib.sha256(
+        f"{config_path}|{allowed_chat_id}|{trigger_text}".encode("utf-8")
+    ).hexdigest()
+    return fingerprint
+
+
+def load_telegram_settings(config_path: str) -> Dict[str, Any]:
+    """Load Telegram bot trigger settings from config."""
+
+    config = load_config_parser(config_path)
+    ensure_config_sections(config)
+    section = config["telegram"]
+
+    enabled = section.get("enabled", "false").strip().lower() in {"1", "true", "yes", "on"}
+    bot_token = section.get("bot_token", "").strip()
+    allowed_chat_id = section.get("allowed_chat_id", "").strip()
+    trigger_text = section.get("trigger_text", "/clipboard").strip() or "/clipboard"
+    reply_on_success = section.get("reply_on_success", "true").strip().lower() in {"1", "true", "yes", "on"}
+    poll_interval_raw = section.get("poll_interval_seconds", "5").strip()
+    try:
+        poll_interval_seconds = max(3, min(300, int(poll_interval_raw or "5")))
+    except ValueError:
+        poll_interval_seconds = 5
+
+    return {
+        "enabled": enabled,
+        "bot_token": bot_token,
+        "allowed_chat_id": allowed_chat_id,
+        "trigger_text": trigger_text,
+        "reply_on_success": reply_on_success,
+        "poll_interval_seconds": poll_interval_seconds,
+    }
+
+
+def telegram_api_call(bot_token: str, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Call the Telegram Bot API and return the decoded JSON payload."""
+
+    encoded = urlencode({key: value for key, value in params.items() if value is not None})
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+    if encoded:
+        url = f"{url}?{encoded}"
+
+    with urlopen(url, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        raise RuntimeError(f"Telegram API call failed: {method}")
+    return payload
+
+
+def send_telegram_message(bot_token: str, chat_id: str, text: str) -> None:
+    """Send a plain Telegram bot message."""
+
+    telegram_api_call(
+        bot_token,
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": text,
+        },
+    )
+
+
+def claim_telegram_trigger(config_path: str, chat_id: str, update_id: int) -> bool:
+    """Claim one Telegram update across multiple app instances via Nextcloud."""
+
+    section, root, verify_ssl = load_target_section(config_path)
+    client = build_client(section, verify_ssl)
+    claim_root = posixpath.join(root, ".telegram_trigger_claims", sanitize_filename(chat_id)) if root else posixpath.join(
+        ".telegram_trigger_claims",
+        sanitize_filename(chat_id),
+    )
+    ensure_remote_dir(client, claim_root)
+
+    claim_path = posixpath.join(claim_root, str(update_id))
+    claim_url = compose_remote_url(section, claim_path)
+    command = [
+        "curl",
+        "-sS",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "-X",
+        "MKCOL",
+        "-u",
+        f"{section.get('username', '')}:{section.get('password', '')}",
+        claim_url,
+    ]
+    if not verify_ssl:
+        command.insert(1, "-k")
+
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    http_code = result.stdout.strip()
+    if http_code == "201":
+        return True
+    if http_code in {"301", "405"}:
+        return False
+
+    details = result.stderr.strip() or http_code or "unknown error"
+    raise RuntimeError(f"Telegram trigger claim failed for update_id={update_id}: {details}")
+
+
+def poll_telegram_clipboard_trigger(config_path: str) -> Optional[Dict[str, str]]:
+    """Check Telegram updates and upload the clipboard when the trigger message arrives."""
+
+    settings = load_telegram_settings(config_path)
+    if not settings["enabled"]:
+        return None
+    if not settings["bot_token"] or not settings["allowed_chat_id"]:
+        raise ValueError("telegram.enabled=true 인 경우 bot_token 과 allowed_chat_id 가 필요합니다.")
+
+    state = load_telegram_state()
+    state_key = get_telegram_state_key(
+        config_path,
+        settings["allowed_chat_id"],
+        settings["trigger_text"],
+    )
+    offset = state.get(state_key, 0)
+    updates_payload = telegram_api_call(
+        settings["bot_token"],
+        "getUpdates",
+        {"offset": offset, "timeout": 0},
+    )
+    updates = updates_payload.get("result", [])
+    if not isinstance(updates, list):
+        updates = []
+
+    max_update_id = offset
+    if updates:
+        max_update_id = max(
+            int(update.get("update_id", offset))
+            for update in updates
+            if isinstance(update, dict) and isinstance(update.get("update_id"), int)
+        )
+
+    if offset == 0:
+        if max_update_id:
+            state[state_key] = max_update_id + 1
+            save_telegram_state(state)
+        return None
+
+    triggered_message: Dict[str, Any] | None = None
+    triggered_update_id: int | None = None
+    for update in updates:
+        if not isinstance(update, dict):
+            continue
+        update_id = update.get("update_id")
+        if not isinstance(update_id, int):
+            continue
+        message = update.get("message")
+        if not isinstance(message, dict):
+            continue
+        text = str(message.get("text", "")).strip()
+        chat = message.get("chat", {})
+        chat_id = str(chat.get("id", "")).strip() if isinstance(chat, dict) else ""
+        if chat_id != settings["allowed_chat_id"]:
+            continue
+        if text != settings["trigger_text"]:
+            continue
+        triggered_message = message
+        triggered_update_id = update_id
+
+    if max_update_id:
+        state[state_key] = max_update_id + 1
+        save_telegram_state(state)
+
+    if not triggered_message or triggered_update_id is None:
+        return None
+
+    if not claim_telegram_trigger(
+        config_path,
+        settings["allowed_chat_id"],
+        triggered_update_id,
+    ):
+        return None
+
+    payload = read_clipboard_payload()
+    remote_path, remote_url = upload_markdown(config_path, payload)
+    if settings["reply_on_success"]:
+        send_telegram_message(
+            settings["bot_token"],
+            settings["allowed_chat_id"],
+            f"Clipboard uploaded\n{remote_path}\n{remote_url}",
+        )
+    st.session_state.clipboard_payload = payload
+    return {
+        "remote_path": remote_path,
+        "remote_url": remote_url,
+        "trigger_text": settings["trigger_text"],
+    }
 
 
 def apply_selected_config_path() -> None:
@@ -920,6 +1168,54 @@ def render_clipboard_preview(payload: Dict[str, Any]) -> None:
         st.info("클립보드에 표시 가능한 텍스트, 파일 URL, 이미지가 없습니다.")
 
 
+def render_telegram_trigger_status_button() -> None:
+    """Render a button-like status indicator for recent Telegram triggers."""
+
+    highlight_until = float(st.session_state.get("telegram_trigger_highlight_until", 0.0) or 0.0)
+    is_triggered = time.time() < highlight_until
+    last_result = st.session_state.get("telegram_last_trigger_result")
+
+    label = "Telegram 대기중"
+    detail = "트리거를 기다리는 중입니다."
+    background = "#94a3b8"
+    border = "#64748b"
+
+    if is_triggered:
+        label = "Telegram Trigger 감지됨"
+        detail = "클립보드 자동 전송이 방금 실행되었습니다."
+        background = "#dc2626"
+        border = "#991b1b"
+    elif isinstance(last_result, dict) and last_result.get("remote_path"):
+        label = "Telegram Trigger 처리완료"
+        detail = str(last_result.get("remote_path"))
+        background = "#16a34a"
+        border = "#166534"
+
+    st.markdown(
+        f"""
+        <div style="margin: 0.5rem 0 1rem 0;">
+          <div style="
+              width: 100%;
+              border-radius: 0.6rem;
+              border: 1px solid {border};
+              background: {background};
+              color: white;
+              padding: 0.85rem 1rem;
+              text-align: center;
+              font-weight: 700;
+              box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+          ">
+            {label}
+          </div>
+          <div style="font-size: 0.85rem; color: #475569; margin-top: 0.35rem;">
+            {detail}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     """Render the Streamlit app."""
 
@@ -944,6 +1240,10 @@ def main() -> None:
         st.session_state.server_file_delete_confirmed = False
     if "server_file_single_delete_confirmed" not in st.session_state:
         st.session_state.server_file_single_delete_confirmed = False
+    if "telegram_last_trigger_result" not in st.session_state:
+        st.session_state.telegram_last_trigger_result = None
+    if "telegram_trigger_highlight_until" not in st.session_state:
+        st.session_state.telegram_trigger_highlight_until = 0.0
     history = st.session_state.config_path_history
     st.session_state.config_path_selected = (
         st.session_state.config_path_value
@@ -1046,6 +1346,30 @@ def main() -> None:
                         key="config_settings_verify_ssl",
                     )
 
+                    st.markdown("**[telegram]**")
+                    for key in ("bot_token", "allowed_chat_id", "trigger_text", "poll_interval_seconds"):
+                        current_value = editor_parser.get("telegram", key, fallback="")
+                        session_key = f"config_telegram_{key}"
+                        if session_key not in st.session_state:
+                            st.session_state[session_key] = ""
+                        st.text_input(
+                            f"telegram.{key}",
+                            value=st.session_state[session_key],
+                            placeholder=current_value,
+                            type="password" if key == "bot_token" else "default",
+                            key=session_key,
+                        )
+                    st.checkbox(
+                        "telegram.enabled",
+                        value=editor_parser.getboolean("telegram", "enabled", fallback=False),
+                        key="config_telegram_enabled",
+                    )
+                    st.checkbox(
+                        "telegram.reply_on_success",
+                        value=editor_parser.getboolean("telegram", "reply_on_success", fallback=True),
+                        key="config_telegram_reply_on_success",
+                    )
+
                     save_clicked = st.form_submit_button("설정 파일 저장", use_container_width=True)
 
                 if save_clicked:
@@ -1065,6 +1389,26 @@ def main() -> None:
                             "settings",
                             "verify_ssl",
                             "true" if st.session_state.get("config_settings_verify_ssl", True) else "false",
+                        )
+                        for key in ("bot_token", "allowed_chat_id", "trigger_text", "poll_interval_seconds"):
+                            editor_parser.set(
+                                "telegram",
+                                key,
+                                get_preserved_input_value(
+                                    "telegram",
+                                    key,
+                                    editor_parser.get("telegram", key, fallback=""),
+                                ),
+                            )
+                        editor_parser.set(
+                            "telegram",
+                            "enabled",
+                            "true" if st.session_state.get("config_telegram_enabled", False) else "false",
+                        )
+                        editor_parser.set(
+                            "telegram",
+                            "reply_on_success",
+                            "true" if st.session_state.get("config_telegram_reply_on_success", True) else "false",
                         )
                         save_config_parser(config_path, editor_parser)
                     except Exception as exc:  # pragma: no cover - UI error path
@@ -1108,7 +1452,41 @@ def main() -> None:
                 st.session_state.clipboard_payload = read_clipboard_payload()
             st.rerun()
 
+        try:
+            telegram_settings = load_telegram_settings(config_path)
+        except Exception as exc:  # pragma: no cover - UI error path
+            telegram_settings = None
+            st.error(f"Telegram 설정 확인 실패: {exc}")
+        else:
+            if telegram_settings["enabled"]:
+                st.info(
+                    "Telegram 자동 전송 감시 활성화: "
+                    f"chat_id={telegram_settings['allowed_chat_id'] or '-'}, "
+                    f"trigger={telegram_settings['trigger_text']}, "
+                    f"poll={telegram_settings['poll_interval_seconds']}s"
+                )
+
     payload = st.session_state.clipboard_payload
+
+    telegram_settings_runtime: Optional[Dict[str, Any]]
+    try:
+        telegram_settings_runtime = load_telegram_settings(config_path)
+    except Exception:
+        telegram_settings_runtime = None
+    if telegram_settings_runtime and telegram_settings_runtime["enabled"]:
+        try:
+            trigger_result = poll_telegram_clipboard_trigger(config_path)
+        except Exception as exc:  # pragma: no cover - UI error path
+            st.error(f"Telegram 트리거 처리 실패: {exc}")
+            trigger_result = None
+        if trigger_result:
+            st.session_state.telegram_last_trigger_result = trigger_result
+            st.session_state.telegram_trigger_highlight_until = time.time() + 30
+            st.success(
+                "Telegram 트리거로 클립보드 전송 완료: "
+                f"{trigger_result['remote_path']}"
+            )
+            st.markdown(f"[원격 URL 열기]({trigger_result['remote_url']})")
 
     if st.session_state.transfer_mode == "file" and file_transfer_error:
         show_alert_and_stop(
@@ -1133,6 +1511,8 @@ def main() -> None:
 
         with right_col:
             st.subheader("업로드")
+            if telegram_settings_runtime and telegram_settings_runtime["enabled"]:
+                render_telegram_trigger_status_button()
             created_at = datetime.now().astimezone()
             device_name = detect_device_name()
             markdown_preview = build_markdown_content(
@@ -1409,6 +1789,10 @@ def main() -> None:
             else:
                 st.session_state.server_file_single_delete_confirmed = False
                 st.caption("서버 파일을 선택하면 내용을 보여줍니다.")
+
+    if telegram_settings_runtime and telegram_settings_runtime["enabled"]:
+        time.sleep(telegram_settings_runtime["poll_interval_seconds"])
+        st.rerun()
 
 
 if __name__ == "__main__":
