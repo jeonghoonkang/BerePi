@@ -130,6 +130,20 @@ FILE_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "download_file",
+            "description": "Prepare a file inside the workspace directory for user download in the UI.",
+            "parameters": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "excel_workbook_info",
             "description": "Get workbook sheet names and basic dimensions for an Excel file in the workspace.",
             "parameters": {
@@ -412,6 +426,26 @@ def write_workspace_file(relative_path: str, content: str) -> str:
     return f"Saved file: {workspace_relative(path)}"
 
 
+def prepare_workspace_download(relative_path: str) -> str:
+    """Register a workspace file for download in the Streamlit UI."""
+    path = safe_workspace_path(relative_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {relative_path}")
+    if not path.is_file():
+        raise IsADirectoryError(f"Path is not a file: {relative_path}")
+
+    st.session_state.setdefault("prepared_downloads", [])
+    prepared_downloads: list[str] = st.session_state["prepared_downloads"]
+    normalized_path = workspace_relative(path)
+    if normalized_path not in prepared_downloads:
+        prepared_downloads.append(normalized_path)
+
+    return (
+        f"Prepared download: {normalized_path}. "
+        "Tell the user to use the download button shown in the Workspace Downloads section."
+    )
+
+
 def copy_workspace_path(source_path: str, destination_path: str) -> str:
     """Copy a workspace file or directory."""
     source = safe_workspace_path(source_path)
@@ -691,6 +725,8 @@ def execute_file_tool(name: str, arguments: dict) -> str:
         )
     if name == "delete_path":
         return delete_workspace_path(str(arguments["path"]))
+    if name == "download_file":
+        return prepare_workspace_download(str(arguments["path"]))
     if name == "excel_workbook_info":
         return excel_workbook_info(str(arguments["path"]))
     if name == "excel_sheet_preview":
@@ -763,7 +799,9 @@ def build_user_message(prompt: str, excel_contexts: Iterable[str], allow_tools: 
         )
     if allow_tools:
         content_parts.append(
-            f"You may use workspace tools when needed. The workspace root is: {WORKSPACE_DIR.resolve()}"
+            "You may use workspace tools when needed. "
+            "If the user asks to download a workspace file, call download_file for that file so the UI can expose a download button. "
+            f"The workspace root is: {WORKSPACE_DIR.resolve()}"
         )
 
     return "\n\n".join(part for part in content_parts if part)
@@ -1377,6 +1415,35 @@ def render_sidebar() -> tuple[str, str]:
     return host, model
 
 
+def render_prepared_downloads() -> None:
+    """Render download buttons for files prepared by tool calls."""
+    prepared_downloads = st.session_state.get("prepared_downloads", [])
+    if not prepared_downloads:
+        return
+
+    st.subheader("Workspace Downloads")
+    st.caption("Files prepared by tool calls can be downloaded here.")
+
+    for relative_path in prepared_downloads:
+        try:
+            path = safe_workspace_path(relative_path)
+            if not path.exists() or not path.is_file():
+                st.warning(f"Prepared file is no longer available: {relative_path}")
+                continue
+
+            data = path.read_bytes()
+            st.download_button(
+                label=f"Download {relative_path}",
+                data=data,
+                file_name=path.name,
+                mime="application/octet-stream",
+                key=f"download::{relative_path}",
+                use_container_width=True,
+            )
+        except Exception as exc:
+            st.error(f"Failed to prepare download for {relative_path}: {exc}")
+
+
 def main() -> None:
     st.set_page_config(page_title="Gemma 3 4B on RTX 5090", layout="wide")
     st.title("Gemma 3 4B AI for RTX 5090")
@@ -1392,6 +1459,8 @@ def main() -> None:
         st.session_state.query_cancel_requested = False
     if "last_elapsed_seconds" not in st.session_state:
         st.session_state.last_elapsed_seconds = None
+    if "prepared_downloads" not in st.session_state:
+        st.session_state.prepared_downloads = []
 
     prompt = st.text_area(
         "Prompt",
@@ -1424,6 +1493,8 @@ def main() -> None:
         type=["png", "jpg", "jpeg", "webp", "bmp"],
         accept_multiple_files=True,
     )
+
+    render_prepared_downloads()
 
     excel_contexts: list[str] = []
     if uploaded_excels:
