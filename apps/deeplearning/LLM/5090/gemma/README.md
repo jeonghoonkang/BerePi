@@ -12,6 +12,8 @@ Ollama server using the `gemma3:4b` model by default.
 - Sidebar model selection, installed model refresh, and model download
 - Auto-select the downloaded model as the active default
 - GPU memory-based recommended Gemma model guidance when `nvidia-smi` is available
+- Response elapsed time display after each prompt
+- Current model information, local storage path, and model size display in the sidebar
 
 ## Assumption
 
@@ -65,3 +67,4 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - Excel files are summarized into prompt context rather than being passed as raw binary.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.
+- The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.

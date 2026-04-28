@@ -4,8 +4,10 @@ import base64
 import io
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
+import time
 from typing import Iterable
 
 import pandas as pd
@@ -108,19 +110,28 @@ def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], i
     return data.get("message", {}).get("content", "").strip()
 
 
-def fetch_installed_models(host: str) -> list[str]:
-    """Return installed Ollama model names."""
+def fetch_installed_models(host: str) -> dict[str, dict]:
+    """Return installed Ollama models keyed by name."""
     response = requests.get(f"{host.rstrip('/')}/api/tags", timeout=30)
     response.raise_for_status()
     data = response.json()
     models = data.get("models", [])
-    return sorted(
-        {
-            model.get("name", "").strip()
-            for model in models
-            if model.get("name", "").strip()
-        }
+    return {
+        model.get("name", "").strip(): model
+        for model in models
+        if model.get("name", "").strip()
+    }
+
+
+def fetch_model_show_info(host: str, model: str) -> dict:
+    """Return detailed model information from Ollama show API."""
+    response = requests.post(
+        f"{host.rstrip('/')}/api/show",
+        json={"model": model},
+        timeout=30,
     )
+    response.raise_for_status()
+    return response.json()
 
 
 def detect_gpu_info() -> tuple[str | None, int | None, str | None]:
@@ -177,6 +188,62 @@ def recommend_models_for_gpu(memory_gib: int | None) -> tuple[str | None, list[s
     return compatible_models[-1], compatible_models
 
 
+def format_bytes(size_bytes: int | None) -> str:
+    """Format a byte count into a readable string."""
+    if size_bytes is None:
+        return "Unknown"
+
+    value = float(size_bytes)
+    units = ["B", "KB", "MB", "GB", "TB"]
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            return f"{value:.2f} {unit}"
+        value /= 1024
+    return f"{size_bytes} B"
+
+
+def get_ollama_models_root() -> Path:
+    """Return the configured or default local Ollama model root."""
+    configured = os.getenv("OLLAMA_MODELS")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".ollama" / "models"
+
+
+def get_model_storage_path(model: str) -> Path:
+    """Infer the local Ollama manifest path for a model tag."""
+    registry = "registry.ollama.ai"
+    namespace = "library"
+    repository = model
+    tag = "latest"
+
+    if ":" in model:
+        repository, tag = model.rsplit(":", maxsplit=1)
+
+    if "/" in repository:
+        namespace, repository = repository.split("/", maxsplit=1)
+
+    return get_ollama_models_root() / "manifests" / registry / namespace / repository / tag
+
+
+def get_selected_model_info(host: str, model: str, installed_model_map: dict[str, dict]) -> tuple[dict | None, str | None]:
+    """Return selected model metadata from tags and show API."""
+    installed_info = installed_model_map.get(model)
+    try:
+        show_info = fetch_model_show_info(host, model)
+    except requests.RequestException as exc:
+        if installed_info:
+            return {
+                "installed": installed_info,
+                "show": {},
+            }, str(exc)
+        return None, str(exc)
+    return {
+        "installed": installed_info,
+        "show": show_info,
+    }, None
+
+
 def pull_model(host: str, model: str, status_placeholder, progress_placeholder) -> None:
     """Download a model from Ollama and show progress in the sidebar."""
     response = requests.post(
@@ -223,10 +290,11 @@ def render_sidebar() -> tuple[str, str]:
             st.session_state.installed_models = fetch_installed_models(host)
             st.session_state.model_error = ""
         except requests.RequestException as exc:
-            st.session_state.installed_models = []
+            st.session_state.installed_models = {}
             st.session_state.model_error = f"Failed to load installed models: {exc}"
 
-    installed_models = st.session_state.get("installed_models", [])
+    installed_model_map = st.session_state.get("installed_models", {})
+    installed_models = sorted(installed_model_map.keys())
     model_candidates = list(dict.fromkeys(GEMMA_MODEL_OPTIONS + installed_models))
     gpu_name, gpu_memory_gib, gpu_error = detect_gpu_info()
     recommended_model, compatible_models = recommend_models_for_gpu(gpu_memory_gib)
@@ -296,6 +364,33 @@ def render_sidebar() -> tuple[str, str]:
         required_gb = MODEL_MEMORY_GUIDE_GB.get(option)
         label = f"{option}  ({required_gb} GiB+ recommended)" if required_gb else option
         st.sidebar.code(label)
+
+    st.sidebar.subheader("Current Model")
+    selected_model_info, selected_model_error = get_selected_model_info(host, model, installed_model_map)
+    storage_root = get_ollama_models_root()
+    storage_path = get_model_storage_path(model)
+    st.sidebar.write(f"Model: `{model}`")
+    st.sidebar.write(f"Storage root: `{storage_root}`")
+    st.sidebar.write(f"Storage path: `{storage_path}`")
+
+    if selected_model_info:
+        installed_info = selected_model_info.get("installed") or {}
+        show_info = selected_model_info.get("show") or {}
+        details = installed_info.get("details") or {}
+        model_size = installed_info.get("size")
+        parameter_size = details.get("parameter_size") or show_info.get("details", {}).get("parameter_size")
+        quantization = details.get("quantization_level") or show_info.get("details", {}).get("quantization_level")
+        family = details.get("family") or show_info.get("details", {}).get("family")
+
+        st.sidebar.write(f"Model size: `{format_bytes(model_size)}`")
+        if parameter_size:
+            st.sidebar.write(f"Parameters: `{parameter_size}`")
+        if quantization:
+            st.sidebar.write(f"Quantization: `{quantization}`")
+        if family:
+            st.sidebar.write(f"Family: `{family}`")
+    elif selected_model_error:
+        st.sidebar.caption(f"Model detail lookup failed: {selected_model_error}")
 
     status_placeholder = st.sidebar.empty()
     progress_placeholder = st.sidebar.empty()
@@ -372,18 +467,23 @@ def main() -> None:
             except Exception as exc:
                 st.error(f"Failed to read image {uploaded_image.name}: {exc}")
 
-    ask_disabled = not prompt.strip()
-    if st.button("Ask Gemma", type="primary", disabled=ask_disabled):
+    query_disabled = not prompt.strip()
+    if st.button("Query Gemma", type="primary", disabled=query_disabled):
         with st.spinner("Gemma is generating a response..."):
             try:
+                start_time = time.perf_counter()
                 answer = call_ollama(host, model, prompt, excel_contexts, image_payloads)
+                elapsed_seconds = time.perf_counter() - start_time
                 st.session_state.history.append(
                     {
                         "prompt": prompt,
                         "answer": answer,
+                        "elapsed_seconds": elapsed_seconds,
+                        "model": model,
                     }
                 )
                 st.success("Response received")
+                st.info(f"Elapsed time: {elapsed_seconds:.2f} seconds")
             except requests.HTTPError as exc:
                 detail = exc.response.text if exc.response is not None else str(exc)
                 st.error(f"Ollama request failed: {detail}")
@@ -393,12 +493,16 @@ def main() -> None:
                 st.error(f"Unexpected error: {exc}")
 
     if st.session_state.history:
-        st.subheader("Chat History")
+        st.subheader("History")
         for item in reversed(st.session_state.history):
             st.markdown("**Prompt**")
             st.write(item["prompt"])
             st.markdown("**Answer**")
             st.write(item["answer"])
+            if item.get("elapsed_seconds") is not None:
+                st.caption(
+                    f"Model: {item.get('model', model)} | Elapsed: {item['elapsed_seconds']:.2f} seconds"
+                )
 
 
 if __name__ == "__main__":
