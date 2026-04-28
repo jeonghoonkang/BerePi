@@ -194,6 +194,33 @@ FILE_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_merge_files",
+            "description": "Merge multiple Excel files from the workspace into one Excel file. Supported modes: append_rows, separate_sheets.",
+            "parameters": {
+                "type": "object",
+                "required": ["source_paths", "output_path"],
+                "properties": {
+                    "source_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Relative Excel file paths inside the workspace",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Relative output Excel file path inside the workspace",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "append_rows or separate_sheets",
+                        "default": "append_rows",
+                    },
+                },
+            },
+        },
+    },
 ]
 
 
@@ -452,6 +479,64 @@ def excel_aggregate_range(relative_path: str, sheet_name: str, cell_range: str, 
     return f"{operation}({sheet_name}!{cell_range}) = {result}"
 
 
+def sanitize_sheet_title(title: str, used_titles: set[str]) -> str:
+    """Create a valid and unique Excel sheet title."""
+    cleaned = "".join(character for character in title if character not in '[]:*?/\\')
+    cleaned = cleaned[:31] or "Sheet"
+    candidate = cleaned
+    index = 1
+    while candidate in used_titles:
+        suffix = f"_{index}"
+        candidate = f"{cleaned[: 31 - len(suffix)]}{suffix}"
+        index += 1
+    used_titles.add(candidate)
+    return candidate
+
+
+def excel_merge_files(source_paths: list[str], output_path: str, mode: str = "append_rows") -> str:
+    """Merge multiple Excel files into a single Excel output file."""
+    if not source_paths:
+        raise ValueError("source_paths must not be empty.")
+
+    output = safe_excel_path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    normalized_sources = [safe_excel_path(source_path) for source_path in source_paths]
+    if output.resolve() in [source.resolve() for source in normalized_sources]:
+        raise ValueError("output_path must be different from every source path.")
+
+    if mode == "append_rows":
+        frames = []
+        for source in normalized_sources:
+            excel_file = pd.ExcelFile(source)
+            for sheet_name in excel_file.sheet_names:
+                frame = excel_file.parse(sheet_name)
+                frame["source_file"] = source.name
+                frame["source_sheet"] = sheet_name
+                frames.append(frame)
+
+        if not frames:
+            raise ValueError("No Excel data found to merge.")
+
+        merged = pd.concat(frames, ignore_index=True)
+        merged.to_excel(output, index=False)
+        return f"Merged {len(normalized_sources)} files into {workspace_relative(output)} using append_rows mode."
+
+    if mode == "separate_sheets":
+        used_titles: set[str] = set()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            for source in normalized_sources:
+                excel_file = pd.ExcelFile(source)
+                for sheet_name in excel_file.sheet_names:
+                    frame = excel_file.parse(sheet_name)
+                    target_sheet = sanitize_sheet_title(f"{source.stem}_{sheet_name}", used_titles)
+                    frame.to_excel(writer, sheet_name=target_sheet, index=False)
+
+        return f"Merged {len(normalized_sources)} files into {workspace_relative(output)} using separate_sheets mode."
+
+    raise ValueError(f"Unsupported merge mode: {mode}")
+
+
 def execute_file_tool(name: str, arguments: dict) -> str:
     """Run a validated workspace tool call and return its result."""
     if name == "list_files":
@@ -497,6 +582,12 @@ def execute_file_tool(name: str, arguments: dict) -> str:
             sheet_name=str(arguments["sheet_name"]),
             cell_range=str(arguments["cell_range"]),
             operation=str(arguments["operation"]).lower(),
+        )
+    if name == "excel_merge_files":
+        return excel_merge_files(
+            source_paths=[str(path) for path in arguments["source_paths"]],
+            output_path=str(arguments["output_path"]),
+            mode=str(arguments.get("mode", "append_rows")).lower(),
         )
     raise ValueError(f"Unknown tool: {name}")
 
