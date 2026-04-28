@@ -936,6 +936,8 @@ def main() -> None:
         st.session_state.file_transfer_confirmed_file = ""
     if "file_transfer_confirmed_dir" not in st.session_state:
         st.session_state.file_transfer_confirmed_dir = ""
+    if "file_uploader_nonce" not in st.session_state:
+        st.session_state.file_uploader_nonce = 0
     if "directory_transfer_path" not in st.session_state:
         st.session_state.directory_transfer_path = ""
     if "server_file_delete_confirmed" not in st.session_state:
@@ -1162,6 +1164,7 @@ def main() -> None:
                 "업로드할 파일",
                 accept_multiple_files=True,
                 label_visibility="collapsed",
+                key=f"file_transfer_uploads_{st.session_state.file_uploader_nonce}",
             ) or []
             too_many_files = len(uploaded_files) > 10
             selected_files = uploaded_files[:10]
@@ -1248,10 +1251,12 @@ def main() -> None:
                             st.exception(exc)
                         else:
                             st.session_state.file_transfer_confirmed_file = ""
+                            st.session_state.file_uploader_nonce += 1
                             st.success(f"업로드 완료: {len(uploaded_results)}개 파일")
                             for remote_path, remote_url in uploaded_results:
                                 st.write(remote_path)
                                 st.markdown(f"[원격 URL 열기]({remote_url})")
+                            st.rerun()
             else:
                 if too_many_files:
                     st.caption("선택 파일 수를 10개 이하로 줄이면 업로드 정보가 표시됩니다.")
