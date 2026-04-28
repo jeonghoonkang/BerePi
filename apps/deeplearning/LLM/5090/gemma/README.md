@@ -18,6 +18,7 @@ Ollama server using the `gemma3:4b` model by default. It can also use
 - Current model information, local storage path, and model size display in the sidebar
 - Uploaded Excel files are saved into the app-local `workspace` directory
 - Gemma can use validated workspace tools to list, read, write, copy, and delete files
+- User-selectable Ollama model storage path with model file migration support
 
 ## Assumption
 
@@ -80,3 +81,4 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.
 - The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.
 - Workspace file tools are limited to the app-local `workspace` directory for safety.
+- Changing the model storage path in the app updates the desired location and can move existing files, but Ollama must be restarted with `OLLAMA_MODELS` set to the same path for future downloads to use it.

@@ -470,12 +470,45 @@ def format_duration(seconds: float | None) -> str:
     return f"{secs}s"
 
 
-def get_ollama_models_root() -> Path:
+def get_default_ollama_models_root() -> Path:
     """Return the configured or default local Ollama model root."""
     configured = os.getenv("OLLAMA_MODELS")
     if configured:
         return Path(configured).expanduser()
     return Path.home() / ".ollama" / "models"
+
+
+def get_selected_ollama_models_root() -> Path:
+    """Return the user-selected model root or the default root."""
+    selected = st.session_state.get("ollama_models_path")
+    if selected:
+        return Path(selected).expanduser()
+    return get_default_ollama_models_root()
+
+
+def move_model_storage(source_root: Path, destination_root: Path) -> str:
+    """Move existing Ollama model files to a new storage root."""
+    source = source_root.expanduser().resolve()
+    destination = destination_root.expanduser().resolve()
+
+    if source == destination:
+        return f"Model storage path is already set to: {destination}"
+
+    if not source.exists():
+        destination.mkdir(parents=True, exist_ok=True)
+        return f"Source model path does not exist yet. Created destination: {destination}"
+
+    destination.mkdir(parents=True, exist_ok=True)
+    moved_items = []
+    for child in source.iterdir():
+        target = destination / child.name
+        shutil.move(str(child), str(target))
+        moved_items.append(child.name)
+
+    return (
+        f"Moved {len(moved_items)} item(s) from {source} to {destination}. "
+        "Restart Ollama with OLLAMA_MODELS pointing to the new path to use it for future downloads."
+    )
 
 
 def get_model_storage_path(model: str) -> Path:
@@ -491,7 +524,7 @@ def get_model_storage_path(model: str) -> Path:
     if "/" in repository:
         namespace, repository = repository.split("/", maxsplit=1)
 
-    return get_ollama_models_root() / "manifests" / registry / namespace / repository / tag
+    return get_selected_ollama_models_root() / "manifests" / registry / namespace / repository / tag
 
 
 def get_selected_model_info(host: str, model: str, installed_model_map: dict[str, dict]) -> tuple[dict | None, str | None]:
@@ -562,6 +595,42 @@ def render_sidebar() -> tuple[str, str]:
     st.sidebar.header("Runtime")
     host = st.sidebar.text_input("Ollama Host", value=DEFAULT_OLLAMA_HOST)
     st.sidebar.write(f"Workspace: `{WORKSPACE_DIR.resolve()}`")
+
+    default_model_root = get_default_ollama_models_root()
+    if "ollama_models_path" not in st.session_state:
+        st.session_state.ollama_models_path = str(default_model_root)
+    if "model_path_message" not in st.session_state:
+        st.session_state.model_path_message = ""
+
+    model_root_input = st.sidebar.text_input(
+        "Model Download Path",
+        value=st.session_state.ollama_models_path,
+        help="This path is used for display and migration. Ollama must be restarted with OLLAMA_MODELS set to this path for future downloads to use it.",
+    )
+    apply_model_root = st.sidebar.button("Use Model Path", use_container_width=True)
+    move_model_root = st.sidebar.button("Move Existing Model Files", use_container_width=True)
+
+    if apply_model_root:
+        st.session_state.ollama_models_path = model_root_input.strip() or str(default_model_root)
+        st.session_state.model_path_message = (
+            "Model path updated in the app. Restart Ollama with OLLAMA_MODELS set to this path for future downloads."
+        )
+        st.rerun()
+
+    if move_model_root:
+        try:
+            source_root = get_selected_ollama_models_root()
+            destination_root = Path(model_root_input.strip() or str(default_model_root))
+            message = move_model_storage(source_root, destination_root)
+            st.session_state.ollama_models_path = str(destination_root.expanduser())
+            st.session_state.model_path_message = message
+            st.rerun()
+        except Exception as exc:
+            st.session_state.model_path_message = f"Model file move failed: {exc}"
+
+    if st.session_state.model_path_message:
+        st.sidebar.info(st.session_state.model_path_message)
+
     refresh_models = st.sidebar.button("Refresh Installed Models", use_container_width=True)
 
     if refresh_models or "installed_models" not in st.session_state:
@@ -646,11 +715,12 @@ def render_sidebar() -> tuple[str, str]:
 
     st.sidebar.subheader("Current Model")
     selected_model_info, selected_model_error = get_selected_model_info(host, model, installed_model_map)
-    storage_root = get_ollama_models_root()
+    storage_root = get_selected_ollama_models_root()
     storage_path = get_model_storage_path(model)
     st.sidebar.write(f"Model: `{model}`")
     st.sidebar.write(f"Storage root: `{storage_root}`")
     st.sidebar.write(f"Storage path: `{storage_path}`")
+    st.sidebar.caption("Future downloads use this path only after Ollama is restarted with OLLAMA_MODELS set to the same directory.")
 
     if selected_model_info:
         installed_info = selected_model_info.get("installed") or {}
