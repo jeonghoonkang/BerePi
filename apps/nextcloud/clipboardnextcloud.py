@@ -1296,6 +1296,12 @@ def render_telegram_trigger_status_button() -> None:
     )
 
 
+def toggle_telegram_runtime_enabled() -> None:
+    """Reset polling schedule when the runtime Telegram switch changes."""
+
+    st.session_state.telegram_next_poll_at = 0.0
+
+
 def main() -> None:
     """Render the Streamlit app."""
 
@@ -1324,6 +1330,10 @@ def main() -> None:
         st.session_state.telegram_last_trigger_result = None
     if "telegram_trigger_highlight_until" not in st.session_state:
         st.session_state.telegram_trigger_highlight_until = 0.0
+    if "telegram_runtime_enabled" not in st.session_state:
+        st.session_state.telegram_runtime_enabled = False
+    if "telegram_next_poll_at" not in st.session_state:
+        st.session_state.telegram_next_poll_at = 0.0
     history = st.session_state.config_path_history
     st.session_state.config_path_selected = (
         st.session_state.config_path_value
@@ -1538,6 +1548,10 @@ def main() -> None:
             telegram_settings = None
             st.error(f"Telegram 설정 확인 실패: {exc}")
         else:
+            config_telegram_enabled = telegram_settings["enabled"]
+            if not st.session_state.get("telegram_runtime_initialized", False):
+                st.session_state.telegram_runtime_enabled = config_telegram_enabled
+                st.session_state.telegram_runtime_initialized = True
             if telegram_settings["enabled"]:
                 trigger_label = telegram_settings["trigger_text"] or "[any text message]"
                 st.info(
@@ -1546,6 +1560,19 @@ def main() -> None:
                     f"trigger={trigger_label}, "
                     f"poll={telegram_settings['poll_interval_seconds']}s"
                 )
+                st.toggle(
+                    "Telegram trigger 실행",
+                    key="telegram_runtime_enabled",
+                    on_change=toggle_telegram_runtime_enabled,
+                )
+                if st.session_state.telegram_runtime_enabled:
+                    next_poll_at = float(st.session_state.get("telegram_next_poll_at", 0.0) or 0.0)
+                    remaining_seconds = max(0, int(next_poll_at - time.time() + 0.999)) if next_poll_at else 0
+                    st.caption(
+                        f"다음 확인까지 {remaining_seconds}s / period={telegram_settings['poll_interval_seconds']}s"
+                    )
+                else:
+                    st.caption("Telegram trigger 실행이 일시 중지되었습니다.")
 
     payload = st.session_state.clipboard_payload
 
@@ -1554,20 +1581,33 @@ def main() -> None:
         telegram_settings_runtime = load_telegram_settings(config_path)
     except Exception:
         telegram_settings_runtime = None
-    if telegram_settings_runtime and telegram_settings_runtime["enabled"]:
-        try:
-            trigger_result = poll_telegram_clipboard_trigger(config_path)
-        except Exception as exc:  # pragma: no cover - UI error path
-            st.error(f"Telegram 트리거 처리 실패: {exc}")
-            trigger_result = None
-        if trigger_result:
-            st.session_state.telegram_last_trigger_result = trigger_result
-            st.session_state.telegram_trigger_highlight_until = time.time() + 30
-            st.success(
-                "Telegram 트리거로 메시지 저장 완료: "
-                f"{trigger_result['remote_path']}"
-            )
-            st.markdown(f"[원격 URL 열기]({trigger_result['remote_url']})")
+    telegram_runtime_active = bool(
+        telegram_settings_runtime
+        and telegram_settings_runtime["enabled"]
+        and st.session_state.get("telegram_runtime_enabled", False)
+    )
+    if telegram_runtime_active:
+        now = time.time()
+        next_poll_at = float(st.session_state.get("telegram_next_poll_at", 0.0) or 0.0)
+        if next_poll_at <= 0.0:
+            next_poll_at = now
+        if now >= next_poll_at:
+            try:
+                trigger_result = poll_telegram_clipboard_trigger(config_path)
+            except Exception as exc:  # pragma: no cover - UI error path
+                st.error(f"Telegram 트리거 처리 실패: {exc}")
+                trigger_result = None
+            st.session_state.telegram_next_poll_at = now + float(telegram_settings_runtime["poll_interval_seconds"])
+            if trigger_result:
+                st.session_state.telegram_last_trigger_result = trigger_result
+                st.session_state.telegram_trigger_highlight_until = time.time() + 30
+                st.success(
+                    "Telegram 트리거로 메시지 저장 완료: "
+                    f"{trigger_result['remote_path']}"
+                )
+                st.markdown(f"[원격 URL 열기]({trigger_result['remote_url']})")
+    else:
+        st.session_state.telegram_next_poll_at = 0.0
 
     if st.session_state.transfer_mode == "file" and file_transfer_error:
         show_alert_and_stop(
@@ -1871,8 +1911,8 @@ def main() -> None:
                 st.session_state.server_file_single_delete_confirmed = False
                 st.caption("서버 파일을 선택하면 내용을 보여줍니다.")
 
-    if telegram_settings_runtime and telegram_settings_runtime["enabled"]:
-        time.sleep(telegram_settings_runtime["poll_interval_seconds"])
+    if telegram_runtime_active:
+        time.sleep(1)
         st.rerun()
 
 
