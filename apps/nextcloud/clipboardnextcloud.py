@@ -442,7 +442,7 @@ def load_telegram_settings(config_path: str) -> Dict[str, Any]:
     enabled = section.get("enabled", "false").strip().lower() in {"1", "true", "yes", "on"}
     bot_token = section.get("bot_token", "").strip()
     allowed_chat_id = section.get("allowed_chat_id", "").strip()
-    trigger_text = section.get("trigger_text", "/clipboard").strip() or "/clipboard"
+    trigger_text = section.get("trigger_text", "").strip()
     reply_on_success = section.get("reply_on_success", "true").strip().lower() in {"1", "true", "yes", "on"}
     poll_interval_raw = section.get("poll_interval_seconds", "5").strip()
     try:
@@ -584,7 +584,7 @@ def poll_telegram_clipboard_trigger(config_path: str) -> Optional[Dict[str, str]
         chat_id = str(chat.get("id", "")).strip() if isinstance(chat, dict) else ""
         if chat_id != settings["allowed_chat_id"]:
             continue
-        if text != settings["trigger_text"]:
+        if settings["trigger_text"] and text != settings["trigger_text"]:
             continue
         triggered_message = message
         triggered_update_id = update_id
@@ -1539,10 +1539,11 @@ def main() -> None:
             st.error(f"Telegram 설정 확인 실패: {exc}")
         else:
             if telegram_settings["enabled"]:
+                trigger_label = telegram_settings["trigger_text"] or "[any text message]"
                 st.info(
                     "Telegram 자동 전송 감시 활성화: "
                     f"chat_id={telegram_settings['allowed_chat_id'] or '-'}, "
-                    f"trigger={telegram_settings['trigger_text']}, "
+                    f"trigger={trigger_label}, "
                     f"poll={telegram_settings['poll_interval_seconds']}s"
                 )
 
