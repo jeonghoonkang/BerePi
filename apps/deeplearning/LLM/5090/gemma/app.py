@@ -32,6 +32,7 @@ SUPPORTED_MODEL_OPTIONS = [
     "gemma3:12b",
     "gemma3:27b",
     "qwen2.5-coder:7b",
+    "qwen3-coder:30b",
 ]
 
 MODEL_MEMORY_GUIDE_GB = {
@@ -40,6 +41,7 @@ MODEL_MEMORY_GUIDE_GB = {
     "gemma3:12b": 20,
     "gemma3:27b": 40,
     "qwen2.5-coder:7b": 8,
+    "qwen3-coder:30b": 20,
 }
 
 MODEL_DEFAULT_TEMPERATURES = {
@@ -48,6 +50,7 @@ MODEL_DEFAULT_TEMPERATURES = {
     "gemma3:12b": 0.6,
     "gemma3:27b": 0.5,
     "qwen2.5-coder:7b": 0.2,
+    "qwen3-coder:30b": 0.2,
 }
 
 FILE_TOOLS = [
@@ -744,7 +747,7 @@ def normalize_tool_arguments(arguments) -> dict:
 
 def model_supports_tools(model: str) -> bool:
     """Return whether the selected model should use tool calling."""
-    return model.startswith("qwen2.5-coder:")
+    return model.startswith("qwen2.5-coder:") or model.startswith("qwen3-coder:")
 
 
 def build_user_message(prompt: str, excel_contexts: Iterable[str], allow_tools: bool) -> str:

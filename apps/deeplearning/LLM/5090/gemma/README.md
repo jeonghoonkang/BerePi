@@ -2,13 +2,13 @@
 
 This app runs a Streamlit UI on port `2280` and sends prompts to a local
 Ollama server using the `gemma3:4b` model by default. It can also use
-`qwen2.5-coder:7b` for coding-oriented prompts and tool calling. Workspace
-tools are enabled only for `qwen2.5-coder:7b`.
+`qwen2.5-coder:7b` and `qwen3-coder:30b` for coding-oriented prompts and
+tool calling. Workspace tools are enabled only for supported Qwen coder models.
 
 ## Features
 
 - Text chat with `gemma3:4b`
-- Optional coding model support with `qwen2.5-coder:7b`
+- Optional coding model support with `qwen2.5-coder:7b` and `qwen3-coder:30b`
 - Excel upload support for `.xlsx` and `.xls`
 - Image upload support for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`
 - External access with Streamlit bound to `0.0.0.0:2280`
@@ -58,6 +58,7 @@ For coding and file-tool prompts, you can also download:
 
 ```bash
 ollama pull qwen2.5-coder:7b
+ollama pull qwen3-coder:30b
 ```
 
 ## Run
@@ -87,6 +88,6 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.
 - The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.
 - Workspace file tools are limited to the app-local `workspace` directory for safety.
-- Gemma models run in normal chat mode without workspace tool calling.
+- Qwen coder models run with workspace tool calling, while Gemma models stay in normal chat mode without workspace tool calling.
 - Changing the model storage path in the app updates the desired location and can move existing files, but Ollama must be restarted with `OLLAMA_MODELS` set to the same path for future downloads to use it.
 - The selected model storage path is saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` and restored on the next app start.
