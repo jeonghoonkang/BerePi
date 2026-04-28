@@ -20,7 +20,8 @@ DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 REQUEST_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 MAX_PREVIEW_ROWS = 20
 APP_DIR = Path(__file__).resolve().parent
-EXCEL_UPLOAD_DIR = APP_DIR / "upload"
+WORKSPACE_DIR = APP_DIR / "workspace"
+MAX_TOOL_FILE_BYTES = 1_000_000
 GEMMA_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -34,6 +35,81 @@ MODEL_MEMORY_GUIDE_GB = {
     "gemma3:12b": 20,
     "gemma3:27b": 40,
 }
+
+FILE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_files",
+            "description": "List files and directories inside the workspace directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path inside the workspace", "default": "."},
+                    "recursive": {"type": "boolean", "description": "Whether to include nested files", "default": False},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a UTF-8 text file from the workspace directory.",
+            "parameters": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write UTF-8 text content to a file inside the workspace directory.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "content"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace"},
+                    "content": {"type": "string", "description": "Text content to write to the file"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "copy_path",
+            "description": "Copy a file or directory inside the workspace directory.",
+            "parameters": {
+                "type": "object",
+                "required": ["source_path", "destination_path"],
+                "properties": {
+                    "source_path": {"type": "string", "description": "Relative source path inside the workspace"},
+                    "destination_path": {"type": "string", "description": "Relative destination path inside the workspace"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_path",
+            "description": "Delete a file or directory inside the workspace directory.",
+            "parameters": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path inside the workspace"},
+                },
+            },
+        },
+    },
+]
 
 
 def excel_to_context(uploaded_file) -> str:
@@ -71,11 +147,132 @@ def image_to_base64(uploaded_file) -> tuple[str, Image.Image]:
 
 
 def save_uploaded_excel(uploaded_file) -> Path:
-    """Persist an uploaded Excel file to the configured upload directory."""
-    EXCEL_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    destination = EXCEL_UPLOAD_DIR / Path(uploaded_file.name).name
+    """Persist an uploaded Excel file to the workspace directory."""
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    destination = WORKSPACE_DIR / Path(uploaded_file.name).name
     destination.write_bytes(uploaded_file.getvalue())
     return destination
+
+
+def safe_workspace_path(relative_path: str) -> Path:
+    """Resolve a user path while preventing access outside the workspace."""
+    raw_path = relative_path.strip() or "."
+    candidate = (WORKSPACE_DIR / raw_path).resolve()
+    workspace_root = WORKSPACE_DIR.resolve()
+    if candidate != workspace_root and workspace_root not in candidate.parents:
+        raise ValueError("Access outside the workspace directory is not allowed.")
+    return candidate
+
+
+def workspace_relative(path: Path) -> str:
+    """Return a workspace-relative display path."""
+    return str(path.resolve().relative_to(WORKSPACE_DIR.resolve()))
+
+
+def list_workspace_entries(relative_path: str = ".", recursive: bool = False) -> str:
+    """List files and directories within the workspace."""
+    path = safe_workspace_path(relative_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Path not found: {relative_path}")
+    if not path.is_dir():
+        raise NotADirectoryError(f"Not a directory: {relative_path}")
+
+    if recursive:
+        entries = sorted(path.rglob("*"))
+    else:
+        entries = sorted(path.iterdir())
+
+    lines = []
+    for entry in entries[:200]:
+        entry_type = "dir" if entry.is_dir() else "file"
+        lines.append(f"{entry_type}: {workspace_relative(entry)}")
+    if len(entries) > 200:
+        lines.append(f"... truncated, total entries: {len(entries)}")
+    return "\n".join(lines) if lines else "(empty directory)"
+
+
+def read_workspace_file(relative_path: str) -> str:
+    """Read a text file from the workspace."""
+    path = safe_workspace_path(relative_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {relative_path}")
+    if not path.is_file():
+        raise IsADirectoryError(f"Path is not a file: {relative_path}")
+    if path.stat().st_size > MAX_TOOL_FILE_BYTES:
+        raise ValueError(f"File too large to read safely: {relative_path}")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def write_workspace_file(relative_path: str, content: str) -> str:
+    """Write text content to a workspace file."""
+    path = safe_workspace_path(relative_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return f"Saved file: {workspace_relative(path)}"
+
+
+def copy_workspace_path(source_path: str, destination_path: str) -> str:
+    """Copy a workspace file or directory."""
+    source = safe_workspace_path(source_path)
+    destination = safe_workspace_path(destination_path)
+    if not source.exists():
+        raise FileNotFoundError(f"Source not found: {source_path}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    if source.is_dir():
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+        return f"Copied directory: {workspace_relative(source)} -> {workspace_relative(destination)}"
+
+    shutil.copy2(source, destination)
+    return f"Copied file: {workspace_relative(source)} -> {workspace_relative(destination)}"
+
+
+def delete_workspace_path(relative_path: str) -> str:
+    """Delete a workspace file or directory."""
+    path = safe_workspace_path(relative_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Path not found: {relative_path}")
+    if path == WORKSPACE_DIR.resolve():
+        raise ValueError("Deleting the workspace root is not allowed.")
+
+    if path.is_dir():
+        shutil.rmtree(path)
+        return f"Deleted directory: {relative_path}"
+
+    path.unlink()
+    return f"Deleted file: {relative_path}"
+
+
+def execute_file_tool(name: str, arguments: dict) -> str:
+    """Run a validated workspace tool call and return its result."""
+    if name == "list_files":
+        return list_workspace_entries(
+            relative_path=str(arguments.get("path", ".")),
+            recursive=bool(arguments.get("recursive", False)),
+        )
+    if name == "read_file":
+        return read_workspace_file(str(arguments["path"]))
+    if name == "write_file":
+        return write_workspace_file(str(arguments["path"]), str(arguments["content"]))
+    if name == "copy_path":
+        return copy_workspace_path(
+            source_path=str(arguments["source_path"]),
+            destination_path=str(arguments["destination_path"]),
+        )
+    if name == "delete_path":
+        return delete_workspace_path(str(arguments["path"]))
+    raise ValueError(f"Unknown tool: {name}")
+
+
+def normalize_tool_arguments(arguments) -> dict:
+    """Normalize tool arguments that may arrive as a dict or JSON string."""
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str):
+        parsed = json.loads(arguments)
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError(f"Unsupported tool arguments: {arguments}")
 
 
 def build_user_message(prompt: str, excel_contexts: Iterable[str]) -> str:
@@ -88,54 +285,76 @@ def build_user_message(prompt: str, excel_contexts: Iterable[str]) -> str:
             "The user also uploaded Excel data. Use the workbook summaries below when relevant.\n\n"
             + "\n\n".join(excel_contexts)
         )
+    content_parts.append(
+        f"You may use workspace tools when needed. The workspace root is: {WORKSPACE_DIR.resolve()}"
+    )
 
     return "\n\n".join(part for part in content_parts if part)
 
 
 def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], images: list[str]) -> str:
-    """Send a chat request to Ollama."""
+    """Send a chat request to Ollama and allow validated workspace tool calls."""
     url = f"{host.rstrip('/')}/api/chat"
-    payload = {
-        "model": model,
-        "stream": True,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant running on an RTX 5090 server. "
-                    "Answer clearly, use uploaded Excel context when provided, and analyze images when attached."
-                ),
-            },
-            {
-                "role": "user",
-                "content": build_user_message(prompt, excel_contexts),
-                "images": images,
-            },
-        ],
-    }
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful assistant running on an RTX 5090 server. "
+                "Answer clearly, use uploaded Excel context when provided, analyze images when attached, "
+                "and use workspace file tools when they are needed to complete the user's request. "
+                "Never claim you changed files unless a tool call succeeded."
+            ),
+        },
+        {
+            "role": "user",
+            "content": build_user_message(prompt, excel_contexts),
+            "images": images,
+        },
+    ]
 
-    response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT, stream=True)
-    response.raise_for_status()
-    answer_parts: list[str] = []
-
-    for raw_line in response.iter_lines():
-        if not raw_line:
-            continue
-
+    while True:
         if st.session_state.get("query_cancel_requested"):
-            response.close()
             raise RuntimeError("Query stopped by user.")
 
-        event = json.loads(raw_line.decode("utf-8"))
+        response = requests.post(
+            url,
+            json={
+                "model": model,
+                "stream": False,
+                "messages": messages,
+                "tools": FILE_TOOLS,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        event = response.json()
         message = event.get("message", {})
-        content = message.get("content", "")
-        if content:
-            answer_parts.append(content)
+        messages.append(message)
+        tool_calls = message.get("tool_calls") or []
 
-        if event.get("done"):
-            break
+        if not tool_calls:
+            return message.get("content", "").strip()
 
-    return "".join(answer_parts).strip()
+        for tool_call in tool_calls:
+            if st.session_state.get("query_cancel_requested"):
+                raise RuntimeError("Query stopped by user.")
+
+            function = tool_call.get("function", {})
+            tool_name = function.get("name", "")
+            arguments = normalize_tool_arguments(function.get("arguments", {}) or {})
+
+            try:
+                result = execute_file_tool(tool_name, arguments)
+            except Exception as exc:
+                result = f"Tool error: {exc}"
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_name": tool_name,
+                    "content": str(result),
+                }
+            )
 
 
 def fetch_installed_models(host: str) -> dict[str, dict]:
@@ -337,6 +556,7 @@ def pull_model(host: str, model: str, status_placeholder, progress_placeholder) 
 def render_sidebar() -> tuple[str, str]:
     st.sidebar.header("Runtime")
     host = st.sidebar.text_input("Ollama Host", value=DEFAULT_OLLAMA_HOST)
+    st.sidebar.write(f"Workspace: `{WORKSPACE_DIR.resolve()}`")
     refresh_models = st.sidebar.button("Refresh Installed Models", use_container_width=True)
 
     if refresh_models or "installed_models" not in st.session_state:
@@ -468,6 +688,7 @@ def main() -> None:
     st.set_page_config(page_title="Gemma 3 4B on RTX 5090", layout="wide")
     st.title("Gemma 3 4B AI for RTX 5090")
     st.caption("Ollama + Streamlit with text, Excel, and image inputs")
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
     host, model = render_sidebar()
 

@@ -14,6 +14,8 @@ Ollama server using the `gemma3:4b` model by default.
 - GPU memory-based recommended Gemma model guidance when `nvidia-smi` is available
 - Response elapsed time display after each prompt
 - Current model information, local storage path, and model size display in the sidebar
+- Uploaded Excel files are saved into the app-local `workspace` directory
+- Gemma can use validated workspace tools to list, read, write, copy, and delete files
 
 ## Assumption
 
@@ -65,6 +67,8 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - If Ollama is not on the local host, set `OLLAMA_HOST`.
 - If you want a different model tag, set `OLLAMA_MODEL`.
 - Excel files are summarized into prompt context rather than being passed as raw binary.
+- Uploaded Excel files are also saved into `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace`.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.
 - The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.
+- Workspace file tools are limited to the app-local `workspace` directory for safety.
