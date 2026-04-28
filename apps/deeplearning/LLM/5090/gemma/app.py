@@ -221,6 +221,38 @@ FILE_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_stack_files_to_single_sheet",
+            "description": "Read multiple Excel files and stack their sheet data into one worksheet vertically with blank row gaps between blocks.",
+            "parameters": {
+                "type": "object",
+                "required": ["source_paths", "output_path"],
+                "properties": {
+                    "source_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Relative Excel file paths inside the workspace",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Relative output Excel file path inside the workspace",
+                    },
+                    "sheet_name": {
+                        "type": "string",
+                        "description": "Output worksheet name",
+                        "default": "MergedData",
+                    },
+                    "gap_rows": {
+                        "type": "integer",
+                        "description": "Number of blank rows between file blocks",
+                        "default": 2,
+                    },
+                },
+            },
+        },
+    },
 ]
 
 
@@ -537,6 +569,61 @@ def excel_merge_files(source_paths: list[str], output_path: str, mode: str = "ap
     raise ValueError(f"Unsupported merge mode: {mode}")
 
 
+def excel_stack_files_to_single_sheet(
+    source_paths: list[str],
+    output_path: str,
+    sheet_name: str = "MergedData",
+    gap_rows: int = 2,
+) -> str:
+    """Stack multiple Excel file contents into a single worksheet vertically."""
+    if not source_paths:
+        raise ValueError("source_paths must not be empty.")
+
+    output = safe_excel_path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    normalized_sources = [safe_excel_path(source_path) for source_path in source_paths]
+    if output.resolve() in [source.resolve() for source in normalized_sources]:
+        raise ValueError("output_path must be different from every source path.")
+
+    gap_rows = max(0, int(gap_rows))
+    output_sheet_name = sanitize_sheet_title(sheet_name, set())
+    current_row = 0
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        for source in normalized_sources:
+            excel_file = pd.ExcelFile(source)
+            for source_sheet_name in excel_file.sheet_names:
+                frame = excel_file.parse(source_sheet_name)
+                header_frame = pd.DataFrame(
+                    [
+                        [f"source_file={source.name}"],
+                        [f"source_sheet={source_sheet_name}"],
+                    ]
+                )
+                header_frame.to_excel(
+                    writer,
+                    sheet_name=output_sheet_name,
+                    index=False,
+                    header=False,
+                    startrow=current_row,
+                )
+                current_row += len(header_frame)
+
+                frame.to_excel(
+                    writer,
+                    sheet_name=output_sheet_name,
+                    index=False,
+                    startrow=current_row,
+                )
+                current_row += len(frame.index) + 1 + gap_rows
+
+    return (
+        f"Stacked {len(normalized_sources)} files into single sheet "
+        f"{workspace_relative(output)}::{output_sheet_name} with {gap_rows} blank row gap(s)."
+    )
+
+
 def execute_file_tool(name: str, arguments: dict) -> str:
     """Run a validated workspace tool call and return its result."""
     if name == "list_files":
@@ -588,6 +675,13 @@ def execute_file_tool(name: str, arguments: dict) -> str:
             source_paths=[str(path) for path in arguments["source_paths"]],
             output_path=str(arguments["output_path"]),
             mode=str(arguments.get("mode", "append_rows")).lower(),
+        )
+    if name == "excel_stack_files_to_single_sheet":
+        return excel_stack_files_to_single_sheet(
+            source_paths=[str(path) for path in arguments["source_paths"]],
+            output_path=str(arguments["output_path"]),
+            sheet_name=str(arguments.get("sheet_name", "MergedData")),
+            gap_rows=int(arguments.get("gap_rows", 2)),
         )
     raise ValueError(f"Unknown tool: {name}")
 
