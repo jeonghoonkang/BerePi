@@ -19,7 +19,8 @@ DEFAULT_OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 REQUEST_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 MAX_PREVIEW_ROWS = 20
-EXCEL_UPLOAD_DIR = Path("apps/deeplearning/5090/gemma/upload")
+APP_DIR = Path(__file__).resolve().parent
+EXCEL_UPLOAD_DIR = APP_DIR / "upload"
 GEMMA_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
