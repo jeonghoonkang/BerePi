@@ -12,6 +12,7 @@ Ollama server using the `gemma3:4b` model by default. It can also use
 - Image upload support for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`
 - External access with Streamlit bound to `0.0.0.0:2280`
 - Sidebar model selection, installed model refresh, and model download
+- Per-model temperature control from the Streamlit sidebar
 - Auto-select the downloaded model as the active default
 - GPU memory-based recommended Gemma model guidance when `nvidia-smi` is available
 - Response elapsed time display after each prompt
@@ -76,6 +77,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The Streamlit port is fixed to `2280` by default in `.streamlit/config.toml`.
 - If Ollama is not on the local host, set `OLLAMA_HOST`.
 - If you want a different model tag, set `OLLAMA_MODEL`.
+- Each model can keep its own temperature setting from `0.0` to `2.0`.
 - Excel files are summarized into prompt context rather than being passed as raw binary.
 - Uploaded Excel files are also saved into `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace`.
 - Excel tool calls support workbook inspection, sheet preview, cell reads/writes, numeric range operations such as `sum`, `average`, `min`, `max`, and `count`, plus multi-file merge in `append_rows` or `separate_sheets` mode, and single-sheet vertical stacking with configurable blank row gaps.

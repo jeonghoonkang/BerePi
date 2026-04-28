@@ -41,6 +41,14 @@ MODEL_MEMORY_GUIDE_GB = {
     "qwen2.5-coder:7b": 8,
 }
 
+MODEL_DEFAULT_TEMPERATURES = {
+    "gemma3:1b": 0.7,
+    "gemma3:4b": 0.7,
+    "gemma3:12b": 0.6,
+    "gemma3:27b": 0.5,
+    "qwen2.5-coder:7b": 0.2,
+}
+
 FILE_TOOLS = [
     {
         "type": "function",
@@ -714,7 +722,22 @@ def build_user_message(prompt: str, excel_contexts: Iterable[str]) -> str:
     return "\n\n".join(part for part in content_parts if part)
 
 
-def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], images: list[str]) -> str:
+def get_model_temperature(model: str) -> float:
+    """Return the selected or default temperature for a model."""
+    model_temperatures = st.session_state.get("model_temperatures", {})
+    if model in model_temperatures:
+        return float(model_temperatures[model])
+    return float(MODEL_DEFAULT_TEMPERATURES.get(model, 0.7))
+
+
+def call_ollama(
+    host: str,
+    model: str,
+    prompt: str,
+    excel_contexts: list[str],
+    images: list[str],
+    temperature: float,
+) -> str:
     """Send a chat request to Ollama and allow validated workspace tool calls."""
     url = f"{host.rstrip('/')}/api/chat"
     messages = [
@@ -745,6 +768,9 @@ def call_ollama(host: str, model: str, prompt: str, excel_contexts: list[str], i
                 "stream": False,
                 "messages": messages,
                 "tools": FILE_TOOLS,
+                "options": {
+                    "temperature": temperature,
+                },
             },
             timeout=REQUEST_TIMEOUT,
         )
@@ -1106,6 +1132,19 @@ def render_sidebar() -> tuple[str, str]:
     custom_model = st.sidebar.text_input("Custom Model Tag", value=selected_model)
     model = custom_model.strip() or selected_model
 
+    if "model_temperatures" not in st.session_state:
+        st.session_state.model_temperatures = {}
+    current_temperature = get_model_temperature(model)
+    selected_temperature = st.sidebar.slider(
+        "Model Temperature",
+        min_value=0.0,
+        max_value=2.0,
+        value=float(current_temperature),
+        step=0.1,
+        help="Temperature is remembered per model and applied to Ollama chat requests.",
+    )
+    st.session_state.model_temperatures[model] = float(selected_temperature)
+
     if st.session_state.get("model_error"):
         st.sidebar.warning(st.session_state.model_error)
 
@@ -1137,6 +1176,7 @@ def render_sidebar() -> tuple[str, str]:
     storage_root = get_selected_ollama_models_root()
     storage_path = get_model_storage_path(model)
     st.sidebar.write(f"Model: `{model}`")
+    st.sidebar.write(f"Temperature: `{get_model_temperature(model):.1f}`")
     st.sidebar.write(f"Storage root: `{storage_root}`")
     st.sidebar.write(f"Storage path: `{storage_path}`")
     st.sidebar.caption("Future downloads use this path only after Ollama is restarted with OLLAMA_MODELS set to the same directory.")
@@ -1185,6 +1225,7 @@ def main() -> None:
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
     host, model = render_sidebar()
+    temperature = get_model_temperature(model)
 
     if "history" not in st.session_state:
         st.session_state.history = []
@@ -1262,7 +1303,7 @@ def main() -> None:
             try:
                 st.session_state.query_cancel_requested = False
                 start_time = time.perf_counter()
-                answer = call_ollama(host, model, prompt, excel_contexts, image_payloads)
+                answer = call_ollama(host, model, prompt, excel_contexts, image_payloads, temperature)
                 elapsed_seconds = time.perf_counter() - start_time
                 st.session_state.last_elapsed_seconds = elapsed_seconds
                 st.session_state.history.append(
@@ -1271,6 +1312,7 @@ def main() -> None:
                         "answer": answer,
                         "elapsed_seconds": elapsed_seconds,
                         "model": model,
+                        "temperature": temperature,
                     }
                 )
                 st.success("Response received")
@@ -1298,7 +1340,7 @@ def main() -> None:
             st.write(item["answer"])
             if item.get("elapsed_seconds") is not None:
                 st.caption(
-                    f"Model: {item.get('model', model)} | Elapsed: {item['elapsed_seconds']:.2f} seconds"
+                    f"Model: {item.get('model', model)} | Temperature: {item.get('temperature', temperature):.1f} | Elapsed: {item['elapsed_seconds']:.2f} seconds"
                 )
 
 
