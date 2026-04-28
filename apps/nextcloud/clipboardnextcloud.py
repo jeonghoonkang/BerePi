@@ -530,7 +530,7 @@ def claim_telegram_trigger(config_path: str, chat_id: str, update_id: int) -> bo
 
 
 def poll_telegram_clipboard_trigger(config_path: str) -> Optional[Dict[str, str]]:
-    """Check Telegram updates and upload the clipboard when the trigger message arrives."""
+    """Check Telegram updates and upload the received Telegram message when the trigger arrives."""
 
     settings = load_telegram_settings(config_path)
     if not settings["enabled"]:
@@ -603,19 +603,18 @@ def poll_telegram_clipboard_trigger(config_path: str) -> Optional[Dict[str, str]
     ):
         return None
 
-    payload = read_clipboard_payload()
-    remote_path, remote_url = upload_markdown(config_path, payload)
+    remote_path, remote_url = upload_telegram_message(config_path, triggered_message)
     if settings["reply_on_success"]:
         send_telegram_message(
             settings["bot_token"],
             settings["allowed_chat_id"],
-            f"Clipboard uploaded\n{remote_path}\n{remote_url}",
+            f"Telegram message uploaded\n{remote_path}\n{remote_url}",
         )
-    st.session_state.clipboard_payload = payload
     return {
         "remote_path": remote_path,
         "remote_url": remote_url,
         "trigger_text": settings["trigger_text"],
+        "message_text": str(triggered_message.get("text", "") or "").strip(),
     }
 
 
@@ -769,6 +768,52 @@ def build_markdown_content(
     return "\n".join(lines)
 
 
+def build_telegram_markdown(message: Dict[str, Any], created_at: datetime, device_name: str) -> str:
+    """Build markdown content from a Telegram message payload."""
+
+    chat = message.get("chat", {})
+    sender = message.get("from", {})
+    chat_id = str(chat.get("id", "")).strip() if isinstance(chat, dict) else ""
+    message_id = str(message.get("message_id", "")).strip()
+    text = str(message.get("text", "") or "").rstrip("\n")
+    username = str(sender.get("username", "")).strip() if isinstance(sender, dict) else ""
+    first_name = str(sender.get("first_name", "")).strip() if isinstance(sender, dict) else ""
+    last_name = str(sender.get("last_name", "")).strip() if isinstance(sender, dict) else ""
+    full_name = " ".join(part for part in (first_name, last_name) if part).strip()
+    chat_title = str(chat.get("title", "")).strip() if isinstance(chat, dict) else ""
+    chat_type = str(chat.get("type", "")).strip() if isinstance(chat, dict) else ""
+
+    lines: List[str] = [
+        "# Telegram Message Capture",
+        "",
+        f"- created_at: {created_at.isoformat(timespec='seconds')}",
+        f"- device_name: {device_name}",
+        f"- chat_id: {chat_id or 'unknown'}",
+        f"- message_id: {message_id or 'unknown'}",
+        f"- chat_type: {chat_type or 'unknown'}",
+    ]
+
+    if chat_title:
+        lines.append(f"- chat_title: {chat_title}")
+    if full_name:
+        lines.append(f"- sender_name: {full_name}")
+    if username:
+        lines.append(f"- sender_username: @{username}")
+
+    lines.extend(
+        [
+            "",
+            "## Message",
+            "",
+            "```text",
+            text if text else "[empty message]",
+            "```",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str]:
     """Upload a generated markdown file to Nextcloud and return path/url."""
 
@@ -833,6 +878,41 @@ def upload_markdown(config_path: str, payload: Dict[str, Any]) -> Tuple[str, str
             mode="w",
             suffix=".md",
             prefix="clipboard_",
+            delete=False,
+            encoding="utf-8",
+        ) as handle:
+            handle.write(markdown)
+            temp_path = handle.name
+        client.upload_sync(remote_path=remote_path, local_path=temp_path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+    return remote_path, compose_browse_url(section, remote_path)
+
+
+def upload_telegram_message(config_path: str, message: Dict[str, Any]) -> Tuple[str, str]:
+    """Upload a received Telegram message to Nextcloud and return path/url."""
+
+    section, root, verify_ssl = load_target_section(config_path)
+    client = build_client(section, verify_ssl)
+
+    created_at = datetime.now().astimezone()
+    dated_root = build_dated_remote_root(root, created_at)
+    ensure_remote_dir(client, dated_root)
+    device_name = detect_device_name()
+    timestamp = created_at.strftime("%Y%m%d_%H%M%S")
+    markdown_filename = f"{timestamp}_{device_name}_telegram_message.md"
+    remote_path = posixpath.join(dated_root, markdown_filename) if dated_root else markdown_filename
+
+    markdown = build_telegram_markdown(message, created_at, device_name)
+
+    temp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".md",
+            prefix="telegram_message_",
             delete=False,
             encoding="utf-8",
         ) as handle:
@@ -1182,7 +1262,7 @@ def render_telegram_trigger_status_button() -> None:
 
     if is_triggered:
         label = "Telegram Trigger 감지됨"
-        detail = "클립보드 자동 전송이 방금 실행되었습니다."
+        detail = "Telegram 메시지 저장이 방금 실행되었습니다."
         background = "#dc2626"
         border = "#991b1b"
     elif isinstance(last_result, dict) and last_result.get("remote_path"):
@@ -1483,7 +1563,7 @@ def main() -> None:
             st.session_state.telegram_last_trigger_result = trigger_result
             st.session_state.telegram_trigger_highlight_until = time.time() + 30
             st.success(
-                "Telegram 트리거로 클립보드 전송 완료: "
+                "Telegram 트리거로 메시지 저장 완료: "
                 f"{trigger_result['remote_path']}"
             )
             st.markdown(f"[원격 URL 열기]({trigger_result['remote_url']})")
