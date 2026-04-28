@@ -19,6 +19,7 @@ DEFAULT_OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 REQUEST_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 MAX_PREVIEW_ROWS = 20
+EXCEL_UPLOAD_DIR = Path("apps/deeplearning/5090/gemma/upload")
 GEMMA_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -66,6 +67,14 @@ def image_to_base64(uploaded_file) -> tuple[str, Image.Image]:
     encoded = base64.b64encode(data).decode("utf-8")
     image = Image.open(io.BytesIO(data))
     return encoded, image
+
+
+def save_uploaded_excel(uploaded_file) -> Path:
+    """Persist an uploaded Excel file to the configured upload directory."""
+    EXCEL_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    destination = EXCEL_UPLOAD_DIR / Path(uploaded_file.name).name
+    destination.write_bytes(uploaded_file.getvalue())
+    return destination
 
 
 def build_user_message(prompt: str, excel_contexts: Iterable[str]) -> str:
@@ -505,11 +514,13 @@ def main() -> None:
         st.subheader("Excel Preview")
         for uploaded_excel in uploaded_excels:
             try:
+                saved_path = save_uploaded_excel(uploaded_excel)
                 context = excel_to_context(uploaded_excel)
                 excel_contexts.append(context)
                 uploaded_excel.seek(0)
                 workbook = pd.ExcelFile(uploaded_excel)
                 st.write(f"Workbook: `{uploaded_excel.name}`")
+                st.caption(f"Saved to: `{saved_path}`")
                 for sheet_name in workbook.sheet_names:
                     frame = workbook.parse(sheet_name)
                     st.write(f"Sheet: `{sheet_name}`")
