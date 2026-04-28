@@ -10,6 +10,8 @@ import subprocess
 import time
 from typing import Iterable
 
+from openpyxl import load_workbook
+from openpyxl.utils import range_boundaries
 import pandas as pd
 import requests
 import streamlit as st
@@ -112,6 +114,86 @@ FILE_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_workbook_info",
+            "description": "Get workbook sheet names and basic dimensions for an Excel file in the workspace.",
+            "parameters": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative Excel file path inside the workspace"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_sheet_preview",
+            "description": "Preview the first rows of a sheet in an Excel file from the workspace.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "sheet_name"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative Excel file path inside the workspace"},
+                    "sheet_name": {"type": "string", "description": "Sheet name to preview"},
+                    "max_rows": {"type": "integer", "description": "Number of rows to preview", "default": 20},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_read_cells",
+            "description": "Read a cell or cell range from an Excel sheet in the workspace.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "sheet_name", "cell_range"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative Excel file path inside the workspace"},
+                    "sheet_name": {"type": "string", "description": "Sheet name to read"},
+                    "cell_range": {"type": "string", "description": "Excel range like A1 or A1:C10"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_write_cell",
+            "description": "Write a value into a single Excel cell in the workspace.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "sheet_name", "cell", "value"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative Excel file path inside the workspace"},
+                    "sheet_name": {"type": "string", "description": "Sheet name to update"},
+                    "cell": {"type": "string", "description": "Target cell like B3"},
+                    "value": {"type": "string", "description": "Value to write"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "excel_aggregate_range",
+            "description": "Run numeric aggregation on an Excel range. Supported operations: sum, average, min, max, count.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "sheet_name", "cell_range", "operation"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative Excel file path inside the workspace"},
+                    "sheet_name": {"type": "string", "description": "Sheet name to aggregate"},
+                    "cell_range": {"type": "string", "description": "Excel range like A1:C10"},
+                    "operation": {"type": "string", "description": "sum, average, min, max, or count"},
+                },
+            },
+        },
+    },
 ]
 
 
@@ -155,6 +237,14 @@ def save_uploaded_excel(uploaded_file) -> Path:
     destination = WORKSPACE_DIR / Path(uploaded_file.name).name
     destination.write_bytes(uploaded_file.getvalue())
     return destination
+
+
+def safe_excel_path(relative_path: str) -> Path:
+    """Resolve a workspace path and require an Excel file extension."""
+    path = safe_workspace_path(relative_path)
+    if path.suffix.lower() not in {".xlsx", ".xlsm", ".xltx", ".xltm", ".xls"}:
+        raise ValueError(f"Not an Excel file: {relative_path}")
+    return path
 
 
 def safe_workspace_path(relative_path: str) -> Path:
@@ -246,6 +336,122 @@ def delete_workspace_path(relative_path: str) -> str:
     return f"Deleted file: {relative_path}"
 
 
+def excel_workbook_info(relative_path: str) -> str:
+    """Return workbook sheet metadata."""
+    path = safe_excel_path(relative_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Excel file not found: {relative_path}")
+
+    workbook = load_workbook(path, data_only=False)
+    lines = [f"Workbook: {workspace_relative(path)}"]
+    for sheet_name in workbook.sheetnames:
+        sheet = workbook[sheet_name]
+        lines.append(
+            f"Sheet: {sheet_name} | rows={sheet.max_row} | cols={sheet.max_column}"
+        )
+    workbook.close()
+    return "\n".join(lines)
+
+
+def excel_sheet_preview(relative_path: str, sheet_name: str, max_rows: int = 20) -> str:
+    """Preview top rows from an Excel sheet."""
+    path = safe_excel_path(relative_path)
+    preview_rows = max(1, min(int(max_rows), 100))
+    frame = pd.read_excel(path, sheet_name=sheet_name).head(preview_rows).fillna("")
+    return frame.to_csv(index=False).strip()
+
+
+def excel_read_cells(relative_path: str, sheet_name: str, cell_range: str) -> str:
+    """Read one or more cells from an Excel sheet."""
+    path = safe_excel_path(relative_path)
+    workbook = load_workbook(path, data_only=False)
+    sheet = workbook[sheet_name]
+
+    if ":" not in cell_range:
+        value = sheet[cell_range].value
+        workbook.close()
+        return f"{cell_range} = {value}"
+
+    min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+    lines = []
+    for row in sheet.iter_rows(
+        min_row=min_row,
+        max_row=max_row,
+        min_col=min_col,
+        max_col=max_col,
+        values_only=False,
+    ):
+        row_items = [f"{cell.coordinate}={cell.value}" for cell in row]
+        lines.append(", ".join(row_items))
+    workbook.close()
+    return "\n".join(lines)
+
+
+def coerce_excel_value(value: str):
+    """Convert text input into a simple Excel cell value."""
+    lowered = value.strip().lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        if "." in value:
+            return float(value)
+        return int(value)
+    except ValueError:
+        return value
+
+
+def excel_write_cell(relative_path: str, sheet_name: str, cell: str, value: str) -> str:
+    """Write a value into a single Excel cell."""
+    path = safe_excel_path(relative_path)
+    workbook = load_workbook(path)
+    sheet = workbook[sheet_name]
+    sheet[cell] = coerce_excel_value(value)
+    workbook.save(path)
+    workbook.close()
+    return f"Updated {workspace_relative(path)} {sheet_name}!{cell} = {value}"
+
+
+def excel_aggregate_range(relative_path: str, sheet_name: str, cell_range: str, operation: str) -> str:
+    """Aggregate numeric values from an Excel range."""
+    path = safe_excel_path(relative_path)
+    workbook = load_workbook(path, data_only=True)
+    sheet = workbook[sheet_name]
+    min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+
+    numbers = []
+    for row in sheet.iter_rows(
+        min_row=min_row,
+        max_row=max_row,
+        min_col=min_col,
+        max_col=max_col,
+        values_only=True,
+    ):
+        for value in row:
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                numbers.append(float(value))
+    workbook.close()
+
+    if operation not in {"sum", "average", "min", "max", "count"}:
+        raise ValueError(f"Unsupported operation: {operation}")
+    if operation != "count" and not numbers:
+        raise ValueError(f"No numeric values found in range: {cell_range}")
+
+    if operation == "sum":
+        result = sum(numbers)
+    elif operation == "average":
+        result = sum(numbers) / len(numbers)
+    elif operation == "min":
+        result = min(numbers)
+    elif operation == "max":
+        result = max(numbers)
+    else:
+        result = len(numbers)
+
+    return f"{operation}({sheet_name}!{cell_range}) = {result}"
+
+
 def execute_file_tool(name: str, arguments: dict) -> str:
     """Run a validated workspace tool call and return its result."""
     if name == "list_files":
@@ -264,6 +470,34 @@ def execute_file_tool(name: str, arguments: dict) -> str:
         )
     if name == "delete_path":
         return delete_workspace_path(str(arguments["path"]))
+    if name == "excel_workbook_info":
+        return excel_workbook_info(str(arguments["path"]))
+    if name == "excel_sheet_preview":
+        return excel_sheet_preview(
+            relative_path=str(arguments["path"]),
+            sheet_name=str(arguments["sheet_name"]),
+            max_rows=int(arguments.get("max_rows", 20)),
+        )
+    if name == "excel_read_cells":
+        return excel_read_cells(
+            relative_path=str(arguments["path"]),
+            sheet_name=str(arguments["sheet_name"]),
+            cell_range=str(arguments["cell_range"]),
+        )
+    if name == "excel_write_cell":
+        return excel_write_cell(
+            relative_path=str(arguments["path"]),
+            sheet_name=str(arguments["sheet_name"]),
+            cell=str(arguments["cell"]),
+            value=str(arguments["value"]),
+        )
+    if name == "excel_aggregate_range":
+        return excel_aggregate_range(
+            relative_path=str(arguments["path"]),
+            sheet_name=str(arguments["sheet_name"]),
+            cell_range=str(arguments["cell_range"]),
+            operation=str(arguments["operation"]).lower(),
+        )
     raise ValueError(f"Unknown tool: {name}")
 
 

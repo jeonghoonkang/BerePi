@@ -19,6 +19,7 @@ Ollama server using the `gemma3:4b` model by default. It can also use
 - Uploaded Excel files are saved into the app-local `workspace` directory
 - Gemma can use validated workspace tools to list, read, write, copy, and delete files
 - User-selectable Ollama model storage path with model file migration support
+- Qwen can use Excel tools for workbook info, sheet preview, cell read/write, and range aggregation
 
 ## Assumption
 
@@ -77,6 +78,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - If you want a different model tag, set `OLLAMA_MODEL`.
 - Excel files are summarized into prompt context rather than being passed as raw binary.
 - Uploaded Excel files are also saved into `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace`.
+- Excel tool calls support workbook inspection, sheet preview, cell reads/writes, and numeric range operations such as `sum`, `average`, `min`, `max`, and `count`.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.
 - The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.
