@@ -425,6 +425,8 @@ def main() -> None:
         height=180,
         placeholder="질문을 입력하세요. 엑셀 파일이나 이미지를 함께 올리면 같이 분석합니다.",
     )
+    query_disabled = not prompt.strip()
+    query_submitted = st.button("Query Gemma", type="primary", disabled=query_disabled)
 
     uploaded_excels = st.file_uploader(
         "Excel files",
@@ -467,8 +469,7 @@ def main() -> None:
             except Exception as exc:
                 st.error(f"Failed to read image {uploaded_image.name}: {exc}")
 
-    query_disabled = not prompt.strip()
-    if st.button("Query Gemma", type="primary", disabled=query_disabled):
+    if query_submitted:
         with st.spinner("Gemma is generating a response..."):
             try:
                 start_time = time.perf_counter()
