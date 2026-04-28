@@ -705,7 +705,12 @@ def normalize_tool_arguments(arguments) -> dict:
     raise ValueError(f"Unsupported tool arguments: {arguments}")
 
 
-def build_user_message(prompt: str, excel_contexts: Iterable[str]) -> str:
+def model_supports_tools(model: str) -> bool:
+    """Return whether the selected model should use tool calling."""
+    return model.startswith("qwen2.5-coder:")
+
+
+def build_user_message(prompt: str, excel_contexts: Iterable[str], allow_tools: bool) -> str:
     """Build the final prompt content sent to the model."""
     content_parts = [prompt.strip()]
 
@@ -715,9 +720,10 @@ def build_user_message(prompt: str, excel_contexts: Iterable[str]) -> str:
             "The user also uploaded Excel data. Use the workbook summaries below when relevant.\n\n"
             + "\n\n".join(excel_contexts)
         )
-    content_parts.append(
-        f"You may use workspace tools when needed. The workspace root is: {WORKSPACE_DIR.resolve()}"
-    )
+    if allow_tools:
+        content_parts.append(
+            f"You may use workspace tools when needed. The workspace root is: {WORKSPACE_DIR.resolve()}"
+        )
 
     return "\n\n".join(part for part in content_parts if part)
 
@@ -740,22 +746,44 @@ def call_ollama(
 ) -> str:
     """Send a chat request to Ollama and allow validated workspace tool calls."""
     url = f"{host.rstrip('/')}/api/chat"
+    allow_tools = model_supports_tools(model)
     messages = [
         {
             "role": "system",
             "content": (
                 "You are a helpful assistant running on an RTX 5090 server. "
-                "Answer clearly, use uploaded Excel context when provided, analyze images when attached, "
-                "and use workspace file tools when they are needed to complete the user's request. "
-                "Never claim you changed files unless a tool call succeeded."
+                "Answer clearly and use uploaded Excel context when provided. "
+                + (
+                    "Analyze images when attached, use workspace file tools when they are needed to complete the user's request, "
+                    "and never claim you changed files unless a tool call succeeded."
+                    if allow_tools
+                    else "Analyze images when attached. Do not claim tool usage or file changes."
+                )
             ),
         },
         {
             "role": "user",
-            "content": build_user_message(prompt, excel_contexts),
+            "content": build_user_message(prompt, excel_contexts, allow_tools),
             "images": images,
         },
     ]
+
+    if not allow_tools:
+        response = requests.post(
+            url,
+            json={
+                "model": model,
+                "stream": False,
+                "messages": messages,
+                "options": {
+                    "temperature": temperature,
+                },
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        event = response.json()
+        return event.get("message", {}).get("content", "").strip()
 
     for _ in range(MAX_TOOL_ROUNDS):
         if st.session_state.get("query_cancel_requested"):
@@ -1176,6 +1204,7 @@ def render_sidebar() -> tuple[str, str]:
     storage_root = get_selected_ollama_models_root()
     storage_path = get_model_storage_path(model)
     st.sidebar.write(f"Model: `{model}`")
+    st.sidebar.write(f"Tool Support: `{'Enabled' if model_supports_tools(model) else 'Disabled'}`")
     st.sidebar.write(f"Temperature: `{get_model_temperature(model):.1f}`")
     st.sidebar.write(f"Storage root: `{storage_root}`")
     st.sidebar.write(f"Storage path: `{storage_path}`")
