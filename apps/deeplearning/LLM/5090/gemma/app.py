@@ -26,6 +26,7 @@ WORKSPACE_DIR = APP_DIR / "workspace"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 MAX_TOOL_FILE_BYTES = 1_000_000
 MAX_TOOL_ROUNDS = 8
+MAX_IDENTICAL_TOOL_ROUNDS = 2
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -776,6 +777,55 @@ def get_model_temperature(model: str) -> float:
     return float(MODEL_DEFAULT_TEMPERATURES.get(model, 0.7))
 
 
+def summarize_tool_calls(tool_calls: list[dict]) -> str:
+    """Return a stable summary string for loop detection and diagnostics."""
+    summary_parts: list[str] = []
+    for tool_call in tool_calls:
+        function = tool_call.get("function", {})
+        tool_name = str(function.get("name", ""))
+        arguments = normalize_tool_arguments(function.get("arguments", {}) or {})
+        normalized_arguments = json.dumps(arguments, ensure_ascii=True, sort_keys=True)
+        summary_parts.append(f"{tool_name}:{normalized_arguments}")
+    return " | ".join(summary_parts)
+
+
+def request_final_answer(
+    url: str,
+    model: str,
+    messages: list[dict],
+    temperature: float,
+    reason: str,
+) -> str:
+    """Ask the model for a final answer without exposing more tool options."""
+    final_messages = list(messages)
+    final_messages.append(
+        {
+            "role": "system",
+            "content": (
+                "Stop calling tools now. "
+                f"Reason: {reason} "
+                "Provide the best final answer using only the information already available in this conversation. "
+                "If the task could not be completed fully, state what remains."
+            ),
+        }
+    )
+    response = requests.post(
+        url,
+        json={
+            "model": model,
+            "stream": False,
+            "messages": final_messages,
+            "options": {
+                "temperature": temperature,
+            },
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+    response.raise_for_status()
+    event = response.json()
+    return event.get("message", {}).get("content", "").strip()
+
+
 def call_ollama(
     host: str,
     model: str,
@@ -825,6 +875,9 @@ def call_ollama(
         event = response.json()
         return event.get("message", {}).get("content", "").strip()
 
+    previous_tool_signature = ""
+    repeated_tool_rounds = 0
+
     for _ in range(MAX_TOOL_ROUNDS):
         if st.session_state.get("query_cancel_requested"):
             raise RuntimeError("Query stopped by user.")
@@ -851,6 +904,25 @@ def call_ollama(
         if not tool_calls:
             return message.get("content", "").strip()
 
+        tool_signature = summarize_tool_calls(tool_calls)
+        if tool_signature == previous_tool_signature:
+            repeated_tool_rounds += 1
+        else:
+            repeated_tool_rounds = 0
+            previous_tool_signature = tool_signature
+
+        if repeated_tool_rounds >= MAX_IDENTICAL_TOOL_ROUNDS:
+            return request_final_answer(
+                url=url,
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                reason=(
+                    "the model repeated the same tool call sequence multiple times "
+                    f"({tool_signature})"
+                ),
+            )
+
         for tool_call in tool_calls:
             if st.session_state.get("query_cancel_requested"):
                 raise RuntimeError("Query stopped by user.")
@@ -872,7 +944,22 @@ def call_ollama(
                 }
             )
 
-    raise RuntimeError("Tool calling stopped after reaching the maximum tool round limit.")
+    final_answer = request_final_answer(
+        url=url,
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        reason=(
+            "the maximum tool round limit was reached "
+            f"after {MAX_TOOL_ROUNDS} rounds"
+        ),
+    )
+    if final_answer:
+        return final_answer
+    raise RuntimeError(
+        "Tool calling stopped after reaching the maximum tool round limit."
+        f" Rounds attempted: {MAX_TOOL_ROUNDS}."
+    )
 
 
 def fetch_installed_models(host: str) -> dict[str, dict]:

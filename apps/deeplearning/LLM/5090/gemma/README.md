@@ -89,5 +89,6 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.
 - Workspace file tools are limited to the app-local `workspace` directory for safety.
 - Qwen coder models run with workspace tool calling, while Gemma models stay in normal chat mode without workspace tool calling.
+- If a tool-capable model repeats the same tool call or reaches the tool round cap, the app now asks the model for a final non-tool answer instead of failing immediately.
 - Changing the model storage path in the app updates the desired location and can move existing files, but Ollama must be restarted with `OLLAMA_MODELS` set to the same path for future downloads to use it.
 - The selected model storage path is saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` and restored on the next app start.
