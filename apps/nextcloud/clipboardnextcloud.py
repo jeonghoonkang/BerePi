@@ -608,7 +608,7 @@ def poll_telegram_clipboard_trigger(config_path: str) -> Optional[Dict[str, str]
         send_telegram_message(
             settings["bot_token"],
             settings["allowed_chat_id"],
-            f"Telegram message uploaded\n{remote_path}\n{remote_url}",
+            f"전송되었습니다\n{remote_path}\n{remote_url}",
         )
     return {
         "remote_path": remote_path,
