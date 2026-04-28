@@ -323,8 +323,6 @@ def ensure_config_sections(parser: configparser.ConfigParser) -> None:
         parser.set("settings", "verify_ssl", "true")
     if not parser.has_option("telegram", "enabled"):
         parser.set("telegram", "enabled", "false")
-    if not parser.has_option("telegram", "trigger_text"):
-        parser.set("telegram", "trigger_text", "/clipboard")
     if not parser.has_option("telegram", "poll_interval_seconds"):
         parser.set("telegram", "poll_interval_seconds", "5")
     if not parser.has_option("telegram", "reply_on_success"):
