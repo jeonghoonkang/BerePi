@@ -4,6 +4,10 @@
 이 디렉토리는 Nextcloud 파일 동기화 시스템과 관련된 다양한 응용 소프트웨어를 포함합니다. 
 Nextcloud는 자체 호스팅 파일 동기화 및 공유 솔루션으로, 여러 클라이언트 도구, 서버 설정, 관리 스크립트, 플러그인 등을 제공합니다.
 
+## clipboardnextcloud.py 실행
+-  python3 -m streamlit run clipboardnextcloud.py --server.headless true
+
+
 ## 내부 응용 소프트웨어 구성
 
 ### 1. 클라이언트 도구 (client/)
