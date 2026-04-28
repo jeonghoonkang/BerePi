@@ -202,6 +202,22 @@ def format_bytes(size_bytes: int | None) -> str:
     return f"{size_bytes} B"
 
 
+def format_duration(seconds: float | None) -> str:
+    """Format seconds into a short readable duration."""
+    if seconds is None or seconds < 0:
+        return "Unknown"
+
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
 def get_ollama_models_root() -> Path:
     """Return the configured or default local Ollama model root."""
     configured = os.getenv("OLLAMA_MODELS")
@@ -257,6 +273,7 @@ def pull_model(host: str, model: str, status_placeholder, progress_placeholder) 
     progress_bar = progress_placeholder.progress(0)
     last_status = "Starting download..."
     status_placeholder.info(last_status)
+    started_at = time.perf_counter()
 
     for raw_line in response.iter_lines():
         if not raw_line:
@@ -269,7 +286,16 @@ def pull_model(host: str, model: str, status_placeholder, progress_placeholder) 
 
         if total and completed is not None and total > 0:
             ratio = min(max(completed / total, 0.0), 1.0)
-            progress_bar.progress(ratio, text=status_text)
+            elapsed_seconds = max(time.perf_counter() - started_at, 0.001)
+            bytes_per_second = completed / elapsed_seconds if completed > 0 else 0.0
+            remaining_bytes = max(total - completed, 0)
+            eta_seconds = remaining_bytes / bytes_per_second if bytes_per_second > 0 else None
+            progress_text = (
+                f"{status_text} | {ratio * 100:.1f}% | "
+                f"{format_bytes(completed)} / {format_bytes(total)} | "
+                f"ETA {format_duration(eta_seconds)}"
+            )
+            progress_bar.progress(ratio, text=progress_text)
         else:
             progress_bar.progress(0, text=status_text)
 
@@ -412,7 +438,7 @@ def render_sidebar() -> tuple[str, str]:
 
 def main() -> None:
     st.set_page_config(page_title="Gemma 3 4B on RTX 5090", layout="wide")
-    st.title("Gemma 3 4B Chat for RTX 5090")
+    st.title("Gemma 3 4B AI for RTX 5090")
     st.caption("Ollama + Streamlit with text, Excel, and image inputs")
 
     host, model = render_sidebar()
