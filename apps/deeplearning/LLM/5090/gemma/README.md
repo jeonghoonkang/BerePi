@@ -21,6 +21,7 @@ tools are enabled only for `qwen2.5-coder:7b`.
 - Uploaded Excel files are saved into the app-local `workspace` directory
 - Qwen can use validated workspace tools to list, read, write, copy, and delete files
 - User-selectable Ollama model storage path with model file migration support
+- Remember the selected model storage path across Streamlit restarts
 - Qwen can use Excel tools for workbook info, sheet preview, cell read/write, range aggregation, workbook merge, and vertical stacking into one sheet
 
 ## Assumption
@@ -88,3 +89,4 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - Workspace file tools are limited to the app-local `workspace` directory for safety.
 - Gemma models run in normal chat mode without workspace tool calling.
 - Changing the model storage path in the app updates the desired location and can move existing files, but Ollama must be restarted with `OLLAMA_MODELS` set to the same path for future downloads to use it.
+- The selected model storage path is saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` and restored on the next app start.

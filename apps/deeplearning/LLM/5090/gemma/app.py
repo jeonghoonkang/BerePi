@@ -23,6 +23,7 @@ REQUEST_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 MAX_PREVIEW_ROWS = 20
 APP_DIR = Path(__file__).resolve().parent
 WORKSPACE_DIR = APP_DIR / "workspace"
+APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 MAX_TOOL_FILE_BYTES = 1_000_000
 MAX_TOOL_ROUNDS = 8
 SUPPORTED_MODEL_OPTIONS = [
@@ -262,6 +263,42 @@ FILE_TOOLS = [
         },
     },
 ]
+
+
+def load_app_settings() -> dict:
+    """Load persisted app settings from the local settings file."""
+    if not APP_SETTINGS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(APP_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_app_settings(settings: dict) -> None:
+    """Persist app settings to the local settings file."""
+    APP_SETTINGS_PATH.write_text(
+        json.dumps(settings, ensure_ascii=True, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def get_saved_model_root() -> str | None:
+    """Return the saved model storage root path, if present."""
+    value = load_app_settings().get("ollama_models_path")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def persist_model_root(path_value: str) -> str:
+    """Store the chosen model storage root and return its normalized value."""
+    normalized = str(Path(path_value).expanduser())
+    settings = load_app_settings()
+    settings["ollama_models_path"] = normalized
+    save_app_settings(settings)
+    return normalized
 
 
 def excel_to_context(uploaded_file) -> str:
@@ -1070,8 +1107,9 @@ def render_sidebar() -> tuple[str, str]:
     st.sidebar.write(f"Workspace: `{WORKSPACE_DIR.resolve()}`")
 
     default_model_root = get_default_ollama_models_root()
+    saved_model_root = get_saved_model_root()
     if "ollama_models_path" not in st.session_state:
-        st.session_state.ollama_models_path = str(default_model_root)
+        st.session_state.ollama_models_path = saved_model_root or str(default_model_root)
     if "model_path_message" not in st.session_state:
         st.session_state.model_path_message = ""
 
@@ -1084,9 +1122,11 @@ def render_sidebar() -> tuple[str, str]:
     move_model_root = st.sidebar.button("Move Existing Model Files", use_container_width=True)
 
     if apply_model_root:
-        st.session_state.ollama_models_path = model_root_input.strip() or str(default_model_root)
+        st.session_state.ollama_models_path = persist_model_root(
+            model_root_input.strip() or str(default_model_root)
+        )
         st.session_state.model_path_message = (
-            "Model path updated in the app. Restart Ollama with OLLAMA_MODELS set to this path for future downloads."
+            "Model path updated and saved. Restart Ollama with OLLAMA_MODELS set to this path for future downloads."
         )
         st.rerun()
 
@@ -1095,7 +1135,7 @@ def render_sidebar() -> tuple[str, str]:
             source_root = get_selected_ollama_models_root()
             destination_root = Path(model_root_input.strip() or str(default_model_root))
             message = move_model_storage(source_root, destination_root)
-            st.session_state.ollama_models_path = str(destination_root.expanduser())
+            st.session_state.ollama_models_path = persist_model_root(str(destination_root.expanduser()))
             st.session_state.model_path_message = message
             st.rerun()
         except Exception as exc:
