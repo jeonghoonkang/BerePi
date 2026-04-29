@@ -21,6 +21,8 @@ tool calling. Workspace tools are enabled only for supported Qwen coder models.
 - Uploaded Excel files are saved into the app-local `workspace` directory
 - Files in the server `workspace` can be downloaded to the browser client from the landing page
 - Files in the server `workspace` can also be deleted from the landing page with a confirmation button
+- A right-side WebDAV / RAG panel can connect to Nextcloud WebDAV and read up to four configured paths
+- Markdown and PDF files from WebDAV can be indexed into prompt-time RAG context
 - Qwen can use validated workspace tools to list, read, write, copy, and delete files
 - Qwen can prepare workspace files for direct download through the Streamlit UI
 - User-selectable Ollama model storage path with model file migration support
@@ -88,6 +90,9 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - Uploaded Excel files are also saved into `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace`.
 - Files generated in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace` can be sent to the browser with the `Workspace Files` download section.
 - The same `Workspace Files` section also supports browser-side delete actions with a second-click confirmation step.
+- The right-side `WebDAV / RAG` panel is intended for Nextcloud WebDAV URLs such as `https://host/remote.php/dav/files/<user>/`.
+- Up to four WebDAV read paths can be configured, and the app recursively loads `.md`, `.markdown`, and `.pdf` files from those paths into a lightweight lexical RAG index.
+- WebDAV settings are saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json`.
 - Excel tool calls support workbook inspection, sheet preview, cell reads/writes, numeric range operations such as `sum`, `average`, `min`, `max`, and `count`, plus multi-file merge in `append_rows` or `separate_sheets` mode, and single-sheet vertical stacking with configurable blank row gaps.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.

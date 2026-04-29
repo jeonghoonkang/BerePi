@@ -5,14 +5,18 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import time
 from typing import Iterable
+from urllib.parse import quote, unquote, urljoin, urlparse
+import xml.etree.ElementTree as ET
 
 from openpyxl import load_workbook
 from openpyxl.utils import range_boundaries
 import pandas as pd
+from pypdf import PdfReader
 import requests
 import streamlit as st
 from PIL import Image
@@ -27,6 +31,14 @@ APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 MAX_TOOL_FILE_BYTES = 1_000_000
 MAX_TOOL_ROUNDS = 8
 MAX_IDENTICAL_TOOL_ROUNDS = 2
+MAX_RAG_FILES = 60
+MAX_RAG_CHUNKS = 300
+MAX_RAG_CHUNK_CHARS = 1400
+RAG_TOP_K = 6
+WEBDAV_TIMEOUT = 60
+WEBDAV_NS = {
+    "d": "DAV:",
+}
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -319,6 +331,36 @@ def persist_model_root(path_value: str) -> str:
     return normalized
 
 
+def get_saved_webdav_settings() -> dict:
+    """Return persisted WebDAV settings with sane defaults."""
+    settings = load_app_settings()
+    webdav_settings = settings.get("webdav") if isinstance(settings.get("webdav"), dict) else {}
+    read_paths = webdav_settings.get("read_paths", ["", "", "", ""])
+    if not isinstance(read_paths, list):
+        read_paths = ["", "", "", ""]
+    normalized_paths = [str(value).strip() for value in read_paths[:4]]
+    while len(normalized_paths) < 4:
+        normalized_paths.append("")
+    return {
+        "base_url": str(webdav_settings.get("base_url", "")).strip(),
+        "username": str(webdav_settings.get("username", "")).strip(),
+        "password": str(webdav_settings.get("password", "")).strip(),
+        "read_paths": normalized_paths,
+    }
+
+
+def persist_webdav_settings(base_url: str, username: str, password: str, read_paths: list[str]) -> None:
+    """Persist WebDAV connection settings to the local settings file."""
+    settings = load_app_settings()
+    settings["webdav"] = {
+        "base_url": base_url.strip(),
+        "username": username.strip(),
+        "password": password,
+        "read_paths": [path.strip() for path in read_paths[:4]],
+    }
+    save_app_settings(settings)
+
+
 def excel_to_context(uploaded_file) -> str:
     """Create a concise, prompt-friendly summary from an Excel workbook."""
     uploaded_file.seek(0)
@@ -342,6 +384,257 @@ def excel_to_context(uploaded_file) -> str:
             )
         )
 
+    return "\n\n".join(sections)
+
+
+def tokenize_query(text: str) -> list[str]:
+    """Tokenize user text for simple lexical RAG ranking."""
+    return [token for token in re.findall(r"[0-9A-Za-z_가-힣]{2,}", text.lower())]
+
+
+def normalize_webdav_base_url(base_url: str) -> str:
+    """Normalize a WebDAV base URL for reliable joining."""
+    normalized = base_url.strip()
+    if normalized and not normalized.endswith("/"):
+        normalized += "/"
+    return normalized
+
+
+def build_webdav_url(base_url: str, relative_path: str) -> str:
+    """Build a full WebDAV URL from a base path and user path."""
+    clean_path = relative_path.strip().lstrip("/")
+    if not clean_path:
+        return normalize_webdav_base_url(base_url)
+    encoded_path = "/".join(quote(part) for part in clean_path.split("/") if part)
+    return urljoin(normalize_webdav_base_url(base_url), encoded_path)
+
+
+def webdav_propfind(session: requests.Session, target_url: str, depth: str = "1") -> ET.Element:
+    """Run a WebDAV PROPFIND request and return the XML root."""
+    response = session.request(
+        "PROPFIND",
+        target_url,
+        headers={"Depth": depth},
+        data=(
+            '<?xml version="1.0" encoding="utf-8" ?>'
+            '<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>'
+        ),
+        timeout=WEBDAV_TIMEOUT,
+    )
+    response.raise_for_status()
+    return ET.fromstring(response.text)
+
+
+def parse_webdav_listing(xml_root: ET.Element, base_url: str) -> list[dict]:
+    """Parse a PROPFIND XML response into file and directory entries."""
+    entries: list[dict] = []
+    base_path = urlparse(base_url).path
+
+    for response_element in xml_root.findall("d:response", WEBDAV_NS):
+        href = response_element.findtext("d:href", default="", namespaces=WEBDAV_NS)
+        if not href:
+            continue
+
+        decoded_href = unquote(href)
+        href_path = urlparse(decoded_href).path
+        relative_path = href_path
+        if base_path and href_path.startswith(base_path):
+            relative_path = href_path[len(base_path):]
+        relative_path = relative_path.strip("/")
+
+        prop = response_element.find("d:propstat/d:prop", WEBDAV_NS)
+        if prop is None:
+            continue
+
+        is_collection = prop.find("d:resourcetype/d:collection", WEBDAV_NS) is not None
+        size_text = prop.findtext("d:getcontentlength", default="", namespaces=WEBDAV_NS).strip()
+        try:
+            size = int(size_text) if size_text else None
+        except ValueError:
+            size = None
+
+        entries.append(
+            {
+                "href": decoded_href,
+                "relative_path": relative_path,
+                "is_collection": is_collection,
+                "size": size,
+            }
+        )
+
+    return entries
+
+
+def extract_pdf_text(content: bytes) -> str:
+    """Extract text from a PDF byte payload."""
+    reader = PdfReader(io.BytesIO(content))
+    pages: list[str] = []
+    for page in reader.pages:
+        pages.append(page.extract_text() or "")
+    return "\n".join(page for page in pages if page.strip())
+
+
+def chunk_document_text(text: str, chunk_chars: int = MAX_RAG_CHUNK_CHARS) -> list[str]:
+    """Split a document into manageable RAG chunks."""
+    normalized = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if not normalized:
+        return []
+
+    paragraphs = [paragraph.strip() for paragraph in normalized.split("\n\n") if paragraph.strip()]
+    chunks: list[str] = []
+    current = ""
+
+    for paragraph in paragraphs:
+        if len(paragraph) > chunk_chars:
+            for index in range(0, len(paragraph), chunk_chars):
+                piece = paragraph[index:index + chunk_chars].strip()
+                if piece:
+                    if current:
+                        chunks.append(current)
+                        current = ""
+                    chunks.append(piece)
+            continue
+
+        candidate = paragraph if not current else f"{current}\n\n{paragraph}"
+        if len(candidate) <= chunk_chars:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = paragraph
+
+    if current:
+        chunks.append(current)
+
+    return chunks[:MAX_RAG_CHUNKS]
+
+
+def collect_webdav_documents(
+    base_url: str,
+    username: str,
+    password: str,
+    read_paths: list[str],
+) -> tuple[list[dict], list[str]]:
+    """Fetch markdown and PDF files from configured WebDAV paths."""
+    session = requests.Session()
+    session.auth = (username, password)
+
+    normalized_base_url = normalize_webdav_base_url(base_url)
+    documents: list[dict] = []
+    status_lines: list[str] = []
+    visited_directories: set[str] = set()
+    seen_files: set[str] = set()
+
+    for configured_path in [path.strip() for path in read_paths if path.strip()]:
+        pending_urls = [build_webdav_url(normalized_base_url, configured_path)]
+
+        while pending_urls and len(documents) < MAX_RAG_FILES:
+            current_url = pending_urls.pop(0)
+            if current_url in visited_directories:
+                continue
+            visited_directories.add(current_url)
+
+            listing_root = webdav_propfind(session, current_url, depth="1")
+            entries = parse_webdav_listing(listing_root, normalized_base_url)
+            current_relative = current_url.removeprefix(normalized_base_url).strip("/")
+
+            for entry in entries:
+                relative_path = entry["relative_path"]
+                if relative_path == current_relative:
+                    continue
+
+                if entry["is_collection"]:
+                    pending_urls.append(build_webdav_url(normalized_base_url, relative_path))
+                    continue
+
+                suffix = Path(relative_path).suffix.lower()
+                if suffix not in {".md", ".markdown", ".pdf"}:
+                    continue
+                if relative_path in seen_files:
+                    continue
+
+                file_response = session.get(build_webdav_url(normalized_base_url, relative_path), timeout=WEBDAV_TIMEOUT)
+                file_response.raise_for_status()
+                seen_files.add(relative_path)
+
+                if suffix == ".pdf":
+                    text = extract_pdf_text(file_response.content)
+                else:
+                    text = file_response.content.decode("utf-8", errors="replace")
+
+                if not text.strip():
+                    status_lines.append(f"Skipped empty document: {relative_path}")
+                    continue
+
+                documents.append(
+                    {
+                        "path": relative_path,
+                        "type": suffix.lstrip("."),
+                        "size": entry.get("size"),
+                        "text": text,
+                    }
+                )
+                status_lines.append(f"Loaded {relative_path}")
+
+    return documents, status_lines
+
+
+def build_rag_index(documents: list[dict]) -> list[dict]:
+    """Create searchable text chunks from WebDAV documents."""
+    chunks: list[dict] = []
+    for document in documents:
+        for index, chunk_text in enumerate(chunk_document_text(document["text"]), start=1):
+            chunks.append(
+                {
+                    "path": document["path"],
+                    "type": document["type"],
+                    "chunk_index": index,
+                    "text": chunk_text,
+                    "tokens": set(tokenize_query(chunk_text)),
+                }
+            )
+            if len(chunks) >= MAX_RAG_CHUNKS:
+                return chunks
+    return chunks
+
+
+def select_rag_chunks(query: str, rag_chunks: list[dict], top_k: int = RAG_TOP_K) -> list[dict]:
+    """Return the most relevant chunks for the current query."""
+    query_tokens = tokenize_query(query)
+    if not query_tokens:
+        return rag_chunks[:top_k]
+
+    scored_chunks: list[tuple[int, int, dict]] = []
+    unique_query_tokens = set(query_tokens)
+    for chunk in rag_chunks:
+        overlap = len(unique_query_tokens.intersection(chunk["tokens"]))
+        if overlap <= 0:
+            continue
+        scored_chunks.append((overlap, len(chunk["text"]), chunk))
+
+    scored_chunks.sort(key=lambda item: (-item[0], item[1]))
+    if scored_chunks:
+        return [item[2] for item in scored_chunks[:top_k]]
+    return rag_chunks[: min(top_k, len(rag_chunks))]
+
+
+def build_rag_context(query: str, rag_chunks: list[dict]) -> str:
+    """Format selected RAG chunks into prompt context."""
+    selected_chunks = select_rag_chunks(query, rag_chunks)
+    if not selected_chunks:
+        return ""
+
+    sections = []
+    for chunk in selected_chunks:
+        sections.append(
+            "\n".join(
+                [
+                    f"[Source] {chunk['path']}",
+                    f"[Chunk] {chunk['chunk_index']}",
+                    chunk["text"].strip(),
+                ]
+            )
+        )
     return "\n\n".join(sections)
 
 
@@ -795,7 +1088,7 @@ def model_supports_tools(model: str) -> bool:
     return model.startswith("qwen2.5-coder:") or model.startswith("qwen3-coder:")
 
 
-def build_user_message(prompt: str, excel_contexts: Iterable[str], allow_tools: bool) -> str:
+def build_user_message(prompt: str, excel_contexts: Iterable[str], rag_context: str, allow_tools: bool) -> str:
     """Build the final prompt content sent to the model."""
     content_parts = [prompt.strip()]
 
@@ -804,6 +1097,11 @@ def build_user_message(prompt: str, excel_contexts: Iterable[str], allow_tools: 
         content_parts.append(
             "The user also uploaded Excel data. Use the workbook summaries below when relevant.\n\n"
             + "\n\n".join(excel_contexts)
+        )
+    if rag_context.strip():
+        content_parts.append(
+            "The user also connected WebDAV RAG sources. Use the retrieved context below when relevant, and cite the source path in your answer when you rely on it.\n\n"
+            + rag_context.strip()
         )
     if allow_tools:
         content_parts.append(
@@ -877,6 +1175,7 @@ def call_ollama(
     model: str,
     prompt: str,
     excel_contexts: list[str],
+    rag_context: str,
     images: list[str],
     temperature: float,
 ) -> str:
@@ -899,7 +1198,7 @@ def call_ollama(
         },
         {
             "role": "user",
-            "content": build_user_message(prompt, excel_contexts, allow_tools),
+            "content": build_user_message(prompt, excel_contexts, rag_context, allow_tools),
             "images": images,
         },
     ]
@@ -1500,6 +1799,126 @@ def render_prepared_downloads() -> None:
             st.error(f"Failed to prepare download for {relative_path}: {exc}")
 
 
+def render_webdav_rag_panel() -> str:
+    """Render the right-side WebDAV RAG settings panel and return current RAG context."""
+    saved_webdav = get_saved_webdav_settings()
+    if "webdav_base_url" not in st.session_state:
+        st.session_state.webdav_base_url = saved_webdav["base_url"]
+    if "webdav_username" not in st.session_state:
+        st.session_state.webdav_username = saved_webdav["username"]
+    if "webdav_password" not in st.session_state:
+        st.session_state.webdav_password = saved_webdav["password"]
+    if "webdav_read_paths" not in st.session_state:
+        st.session_state.webdav_read_paths = list(saved_webdav["read_paths"])
+    if "webdav_status_message" not in st.session_state:
+        st.session_state.webdav_status_message = ""
+    if "webdav_documents" not in st.session_state:
+        st.session_state.webdav_documents = []
+    if "webdav_rag_chunks" not in st.session_state:
+        st.session_state.webdav_rag_chunks = []
+
+    st.subheader("WebDAV / RAG")
+    st.caption("Connect to Nextcloud WebDAV, read up to four paths, and build prompt context from Markdown and PDF files.")
+
+    base_url = st.text_input(
+        "WebDAV Base URL",
+        value=st.session_state.webdav_base_url,
+        placeholder="https://nextcloud.example.com/remote.php/dav/files/username/",
+        key="webdav_base_url_input",
+    )
+    username = st.text_input(
+        "WebDAV Username",
+        value=st.session_state.webdav_username,
+        key="webdav_username_input",
+    )
+    password = st.text_input(
+        "WebDAV Password / App Token",
+        value=st.session_state.webdav_password,
+        type="password",
+        key="webdav_password_input",
+    )
+
+    read_paths: list[str] = []
+    for index in range(4):
+        initial_value = st.session_state.webdav_read_paths[index] if index < len(st.session_state.webdav_read_paths) else ""
+        read_paths.append(
+            st.text_input(
+                f"Read Path {index + 1}",
+                value=initial_value,
+                placeholder="docs/project-a/",
+                key=f"webdav_read_path_{index + 1}",
+            )
+        )
+
+    save_col, sync_col = st.columns(2)
+    with save_col:
+        save_settings = st.button("Save WebDAV Settings", use_container_width=True)
+    with sync_col:
+        refresh_rag = st.button("Load WebDAV RAG", type="primary", use_container_width=True)
+
+    st.session_state.webdav_base_url = base_url.strip()
+    st.session_state.webdav_username = username.strip()
+    st.session_state.webdav_password = password
+    st.session_state.webdav_read_paths = [path.strip() for path in read_paths]
+
+    if save_settings:
+        persist_webdav_settings(
+            base_url=st.session_state.webdav_base_url,
+            username=st.session_state.webdav_username,
+            password=st.session_state.webdav_password,
+            read_paths=st.session_state.webdav_read_paths,
+        )
+        st.session_state.webdav_status_message = "WebDAV settings saved."
+        st.rerun()
+
+    if refresh_rag:
+        try:
+            documents, status_lines = collect_webdav_documents(
+                base_url=st.session_state.webdav_base_url,
+                username=st.session_state.webdav_username,
+                password=st.session_state.webdav_password,
+                read_paths=st.session_state.webdav_read_paths,
+            )
+            st.session_state.webdav_documents = documents
+            st.session_state.webdav_rag_chunks = build_rag_index(documents)
+            st.session_state.webdav_status_message = (
+                f"Loaded {len(documents)} document(s) and {len(st.session_state.webdav_rag_chunks)} chunk(s) from WebDAV."
+            )
+            st.session_state.webdav_status_detail = status_lines
+            persist_webdav_settings(
+                base_url=st.session_state.webdav_base_url,
+                username=st.session_state.webdav_username,
+                password=st.session_state.webdav_password,
+                read_paths=st.session_state.webdav_read_paths,
+            )
+            st.rerun()
+        except Exception as exc:
+            st.session_state.webdav_status_message = f"WebDAV load failed: {exc}"
+            st.session_state.webdav_status_detail = []
+
+    if st.session_state.webdav_status_message:
+        st.info(st.session_state.webdav_status_message)
+
+    documents: list[dict] = st.session_state.get("webdav_documents", [])
+    rag_chunks: list[dict] = st.session_state.get("webdav_rag_chunks", [])
+    if documents:
+        st.write(f"Documents: `{len(documents)}`")
+        st.write(f"Chunks: `{len(rag_chunks)}`")
+        with st.expander("Loaded WebDAV Sources", expanded=False):
+            for document in documents[:MAX_RAG_FILES]:
+                size_label = format_bytes(document.get("size"))
+                st.write(f"- `{document['path']}` ({document['type']}, {size_label})")
+
+    status_detail = st.session_state.get("webdav_status_detail", [])
+    if status_detail:
+        with st.expander("Sync Log", expanded=False):
+            for line in status_detail[:100]:
+                st.write(f"- {line}")
+
+    current_prompt = st.session_state.get("prompt_input", "")
+    return build_rag_context(current_prompt, rag_chunks)
+
+
 def main() -> None:
     st.set_page_config(page_title="Gemma 3 4B on RTX 5090", layout="wide")
     st.title("Gemma 3 4B AI for RTX 5090")
@@ -1517,119 +1936,126 @@ def main() -> None:
         st.session_state.last_elapsed_seconds = None
     if "prepared_downloads" not in st.session_state:
         st.session_state.prepared_downloads = []
+    main_col, right_col = st.columns([2.2, 1.0], gap="large")
 
-    prompt = st.text_area(
-        "Prompt",
-        height=180,
-        placeholder="질문을 입력하세요. 엑셀 파일이나 이미지를 함께 올리면 같이 분석합니다.",
-    )
-    query_disabled = not prompt.strip()
-    action_col, stop_col, elapsed_col = st.columns([1.2, 1.0, 1.8])
-    with action_col:
-        query_submitted = st.button("Query Gemma", type="primary", disabled=query_disabled, use_container_width=True)
-    with stop_col:
-        stop_requested = st.button("Stop", disabled=query_disabled, use_container_width=True)
-    with elapsed_col:
-        elapsed_label = "Elapsed time: -"
-        if st.session_state.last_elapsed_seconds is not None:
-            elapsed_label = f"Elapsed time: {st.session_state.last_elapsed_seconds:.2f} seconds"
-        st.markdown(f"**{elapsed_label}**")
+    with main_col:
+        prompt = st.text_area(
+            "Prompt",
+            height=180,
+            placeholder="질문을 입력하세요. 엑셀 파일이나 이미지를 함께 올리면 같이 분석합니다.",
+            key="prompt_input",
+        )
+        query_disabled = not prompt.strip()
+        action_col, stop_col, elapsed_col = st.columns([1.2, 1.0, 1.8])
+        with action_col:
+            query_submitted = st.button("Query Gemma", type="primary", disabled=query_disabled, use_container_width=True)
+        with stop_col:
+            stop_requested = st.button("Stop", disabled=query_disabled, use_container_width=True)
+        with elapsed_col:
+            elapsed_label = "Elapsed time: -"
+            if st.session_state.last_elapsed_seconds is not None:
+                elapsed_label = f"Elapsed time: {st.session_state.last_elapsed_seconds:.2f} seconds"
+            st.markdown(f"**{elapsed_label}**")
 
-    if stop_requested:
-        st.session_state.query_cancel_requested = True
-        st.warning("Stop requested. The current query will stop when the next response chunk arrives.")
+        if stop_requested:
+            st.session_state.query_cancel_requested = True
+            st.warning("Stop requested. The current query will stop when the next response chunk arrives.")
 
-    uploaded_excels = st.file_uploader(
-        "Excel files",
-        type=["xlsx", "xls"],
-        accept_multiple_files=True,
-    )
-    uploaded_images = st.file_uploader(
-        "Image files",
-        type=["png", "jpg", "jpeg", "webp", "bmp"],
-        accept_multiple_files=True,
-    )
+        uploaded_excels = st.file_uploader(
+            "Excel files",
+            type=["xlsx", "xls"],
+            accept_multiple_files=True,
+        )
+        uploaded_images = st.file_uploader(
+            "Image files",
+            type=["png", "jpg", "jpeg", "webp", "bmp"],
+            accept_multiple_files=True,
+        )
 
-    render_prepared_downloads()
+        render_prepared_downloads()
 
-    excel_contexts: list[str] = []
-    if uploaded_excels:
-        st.subheader("Excel Preview")
-        for uploaded_excel in uploaded_excels:
-            try:
-                saved_path = save_uploaded_excel(uploaded_excel)
-                context = excel_to_context(uploaded_excel)
-                excel_contexts.append(context)
-                uploaded_excel.seek(0)
-                workbook = pd.ExcelFile(uploaded_excel)
-                st.write(f"Workbook: `{uploaded_excel.name}`")
-                st.caption(f"Saved to: `{saved_path}`")
-                for sheet_name in workbook.sheet_names:
-                    frame = workbook.parse(sheet_name)
-                    st.write(f"Sheet: `{sheet_name}`")
-                    st.dataframe(frame.head(MAX_PREVIEW_ROWS), use_container_width=True)
-            except Exception as exc:
-                st.error(f"Failed to read Excel file {uploaded_excel.name}: {exc}")
+        excel_contexts: list[str] = []
+        if uploaded_excels:
+            st.subheader("Excel Preview")
+            for uploaded_excel in uploaded_excels:
+                try:
+                    saved_path = save_uploaded_excel(uploaded_excel)
+                    context = excel_to_context(uploaded_excel)
+                    excel_contexts.append(context)
+                    uploaded_excel.seek(0)
+                    workbook = pd.ExcelFile(uploaded_excel)
+                    st.write(f"Workbook: `{uploaded_excel.name}`")
+                    st.caption(f"Saved to: `{saved_path}`")
+                    for sheet_name in workbook.sheet_names:
+                        frame = workbook.parse(sheet_name)
+                        st.write(f"Sheet: `{sheet_name}`")
+                        st.dataframe(frame.head(MAX_PREVIEW_ROWS), use_container_width=True)
+                except Exception as exc:
+                    st.error(f"Failed to read Excel file {uploaded_excel.name}: {exc}")
 
-    image_payloads: list[str] = []
-    if uploaded_images:
-        st.subheader("Image Preview")
-        columns = st.columns(min(len(uploaded_images), 3))
-        for index, uploaded_image in enumerate(uploaded_images):
-            try:
-                image_base64, image = image_to_base64(uploaded_image)
-                image_payloads.append(image_base64)
-                with columns[index % len(columns)]:
-                    st.image(image, caption=uploaded_image.name, use_container_width=True)
-            except Exception as exc:
-                st.error(f"Failed to read image {uploaded_image.name}: {exc}")
+        image_payloads: list[str] = []
+        if uploaded_images:
+            st.subheader("Image Preview")
+            columns = st.columns(min(len(uploaded_images), 3))
+            for index, uploaded_image in enumerate(uploaded_images):
+                try:
+                    image_base64, image = image_to_base64(uploaded_image)
+                    image_payloads.append(image_base64)
+                    with columns[index % len(columns)]:
+                        st.image(image, caption=uploaded_image.name, use_container_width=True)
+                except Exception as exc:
+                    st.error(f"Failed to read image {uploaded_image.name}: {exc}")
 
-    if query_submitted:
-        with st.spinner("Gemma is generating a response..."):
-            try:
-                st.session_state.query_cancel_requested = False
-                start_time = time.perf_counter()
-                answer = call_ollama(host, model, prompt, excel_contexts, image_payloads, temperature)
-                elapsed_seconds = time.perf_counter() - start_time
-                st.session_state.last_elapsed_seconds = elapsed_seconds
-                st.session_state.history.append(
-                    {
-                        "prompt": prompt,
-                        "answer": answer,
-                        "elapsed_seconds": elapsed_seconds,
-                        "model": model,
-                        "temperature": temperature,
-                    }
-                )
-                st.success("Response received")
-                st.rerun()
-            except RuntimeError as exc:
-                elapsed_seconds = time.perf_counter() - start_time
-                st.session_state.last_elapsed_seconds = elapsed_seconds
-                st.warning(str(exc))
-            except requests.HTTPError as exc:
-                detail = exc.response.text if exc.response is not None else str(exc)
-                st.error(f"Ollama request failed: {detail}")
-            except requests.RequestException as exc:
-                st.error(f"Failed to connect to Ollama at {host}: {exc}")
-            except Exception as exc:
-                st.error(f"Unexpected error: {exc}")
-            finally:
-                st.session_state.query_cancel_requested = False
+    with right_col:
+        rag_context = render_webdav_rag_panel()
 
-    render_workspace_downloads()
+    with main_col:
+        if query_submitted:
+            with st.spinner("Gemma is generating a response..."):
+                try:
+                    st.session_state.query_cancel_requested = False
+                    start_time = time.perf_counter()
+                    answer = call_ollama(host, model, prompt, excel_contexts, rag_context, image_payloads, temperature)
+                    elapsed_seconds = time.perf_counter() - start_time
+                    st.session_state.last_elapsed_seconds = elapsed_seconds
+                    st.session_state.history.append(
+                        {
+                            "prompt": prompt,
+                            "answer": answer,
+                            "elapsed_seconds": elapsed_seconds,
+                            "model": model,
+                            "temperature": temperature,
+                        }
+                    )
+                    st.success("Response received")
+                    st.rerun()
+                except RuntimeError as exc:
+                    elapsed_seconds = time.perf_counter() - start_time
+                    st.session_state.last_elapsed_seconds = elapsed_seconds
+                    st.warning(str(exc))
+                except requests.HTTPError as exc:
+                    detail = exc.response.text if exc.response is not None else str(exc)
+                    st.error(f"Ollama request failed: {detail}")
+                except requests.RequestException as exc:
+                    st.error(f"Failed to connect to Ollama at {host}: {exc}")
+                except Exception as exc:
+                    st.error(f"Unexpected error: {exc}")
+                finally:
+                    st.session_state.query_cancel_requested = False
 
-    if st.session_state.history:
-        st.subheader("History")
-        for item in reversed(st.session_state.history):
-            st.markdown("**Prompt**")
-            st.write(item["prompt"])
-            st.markdown("**Answer**")
-            st.write(item["answer"])
-            if item.get("elapsed_seconds") is not None:
-                st.caption(
-                    f"Model: {item.get('model', model)} | Temperature: {item.get('temperature', temperature):.1f} | Elapsed: {item['elapsed_seconds']:.2f} seconds"
-                )
+        render_workspace_downloads()
+
+        if st.session_state.history:
+            st.subheader("History")
+            for item in reversed(st.session_state.history):
+                st.markdown("**Prompt**")
+                st.write(item["prompt"])
+                st.markdown("**Answer**")
+                st.write(item["answer"])
+                if item.get("elapsed_seconds") is not None:
+                    st.caption(
+                        f"Model: {item.get('model', model)} | Temperature: {item.get('temperature', temperature):.1f} | Elapsed: {item['elapsed_seconds']:.2f} seconds"
+                    )
 
 
 if __name__ == "__main__":
