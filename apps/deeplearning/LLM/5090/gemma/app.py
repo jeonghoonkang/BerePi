@@ -384,6 +384,14 @@ def workspace_relative(path: Path) -> str:
     return str(path.resolve().relative_to(WORKSPACE_DIR.resolve()))
 
 
+def list_workspace_files(limit: int = 200) -> list[Path]:
+    """Return workspace files for UI download actions."""
+    if not WORKSPACE_DIR.exists():
+        return []
+    files = sorted(path for path in WORKSPACE_DIR.rglob("*") if path.is_file())
+    return files[:limit]
+
+
 def list_workspace_entries(relative_path: str = ".", recursive: bool = False) -> str:
     """List files and directories within the workspace."""
     path = safe_workspace_path(relative_path)
@@ -1108,6 +1116,35 @@ def format_duration(seconds: float | None) -> str:
     return f"{secs}s"
 
 
+def render_workspace_downloads() -> None:
+    """Render browser download controls for files stored in the workspace."""
+    st.subheader("Workspace Files")
+    workspace_files = list_workspace_files()
+
+    if not workspace_files:
+        st.caption("No files are currently stored in the workspace.")
+        return
+
+    st.caption("Download files created on the server workspace directly to this browser client.")
+    for workspace_file in workspace_files:
+        relative_path = workspace_relative(workspace_file)
+        file_size = format_bytes(workspace_file.stat().st_size)
+        name_col, size_col, action_col = st.columns([3.8, 1.2, 1.6])
+        with name_col:
+            st.write(f"`{relative_path}`")
+        with size_col:
+            st.caption(file_size)
+        with action_col:
+            st.download_button(
+                "Download",
+                data=workspace_file.read_bytes(),
+                file_name=workspace_file.name,
+                mime="application/octet-stream",
+                key=f"download-{relative_path}",
+                use_container_width=True,
+            )
+
+
 def get_default_ollama_models_root() -> Path:
     """Return the configured or default local Ollama model root."""
     configured = os.getenv("OLLAMA_MODELS")
@@ -1560,6 +1597,8 @@ def main() -> None:
                 st.error(f"Unexpected error: {exc}")
             finally:
                 st.session_state.query_cancel_requested = False
+
+    render_workspace_downloads()
 
     if st.session_state.history:
         st.subheader("History")

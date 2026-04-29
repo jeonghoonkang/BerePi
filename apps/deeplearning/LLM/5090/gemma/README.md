@@ -19,6 +19,7 @@ tool calling. Workspace tools are enabled only for supported Qwen coder models.
 - Response elapsed time display after each prompt
 - Current model information, local storage path, and model size display in the sidebar
 - Uploaded Excel files are saved into the app-local `workspace` directory
+- Files in the server `workspace` can be downloaded to the browser client from the landing page
 - Qwen can use validated workspace tools to list, read, write, copy, and delete files
 - Qwen can prepare workspace files for direct download through the Streamlit UI
 - User-selectable Ollama model storage path with model file migration support
@@ -84,6 +85,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - Each model can keep its own temperature setting from `0.0` to `2.0`.
 - Excel files are summarized into prompt context rather than being passed as raw binary.
 - Uploaded Excel files are also saved into `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace`.
+- Files generated in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace` can be sent to the browser with the `Workspace Files` download section.
 - Excel tool calls support workbook inspection, sheet preview, cell reads/writes, numeric range operations such as `sum`, `average`, `min`, `max`, and `count`, plus multi-file merge in `append_rows` or `separate_sheets` mode, and single-sheet vertical stacking with configurable blank row gaps.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
 - The app tries to detect GPU memory using `nvidia-smi` and recommends a model size accordingly.
