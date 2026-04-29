@@ -39,6 +39,7 @@ WEBDAV_TIMEOUT = 60
 WEBDAV_NS = {
     "d": "DAV:",
 }
+DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/username"
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -335,12 +336,15 @@ def get_saved_webdav_settings() -> dict:
     """Return persisted WebDAV settings with sane defaults."""
     settings = load_app_settings()
     webdav_settings = settings.get("webdav") if isinstance(settings.get("webdav"), dict) else {}
-    read_paths = webdav_settings.get("read_paths", ["", "", "", ""])
+    read_paths = webdav_settings.get(
+        "read_paths",
+        [DEFAULT_WEBDAV_READ_PATH] * 4,
+    )
     if not isinstance(read_paths, list):
-        read_paths = ["", "", "", ""]
+        read_paths = [DEFAULT_WEBDAV_READ_PATH] * 4
     normalized_paths = [str(value).strip() for value in read_paths[:4]]
     while len(normalized_paths) < 4:
-        normalized_paths.append("")
+        normalized_paths.append(DEFAULT_WEBDAV_READ_PATH)
     return {
         "base_url": str(webdav_settings.get("base_url", "")).strip(),
         "username": str(webdav_settings.get("username", "")).strip(),
@@ -402,7 +406,16 @@ def normalize_webdav_base_url(base_url: str) -> str:
 
 def build_webdav_url(base_url: str, relative_path: str) -> str:
     """Build a full WebDAV URL from a base path and user path."""
-    clean_path = relative_path.strip().lstrip("/")
+    cleaned_input = relative_path.strip()
+    if cleaned_input.startswith("http://") or cleaned_input.startswith("https://"):
+        return cleaned_input
+
+    parsed_base = urlparse(normalize_webdav_base_url(base_url))
+    if cleaned_input.startswith("/"):
+        encoded_path = "/".join(quote(part) for part in cleaned_input.split("/") if part)
+        return f"{parsed_base.scheme}://{parsed_base.netloc}/{encoded_path}"
+
+    clean_path = cleaned_input.lstrip("/")
     if not clean_path:
         return normalize_webdav_base_url(base_url)
     encoded_path = "/".join(quote(part) for part in clean_path.split("/") if part)
@@ -1845,7 +1858,7 @@ def render_webdav_rag_panel() -> str:
             st.text_input(
                 f"Read Path {index + 1}",
                 value=initial_value,
-                placeholder="docs/project-a/",
+                placeholder=DEFAULT_WEBDAV_READ_PATH,
                 key=f"webdav_read_path_{index + 1}",
             )
         )
