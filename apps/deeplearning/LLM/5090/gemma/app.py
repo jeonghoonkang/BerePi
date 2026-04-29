@@ -1129,12 +1129,16 @@ def render_workspace_downloads() -> None:
     for workspace_file in workspace_files:
         relative_path = workspace_relative(workspace_file)
         file_size = format_bytes(workspace_file.stat().st_size)
-        name_col, size_col, action_col = st.columns([3.8, 1.2, 1.6])
+        confirm_key = f"confirm-delete-{relative_path}"
+        if confirm_key not in st.session_state:
+            st.session_state[confirm_key] = False
+
+        name_col, size_col, download_col, delete_col = st.columns([3.6, 1.0, 1.4, 1.4])
         with name_col:
             st.write(f"`{relative_path}`")
         with size_col:
             st.caption(file_size)
-        with action_col:
+        with download_col:
             st.download_button(
                 "Download",
                 data=workspace_file.read_bytes(),
@@ -1143,6 +1147,21 @@ def render_workspace_downloads() -> None:
                 key=f"download-{relative_path}",
                 use_container_width=True,
             )
+        with delete_col:
+            delete_label = "Confirm Delete" if st.session_state[confirm_key] else "Delete"
+            if st.button(delete_label, key=f"delete-{relative_path}", use_container_width=True):
+                if st.session_state[confirm_key]:
+                    workspace_file.unlink()
+                    st.session_state[confirm_key] = False
+                    st.session_state["workspace_file_message"] = f"Deleted: {relative_path}"
+                    st.rerun()
+                else:
+                    st.session_state[confirm_key] = True
+
+    workspace_message = st.session_state.get("workspace_file_message", "")
+    if workspace_message:
+        st.success(workspace_message)
+        st.session_state["workspace_file_message"] = ""
 
 
 def get_default_ollama_models_root() -> Path:
