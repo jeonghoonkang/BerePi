@@ -25,6 +25,8 @@
 ## Streamlit human detect
 
 - File: `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo/human_detect.py`
+- Config: `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo/input.conf`
+- Runner: `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo/run.sh`
 - Purpose:
   - Read image files from a remote WebDAV folder
   - Detect people with YOLO, allowing GPU selection when multiple NVIDIA GPUs are available and defaulting to the first GPU
@@ -39,8 +41,14 @@
 ```bash
 cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo
 pip install -r requirements.txt
-streamlit run human_detect.py
+./run.sh
 ```
 
 - Default Streamlit port: `2290`
 - Default bind address: `0.0.0.0`
+
+### Config flow
+
+- `input.conf` is read first as the default configuration
+- values saved from the Streamlit UI override `input.conf`
+- if you want to reset the UI to the file defaults, remove `human_detect_settings.json`

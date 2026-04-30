@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 from dataclasses import dataclass
 from datetime import datetime
 import io
@@ -22,6 +23,7 @@ OUTPUT_DIR = APP_DIR / "output" / "human_detect"
 ORIGINAL_OUTPUT_DIR = OUTPUT_DIR / "original"
 BOXED_OUTPUT_DIR = OUTPUT_DIR / "boxed"
 SETTINGS_PATH = APP_DIR / "human_detect_settings.json"
+INPUT_CONF_PATH = APP_DIR / "input.conf"
 REQUEST_TIMEOUT = 90
 WEBDAV_NS = {"d": "DAV:"}
 SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -69,6 +71,48 @@ def load_settings() -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def load_input_conf() -> dict[str, Any]:
+    """Load optional INI defaults from input.conf."""
+    if not INPUT_CONF_PATH.exists():
+        return {}
+
+    parser = configparser.ConfigParser()
+    parser.read(INPUT_CONF_PATH, encoding="utf-8")
+
+    source = parser["source"] if parser.has_section("source") else {}
+    destination = parser["destination"] if parser.has_section("destination") else {}
+    model = parser["model"] if parser.has_section("model") else {}
+
+    return {
+        "source": {
+            "webdav_hostname": source.get("webdav_hostname", ""),
+            "webdav_root": source.get("webdav_root", "/remote.php/dav/files/username/"),
+            "username": source.get("username", ""),
+            "password": source.get("password", ""),
+            "folder": source.get("folder", ""),
+        },
+        "destinations": {
+            "webdav_folders": [
+                destination.get("webdav_folder1", ""),
+                destination.get("webdav_folder2", ""),
+                destination.get("webdav_folder3", ""),
+                destination.get("webdav_folder4", ""),
+            ],
+            "local_folders": [
+                destination.get("local_folder1", ""),
+                destination.get("local_folder2", ""),
+                destination.get("local_folder3", ""),
+                destination.get("local_folder4", ""),
+            ],
+        },
+        "model": {
+            "name": model.get("name", "yolov8n.pt"),
+            "confidence": float(model.get("confidence", str(DEFAULT_CONFIDENCE))),
+            "device": model.get("device", get_default_inference_device()),
+        },
+    }
 
 
 def save_settings(settings: dict[str, Any]) -> None:
@@ -369,6 +413,12 @@ def default_settings() -> dict[str, Any]:
 
 def get_settings() -> dict[str, Any]:
     settings = default_settings()
+    input_conf = load_input_conf()
+    for key, value in input_conf.items():
+        if isinstance(value, dict) and isinstance(settings.get(key), dict):
+            settings[key].update(value)
+        else:
+            settings[key] = value
     saved = load_settings()
     for key, value in saved.items():
         if isinstance(value, dict) and isinstance(settings.get(key), dict):
