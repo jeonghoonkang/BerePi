@@ -41,3 +41,6 @@ cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo
 pip install -r requirements.txt
 streamlit run human_detect.py
 ```
+
+- Default Streamlit port: `2290`
+- Default bind address: `0.0.0.0`
