@@ -28,7 +28,7 @@
 - Config: `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo/input.conf`
 - Runner: `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/yolo/run.sh`
 - Purpose:
-  - Read image files from a remote WebDAV folder
+  - Read image files from a remote WebDAV folder, a local folder, or both
   - Detect people with YOLO, allowing GPU selection when multiple NVIDIA GPUs are available and defaulting to the first GPU
   - Save two result images when a person is found:
     - original image with capture time footer
@@ -52,3 +52,9 @@ pip install -r requirements.txt
 - `input.conf` is read first as the default configuration
 - values saved from the Streamlit UI override `input.conf`
 - if you want to reset the UI to the file defaults, remove `human_detect_settings.json`
+
+### Source and output options
+
+- Source type can be `WebDAV`, `Local`, or `Both`
+- Source WebDAV folder and source local folder can both be configured
+- Original output directory and boxed output directory can be changed from the UI or `input.conf`
