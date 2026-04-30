@@ -563,6 +563,7 @@ def process_remote_images(
             "captured_at": timestamp_text,
             "has_person": detection["has_person"],
             "person_count": len(detection["person_boxes"]),
+            "source_preview_bytes": image_bytes,
             "saved_original": "",
             "saved_boxed": "",
             "webdav_targets": [],
@@ -789,10 +790,24 @@ def main() -> None:
                 positives = [row for row in rows if row["has_person"]]
                 if positives:
                     latest = positives[-1]
+                    if latest.get("source_preview_bytes"):
+                        st.image(
+                            latest["source_preview_bytes"],
+                            caption="Source image preview",
+                            width=800,
+                        )
                     if latest["saved_original"]:
-                        st.image(str(latest["saved_original"]), caption="Saved original with timestamp", use_container_width=True)
+                        st.image(
+                            str(latest["saved_original"]),
+                            caption="Saved original with timestamp",
+                            width=1024,
+                        )
                     if latest["saved_boxed"]:
-                        st.image(str(latest["saved_boxed"]), caption="Saved boxed image with timestamp", use_container_width=True)
+                        st.image(
+                            str(latest["saved_boxed"]),
+                            caption="Saved boxed image with timestamp",
+                            width=1024,
+                        )
         except Exception as exc:
             st.error(f"Human detection run failed: {exc}")
 

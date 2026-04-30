@@ -59,3 +59,4 @@ pip install -r requirements.txt
 - Source WebDAV folder and source local folder can both be configured
 - Original output directory and boxed output directory can be changed from the UI or `input.conf`
 - Source files can be kept or deleted after processing, and the default is to keep them
+- Source preview is shown at `800px` width, and processed result previews are shown at `1024px` width
