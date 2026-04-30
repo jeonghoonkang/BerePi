@@ -58,3 +58,4 @@ pip install -r requirements.txt
 - Source type can be `WebDAV`, `Local`, or `Both`
 - Source WebDAV folder and source local folder can both be configured
 - Original output directory and boxed output directory can be changed from the UI or `input.conf`
+- Source files can be kept or deleted after processing, and the default is to keep them

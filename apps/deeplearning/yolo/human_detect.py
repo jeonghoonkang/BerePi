@@ -111,6 +111,7 @@ def load_input_conf() -> dict[str, Any]:
             ],
             "original_output_dir": destination.get("original_output_dir", str((OUTPUT_DIR / "original").resolve())),
             "boxed_output_dir": destination.get("boxed_output_dir", str((OUTPUT_DIR / "boxed").resolve())),
+            "delete_source_files": destination.get("delete_source_files", "false").strip().lower() in {"1", "true", "yes", "y"},
         },
         "model": {
             "name": model.get("name", "yolov8n.pt"),
@@ -411,6 +412,7 @@ def default_settings() -> dict[str, Any]:
             ],
             "original_output_dir": str((OUTPUT_DIR / "original").resolve()),
             "boxed_output_dir": str((OUTPUT_DIR / "boxed").resolve()),
+            "delete_source_files": False,
         },
         "model": {
             "name": "yolov8n.pt",
@@ -509,6 +511,7 @@ def process_remote_images(
     device: str,
     original_output_dir: str,
     boxed_output_dir: str,
+    delete_source_files: bool,
 ) -> list[dict[str, Any]]:
     source_items: list[dict[str, Any]] = []
     if source_mode in {"webdav", "both"}:
@@ -601,7 +604,7 @@ def process_remote_images(
             )
         result_row["webdav_targets"] = webdav_targets
 
-        if local_targets or webdav_targets:
+        if delete_source_files and (local_targets or webdav_targets):
             if item["source_type"] == "webdav":
                 delete_remote_file(source_config, str(item["source_path"]))
             else:
@@ -709,6 +712,13 @@ def main() -> None:
             value=destination_settings.get("boxed_output_dir", str((OUTPUT_DIR / "boxed").resolve())),
             key="boxed_output_dir",
         )
+        delete_source_files = st.radio(
+            "Source File Handling",
+            options=[False, True],
+            index=1 if destination_settings.get("delete_source_files", False) else 0,
+            format_func=lambda value: "Delete Source Files After Processing" if value else "Keep Source Files",
+            key="delete_source_files",
+        )
 
     destination_webdav_dirs = [st.session_state.get(f"destination_webdav_folder_{index + 1}", "").strip() for index in range(4)]
     destination_local_dirs = [st.session_state.get(f"destination_local_folder_{index + 1}", "").strip() for index in range(4)]
@@ -738,6 +748,7 @@ def main() -> None:
                     "local_folders": destination_local_dirs,
                     "original_output_dir": original_output_dir,
                     "boxed_output_dir": boxed_output_dir,
+                    "delete_source_files": bool(st.session_state["delete_source_files"]),
                 },
                 "model": {
                     "name": st.session_state["model_name"].strip(),
@@ -767,6 +778,7 @@ def main() -> None:
                 device=st.session_state["inference_device"],
                 original_output_dir=original_output_dir,
                 boxed_output_dir=boxed_output_dir,
+                delete_source_files=bool(st.session_state["delete_source_files"]),
             )
             if not rows:
                 st.info("No image files were found in the selected source directories.")
