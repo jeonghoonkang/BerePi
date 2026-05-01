@@ -119,3 +119,95 @@ Use the model verification helper against cached markdown files:
 ```bash
 python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verify_model_rag_pipeline.py --cache-dir /Users/tinyos/devel_opment/BerePi/apps/nextcloud --question "How does clipboard markdown upload to Nextcloud work?"
 ```
+
+## 한글 안내
+
+이 앱은 `RTX 5090` 환경에서 `Streamlit` 과 `Ollama` 를 이용해 `gemma` 와 `qwen` 계열 모델을 함께 사용할 수 있도록 만든 인터페이스입니다. 기본 모델은 `gemma3:4b` 이며, 필요하면 사이드바에서 다른 모델을 선택하거나 직접 다운로드할 수 있습니다.
+
+### 주요 기능
+
+- 텍스트 질의응답
+- Excel 업로드 및 시트 미리보기
+- 이미지 업로드 및 모델 입력
+- `workspace` 내부 파일 다운로드 및 삭제
+- Nextcloud WebDAV 경로를 통한 Markdown/PDF 문서 RAG
+- `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 workspace tool calling 지원
+
+### 모델별 동작
+
+- `gemma` 계열 모델은 일반 질의응답 모드로 동작합니다.
+- `qwen coder` 계열 모델은 일반 질의응답에 더해 workspace 파일 도구를 사용할 수 있습니다.
+- WebDAV 에서 읽어온 RAG 문맥은 `gemma`, `qwen` 선택 모델 모두 공통으로 사용합니다.
+- 즉, 모델마다 답변 스타일이나 tool calling 가능 여부는 다를 수 있지만, 문서 검색 결과 자체는 같은 흐름으로 연결됩니다.
+
+### 설치 방법
+
+```bash
+cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Ollama 준비
+
+먼저 `Ollama` 서버를 실행합니다.
+
+```bash
+ollama serve
+```
+
+기본 Gemma 모델을 다운로드합니다.
+
+```bash
+ollama pull gemma3:4b
+```
+
+코딩형 모델도 함께 쓰려면 아래 모델을 추가로 받을 수 있습니다.
+
+```bash
+ollama pull qwen2.5-coder:7b
+ollama pull qwen3-coder:30b
+```
+
+### 실행 방법
+
+```bash
+cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma
+chmod +x run.sh
+./run.sh
+```
+
+또는 직접 실행할 수 있습니다.
+
+```bash
+streamlit run app.py --server.address 0.0.0.0 --server.port 2280
+```
+
+### WebDAV / RAG 사용 방법
+
+- 오른쪽 `WebDAV / RAG` 패널에서 Nextcloud WebDAV 주소와 계정 정보를 설정합니다.
+- `Read Path 1` 부터 `Read Path 4` 까지 필요한 문서 경로를 입력할 수 있습니다.
+- 앱은 각 경로 아래의 `.md`, `.markdown`, `.pdf` 파일을 읽어서 간단한 lexical RAG 인덱스를 구성합니다.
+- 사용자가 질문하면 현재 질문과 관련성이 높은 문서 조각을 찾아 프롬프트에 함께 넣습니다.
+- 이 검색 문맥은 선택된 `gemma` 와 `qwen` 모델 모두에 공통으로 전달됩니다.
+
+### 저장 위치와 설정
+
+- 업로드된 Excel 파일은 `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace` 에 저장됩니다.
+- 앱 설정은 `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` 에 저장됩니다.
+- 모델 저장 경로를 바꿔도 실제 다운로드 위치를 바꾸려면 `Ollama` 를 `OLLAMA_MODELS` 환경변수와 함께 다시 시작해야 합니다.
+
+### 검증 방법
+
+공통 RAG 연결이 정상인지 테스트하려면 아래 단위 테스트를 실행합니다.
+
+```bash
+python3 -m unittest /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/test_rag_pipeline.py
+```
+
+실제 Markdown 캐시를 기준으로 모델별 공통 RAG 연결 상태를 확인하려면 아래 스크립트를 실행합니다.
+
+```bash
+python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verify_model_rag_pipeline.py --cache-dir /Users/tinyos/devel_opment/BerePi/apps/nextcloud --question "How does clipboard markdown upload to Nextcloud work?"
+```
