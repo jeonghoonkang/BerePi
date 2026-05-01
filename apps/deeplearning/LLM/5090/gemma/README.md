@@ -100,7 +100,22 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The inferred storage path follows the local `OLLAMA_MODELS` setting or the default `~/.ollama/models` path.
 - Workspace file tools are limited to the app-local `workspace` directory for safety.
 - Qwen coder models run with workspace tool calling, while Gemma models stay in normal chat mode without workspace tool calling.
+- The same WebDAV RAG context is shared across the selectable Gemma and Qwen models; only tool-calling capability differs by model family.
 - When a user asks to download a workspace file, the tool-capable model can call `download_file` and the app shows a button in the `Workspace Downloads` section.
 - If a tool-capable model repeats the same tool call or reaches the tool round cap, the app now asks the model for a final non-tool answer instead of failing immediately.
 - Changing the model storage path in the app updates the desired location and can move existing files, but Ollama must be restarted with `OLLAMA_MODELS` set to the same path for future downloads to use it.
 - The selected model storage path is saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` and restored on the next app start.
+
+## Verify Shared RAG Wiring
+
+Use the unit test:
+
+```bash
+python3 -m unittest /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/test_rag_pipeline.py
+```
+
+Use the model verification helper against cached markdown files:
+
+```bash
+python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verify_model_rag_pipeline.py --cache-dir /Users/tinyos/devel_opment/BerePi/apps/nextcloud --question "How does clipboard markdown upload to Nextcloud work?"
+```
