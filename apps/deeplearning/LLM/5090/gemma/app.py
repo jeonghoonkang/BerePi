@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
+import html
 import io
 import json
 import os
@@ -2034,6 +2036,36 @@ def render_webdav_rag_panel() -> str:
     return build_rag_context(current_prompt, rag_chunks)
 
 
+def render_history_item(item: dict, fallback_model: str, fallback_temperature: float) -> None:
+    """Render one query/answer history item with visual separation."""
+    prompt_text = html.escape(str(item.get("prompt", "")))
+    answer_text = html.escape(str(item.get("answer", "")))
+    queried_at = item.get("queried_at", "-")
+    elapsed_seconds = item.get("elapsed_seconds")
+    elapsed_label = "-" if elapsed_seconds is None else f"{elapsed_seconds:.2f} seconds"
+    model_label = item.get("model", fallback_model)
+    temperature_label = item.get("temperature", fallback_temperature)
+
+    st.markdown(
+        f"""
+        <div style="border: 1px solid #d7e3f4; border-radius: 12px; overflow: hidden; margin-bottom: 1rem;">
+            <div style="background: #eef6ff; padding: 0.85rem 1rem; border-bottom: 1px solid #d7e3f4;">
+            <div style="font-weight: 700; color: #0f3d75; margin-bottom: 0.35rem;">Prompt</div>
+            <div style="white-space: pre-wrap; color: #122033;">{prompt_text}</div>
+          </div>
+          <div style="background: #fff8e8; padding: 0.85rem 1rem; border-bottom: 1px solid #f0dfb0;">
+            <div style="font-weight: 700; color: #7a4b00; margin-bottom: 0.35rem;">Answer</div>
+            <div style="white-space: pre-wrap; color: #2a1d00;">{answer_text}</div>
+          </div>
+          <div style="background: #f7f9fc; padding: 0.65rem 1rem; color: #425466; font-size: 0.92rem;">
+            Query time: {queried_at} | Model: {model_label} | Temperature: {temperature_label:.1f} | Elapsed: {elapsed_label}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="Gemma3 AI for RTX 5090", layout="wide")
     st.title("Gemma3 AI for RTX 5090")
@@ -2126,10 +2158,11 @@ def main() -> None:
 
     with main_col:
         if query_submitted:
-            with st.spinner("Gemma is generating a response..."):
+            with st.spinner("Generating a response..."):
                 try:
                     st.session_state.query_cancel_requested = False
                     start_time = time.perf_counter()
+                    queried_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     answer = call_ollama(host, model, prompt, excel_contexts, rag_context, image_payloads, temperature)
                     elapsed_seconds = time.perf_counter() - start_time
                     st.session_state.last_elapsed_seconds = elapsed_seconds
@@ -2138,6 +2171,7 @@ def main() -> None:
                             "prompt": prompt,
                             "answer": answer,
                             "elapsed_seconds": elapsed_seconds,
+                            "queried_at": queried_at,
                             "model": model,
                             "temperature": temperature,
                         }
@@ -2163,14 +2197,7 @@ def main() -> None:
         if st.session_state.history:
             st.subheader("History")
             for item in reversed(st.session_state.history):
-                st.markdown("**Prompt**")
-                st.write(item["prompt"])
-                st.markdown("**Answer**")
-                st.write(item["answer"])
-                if item.get("elapsed_seconds") is not None:
-                    st.caption(
-                        f"Model: {item.get('model', model)} | Temperature: {item.get('temperature', temperature):.1f} | Elapsed: {item['elapsed_seconds']:.2f} seconds"
-                    )
+                render_history_item(item, model, temperature)
 
 
 if __name__ == "__main__":
