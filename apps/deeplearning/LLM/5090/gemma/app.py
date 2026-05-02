@@ -19,6 +19,7 @@ import pandas as pd
 from pypdf import PdfReader
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image
 
 DEFAULT_OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -348,21 +349,113 @@ def get_saved_webdav_settings() -> dict:
     return {
         "base_url": str(webdav_settings.get("base_url", "")).strip(),
         "username": str(webdav_settings.get("username", "")).strip(),
-        "password": str(webdav_settings.get("password", "")).strip(),
+        "password": "",
         "read_paths": normalized_paths,
     }
 
 
-def persist_webdav_settings(base_url: str, username: str, password: str, read_paths: list[str]) -> None:
-    """Persist WebDAV connection settings to the local settings file."""
+def persist_webdav_settings(base_url: str, username: str, read_paths: list[str]) -> None:
+    """Persist non-secret WebDAV connection settings to the local settings file."""
     settings = load_app_settings()
     settings["webdav"] = {
         "base_url": base_url.strip(),
         "username": username.strip(),
-        "password": password,
         "read_paths": [path.strip() for path in read_paths[:4]],
     }
     save_app_settings(settings)
+
+
+def render_client_webdav_storage_helper() -> None:
+    """Persist WebDAV form values in the browser localStorage instead of on the server."""
+    components.html(
+        """
+        <script>
+        (function() {
+          const storageKey = "berepi.gemma.webdav_settings";
+          const fieldNames = [
+            "WebDAV Base URL",
+            "WebDAV Username",
+            "WebDAV Password / App Token",
+            "Read Path 1",
+            "Read Path 2",
+            "Read Path 3",
+            "Read Path 4",
+          ];
+
+          function loadSavedValues() {
+            try {
+              return JSON.parse(window.localStorage.getItem(storageKey) || "{}");
+            } catch (error) {
+              return {};
+            }
+          }
+
+          function saveValues(values) {
+            try {
+              window.localStorage.setItem(storageKey, JSON.stringify(values));
+            } catch (error) {
+              console.warn("Failed to save WebDAV settings in localStorage", error);
+            }
+          }
+
+          function findInput(label) {
+            return window.parent.document.querySelector(`input[aria-label="${label}"]`);
+          }
+
+          function dispatchInputEvents(element) {
+            element.dispatchEvent(new Event("input", { bubbles: true }));
+            element.dispatchEvent(new Event("change", { bubbles: true }));
+            element.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", code: "Enter" }));
+          }
+
+          function applySavedValues() {
+            const saved = loadSavedValues();
+            fieldNames.forEach((label) => {
+              const element = findInput(label);
+              if (!element) {
+                return;
+              }
+              if (saved[label] && element.value !== saved[label]) {
+                element.value = saved[label];
+                dispatchInputEvents(element);
+              }
+            });
+          }
+
+          function bindPersistence() {
+            const saved = loadSavedValues();
+            fieldNames.forEach((label) => {
+              const element = findInput(label);
+              if (!element || element.dataset.webdavBound === "true") {
+                return;
+              }
+              element.dataset.webdavBound = "true";
+              element.addEventListener("input", () => {
+                saved[label] = element.value || "";
+                saveValues(saved);
+              });
+              element.addEventListener("change", () => {
+                saved[label] = element.value || "";
+                saveValues(saved);
+              });
+            });
+          }
+
+          setTimeout(() => {
+            applySavedValues();
+            bindPersistence();
+          }, 250);
+
+          const observer = new MutationObserver(() => {
+            bindPersistence();
+          });
+          observer.observe(window.parent.document.body, { childList: true, subtree: true });
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 def excel_to_context(uploaded_file) -> str:
@@ -1829,9 +1922,14 @@ def render_webdav_rag_panel() -> str:
         st.session_state.webdav_documents = []
     if "webdav_rag_chunks" not in st.session_state:
         st.session_state.webdav_rag_chunks = []
+    if "webdav_rag_enabled" not in st.session_state:
+        st.session_state.webdav_rag_enabled = True
 
     st.subheader("WebDAV / RAG")
     st.caption("Connect to Nextcloud WebDAV, read up to four paths, and build prompt context from Markdown and PDF files.")
+    st.caption("Password is kept only in this browser's localStorage and is not written into the server app_settings.json file.")
+    rag_enabled = st.toggle("RAG Enabled", value=st.session_state.webdav_rag_enabled, key="webdav_rag_enabled_toggle")
+    st.session_state.webdav_rag_enabled = rag_enabled
 
     base_url = st.text_input(
         "WebDAV Base URL",
@@ -1863,6 +1961,8 @@ def render_webdav_rag_panel() -> str:
             )
         )
 
+    render_client_webdav_storage_helper()
+
     save_col, sync_col = st.columns(2)
     with save_col:
         save_settings = st.button("Save WebDAV Settings", use_container_width=True)
@@ -1878,10 +1978,9 @@ def render_webdav_rag_panel() -> str:
         persist_webdav_settings(
             base_url=st.session_state.webdav_base_url,
             username=st.session_state.webdav_username,
-            password=st.session_state.webdav_password,
             read_paths=st.session_state.webdav_read_paths,
         )
-        st.session_state.webdav_status_message = "WebDAV settings saved."
+        st.session_state.webdav_status_message = "WebDAV settings saved. Password stays only in the current browser localStorage."
         st.rerun()
 
     if refresh_rag:
@@ -1901,7 +2000,6 @@ def render_webdav_rag_panel() -> str:
             persist_webdav_settings(
                 base_url=st.session_state.webdav_base_url,
                 username=st.session_state.webdav_username,
-                password=st.session_state.webdav_password,
                 read_paths=st.session_state.webdav_read_paths,
             )
             st.rerun()
@@ -1928,13 +2026,17 @@ def render_webdav_rag_panel() -> str:
             for line in status_detail[:100]:
                 st.write(f"- {line}")
 
+    if not st.session_state.webdav_rag_enabled:
+        st.warning("RAG is off. The current query will run without WebDAV context.")
+        return ""
+
     current_prompt = st.session_state.get("prompt_input", "")
     return build_rag_context(current_prompt, rag_chunks)
 
 
 def main() -> None:
-    st.set_page_config(page_title="Gemma 3 4B on RTX 5090", layout="wide")
-    st.title("Gemma 3 4B AI for RTX 5090")
+    st.set_page_config(page_title="Gemma3 AI for RTX 5090", layout="wide")
+    st.title("Gemma3 AI for RTX 5090")
     st.caption("Ollama + Streamlit with text, Excel, and image inputs")
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1961,7 +2063,7 @@ def main() -> None:
         query_disabled = not prompt.strip()
         action_col, stop_col, elapsed_col = st.columns([1.2, 1.0, 1.8])
         with action_col:
-            query_submitted = st.button("Query Gemma", type="primary", disabled=query_disabled, use_container_width=True)
+            query_submitted = st.button("Query", type="primary", disabled=query_disabled, use_container_width=True)
         with stop_col:
             stop_requested = st.button("Stop", disabled=query_disabled, use_container_width=True)
         with elapsed_col:
