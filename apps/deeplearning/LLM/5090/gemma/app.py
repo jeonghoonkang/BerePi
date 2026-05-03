@@ -2014,7 +2014,7 @@ def render_webdav_rag_panel() -> str:
     if "webdav_rag_chunks" not in st.session_state:
         st.session_state.webdav_rag_chunks = []
     if "webdav_rag_enabled" not in st.session_state:
-        st.session_state.webdav_rag_enabled = True
+        st.session_state.webdav_rag_enabled = False
 
     st.subheader("WebDAV / RAG")
     st.caption("Connect to Nextcloud WebDAV, read up to four paths, and build prompt context from Markdown and PDF files.")

@@ -198,6 +198,21 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - 앱 설정은 `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` 에 저장됩니다.
 - 모델 저장 경로를 바꿔도 실제 다운로드 위치를 바꾸려면 `Ollama` 를 `OLLAMA_MODELS` 환경변수와 함께 다시 시작해야 합니다.
 
+### 웹 접근 로그인 설정
+
+- 웹페이지 최초 접근 시 `ID` 와 `Password` 를 입력해야 앱 본문에 들어갈 수 있습니다.
+- 서버에서 환경변수 `GEMMA_APP_LOGIN_ID`, `GEMMA_APP_LOGIN_PASSWORD` 를 설정하면 해당 값을 우선 사용합니다.
+- 환경변수를 쓰지 않을 경우 `app_settings.json` 에 아래와 같이 넣어서 접근 계정을 지정할 수 있습니다.
+
+```json
+{
+  "access_control": {
+    "login_id": "your_id",
+    "login_password": "your_password"
+  }
+}
+```
+
 ### 검증 방법
 
 공통 RAG 연결이 정상인지 테스트하려면 아래 단위 테스트를 실행합니다.
