@@ -588,9 +588,37 @@ def normalize_webdav_base_url(base_url: str) -> str:
     return normalized
 
 
+def normalize_webdav_read_path(base_url: str, read_path: str) -> str:
+    """Normalize a user-provided WebDAV read path into a path relative to the configured base URL."""
+    cleaned_input = read_path.strip()
+    if not cleaned_input:
+        return ""
+
+    normalized_base_url = normalize_webdav_base_url(base_url)
+    parsed_base = urlparse(normalized_base_url)
+    base_path = unquote(parsed_base.path).rstrip("/")
+
+    if cleaned_input.startswith("http://") or cleaned_input.startswith("https://"):
+        parsed_input = urlparse(cleaned_input)
+        decoded_path = unquote(parsed_input.path).strip("/")
+        base_path_stripped = base_path.strip("/")
+        if base_path_stripped and decoded_path.startswith(base_path_stripped):
+            decoded_path = decoded_path[len(base_path_stripped):].strip("/")
+        return decoded_path
+
+    decoded_input = unquote(cleaned_input).strip()
+    if decoded_input.startswith("/"):
+        normalized_input = decoded_input.rstrip("/")
+        if base_path and normalized_input.startswith(base_path):
+            normalized_input = normalized_input[len(base_path):]
+        return normalized_input.strip("/")
+
+    return decoded_input.strip("/")
+
+
 def build_webdav_url(base_url: str, relative_path: str) -> str:
     """Build a full WebDAV URL from a base path and user path."""
-    cleaned_input = relative_path.strip()
+    cleaned_input = normalize_webdav_read_path(base_url, relative_path)
     if cleaned_input.startswith("http://") or cleaned_input.startswith("https://"):
         return cleaned_input
 
@@ -604,6 +632,30 @@ def build_webdav_url(base_url: str, relative_path: str) -> str:
         return normalize_webdav_base_url(base_url)
     encoded_path = "/".join(quote(part) for part in clean_path.split("/") if part)
     return urljoin(normalize_webdav_base_url(base_url), encoded_path)
+
+
+def test_webdav_connection(base_url: str, username: str, password: str, read_paths: list[str]) -> tuple[str, list[str]]:
+    """Validate the current WebDAV credentials and one or more configured paths."""
+    session = requests.Session()
+    session.auth = (username, password)
+
+    normalized_base_url = normalize_webdav_base_url(base_url)
+    normalized_paths = [normalize_webdav_read_path(normalized_base_url, path) for path in read_paths if path.strip()]
+    if not normalized_paths:
+        normalized_paths = [""]
+
+    status_lines: list[str] = []
+    for normalized_path in normalized_paths:
+        target_url = build_webdav_url(normalized_base_url, normalized_path)
+        try:
+            listing_root = webdav_propfind(session, target_url, depth="0")
+            entries = parse_webdav_listing(listing_root, normalized_base_url)
+            status_lines.append(f"OK: {target_url} ({len(entries)} item metadata row(s) returned)")
+        except requests.HTTPError as exc:
+            detail = exc.response.text.strip()[:300] if exc.response is not None and exc.response.text else str(exc)
+            raise RuntimeError(f"Connection test failed for {target_url}: {detail}") from exc
+
+    return "WebDAV connection test passed.", status_lines
 
 
 def webdav_propfind(session: requests.Session, target_url: str, depth: str = "1") -> ET.Element:
@@ -2054,16 +2106,23 @@ def render_webdav_rag_panel() -> str:
 
     render_client_webdav_storage_helper()
 
-    save_col, sync_col = st.columns(2)
+    normalized_base_url = normalize_webdav_base_url(base_url)
+    normalized_read_paths = [normalize_webdav_read_path(normalized_base_url, path) for path in read_paths]
+    if any(original.strip() != normalized.strip() for original, normalized in zip(read_paths, normalized_read_paths)):
+        st.caption("Read Path values are auto-normalized relative to the configured WebDAV Base URL.")
+
+    save_col, test_col, sync_col = st.columns(3)
     with save_col:
         save_settings = st.button("Save WebDAV Settings", use_container_width=True)
+    with test_col:
+        test_connection = st.button("Test WebDAV Connection", use_container_width=True)
     with sync_col:
         refresh_rag = st.button("Load WebDAV RAG", type="primary", use_container_width=True)
 
-    st.session_state.webdav_base_url = base_url.strip()
+    st.session_state.webdav_base_url = normalized_base_url.rstrip("/")
     st.session_state.webdav_username = username.strip()
     st.session_state.webdav_password = password
-    st.session_state.webdav_read_paths = [path.strip() for path in read_paths]
+    st.session_state.webdav_read_paths = normalized_read_paths
 
     if save_settings:
         persist_webdav_settings(
@@ -2073,6 +2132,21 @@ def render_webdav_rag_panel() -> str:
         )
         st.session_state.webdav_status_message = "WebDAV settings saved. Password stays only in the current browser localStorage."
         st.rerun()
+
+    if test_connection:
+        try:
+            status_message, status_lines = test_webdav_connection(
+                base_url=st.session_state.webdav_base_url,
+                username=st.session_state.webdav_username,
+                password=st.session_state.webdav_password,
+                read_paths=st.session_state.webdav_read_paths,
+            )
+            st.session_state.webdav_status_message = status_message
+            st.session_state.webdav_status_detail = status_lines
+            st.rerun()
+        except Exception as exc:
+            st.session_state.webdav_status_message = f"WebDAV test failed: {exc}"
+            st.session_state.webdav_status_detail = []
 
     if refresh_rag:
         try:
