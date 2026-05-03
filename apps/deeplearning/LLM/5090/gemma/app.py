@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import subprocess
 import time
@@ -69,6 +70,9 @@ MODEL_DEFAULT_TEMPERATURES = {
     "qwen2.5-coder:7b": 0.2,
     "qwen3-coder:30b": 0.2,
 }
+
+DEFAULT_APP_LOGIN_ID = "admin"
+DEFAULT_APP_LOGIN_PASSWORD = "change-this-password"
 
 FILE_TOOLS = [
     {
@@ -316,6 +320,91 @@ def save_app_settings(settings: dict) -> None:
         json.dumps(settings, ensure_ascii=True, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def get_access_control_settings() -> dict:
+    """Return server-side login settings for the app access gate."""
+    settings = load_app_settings()
+    access_control = settings.get("access_control") if isinstance(settings.get("access_control"), dict) else {}
+
+    login_id = os.getenv("GEMMA_APP_LOGIN_ID")
+    if not login_id:
+        configured_id = access_control.get("login_id")
+        if isinstance(configured_id, str) and configured_id.strip():
+            login_id = configured_id.strip()
+        else:
+            login_id = DEFAULT_APP_LOGIN_ID
+
+    login_password = os.getenv("GEMMA_APP_LOGIN_PASSWORD")
+    if not login_password:
+        configured_password = access_control.get("login_password")
+        if isinstance(configured_password, str) and configured_password.strip():
+            login_password = configured_password
+        else:
+            login_password = DEFAULT_APP_LOGIN_PASSWORD
+
+    return {
+        "login_id": login_id,
+        "login_password": login_password,
+    }
+
+
+def render_access_gate() -> bool:
+    """Require login before rendering the main application."""
+    if "app_authenticated" not in st.session_state:
+        st.session_state.app_authenticated = False
+    if "app_auth_error" not in st.session_state:
+        st.session_state.app_auth_error = ""
+
+    if st.session_state.app_authenticated:
+        return True
+
+    credentials = get_access_control_settings()
+
+    login_col, spacer_col = st.columns([1.2, 1.8], gap="large")
+    with login_col:
+        st.title("Gemma3 AI for RTX 5090")
+        st.caption("Sign in to access this page.")
+        with st.form("app_access_login", clear_on_submit=False):
+            login_id = st.text_input("ID", key="app_access_login_id")
+            login_password = st.text_input("Password", type="password", key="app_access_login_password")
+            submitted = st.form_submit_button("Sign In", use_container_width=True)
+
+        if submitted:
+            login_ok = secrets.compare_digest(login_id.strip(), credentials["login_id"])
+            password_ok = secrets.compare_digest(login_password, credentials["login_password"])
+            if login_ok and password_ok:
+                st.session_state.app_authenticated = True
+                st.session_state.app_auth_error = ""
+                st.rerun()
+            else:
+                st.session_state.app_auth_error = "Invalid ID or password."
+
+        if st.session_state.app_auth_error:
+            st.error(st.session_state.app_auth_error)
+
+        if (
+            credentials["login_id"] == DEFAULT_APP_LOGIN_ID
+            and credentials["login_password"] == DEFAULT_APP_LOGIN_PASSWORD
+        ):
+            st.warning(
+                "Default login is active. Set GEMMA_APP_LOGIN_ID and GEMMA_APP_LOGIN_PASSWORD, "
+                "or configure access_control in app_settings.json."
+            )
+
+    with spacer_col:
+        st.markdown(
+            """
+            ### Access Control
+            This page now requires a login before the application UI is shown.
+
+            Configure credentials on the server with one of these methods:
+            - Environment variables: `GEMMA_APP_LOGIN_ID`, `GEMMA_APP_LOGIN_PASSWORD`
+            - `app_settings.json` entry: `access_control.login_id`, `access_control.login_password`
+            """
+        )
+
+    return False
 
 
 def get_saved_model_root() -> str | None:
@@ -2068,11 +2157,18 @@ def render_history_item(item: dict, fallback_model: str, fallback_temperature: f
 
 def main() -> None:
     st.set_page_config(page_title="Gemma3 AI for RTX 5090", layout="wide")
+
+    if not render_access_gate():
+        st.stop()
+
     st.title("Gemma3 AI for RTX 5090")
     st.caption("Ollama + Streamlit with text, Excel, and image inputs")
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
     host, model = render_sidebar()
+    if st.sidebar.button("Logout", use_container_width=True):
+        st.session_state.app_authenticated = False
+        st.rerun()
     temperature = get_model_temperature(model)
 
     if "history" not in st.session_state:
