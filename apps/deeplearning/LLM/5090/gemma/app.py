@@ -43,6 +43,7 @@ WEBDAV_TIMEOUT = 60
 WEBDAV_NS = {
     "d": "DAV:",
 }
+DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/tinyos/"
 DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER = "메모"
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
@@ -442,16 +443,18 @@ def get_saved_webdav_settings() -> dict:
         "username": str(webdav_settings.get("username", "")).strip(),
         "password": "",
         "read_paths": normalized_paths,
+        "subdir_path": str(webdav_settings.get("subdir_path", "")).strip(),
     }
 
 
-def persist_webdav_settings(base_url: str, username: str, read_paths: list[str]) -> None:
+def persist_webdav_settings(base_url: str, username: str, read_paths: list[str], subdir_path: str) -> None:
     """Persist non-secret WebDAV connection settings to the local settings file."""
     settings = load_app_settings()
     settings["webdav"] = {
         "base_url": base_url.strip(),
         "username": username.strip(),
         "read_paths": [path.strip() for path in read_paths[:4]],
+        "subdir_path": subdir_path.strip(),
     }
     save_app_settings(settings)
 
@@ -467,10 +470,11 @@ def render_client_webdav_storage_helper() -> None:
             "WebDAV Base URL",
             "WebDAV Username",
             "WebDAV Password / App Token",
-            "Subdir 1",
-            "Subdir 2",
-            "Subdir 3",
-            "Subdir 4",
+            "Read Path 1",
+            "Read Path 2",
+            "Read Path 3",
+            "Read Path 4",
+            "Subdir Path",
           ];
 
           function loadSavedValues() {
@@ -581,66 +585,67 @@ def tokenize_query(text: str) -> list[str]:
 
 
 def normalize_webdav_base_url(base_url: str) -> str:
-    """Normalize a WebDAV base URL for reliable joining."""
-    normalized = base_url.strip()
-    if normalized and not normalized.endswith("/"):
-        normalized += "/"
-    return normalized
+    """Normalize a WebDAV origin URL like https://host:port."""
+    cleaned = base_url.strip()
+    if not cleaned:
+        return ""
+    parsed = urlparse(cleaned if "://" in cleaned else f"https://{cleaned}")
+    if not parsed.scheme or not parsed.netloc:
+        return cleaned.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def normalize_webdav_read_path(base_url: str, read_path: str) -> str:
-    """Normalize a user-provided WebDAV read path into a path relative to the configured base URL."""
+    """Normalize a user-provided WebDAV root path into an absolute server path."""
     cleaned_input = read_path.strip()
     if not cleaned_input:
         return ""
 
-    normalized_base_url = normalize_webdav_base_url(base_url)
-    parsed_base = urlparse(normalized_base_url)
-    base_path = unquote(parsed_base.path).rstrip("/")
-
     if cleaned_input.startswith("http://") or cleaned_input.startswith("https://"):
         parsed_input = urlparse(cleaned_input)
-        decoded_path = unquote(parsed_input.path).strip("/")
-        base_path_stripped = base_path.strip("/")
-        if base_path_stripped and decoded_path.startswith(base_path_stripped):
-            decoded_path = decoded_path[len(base_path_stripped):].strip("/")
-        return decoded_path
+        return unquote(parsed_input.path).rstrip("/") or "/"
 
     decoded_input = unquote(cleaned_input).strip()
-    if decoded_input.startswith("/"):
-        normalized_input = decoded_input.rstrip("/")
-        if base_path and normalized_input.startswith(base_path):
-            normalized_input = normalized_input[len(base_path):]
-        return normalized_input.strip("/")
-
-    return decoded_input.strip("/")
+    if not decoded_input.startswith("/"):
+        decoded_input = f"/{decoded_input}"
+    return decoded_input.rstrip("/") or "/"
 
 
-def build_webdav_url(base_url: str, relative_path: str) -> str:
-    """Build a full WebDAV URL from a base path and user path."""
-    cleaned_input = normalize_webdav_read_path(base_url, relative_path)
-    if cleaned_input.startswith("http://") or cleaned_input.startswith("https://"):
-        return cleaned_input
-
-    parsed_base = urlparse(normalize_webdav_base_url(base_url))
-    if cleaned_input.startswith("/"):
-        encoded_path = "/".join(quote(part) for part in cleaned_input.split("/") if part)
-        return f"{parsed_base.scheme}://{parsed_base.netloc}/{encoded_path}"
-
-    clean_path = cleaned_input.lstrip("/")
-    if not clean_path:
-        return normalize_webdav_base_url(base_url)
-    encoded_path = "/".join(quote(part) for part in clean_path.split("/") if part)
-    return urljoin(normalize_webdav_base_url(base_url), encoded_path)
+def normalize_webdav_subdir_path(subdir_path: str) -> str:
+    """Normalize an optional subdirectory path relative to a read root."""
+    return unquote(subdir_path).strip().strip("/")
 
 
-def test_webdav_connection(base_url: str, username: str, password: str, read_paths: list[str]) -> tuple[str, list[str]]:
+def join_webdav_paths(root_path: str, subdir_path: str) -> str:
+    """Join a WebDAV root path and an optional subdirectory path."""
+    normalized_root = normalize_webdav_read_path("", root_path)
+    normalized_subdir = normalize_webdav_subdir_path(subdir_path)
+    if not normalized_subdir:
+        return normalized_root
+    return f"{normalized_root.rstrip('/')}/{normalized_subdir}"
+
+
+def build_webdav_url(base_url: str, server_path: str) -> str:
+    """Build a full WebDAV URL from an origin and absolute server path."""
+    normalized_base_url = normalize_webdav_base_url(base_url)
+    normalized_server_path = normalize_webdav_read_path("", server_path)
+    encoded_path = "/".join(quote(part) for part in normalized_server_path.split("/") if part)
+    return f"{normalized_base_url}/{encoded_path}"
+
+
+def test_webdav_connection(
+    base_url: str,
+    username: str,
+    password: str,
+    read_paths: list[str],
+    subdir_path: str,
+) -> tuple[str, list[str]]:
     """Validate the current WebDAV credentials and one or more configured paths."""
     session = requests.Session()
     session.auth = (username, password)
 
     normalized_base_url = normalize_webdav_base_url(base_url)
-    normalized_paths = [normalize_webdav_read_path(normalized_base_url, path) for path in read_paths if path.strip()]
+    normalized_paths = [join_webdav_paths(path, subdir_path) for path in read_paths if path.strip()]
     if not normalized_paths:
         normalized_paths = [""]
 
@@ -649,7 +654,7 @@ def test_webdav_connection(base_url: str, username: str, password: str, read_pat
         target_url = build_webdav_url(normalized_base_url, normalized_path)
         try:
             listing_root = webdav_propfind(session, target_url, depth="0")
-            entries = parse_webdav_listing(listing_root, normalized_base_url)
+            entries = parse_webdav_listing(listing_root, normalized_path)
             status_lines.append(f"OK: {target_url} ({len(entries)} item metadata row(s) returned)")
         except requests.HTTPError as exc:
             detail = exc.response.text.strip()[:300] if exc.response is not None and exc.response.text else str(exc)
@@ -674,10 +679,10 @@ def webdav_propfind(session: requests.Session, target_url: str, depth: str = "1"
     return ET.fromstring(response.text)
 
 
-def parse_webdav_listing(xml_root: ET.Element, base_url: str) -> list[dict]:
+def parse_webdav_listing(xml_root: ET.Element, base_path: str) -> list[dict]:
     """Parse a PROPFIND XML response into file and directory entries."""
     entries: list[dict] = []
-    base_path = urlparse(base_url).path
+    normalized_base_path = normalize_webdav_read_path("", base_path)
 
     for response_element in xml_root.findall("d:response", WEBDAV_NS):
         href = response_element.findtext("d:href", default="", namespaces=WEBDAV_NS)
@@ -687,8 +692,8 @@ def parse_webdav_listing(xml_root: ET.Element, base_url: str) -> list[dict]:
         decoded_href = unquote(href)
         href_path = urlparse(decoded_href).path
         relative_path = href_path
-        if base_path and href_path.startswith(base_path):
-            relative_path = href_path[len(base_path):]
+        if normalized_base_path and href_path.startswith(normalized_base_path):
+            relative_path = href_path[len(normalized_base_path):]
         relative_path = relative_path.strip("/")
 
         prop = response_element.find("d:propstat/d:prop", WEBDAV_NS)
@@ -705,6 +710,7 @@ def parse_webdav_listing(xml_root: ET.Element, base_url: str) -> list[dict]:
         entries.append(
             {
                 "href": decoded_href,
+                "full_path": href_path,
                 "relative_path": relative_path,
                 "is_collection": is_collection,
                 "size": size,
@@ -763,6 +769,7 @@ def collect_webdav_documents(
     username: str,
     password: str,
     read_paths: list[str],
+    subdir_path: str,
 ) -> tuple[list[dict], list[str]]:
     """Fetch markdown and PDF files from configured WebDAV paths."""
     session = requests.Session()
@@ -775,7 +782,8 @@ def collect_webdav_documents(
     seen_files: set[str] = set()
 
     for configured_path in [path.strip() for path in read_paths if path.strip()]:
-        pending_urls = [build_webdav_url(normalized_base_url, configured_path)]
+        scan_root = join_webdav_paths(configured_path, subdir_path)
+        pending_urls = [build_webdav_url(normalized_base_url, scan_root)]
 
         while pending_urls and len(documents) < MAX_RAG_FILES:
             current_url = pending_urls.pop(0)
@@ -784,8 +792,8 @@ def collect_webdav_documents(
             visited_directories.add(current_url)
 
             listing_root = webdav_propfind(session, current_url, depth="1")
-            entries = parse_webdav_listing(listing_root, normalized_base_url)
-            current_relative = current_url.removeprefix(normalized_base_url).strip("/")
+            entries = parse_webdav_listing(listing_root, scan_root)
+            current_relative = urlparse(unquote(current_url)).path.removeprefix(scan_root).strip("/")
 
             for entry in entries:
                 relative_path = entry["relative_path"]
@@ -793,7 +801,7 @@ def collect_webdav_documents(
                     continue
 
                 if entry["is_collection"]:
-                    pending_urls.append(build_webdav_url(normalized_base_url, relative_path))
+                    pending_urls.append(build_webdav_url(normalized_base_url, entry["full_path"]))
                     continue
 
                 suffix = Path(relative_path).suffix.lower()
@@ -802,7 +810,7 @@ def collect_webdav_documents(
                 if relative_path in seen_files:
                     continue
 
-                file_response = session.get(build_webdav_url(normalized_base_url, relative_path), timeout=WEBDAV_TIMEOUT)
+                file_response = session.get(build_webdav_url(normalized_base_url, entry["full_path"]), timeout=WEBDAV_TIMEOUT)
                 file_response.raise_for_status()
                 seen_files.add(relative_path)
 
@@ -2059,6 +2067,8 @@ def render_webdav_rag_panel() -> str:
         st.session_state.webdav_password = saved_webdav["password"]
     if "webdav_read_paths" not in st.session_state:
         st.session_state.webdav_read_paths = list(saved_webdav["read_paths"])
+    if "webdav_subdir_path" not in st.session_state:
+        st.session_state.webdav_subdir_path = saved_webdav["subdir_path"]
     if "webdav_status_message" not in st.session_state:
         st.session_state.webdav_status_message = ""
     if "webdav_documents" not in st.session_state:
@@ -2069,16 +2079,16 @@ def render_webdav_rag_panel() -> str:
         st.session_state.webdav_rag_enabled = False
 
     st.subheader("WebDAV / RAG")
-    st.caption("Connect to the user WebDAV root, then enter up to four subdirectories to build prompt context from Markdown and PDF files.")
+    st.caption("Use the server origin as WebDAV Base URL, add one or more WebDAV read roots, and optionally append a shared subdirectory path.")
     st.caption("Password is kept only in this browser's localStorage and is not written into the server app_settings.json file.")
-    st.caption("Example: Base URL `/remote.php/dav/files/tinyos/` with Subdir `메모` reads `/remote.php/dav/files/tinyos/메모`.")
+    st.caption("Example: Base URL `https://keties.mooo.com:22443`, Read Path `/remote.php/dav/files/tinyos/`, Subdir `메모`.")
     rag_enabled = st.toggle("RAG Enabled", value=st.session_state.webdav_rag_enabled, key="webdav_rag_enabled_toggle")
     st.session_state.webdav_rag_enabled = rag_enabled
 
     base_url = st.text_input(
         "WebDAV Base URL",
         value=st.session_state.webdav_base_url,
-        placeholder="https://nextcloud.example.com/remote.php/dav/files/username/",
+        placeholder="https://nextcloud.example.com:22443",
         key="webdav_base_url_input",
     )
     username = st.text_input(
@@ -2098,19 +2108,28 @@ def render_webdav_rag_panel() -> str:
         initial_value = st.session_state.webdav_read_paths[index] if index < len(st.session_state.webdav_read_paths) else ""
         read_paths.append(
             st.text_input(
-                f"Subdir {index + 1}",
+                f"Read Path {index + 1}",
                 value=initial_value,
-                placeholder=DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER,
+                placeholder=DEFAULT_WEBDAV_READ_PATH,
                 key=f"webdav_read_path_{index + 1}",
             )
         )
+    subdir_path = st.text_input(
+        "Subdir Path",
+        value=st.session_state.webdav_subdir_path,
+        placeholder=DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER,
+        key="webdav_subdir_path_input",
+    )
 
     render_client_webdav_storage_helper()
 
     normalized_base_url = normalize_webdav_base_url(base_url)
     normalized_read_paths = [normalize_webdav_read_path(normalized_base_url, path) for path in read_paths]
+    normalized_subdir_path = normalize_webdav_subdir_path(subdir_path)
     if any(original.strip() != normalized.strip() for original, normalized in zip(read_paths, normalized_read_paths)):
-        st.caption("Subdir values are auto-normalized relative to the configured WebDAV Base URL.")
+        st.caption("Read Path values are auto-normalized into server paths.")
+    if subdir_path.strip() != normalized_subdir_path:
+        st.caption("Subdir Path is auto-normalized as a relative path.")
 
     save_col, test_col, sync_col = st.columns(3)
     with save_col:
@@ -2124,12 +2143,14 @@ def render_webdav_rag_panel() -> str:
     st.session_state.webdav_username = username.strip()
     st.session_state.webdav_password = password
     st.session_state.webdav_read_paths = normalized_read_paths
+    st.session_state.webdav_subdir_path = normalized_subdir_path
 
     if save_settings:
         persist_webdav_settings(
             base_url=st.session_state.webdav_base_url,
             username=st.session_state.webdav_username,
             read_paths=st.session_state.webdav_read_paths,
+            subdir_path=st.session_state.webdav_subdir_path,
         )
         st.session_state.webdav_status_message = "WebDAV settings saved. Password stays only in the current browser localStorage."
         st.rerun()
@@ -2141,6 +2162,7 @@ def render_webdav_rag_panel() -> str:
                 username=st.session_state.webdav_username,
                 password=st.session_state.webdav_password,
                 read_paths=st.session_state.webdav_read_paths,
+                subdir_path=st.session_state.webdav_subdir_path,
             )
             st.session_state.webdav_status_message = status_message
             st.session_state.webdav_status_detail = status_lines
@@ -2156,6 +2178,7 @@ def render_webdav_rag_panel() -> str:
                 username=st.session_state.webdav_username,
                 password=st.session_state.webdav_password,
                 read_paths=st.session_state.webdav_read_paths,
+                subdir_path=st.session_state.webdav_subdir_path,
             )
             st.session_state.webdav_documents = documents
             st.session_state.webdav_rag_chunks = build_rag_index(documents)
@@ -2167,6 +2190,7 @@ def render_webdav_rag_panel() -> str:
                 base_url=st.session_state.webdav_base_url,
                 username=st.session_state.webdav_username,
                 read_paths=st.session_state.webdav_read_paths,
+                subdir_path=st.session_state.webdav_subdir_path,
             )
             st.rerun()
         except Exception as exc:

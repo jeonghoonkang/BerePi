@@ -187,8 +187,10 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 ### WebDAV / RAG 사용 방법
 
 - 오른쪽 `WebDAV / RAG` 패널에서 Nextcloud WebDAV 주소와 계정 정보를 설정합니다.
-- `WebDAV Base URL` 에는 사용자 루트 경로를 넣습니다. 예: `https://server/remote.php/dav/files/tinyos/`
-- `Subdir 1` 부터 `Subdir 4` 까지는 그 아래 하위 디렉터리 이름만 넣습니다. 예: `메모`
+- `WebDAV Base URL` 에는 서버 주소만 넣습니다. 예: `https://keties.mooo.com:22443`
+- `Read Path 1` 부터 `Read Path 4` 에는 WebDAV 읽기 루트 경로를 넣습니다. 예: `/remote.php/dav/files/tinyos/`
+- `Subdir Path` 에는 그 아래 공통 하위 디렉터리를 넣습니다. 예: `메모`
+- 위 예시 조합은 `/remote.php/dav/files/tinyos/메모` 를 읽어서 RAG 를 구성합니다.
 - 앱은 각 경로 아래의 `.md`, `.markdown`, `.pdf` 파일을 읽어서 간단한 lexical RAG 인덱스를 구성합니다.
 - 사용자가 질문하면 현재 질문과 관련성이 높은 문서 조각을 찾아 프롬프트에 함께 넣습니다.
 - 이 검색 문맥은 선택된 `gemma` 와 `qwen` 모델 모두에 공통으로 전달됩니다.
