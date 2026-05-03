@@ -92,7 +92,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The same `Workspace Files` section also supports browser-side delete actions with a second-click confirmation step.
 - The right-side `WebDAV / RAG` panel is intended for Nextcloud WebDAV URLs such as `https://host/remote.php/dav/files/<user>/`.
 - Up to four WebDAV read paths can be configured, and the app recursively loads `.md`, `.markdown`, and `.pdf` files from those paths into a lightweight lexical RAG index.
-- Read Path 1 to Read Path 4 are prefilled with `/remote.php/dav/files/username` as a Nextcloud-style default.
+- Subdir inputs are relative to the configured WebDAV Base URL. For example, if the base URL is `/remote.php/dav/files/tinyos/`, entering `메모` reads `/remote.php/dav/files/tinyos/메모`.
 - WebDAV settings are saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json`.
 - Excel tool calls support workbook inspection, sheet preview, cell reads/writes, numeric range operations such as `sum`, `average`, `min`, `max`, and `count`, plus multi-file merge in `append_rows` or `separate_sheets` mode, and single-sheet vertical stacking with configurable blank row gaps.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
@@ -187,7 +187,8 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 ### WebDAV / RAG 사용 방법
 
 - 오른쪽 `WebDAV / RAG` 패널에서 Nextcloud WebDAV 주소와 계정 정보를 설정합니다.
-- `Read Path 1` 부터 `Read Path 4` 까지 필요한 문서 경로를 입력할 수 있습니다.
+- `WebDAV Base URL` 에는 사용자 루트 경로를 넣습니다. 예: `https://server/remote.php/dav/files/tinyos/`
+- `Subdir 1` 부터 `Subdir 4` 까지는 그 아래 하위 디렉터리 이름만 넣습니다. 예: `메모`
 - 앱은 각 경로 아래의 `.md`, `.markdown`, `.pdf` 파일을 읽어서 간단한 lexical RAG 인덱스를 구성합니다.
 - 사용자가 질문하면 현재 질문과 관련성이 높은 문서 조각을 찾아 프롬프트에 함께 넣습니다.
 - 이 검색 문맥은 선택된 `gemma` 와 `qwen` 모델 모두에 공통으로 전달됩니다.

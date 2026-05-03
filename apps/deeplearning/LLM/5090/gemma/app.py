@@ -43,7 +43,7 @@ WEBDAV_TIMEOUT = 60
 WEBDAV_NS = {
     "d": "DAV:",
 }
-DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/username"
+DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER = "메모"
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -430,13 +430,13 @@ def get_saved_webdav_settings() -> dict:
     webdav_settings = settings.get("webdav") if isinstance(settings.get("webdav"), dict) else {}
     read_paths = webdav_settings.get(
         "read_paths",
-        [DEFAULT_WEBDAV_READ_PATH] * 4,
+        [""] * 4,
     )
     if not isinstance(read_paths, list):
-        read_paths = [DEFAULT_WEBDAV_READ_PATH] * 4
+        read_paths = [""] * 4
     normalized_paths = [str(value).strip() for value in read_paths[:4]]
     while len(normalized_paths) < 4:
-        normalized_paths.append(DEFAULT_WEBDAV_READ_PATH)
+        normalized_paths.append("")
     return {
         "base_url": str(webdav_settings.get("base_url", "")).strip(),
         "username": str(webdav_settings.get("username", "")).strip(),
@@ -467,10 +467,10 @@ def render_client_webdav_storage_helper() -> None:
             "WebDAV Base URL",
             "WebDAV Username",
             "WebDAV Password / App Token",
-            "Read Path 1",
-            "Read Path 2",
-            "Read Path 3",
-            "Read Path 4",
+            "Subdir 1",
+            "Subdir 2",
+            "Subdir 3",
+            "Subdir 4",
           ];
 
           function loadSavedValues() {
@@ -2069,8 +2069,9 @@ def render_webdav_rag_panel() -> str:
         st.session_state.webdav_rag_enabled = False
 
     st.subheader("WebDAV / RAG")
-    st.caption("Connect to Nextcloud WebDAV, read up to four paths, and build prompt context from Markdown and PDF files.")
+    st.caption("Connect to the user WebDAV root, then enter up to four subdirectories to build prompt context from Markdown and PDF files.")
     st.caption("Password is kept only in this browser's localStorage and is not written into the server app_settings.json file.")
+    st.caption("Example: Base URL `/remote.php/dav/files/tinyos/` with Subdir `메모` reads `/remote.php/dav/files/tinyos/메모`.")
     rag_enabled = st.toggle("RAG Enabled", value=st.session_state.webdav_rag_enabled, key="webdav_rag_enabled_toggle")
     st.session_state.webdav_rag_enabled = rag_enabled
 
@@ -2097,9 +2098,9 @@ def render_webdav_rag_panel() -> str:
         initial_value = st.session_state.webdav_read_paths[index] if index < len(st.session_state.webdav_read_paths) else ""
         read_paths.append(
             st.text_input(
-                f"Read Path {index + 1}",
+                f"Subdir {index + 1}",
                 value=initial_value,
-                placeholder=DEFAULT_WEBDAV_READ_PATH,
+                placeholder=DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER,
                 key=f"webdav_read_path_{index + 1}",
             )
         )
@@ -2109,7 +2110,7 @@ def render_webdav_rag_panel() -> str:
     normalized_base_url = normalize_webdav_base_url(base_url)
     normalized_read_paths = [normalize_webdav_read_path(normalized_base_url, path) for path in read_paths]
     if any(original.strip() != normalized.strip() for original, normalized in zip(read_paths, normalized_read_paths)):
-        st.caption("Read Path values are auto-normalized relative to the configured WebDAV Base URL.")
+        st.caption("Subdir values are auto-normalized relative to the configured WebDAV Base URL.")
 
     save_col, test_col, sync_col = st.columns(3)
     with save_col:
