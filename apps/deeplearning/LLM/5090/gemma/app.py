@@ -43,7 +43,8 @@ WEBDAV_TIMEOUT = 60
 WEBDAV_NS = {
     "d": "DAV:",
 }
-DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/username"
+DEFAULT_WEBDAV_READ_PATH = ""
+DEFAULT_WEBDAV_READ_PATH_PLACEHOLDER = "sub dir name"
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -430,13 +431,13 @@ def get_saved_webdav_settings() -> dict:
     webdav_settings = settings.get("webdav") if isinstance(settings.get("webdav"), dict) else {}
     read_paths = webdav_settings.get(
         "read_paths",
-        [DEFAULT_WEBDAV_READ_PATH] * 4,
+        [""] * 4,
     )
     if not isinstance(read_paths, list):
-        read_paths = [DEFAULT_WEBDAV_READ_PATH] * 4
+        read_paths = [""] * 4
     normalized_paths = [str(value).strip() for value in read_paths[:4]]
     while len(normalized_paths) < 4:
-        normalized_paths.append(DEFAULT_WEBDAV_READ_PATH)
+        normalized_paths.append("")
     return {
         "base_url": str(webdav_settings.get("base_url", "")).strip(),
         "username": str(webdav_settings.get("username", "")).strip(),
@@ -2099,7 +2100,7 @@ def render_webdav_rag_panel() -> str:
             st.text_input(
                 f"Read Path {index + 1}",
                 value=initial_value,
-                placeholder=DEFAULT_WEBDAV_READ_PATH,
+                placeholder=DEFAULT_WEBDAV_READ_PATH_PLACEHOLDER,
                 key=f"webdav_read_path_{index + 1}",
             )
         )

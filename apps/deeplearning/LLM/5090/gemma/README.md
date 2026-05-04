@@ -92,7 +92,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - The same `Workspace Files` section also supports browser-side delete actions with a second-click confirmation step.
 - The right-side `WebDAV / RAG` panel is intended for Nextcloud WebDAV URLs such as `https://host/remote.php/dav/files/<user>/`.
 - Up to four WebDAV read paths can be configured, and the app recursively loads `.md`, `.markdown`, and `.pdf` files from those paths into a lightweight lexical RAG index.
-- Read Path 1 to Read Path 4 are prefilled with `/remote.php/dav/files/username` as a Nextcloud-style default.
+- If Read Path 1 to Read Path 4 are empty, the input shows `sub dir name` as the placeholder text.
 - WebDAV settings are saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json`.
 - Excel tool calls support workbook inspection, sheet preview, cell reads/writes, numeric range operations such as `sum`, `average`, `min`, `max`, and `count`, plus multi-file merge in `append_rows` or `separate_sheets` mode, and single-sheet vertical stacking with configurable blank row gaps.
 - The sidebar can refresh installed models via `GET /api/tags` and download models via `POST /api/pull`.
