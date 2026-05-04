@@ -582,11 +582,16 @@ def tokenize_query(text: str) -> list[str]:
 
 
 def normalize_webdav_base_url(base_url: str) -> str:
-    """Normalize a WebDAV base URL for reliable joining."""
-    normalized = base_url.strip()
-    if normalized and not normalized.endswith("/"):
-        normalized += "/"
-    return normalized
+    """Normalize a WebDAV base URL and remove trailing slashes."""
+    return base_url.strip().rstrip("/")
+
+
+def webdav_base_url_for_join(base_url: str) -> str:
+    """Return a join-safe base URL with exactly one trailing slash when present."""
+    normalized = normalize_webdav_base_url(base_url)
+    if not normalized:
+        return ""
+    return f"{normalized}/"
 
 
 def normalize_webdav_read_path(base_url: str, read_path: str) -> str:
@@ -595,7 +600,7 @@ def normalize_webdav_read_path(base_url: str, read_path: str) -> str:
     if not cleaned_input:
         return ""
 
-    normalized_base_url = normalize_webdav_base_url(base_url)
+    normalized_base_url = webdav_base_url_for_join(base_url)
     parsed_base = urlparse(normalized_base_url)
     base_path = unquote(parsed_base.path).rstrip("/")
 
@@ -623,16 +628,16 @@ def build_webdav_url(base_url: str, relative_path: str) -> str:
     if cleaned_input.startswith("http://") or cleaned_input.startswith("https://"):
         return cleaned_input
 
-    parsed_base = urlparse(normalize_webdav_base_url(base_url))
+    parsed_base = urlparse(webdav_base_url_for_join(base_url))
     if cleaned_input.startswith("/"):
         encoded_path = "/".join(quote(part) for part in cleaned_input.split("/") if part)
         return f"{parsed_base.scheme}://{parsed_base.netloc}/{encoded_path}"
 
     clean_path = cleaned_input.lstrip("/")
     if not clean_path:
-        return normalize_webdav_base_url(base_url)
+        return webdav_base_url_for_join(base_url)
     encoded_path = "/".join(quote(part) for part in clean_path.split("/") if part)
-    return urljoin(normalize_webdav_base_url(base_url), encoded_path)
+    return urljoin(webdav_base_url_for_join(base_url), encoded_path)
 
 
 def test_webdav_connection(base_url: str, username: str, password: str, read_paths: list[str]) -> tuple[str, list[str]]:
