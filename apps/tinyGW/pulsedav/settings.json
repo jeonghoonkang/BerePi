@@ -1,0 +1,27 @@
+{
+  "include": {
+    "cpu": true,
+    "crontab": true,
+    "disk": true,
+    "docker": true,
+    "gpu": true,
+    "network": true,
+    "screen": true,
+    "user_services": true
+  },
+  "metadata": {
+    "ddns_name": "",
+    "intro_text": "장비 상태 자동 보고",
+    "ssh_port": "22"
+  },
+  "schedule": {
+    "interval_minutes": 30
+  },
+  "webdav": {
+    "hostname": "",
+    "password": "",
+    "root": "/remote.php/dav/files/username/pulsedav",
+    "username": "",
+    "verify_ssl": true
+  }
+}
