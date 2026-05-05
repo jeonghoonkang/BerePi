@@ -725,7 +725,7 @@ def send_once(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     snapshot = collect_snapshot(settings)
     markdown = format_markdown(settings, snapshot, first_boot)
 
-    host_dir = posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
+    host_dir = posixpath.join("pulsedav", normalize_remote_path(hostname())).strip("/")
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     remote_path = posixpath.join(host_dir, file_name).strip("/")
     webdav_config = build_webdav_config(settings)

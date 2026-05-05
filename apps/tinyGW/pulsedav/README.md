@@ -20,7 +20,7 @@
 
 ## 동작
 
-- WebDAV 루트 디렉토리 하위에 `tinyGW` 디렉토리를 만들고, 그 아래에 자신의 호스트명 디렉토리를 만듭니다.
+- WebDAV 루트 디렉토리 하위에 `pulsedav` 디렉토리를 만들고, 그 아래에 자신의 호스트명 디렉토리를 만듭니다.
 - 전송할 때마다 `pulse_YYYYMMDD_HHMMSS.md` 파일을 새로 만듭니다.
 - 36개월보다 오래된 원격 파일은 자동 삭제합니다.
 - 부팅 후 첫 전송 메세지에는 `부팅한 직후`를 포함합니다.
@@ -37,6 +37,40 @@ streamlit run app.py
 
 ```bash
 python3 sender.py --once
+```
+
+초기 세팅 값 출력:
+
+```bash
+python3 sender.py --show-defaults
+```
+
+현재 세팅 확인:
+
+```bash
+python3 sender.py --show-settings
+```
+
+CLI에서 서버, 포트, root dir 등을 지정해 1회 전송:
+
+```bash
+python3 sender.py --once \
+  --server keties.mooo.com \
+  --port 22443 \
+  --scheme https \
+  --root-dir /remote.php/dav/files/tinyos \
+  --username tinyos \
+  --password 'your-password'
+```
+
+CLI에서 지정한 값을 `settings.json`에 저장:
+
+```bash
+python3 sender.py --show-settings \
+  --server keties.mooo.com \
+  --port 22443 \
+  --root-dir /remote.php/dav/files/tinyos \
+  --write-settings
 ```
 
 반복 전송:
