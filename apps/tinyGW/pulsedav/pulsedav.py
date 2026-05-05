@@ -112,7 +112,7 @@ def default_settings() -> dict[str, Any]:
     return {
         "webdav": {
             "hostname": "",
-            "root": "/remote.php/dav/files/username/pulsedav",
+            "root": "/remote.php/dav/files/username",
             "username": "",
             "password": "",
             "verify_ssl": True,
@@ -725,7 +725,7 @@ def send_once(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     snapshot = collect_snapshot(settings)
     markdown = format_markdown(settings, snapshot, first_boot)
 
-    host_dir = normalize_remote_path(hostname())
+    host_dir = posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     remote_path = posixpath.join(host_dir, file_name).strip("/")
     webdav_config = build_webdav_config(settings)

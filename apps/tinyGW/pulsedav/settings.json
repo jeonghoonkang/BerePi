@@ -20,7 +20,7 @@
   "webdav": {
     "hostname": "",
     "password": "",
-    "root": "/remote.php/dav/files/username/pulsedav",
+    "root": "/remote.php/dav/files/username",
     "username": "",
     "verify_ssl": true
   }
