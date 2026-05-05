@@ -39,6 +39,7 @@ MAX_RAG_FILES = 60
 MAX_RAG_CHUNKS = 300
 MAX_RAG_CHUNK_CHARS = 1400
 RAG_TOP_K = 6
+MAX_PROMPT_HISTORY = 200
 WEBDAV_TIMEOUT = 60
 WEBDAV_NS = {
     "d": "DAV:",
@@ -2256,6 +2257,34 @@ def render_history_item(item: dict, fallback_model: str, fallback_temperature: f
     )
 
 
+def render_prompt_input_history(prompt_history: list[dict]) -> None:
+    """Render copy-friendly prompt input history at the bottom of the page."""
+    if not prompt_history:
+        return
+
+    st.subheader("Prompt Input History")
+    st.caption(f"Newest first. Up to {MAX_PROMPT_HISTORY} prompts are kept.")
+
+    history_text = "\n\n".join(
+        [
+            "\n".join(
+                [
+                    f"[{index}] {item.get('queried_at', '-')}",
+                    item.get("prompt", "").strip(),
+                ]
+            ).strip()
+            for index, item in enumerate(reversed(prompt_history), start=1)
+        ]
+    )
+    estimated_rows = min(max(history_text.count("\n") + 4, 10), 40)
+    st.text_area(
+        "Copyable prompt history",
+        value=history_text,
+        height=estimated_rows * 24,
+        key="prompt_history_display",
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="Gemma3 AI for RTX 5090", layout="wide")
 
@@ -2274,6 +2303,8 @@ def main() -> None:
 
     if "history" not in st.session_state:
         st.session_state.history = []
+    if "prompt_history" not in st.session_state:
+        st.session_state.prompt_history = []
     if "query_cancel_requested" not in st.session_state:
         st.session_state.query_cancel_requested = False
     if "last_elapsed_seconds" not in st.session_state:
@@ -2373,6 +2404,13 @@ def main() -> None:
                             "temperature": temperature,
                         }
                     )
+                    st.session_state.prompt_history.append(
+                        {
+                            "prompt": prompt,
+                            "queried_at": queried_at,
+                        }
+                    )
+                    st.session_state.prompt_history = st.session_state.prompt_history[-MAX_PROMPT_HISTORY:]
                     st.success("Response received")
                     st.rerun()
                 except RuntimeError as exc:
@@ -2395,6 +2433,8 @@ def main() -> None:
             st.subheader("History")
             for item in reversed(st.session_state.history):
                 render_history_item(item, model, temperature)
+
+        render_prompt_input_history(st.session_state.prompt_history)
 
 
 if __name__ == "__main__":
