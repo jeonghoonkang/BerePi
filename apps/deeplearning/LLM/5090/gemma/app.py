@@ -43,8 +43,10 @@ WEBDAV_TIMEOUT = 60
 WEBDAV_NS = {
     "d": "DAV:",
 }
-DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/tinyos/"
-DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER = "메모"
+
+DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/username/"
+DEFAULT_WEBDAV_READ_PATH_PLACEHOLDER = "sub dir name"
+
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
     "gemma3:4b",
@@ -2110,7 +2112,7 @@ def render_webdav_rag_panel() -> str:
             st.text_input(
                 f"Read Path {index + 1}",
                 value=initial_value,
-                placeholder=DEFAULT_WEBDAV_READ_PATH,
+                placeholder=DEFAULT_WEBDAV_READ_PATH_PLACEHOLDER,
                 key=f"webdav_read_path_{index + 1}",
             )
         )

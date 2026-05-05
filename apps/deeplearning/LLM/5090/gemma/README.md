@@ -120,7 +120,7 @@ Use the model verification helper against cached markdown files:
 python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verify_model_rag_pipeline.py --cache-dir /Users/tinyos/devel_opment/BerePi/apps/nextcloud --question "How does clipboard markdown upload to Nextcloud work?"
 ```
 
-## 한글 안내
+## Readme
 
 이 앱은 `RTX 5090` 환경에서 `Streamlit` 과 `Ollama` 를 이용해 `gemma` 와 `qwen` 계열 모델을 함께 사용할 수 있도록 만든 인터페이스입니다. 기본 모델은 `gemma3:4b` 이며, 필요하면 사이드바에서 다른 모델을 선택하거나 직접 다운로드할 수 있습니다.
 
