@@ -7,7 +7,7 @@
 - `data/sample_sine.csv`: 학습 샘플용 사인파 시계열 CSV
 - `assets/sample_sine.png`: 샘플 사인파 CSV 그래프 이미지
 - `train.py`: LSTM 모델 학습 코드
-- `validate.py`: 저장된 체크포인트 검증 코드
+- `validate.py`: 저장된 체크포인트 검증 코드와 입력/출력 구간 그래프 생성 코드
 - `requirements.txt`: 실행에 필요한 Python 패키지
 - `checkpoints/`: 학습된 모델 체크포인트 저장 위치
 
@@ -34,6 +34,22 @@ checkpoints/lstm_sample.pt
 python train.py --data data/my_timeseries.csv --value-column Global_active_power
 python validate.py --data data/my_timeseries.csv --checkpoint checkpoints/lstm_sample.pt
 ```
+
+검증을 실행하면 기본적으로 다음 그래프도 생성됩니다.
+
+```text
+assets/lstm_validation_prediction.png
+```
+
+이 이미지는 검증에 사용된 입력 구간을 파란색으로 표시하고, 해당 입력으로 예측한 출력 위치를 실제값은 빨간색, 예측값은 초록색으로 표시합니다.
+
+```bash
+python validate.py --plot-index 0 --plot-output assets/lstm_validation_prediction.png
+```
+
+예제 이미지는 다음과 같습니다.
+
+![LSTM validation prediction example](assets/lstm_validation_prediction_example.png)
 
 ## LSTM 원리
 
