@@ -46,6 +46,7 @@ WEBDAV_NS = {
 
 DEFAULT_WEBDAV_READ_PATH = "/remote.php/dav/files/username/"
 DEFAULT_WEBDAV_READ_PATH_PLACEHOLDER = "sub dir name"
+DEFAULT_WEBDAV_SUBDIR_PLACEHOLDER = "sub dir name"
 
 SUPPORTED_MODEL_OPTIONS = [
     "gemma3:1b",
