@@ -71,3 +71,7 @@ PatchTST는 긴 시계열에서 지역 패턴을 patch 단위로 압축해 Trans
 python train.py --sequence-length 32 --patch-length 8 --stride 4 --epochs 100
 python validate.py
 ```
+
+## PatchTST 구조 이미지
+
+![PatchTST structure](assets/patch_TST.jpg)
