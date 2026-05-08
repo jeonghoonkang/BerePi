@@ -986,6 +986,8 @@ def prompt_requests_workspace_scan(prompt: str) -> bool:
     normalized_prompt = prompt.strip().lower()
     if not normalized_prompt:
         return False
+    if "작업파일" in normalized_prompt:
+        return True
 
     command_patterns = [
         r"파일\s*내용.*알려",
@@ -1024,14 +1026,27 @@ def extract_workspace_file_references(prompt: str) -> list[str]:
 
 def extract_task_file_reference(prompt: str) -> str:
     """Extract the file reference that follows the '작업파일' marker."""
-    match = re.search(
-        r"작업파일\s+(?P<path>[^\s,;:]+(?:\.[A-Za-z0-9_-]+)?)",
+    quoted_match = re.search(
+        r"작업파일\s*[:=]?\s*[\"'`](?P<path>.+?)[\"'`]",
         prompt,
         flags=re.IGNORECASE,
     )
-    if not match:
+    if quoted_match:
+        return quoted_match.group("path").strip()
+
+    bare_match = re.search(
+        r"작업파일\s*[:=]?\s*(?P<path>[^\s,;]+)",
+        prompt,
+        flags=re.IGNORECASE,
+    )
+    if not bare_match:
         return ""
-    return match.group("path").strip().strip("\"'`")
+
+    candidate = bare_match.group("path").strip().strip("\"'`")
+    trailing_noise = {"읽어줘", "읽기", "확인", "처리", "분석", "보기", "알려줘", "열어줘"}
+    if candidate in trailing_noise:
+        return ""
+    return candidate
 
 
 def resolve_prompt_file_references(prompt: str, workspace_files: list[Path]) -> list[Path]:
@@ -1066,6 +1081,10 @@ def resolve_workspace_file_reference(reference: str, workspace_files: list[Path]
 
     normalized_reference = reference.replace("\\", "/").strip().lower().lstrip("./")
     basename_reference = Path(normalized_reference).name
+    stem_reference = Path(basename_reference).stem or basename_reference
+
+    basename_matches: list[Path] = []
+    stem_matches: list[Path] = []
     for path in workspace_files:
         try:
             relative_path = workspace_relative(path).replace("\\", "/").lower()
@@ -1074,7 +1093,17 @@ def resolve_workspace_file_reference(reference: str, workspace_files: list[Path]
         if relative_path == normalized_reference or relative_path.endswith(f"/{normalized_reference}"):
             return path
         if basename_reference and Path(relative_path).name == basename_reference:
-            return path
+            basename_matches.append(path)
+            continue
+        if stem_reference and Path(relative_path).stem.lower() == stem_reference.lower():
+            stem_matches.append(path)
+
+    if basename_matches:
+        basename_matches.sort(key=lambda path: len(workspace_relative(path)))
+        return basename_matches[0]
+    if stem_matches:
+        stem_matches.sort(key=lambda path: len(workspace_relative(path)))
+        return stem_matches[0]
     return None
 
 
@@ -1082,7 +1111,11 @@ def build_task_file_context(prompt: str, max_chars_per_file: int = MAX_WORKSPACE
     """Open the file specified by '작업파일' from workspace and return context plus status."""
     reference = extract_task_file_reference(prompt)
     if not reference:
-        return "", "", False
+        return (
+            "The prompt included the 작업파일 marker, but no valid file name was found after it.",
+            "작업파일 뒤에서 유효한 파일명을 찾지 못했습니다.",
+            "작업파일" in prompt,
+        )
 
     workspace_files = list_workspace_files(limit=500)
     resolved_path = resolve_workspace_file_reference(reference, workspace_files)
@@ -1093,13 +1126,6 @@ def build_task_file_context(prompt: str, max_chars_per_file: int = MAX_WORKSPACE
             True,
         )
 
-    if not is_workspace_text_file(resolved_path):
-        return (
-            f"The requested task file is not a supported text file for direct reading: {workspace_relative(resolved_path)}",
-            f"작업파일 `{workspace_relative(resolved_path)}` 은(는) 직접 읽기 지원 형식이 아닙니다.",
-            True,
-        )
-
     if resolved_path.stat().st_size > MAX_TOOL_FILE_BYTES:
         return (
             f"The requested task file is too large to open safely: {workspace_relative(resolved_path)}",
@@ -1107,8 +1133,15 @@ def build_task_file_context(prompt: str, max_chars_per_file: int = MAX_WORKSPACE
             True,
         )
 
-    with open(resolved_path, "r", encoding="utf-8", errors="replace") as file_handle:
-        content = file_handle.read()
+    try:
+        with open(resolved_path, "r", encoding="utf-8", errors="replace") as file_handle:
+            content = file_handle.read()
+    except OSError as exc:
+        return (
+            f"Failed to open the requested task file: {workspace_relative(resolved_path)} ({exc})",
+            f"작업파일 `{workspace_relative(resolved_path)}` 을(를) 열지 못했습니다: {exc}",
+            True,
+        )
 
     snippet = content[:max_chars_per_file].strip()
     if len(content) > max_chars_per_file:
