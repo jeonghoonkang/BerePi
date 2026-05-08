@@ -999,7 +999,52 @@ def prompt_requests_workspace_scan(prompt: str) -> bool:
         r"find .*file",
         r"check .*file",
     ]
-    return any(re.search(pattern, normalized_prompt) for pattern in command_patterns)
+    if any(re.search(pattern, normalized_prompt) for pattern in command_patterns):
+        return True
+    return bool(extract_workspace_file_references(prompt))
+
+
+def extract_workspace_file_references(prompt: str) -> list[str]:
+    """Extract likely file names or relative paths mentioned in the prompt."""
+    references: list[str] = []
+    extension_pattern = r"(?:txt|md|markdown|csv|json|yaml|yml|log|py|js|ts|tsx|jsx|html|css|xml|ini|conf|cfg|sh)"
+    patterns = [
+        rf"[\w./-]+\.{extension_pattern}",
+        rf"[\w-]+\s*\.{extension_pattern}",
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, prompt, flags=re.IGNORECASE):
+            if isinstance(match, tuple):
+                continue
+            candidate = re.sub(r"\s+", "", str(match).strip().strip("\"'`"))
+            if candidate and candidate not in references:
+                references.append(candidate)
+    return references
+
+
+def resolve_prompt_file_references(prompt: str, workspace_files: list[Path]) -> list[Path]:
+    """Resolve prompt-mentioned file names or relative paths to workspace files."""
+    references = extract_workspace_file_references(prompt)
+    if not references:
+        return []
+
+    resolved_files: list[Path] = []
+    for reference in references:
+        normalized_reference = reference.replace("\\", "/").strip().lower().lstrip("./")
+        basename_reference = Path(normalized_reference).name
+        for path in workspace_files:
+            try:
+                relative_path = workspace_relative(path).replace("\\", "/").lower()
+            except OSError:
+                continue
+            if relative_path == normalized_reference or relative_path.endswith(f"/{normalized_reference}"):
+                if path not in resolved_files:
+                    resolved_files.append(path)
+                continue
+            if basename_reference and Path(relative_path).name == basename_reference:
+                if path not in resolved_files:
+                    resolved_files.append(path)
+    return resolved_files
 
 
 def is_workspace_text_file(path: Path) -> bool:
@@ -1047,6 +1092,12 @@ def build_workspace_context_for_prompt(
     if "workspace" in prompt.lower():
         prompt_terms.add("workspace")
 
+    explicit_files = [
+        path
+        for path in resolve_prompt_file_references(prompt, workspace_files)
+        if is_workspace_text_file(path) and path.stat().st_size <= MAX_TOOL_FILE_BYTES
+    ]
+
     ranked_files: list[tuple[int, Path]] = []
     for path in workspace_files:
         if not is_workspace_text_file(path):
@@ -1060,6 +1111,8 @@ def build_workspace_context_for_prompt(
             continue
 
         score = 0
+        if path in explicit_files:
+            score += 100
         if any(term in relative_path for term in prompt_terms):
             score += 5
         score += sum(1 for term in prompt_terms if term in relative_path)
@@ -1068,7 +1121,17 @@ def build_workspace_context_for_prompt(
         ranked_files.append((score, path))
 
     ranked_files.sort(key=lambda item: (-item[0], str(item[1]).lower()))
-    selected_files = [path for score, path in ranked_files if score > 0][:limit_files]
+    selected_files: list[Path] = []
+    for path in explicit_files:
+        if path not in selected_files:
+            selected_files.append(path)
+    for score, path in ranked_files:
+        if score <= 0:
+            continue
+        if path not in selected_files:
+            selected_files.append(path)
+        if len(selected_files) >= limit_files:
+            break
     if not selected_files:
         selected_files = [path for _, path in ranked_files[:limit_files]]
     if not selected_files:
