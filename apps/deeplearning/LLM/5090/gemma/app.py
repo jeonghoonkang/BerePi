@@ -1022,6 +1022,18 @@ def extract_workspace_file_references(prompt: str) -> list[str]:
     return references
 
 
+def extract_task_file_reference(prompt: str) -> str:
+    """Extract the file reference that follows the '작업파일' marker."""
+    match = re.search(
+        r"작업파일\s+(?P<path>[^\s,;:]+(?:\.[A-Za-z0-9_-]+)?)",
+        prompt,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return match.group("path").strip().strip("\"'`")
+
+
 def resolve_prompt_file_references(prompt: str, workspace_files: list[Path]) -> list[Path]:
     """Resolve prompt-mentioned file names or relative paths to workspace files."""
     references = extract_workspace_file_references(prompt)
@@ -1045,6 +1057,67 @@ def resolve_prompt_file_references(prompt: str, workspace_files: list[Path]) -> 
                 if path not in resolved_files:
                     resolved_files.append(path)
     return resolved_files
+
+
+def resolve_workspace_file_reference(reference: str, workspace_files: list[Path]) -> Path | None:
+    """Resolve one prompt-provided file name or relative path to a workspace file."""
+    if not reference:
+        return None
+
+    normalized_reference = reference.replace("\\", "/").strip().lower().lstrip("./")
+    basename_reference = Path(normalized_reference).name
+    for path in workspace_files:
+        try:
+            relative_path = workspace_relative(path).replace("\\", "/").lower()
+        except OSError:
+            continue
+        if relative_path == normalized_reference or relative_path.endswith(f"/{normalized_reference}"):
+            return path
+        if basename_reference and Path(relative_path).name == basename_reference:
+            return path
+    return None
+
+
+def build_task_file_context(prompt: str, max_chars_per_file: int = MAX_WORKSPACE_SCAN_CHARS) -> tuple[str, str, bool]:
+    """Open the file specified by '작업파일' from workspace and return context plus status."""
+    reference = extract_task_file_reference(prompt)
+    if not reference:
+        return "", "", False
+
+    workspace_files = list_workspace_files(limit=500)
+    resolved_path = resolve_workspace_file_reference(reference, workspace_files)
+    if resolved_path is None:
+        return (
+            f"The requested task file was not found in the workspace: {reference}",
+            f"작업파일 `{reference}` 을(를) workspace에서 찾지 못했습니다.",
+            True,
+        )
+
+    if not is_workspace_text_file(resolved_path):
+        return (
+            f"The requested task file is not a supported text file for direct reading: {workspace_relative(resolved_path)}",
+            f"작업파일 `{workspace_relative(resolved_path)}` 은(는) 직접 읽기 지원 형식이 아닙니다.",
+            True,
+        )
+
+    if resolved_path.stat().st_size > MAX_TOOL_FILE_BYTES:
+        return (
+            f"The requested task file is too large to open safely: {workspace_relative(resolved_path)}",
+            f"작업파일 `{workspace_relative(resolved_path)}` 이(가) 너무 커서 열 수 없습니다.",
+            True,
+        )
+
+    with open(resolved_path, "r", encoding="utf-8", errors="replace") as file_handle:
+        content = file_handle.read()
+
+    snippet = content[:max_chars_per_file].strip()
+    if len(content) > max_chars_per_file:
+        snippet += "\n... [truncated]"
+    return (
+        f"[Task File] {workspace_relative(resolved_path)}\n{snippet}",
+        f"작업파일 `{workspace_relative(resolved_path)}` 을(를) 열었습니다.",
+        True,
+    )
 
 
 def is_workspace_text_file(path: Path) -> bool:
@@ -1091,6 +1164,12 @@ def build_workspace_context_for_prompt(
     }
     if "workspace" in prompt.lower():
         prompt_terms.add("workspace")
+
+    task_file_context, _, task_file_requested = build_task_file_context(prompt, max_chars_per_file=max_chars_per_file)
+    if task_file_requested:
+        if task_file_context.startswith("[Task File]"):
+            return task_file_context, 1
+        return task_file_context, 0
 
     explicit_files = [
         path
@@ -2552,13 +2631,21 @@ def main() -> None:
                     workspace_status = None
                     if prompt_requests_workspace_scan(prompt):
                         workspace_status = st.info("workspace 스캔 중...")
-                        workspace_context, matched_files = build_workspace_context_for_prompt(prompt)
-                        if workspace_context:
-                            workspace_status.success(
-                                f"workspace 스캔 완료: 관련 파일 {matched_files}개를 모델에 전달했습니다."
-                            )
+                        task_file_context, task_file_status, task_file_requested = build_task_file_context(prompt)
+                        if task_file_requested:
+                            workspace_context = task_file_context
+                            if task_file_context.startswith("[Task File]"):
+                                workspace_status.success(task_file_status)
+                            else:
+                                workspace_status.warning(task_file_status)
                         else:
-                            workspace_status.warning("workspace에서 관련 파일을 찾지 못했습니다.")
+                            workspace_context, matched_files = build_workspace_context_for_prompt(prompt)
+                            if workspace_context:
+                                workspace_status.success(
+                                    f"workspace 스캔 완료: 관련 파일 {matched_files}개를 모델에 전달했습니다."
+                                )
+                            else:
+                                workspace_status.warning("workspace에서 관련 파일을 찾지 못했습니다.")
                     answer = call_ollama(
                         host,
                         model,
