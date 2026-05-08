@@ -35,6 +35,8 @@ APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 MAX_TOOL_FILE_BYTES = 1_000_000
 MAX_TOOL_ROUNDS = 8
 MAX_IDENTICAL_TOOL_ROUNDS = 2
+MAX_WORKSPACE_SCAN_FILES = 8
+MAX_WORKSPACE_SCAN_CHARS = 3_000
 MAX_RAG_FILES = 60
 MAX_RAG_CHUNKS = 300
 MAX_RAG_CHUNK_CHARS = 1400
@@ -979,6 +981,115 @@ def read_workspace_file(relative_path: str) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def prompt_requests_workspace_scan(prompt: str) -> bool:
+    """Return whether the prompt likely asks the app to inspect workspace files."""
+    normalized_prompt = prompt.strip().lower()
+    if not normalized_prompt:
+        return False
+
+    command_patterns = [
+        r"파일\s*내용.*알려",
+        r"파일\s*내용.*보여",
+        r"파일\s*내용.*확인",
+        r"파일.*읽어",
+        r"workspace.*파일.*알려",
+        r"workspace.*찾아",
+        r"look at .*file",
+        r"read .*file",
+        r"find .*file",
+        r"check .*file",
+    ]
+    return any(re.search(pattern, normalized_prompt) for pattern in command_patterns)
+
+
+def is_workspace_text_file(path: Path) -> bool:
+    """Return whether the workspace file should be scanned as text."""
+    allowed_suffixes = {
+        ".txt",
+        ".md",
+        ".markdown",
+        ".csv",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".log",
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".html",
+        ".css",
+        ".xml",
+        ".ini",
+        ".conf",
+        ".cfg",
+        ".sh",
+    }
+    return path.suffix.lower() in allowed_suffixes
+
+
+def build_workspace_context_for_prompt(
+    prompt: str,
+    limit_files: int = MAX_WORKSPACE_SCAN_FILES,
+    max_chars_per_file: int = MAX_WORKSPACE_SCAN_CHARS,
+) -> tuple[str, int]:
+    """Scan workspace files relevant to the prompt and return a prompt context block."""
+    workspace_files = list_workspace_files(limit=500)
+    if not workspace_files:
+        return "", 0
+
+    prompt_terms = {
+        token
+        for token in re.findall(r"[a-z0-9가-힣._-]+", prompt.lower())
+        if len(token) >= 2
+    }
+    if "workspace" in prompt.lower():
+        prompt_terms.add("workspace")
+
+    ranked_files: list[tuple[int, Path]] = []
+    for path in workspace_files:
+        if not is_workspace_text_file(path):
+            continue
+        try:
+            relative_path = workspace_relative(path).lower()
+            file_size = path.stat().st_size
+        except OSError:
+            continue
+        if file_size > MAX_TOOL_FILE_BYTES:
+            continue
+
+        score = 0
+        if any(term in relative_path for term in prompt_terms):
+            score += 5
+        score += sum(1 for term in prompt_terms if term in relative_path)
+        if path.suffix.lower() in {".md", ".txt", ".csv", ".json"}:
+            score += 1
+        ranked_files.append((score, path))
+
+    ranked_files.sort(key=lambda item: (-item[0], str(item[1]).lower()))
+    selected_files = [path for score, path in ranked_files if score > 0][:limit_files]
+    if not selected_files:
+        selected_files = [path for _, path in ranked_files[:limit_files]]
+    if not selected_files:
+        return "", 0
+
+    context_blocks: list[str] = []
+    for path in selected_files:
+        try:
+            content = read_workspace_file(workspace_relative(path))
+        except (OSError, ValueError):
+            continue
+        snippet = content[:max_chars_per_file].strip()
+        if not snippet:
+            continue
+        if len(content) > max_chars_per_file:
+            snippet += "\n... [truncated]"
+        context_blocks.append(f"[Workspace File] {workspace_relative(path)}\n{snippet}")
+
+    return "\n\n".join(context_blocks), len(context_blocks)
+
+
 def write_workspace_file(relative_path: str, content: str) -> str:
     """Write text content to a workspace file."""
     path = safe_workspace_path(relative_path)
@@ -1348,7 +1459,13 @@ def model_supports_tools(model: str) -> bool:
     return model.startswith("qwen2.5-coder:") or model.startswith("qwen3-coder:")
 
 
-def build_user_message(prompt: str, excel_contexts: Iterable[str], rag_context: str, allow_tools: bool) -> str:
+def build_user_message(
+    prompt: str,
+    excel_contexts: Iterable[str],
+    rag_context: str,
+    workspace_context: str,
+    allow_tools: bool,
+) -> str:
     """Build the final prompt content sent to the model."""
     content_parts = [prompt.strip()]
 
@@ -1362,6 +1479,12 @@ def build_user_message(prompt: str, excel_contexts: Iterable[str], rag_context: 
         content_parts.append(
             "The user also connected WebDAV RAG sources. Use the retrieved context below when relevant, and cite the source path in your answer when you rely on it.\n\n"
             + rag_context.strip()
+        )
+    if workspace_context.strip():
+        content_parts.append(
+            "The app scanned the workspace for relevant files because the user asked about file contents. "
+            "Use the file excerpts below when relevant, and mention the workspace file path when you rely on it.\n\n"
+            + workspace_context.strip()
         )
     if allow_tools:
         content_parts.append(
@@ -1436,6 +1559,7 @@ def call_ollama(
     prompt: str,
     excel_contexts: list[str],
     rag_context: str,
+    workspace_context: str,
     images: list[str],
     temperature: float,
 ) -> str:
@@ -1458,7 +1582,7 @@ def call_ollama(
         },
         {
             "role": "user",
-            "content": build_user_message(prompt, excel_contexts, rag_context, allow_tools),
+            "content": build_user_message(prompt, excel_contexts, rag_context, workspace_context, allow_tools),
             "images": images,
         },
     ]
@@ -2361,7 +2485,27 @@ def main() -> None:
                     st.session_state.query_cancel_requested = False
                     start_time = time.perf_counter()
                     queried_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    answer = call_ollama(host, model, prompt, excel_contexts, rag_context, image_payloads, temperature)
+                    workspace_context = ""
+                    workspace_status = None
+                    if prompt_requests_workspace_scan(prompt):
+                        workspace_status = st.info("workspace 스캔 중...")
+                        workspace_context, matched_files = build_workspace_context_for_prompt(prompt)
+                        if workspace_context:
+                            workspace_status.success(
+                                f"workspace 스캔 완료: 관련 파일 {matched_files}개를 모델에 전달했습니다."
+                            )
+                        else:
+                            workspace_status.warning("workspace에서 관련 파일을 찾지 못했습니다.")
+                    answer = call_ollama(
+                        host,
+                        model,
+                        prompt,
+                        excel_contexts,
+                        rag_context,
+                        workspace_context,
+                        image_payloads,
+                        temperature,
+                    )
                     elapsed_seconds = time.perf_counter() - start_time
                     st.session_state.last_elapsed_seconds = elapsed_seconds
                     st.session_state.history.append(
