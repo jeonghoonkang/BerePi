@@ -5,9 +5,13 @@
 ## 파일 구성
 
 - `data/sample_sine.csv`: 학습 샘플용 사인파 시계열 CSV
+- `data/sample_multi_wave.csv`: 6개 wave 입력과 `target_mix` 출력으로 구성된 다중 입력 시계열 CSV
 - `assets/sample_sine.png`: 샘플 사인파 CSV 그래프 이미지
+- `assets/sample_multi_wave.png`: 다중 wave 샘플 CSV 그래프 이미지
 - `train.py`: LSTM 모델 학습 코드
 - `validate.py`: 저장된 체크포인트 검증 코드와 입력/출력 구간 그래프 생성 코드
+- `train_multi_wave.py`: 여러 wave를 동시에 입력받는 LSTM 학습 코드
+- `validate_multi_wave.py`: 여러 wave 입력 LSTM 체크포인트 검증 코드
 - `requirements.txt`: 실행에 필요한 Python 패키지
 - `checkpoints/`: 학습된 모델 체크포인트 저장 위치
 
@@ -80,6 +84,70 @@ step,value
 아래 이미지는 `data/sample_sine.csv`의 `step`과 `value` 컬럼을 시각화한 그래프입니다.
 
 ![sample sine wave](assets/sample_sine.png)
+
+## 다중 Wave 입력 예제
+
+`train_multi_wave.py`는 단일 `value` 컬럼이 아니라 6개의 wave 컬럼을 동시에 LSTM 입력으로 사용합니다. 각 시점의 입력 벡터는 다음과 같습니다.
+
+```text
+[wave_1, wave_2, wave_3, wave_4, wave_5, wave_6]
+```
+
+모델은 최근 `sequence-length`개 시점의 6차원 입력을 보고 다음 시점의 `target_mix` 값을 예측합니다. `target_mix`는 여러 wave를 가중합해 만든 예측 대상입니다.
+
+```bash
+python train_multi_wave.py
+python validate_multi_wave.py
+```
+
+기본 실행은 다음 파일을 생성합니다.
+
+```text
+checkpoints/lstm_multi_wave.pt
+```
+
+다른 컬럼 조합을 사용할 때는 `--feature-columns`와 `--target-column`을 지정합니다.
+
+```bash
+python train_multi_wave.py \
+  --data data/sample_multi_wave.csv \
+  --feature-columns wave_1,wave_2,wave_3,wave_4,wave_5,wave_6 \
+  --target-column target_mix
+
+python validate_multi_wave.py \
+  --data data/sample_multi_wave.csv \
+  --checkpoint checkpoints/lstm_multi_wave.pt
+```
+
+다중 wave 검증을 실행하면 기본적으로 다음 그래프도 생성됩니다.
+
+```text
+assets/lstm_multi_wave_validation_prediction.png
+```
+
+이 이미지는 검증에 사용된 입력 window를 파란색 영역으로 표시합니다. 해당 구간 안의 6개 wave가 LSTM에 들어가는 입력 데이터이며, 출력 위치에는 `target_mix` 실제값을 빨간색, 예측값을 초록색으로 표시합니다.
+
+```bash
+python validate_multi_wave.py \
+  --plot-index 0 \
+  --plot-output assets/lstm_multi_wave_validation_prediction.png
+```
+
+예제 이미지는 다음과 같습니다.
+
+![multi wave validation prediction example](assets/lstm_multi_wave_validation_prediction_example.png)
+
+다중 wave 샘플 데이터는 다음처럼 구성됩니다.
+
+```csv
+step,wave_1,wave_2,wave_3,wave_4,wave_5,wave_6,target_mix
+0,0.00000,0.56464,0.45360,0.68169,-0.58991,0.17731,0.12340
+1,0.08324,0.67552,0.39322,0.63891,-0.64091,0.19868,0.16899
+```
+
+아래 그래프에서 6개의 색상 wave가 LSTM 입력이고, 검은색 `target_mix`가 예측 대상입니다.
+
+![multi wave sample](assets/sample_multi_wave.png)
 
 ## 테스트용 데이터 다운로드 방법
 
