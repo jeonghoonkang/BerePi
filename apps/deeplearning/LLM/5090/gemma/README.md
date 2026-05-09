@@ -106,6 +106,60 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - Changing the model storage path in the app updates the desired location and can move existing files, but Ollama must be restarted with `OLLAMA_MODELS` set to the same path for future downloads to use it.
 - The selected model storage path is saved in `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` and restored on the next app start.
 
+## Tool Calling
+
+This app has two different prompt-handling paths.
+
+- `qwen2.5-coder:7b` and `qwen3-coder:30b` use Ollama tool calling for validated workspace and Excel tools.
+- `gemma3:*` models do not use Ollama workspace tool calling in this app. Instead, the Streamlit app pre-processes some prompt patterns and injects the matched file content into the model prompt.
+
+### Qwen Tool Calling
+
+When a supported Qwen coder model is selected, the app may expose tools such as:
+
+- `list_files`
+- `read_file`
+- `write_file`
+- `copy_path`
+- `delete_path`
+- `download_file`
+- `excel_workbook_info`
+- `excel_sheet_preview`
+- `excel_read_cells`
+- `excel_write_cell`
+- `excel_aggregate_range`
+- `excel_merge_files`
+- `excel_stack_files_to_single_sheet`
+
+These tools are limited to the app-local `workspace` directory for safety.
+
+### Gemma Prompt Helpers
+
+When a Gemma model is selected, the app still supports file-assisted prompts through prompt parsing. The UI shows `workspace 스캔 중...` while this helper path runs.
+
+Current prompt patterns:
+
+- `작업파일 <file>`:
+  The app looks for the file that appears immediately after `작업파일`, resolves it inside `workspace`, opens it with Python `open(..., encoding="utf-8", errors="replace")`, and injects the content into the model prompt.
+- `작업파일: <file>` or `작업파일 "<file>"`:
+  The same task-file flow also supports `:` and quoted file names.
+- `<filename>.txt`, `<filename>.md`, `<filename>.json`, and similar file names written directly in the prompt:
+  The app searches the `workspace` for matching relative paths, basenames, and stem names, then prioritizes those files during prompt-time workspace scanning.
+- Korean and English file-reading prompts such as `파일 내용 알려줘`, `파일 읽어`, `read file`, `find file`, `check file`:
+  The app scans text-like files in `workspace` and injects the most relevant file excerpts into the prompt.
+
+If the requested file is not found, the app shows a warning in the UI and tells the model that the file was not found in `workspace`.
+
+### Example Prompts
+
+```text
+작업파일 notes/todo.md 읽어서 알려줘
+작업파일: README
+작업파일 "report.txt" 내용 정리해줘
+config.json 파일 내용 보고 설명해줘
+workspace 에서 memo.md 찾아서 알려줘
+```
+
 ## Verify Shared RAG Wiring
 
 Use the unit test:
@@ -200,6 +254,39 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - 업로드된 Excel 파일은 `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/workspace` 에 저장됩니다.
 - 앱 설정은 `/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/app_settings.json` 에 저장됩니다.
 - 모델 저장 경로를 바꿔도 실제 다운로드 위치를 바꾸려면 `Ollama` 를 `OLLAMA_MODELS` 환경변수와 함께 다시 시작해야 합니다.
+
+### Tool Calling
+
+- `qwen2.5-coder:7b`, `qwen3-coder:30b` 를 선택하면 Ollama tool calling 을 통해 `workspace` 와 Excel 관련 도구를 사용할 수 있습니다.
+- `gemma` 계열은 현재 이 앱에서 Ollama tool calling 을 직접 사용하지 않습니다.
+- 대신 `gemma` 는 앱이 프롬프트를 먼저 해석해서 `workspace` 파일 내용을 읽어 프롬프트에 함께 넣는 방식으로 동작합니다.
+- 이때 화면에는 `workspace 스캔 중...` 메시지가 표시됩니다.
+
+현재 반영된 프롬프트 규칙은 아래와 같습니다.
+
+- `작업파일 <파일명>`
+- `작업파일: <파일명>`
+- `작업파일 "<파일명>"`
+- 프롬프트 안에 `notes/todo.md`, `config.json`, `report.txt` 같은 파일명이 직접 들어간 경우
+- `파일 내용 알려줘`, `파일 읽어`, `workspace 에서 파일 찾아`, `read file`, `find file`, `check file` 같은 파일 읽기 의도 문장
+
+동작 방식은 아래와 같습니다.
+
+- `작업파일` 뒤에 온 값이 있으면 그 파일을 `workspace` 에서 우선 검색합니다.
+- 경로 전체 일치, 하위 경로 일치, 파일명 일치, 확장자 없는 stem 일치 순으로 확인합니다.
+- 찾으면 Python `open(..., encoding="utf-8", errors="replace")` 로 읽어서 모델 프롬프트에 넣습니다.
+- 못 찾으면 UI 경고와 함께 `workspace 에서 찾지 못했습니다` 문맥을 모델에도 전달합니다.
+- 일반 파일명 입력이나 파일 읽기 의도 문장은 `workspace` 텍스트 파일 스캔으로 처리합니다.
+
+예시 프롬프트:
+
+```text
+작업파일 notes/todo.md 읽어서 알려줘
+작업파일: README
+작업파일 "report.txt" 요약해줘
+config.json 파일 내용 설명해줘
+workspace 에서 memo.md 찾아서 알려줘
+```
 
 ### 웹 접근 로그인 설정
 
