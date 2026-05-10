@@ -1629,9 +1629,53 @@ def normalize_tool_arguments(arguments) -> dict:
     raise ValueError(f"Unsupported tool arguments: {arguments}")
 
 
+def prompt_requests_tool_list(prompt: str) -> bool:
+    """Return whether the prompt asks the app to describe available tools."""
+    normalized_prompt = prompt.strip().lower()
+    if not normalized_prompt:
+        return False
+
+    patterns = [
+        r"사용\s*가능한\s*tool.*알려",
+        r"사용가능한\s*툴.*알려",
+        r"tool\s*리스트",
+        r"tool\s*목록",
+        r"available\s*tools?",
+        r"what\s*tools?\s*(can|are)",
+    ]
+    return any(re.search(pattern, normalized_prompt) for pattern in patterns)
+
+
 def model_supports_tools(model: str) -> bool:
     """Return whether the selected model should use tool calling."""
     return model.startswith("qwen2.5-coder:") or model.startswith("qwen3-coder:")
+
+
+def build_available_tool_response(model: str) -> str:
+    """Return a direct answer describing the currently available tools."""
+    lines = [f"Current model: `{model}`"]
+
+    if model_supports_tools(model):
+        lines.append("Tool calling: enabled")
+        lines.append("")
+        lines.append("Registered tools:")
+        for tool in FILE_TOOLS:
+            function = tool.get("function", {})
+            tool_name = str(function.get("name", ""))
+            description = str(function.get("description", "")).strip()
+            lines.append(f"- `{tool_name}`: {description}")
+    else:
+        lines.append("Tool calling: disabled for this Gemma model")
+        lines.append("")
+        lines.append("Available app-side helper actions:")
+        lines.append("- `작업파일 <file>`: find the file in `workspace`, open it with Python `open()`, and pass the content to the model")
+        lines.append("- `작업파일: <file>` and `작업파일 \"<file>\"`: same task-file flow with `:` or quoted file names")
+        lines.append("- Direct file names such as `config.json`, `notes/todo.md`, or `report.txt`: search the `workspace` and prioritize matched files")
+        lines.append("- File-reading prompts such as `파일 내용 알려줘`, `파일 읽어`, `read file`, `find file`, `check file`: scan text-like files in `workspace` and pass excerpts to the model")
+        lines.append("")
+        lines.append("If you want true Ollama tool calling, switch to `qwen2.5-coder:7b` or `qwen3-coder:30b`.")
+
+    return "\n".join(lines)
 
 
 def build_user_message(
@@ -2660,35 +2704,38 @@ def main() -> None:
                     st.session_state.query_cancel_requested = False
                     start_time = time.perf_counter()
                     queried_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    workspace_context = ""
-                    workspace_status = None
-                    if prompt_requests_workspace_scan(prompt):
-                        workspace_status = st.info("workspace 스캔 중...")
-                        task_file_context, task_file_status, task_file_requested = build_task_file_context(prompt)
-                        if task_file_requested:
-                            workspace_context = task_file_context
-                            if task_file_context.startswith("[Task File]"):
-                                workspace_status.success(task_file_status)
+                    if prompt_requests_tool_list(prompt):
+                        answer = build_available_tool_response(model)
+                    else:
+                        workspace_context = ""
+                        workspace_status = None
+                        if prompt_requests_workspace_scan(prompt):
+                            workspace_status = st.info("workspace 스캔 중...")
+                            task_file_context, task_file_status, task_file_requested = build_task_file_context(prompt)
+                            if task_file_requested:
+                                workspace_context = task_file_context
+                                if task_file_context.startswith("[Task File]"):
+                                    workspace_status.success(task_file_status)
+                                else:
+                                    workspace_status.warning(task_file_status)
                             else:
-                                workspace_status.warning(task_file_status)
-                        else:
-                            workspace_context, matched_files = build_workspace_context_for_prompt(prompt)
-                            if workspace_context:
-                                workspace_status.success(
-                                    f"workspace 스캔 완료: 관련 파일 {matched_files}개를 모델에 전달했습니다."
-                                )
-                            else:
-                                workspace_status.warning("workspace에서 관련 파일을 찾지 못했습니다.")
-                    answer = call_ollama(
-                        host,
-                        model,
-                        prompt,
-                        excel_contexts,
-                        rag_context,
-                        workspace_context,
-                        image_payloads,
-                        temperature,
-                    )
+                                workspace_context, matched_files = build_workspace_context_for_prompt(prompt)
+                                if workspace_context:
+                                    workspace_status.success(
+                                        f"workspace 스캔 완료: 관련 파일 {matched_files}개를 모델에 전달했습니다."
+                                    )
+                                else:
+                                    workspace_status.warning("workspace에서 관련 파일을 찾지 못했습니다.")
+                        answer = call_ollama(
+                            host,
+                            model,
+                            prompt,
+                            excel_contexts,
+                            rag_context,
+                            workspace_context,
+                            image_payloads,
+                            temperature,
+                        )
                     elapsed_seconds = time.perf_counter() - start_time
                     st.session_state.last_elapsed_seconds = elapsed_seconds
                     st.session_state.history.append(

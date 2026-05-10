@@ -160,6 +160,19 @@ config.json 파일 내용 보고 설명해줘
 workspace 에서 memo.md 찾아서 알려줘
 ```
 
+### Ask for Available Tools
+
+You can also ask the app to list the currently available tools directly from the prompt.
+
+- `사용가능한 tool 알려줘`
+- `tool 목록 알려줘`
+- `available tools`
+
+Behavior:
+
+- When `qwen2.5-coder:7b` or `qwen3-coder:30b` is selected, the app returns the registered Ollama tool list with each tool name and description.
+- When a `gemma3:*` model is selected, the app explains that Ollama tool calling is disabled for Gemma in this app and shows the available app-side helper flows such as `작업파일 <file>` and workspace scan prompts.
+
 ## Verify Shared RAG Wiring
 
 Use the unit test:
@@ -287,6 +300,19 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 config.json 파일 내용 설명해줘
 workspace 에서 memo.md 찾아서 알려줘
 ```
+
+사용 가능한 도구 목록을 보고 싶으면 아래처럼 질문할 수 있습니다.
+
+```text
+사용가능한 tool 알려줘
+tool 목록 알려줘
+available tools
+```
+
+이때 동작은 아래와 같습니다.
+
+- `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 현재 등록된 Ollama tool 이름과 설명 목록을 바로 보여줍니다.
+- `gemma` 선택 시 현재 앱에서 Gemma가 직접 쓰는 Ollama tool calling 은 비활성이라고 안내하고, 대신 사용할 수 있는 `작업파일 <file>` 과 `workspace` 스캔형 프롬프트 기능을 보여줍니다.
 
 ### 웹 접근 로그인 설정
 
