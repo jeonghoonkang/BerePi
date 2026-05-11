@@ -250,6 +250,49 @@ FILE_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "excel_calculate_statistics",
+            "description": "Read an Excel sheet into a dataframe, optionally filter rows, and calculate statistics for one or more columns.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "sheet_name"],
+                "properties": {
+                    "path": {"type": "string", "description": "Relative Excel file path inside the workspace"},
+                    "sheet_name": {"type": "string", "description": "Sheet name to analyze"},
+                    "target_columns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Columns to analyze. If omitted, numeric columns are used.",
+                    },
+                    "group_by": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional columns used for grouped statistics.",
+                    },
+                    "filters": {
+                        "type": "array",
+                        "description": "Optional row filters such as column/operator/value rules.",
+                        "items": {
+                            "type": "object",
+                            "required": ["column", "operator", "value"],
+                            "properties": {
+                                "column": {"type": "string"},
+                                "operator": {"type": "string", "description": "One of eq, ne, gt, gte, lt, lte, contains"},
+                                "value": {},
+                            },
+                        },
+                    },
+                    "statistics": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Statistics to calculate. Supported: count, sum, mean, min, max, median, std, nunique.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "excel_merge_files",
             "description": "Merge multiple Excel files from the workspace into one Excel file. Supported modes: append_rows, separate_sheets.",
             "parameters": {
@@ -1441,6 +1484,154 @@ def excel_aggregate_range(relative_path: str, sheet_name: str, cell_range: str, 
     return f"{operation}({sheet_name}!{cell_range}) = {result}"
 
 
+def coerce_filter_value(value):
+    """Normalize filter input into a comparable python value."""
+    if isinstance(value, str):
+        return coerce_excel_value(value)
+    return value
+
+
+def apply_excel_filters(frame: pd.DataFrame, filters: list[dict] | None) -> pd.DataFrame:
+    """Apply simple row filters to a dataframe."""
+    if not filters:
+        return frame
+
+    filtered = frame.copy()
+    for filter_rule in filters:
+        column = str(filter_rule["column"])
+        operator = str(filter_rule["operator"]).lower()
+        value = coerce_filter_value(filter_rule["value"])
+        if column not in filtered.columns:
+            raise ValueError(f"Filter column not found: {column}")
+
+        series = filtered[column]
+        if operator == "contains":
+            mask = series.astype(str).str.contains(str(value), case=False, na=False)
+        else:
+            comparable_series = series
+            numeric_series = pd.to_numeric(series, errors="coerce")
+            if not numeric_series.isna().all() and isinstance(value, (int, float)):
+                comparable_series = numeric_series
+
+            if operator == "eq":
+                mask = comparable_series == value
+            elif operator == "ne":
+                mask = comparable_series != value
+            elif operator == "gt":
+                mask = comparable_series > value
+            elif operator == "gte":
+                mask = comparable_series >= value
+            elif operator == "lt":
+                mask = comparable_series < value
+            elif operator == "lte":
+                mask = comparable_series <= value
+            else:
+                raise ValueError(f"Unsupported filter operator: {operator}")
+
+        filtered = filtered[mask.fillna(False)]
+
+    return filtered
+
+
+def sanitize_stat_value(value):
+    """Convert pandas/numpy values into JSON-friendly python values."""
+    if pd.isna(value):
+        return None
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            return value
+    return value
+
+
+def excel_calculate_statistics(
+    relative_path: str,
+    sheet_name: str,
+    target_columns: list[str] | None = None,
+    group_by: list[str] | None = None,
+    filters: list[dict] | None = None,
+    statistics: list[str] | None = None,
+) -> str:
+    """Calculate dataframe-style statistics from an Excel sheet."""
+    path = safe_excel_path(relative_path)
+    frame = pd.read_excel(path, sheet_name=sheet_name)
+    filtered = apply_excel_filters(frame, filters)
+
+    requested_stats = [str(item).lower() for item in (statistics or ["count", "sum", "mean", "min", "max"])]
+    supported_stats = {"count", "sum", "mean", "min", "max", "median", "std", "nunique"}
+    unsupported = [item for item in requested_stats if item not in supported_stats]
+    if unsupported:
+        raise ValueError(f"Unsupported statistics requested: {', '.join(unsupported)}")
+
+    group_columns = [str(column) for column in (group_by or [])]
+    for column in group_columns:
+        if column not in filtered.columns:
+            raise ValueError(f"group_by column not found: {column}")
+
+    if target_columns:
+        selected_columns = [str(column) for column in target_columns]
+        missing_columns = [column for column in selected_columns if column not in filtered.columns]
+        if missing_columns:
+            raise ValueError(f"Target columns not found: {', '.join(missing_columns)}")
+    else:
+        numeric_columns = filtered.select_dtypes(include=["number"]).columns.tolist()
+        if not numeric_columns:
+            numeric_columns = [column for column in filtered.columns if column not in group_columns]
+        selected_columns = [str(column) for column in numeric_columns]
+
+    if not selected_columns:
+        raise ValueError("No columns available for statistics.")
+
+    working = filtered.copy()
+    for column in selected_columns:
+        working[column] = pd.to_numeric(working[column], errors="coerce")
+
+    response: dict[str, object] = {
+        "workbook": workspace_relative(path),
+        "sheet_name": sheet_name,
+        "row_count_before_filters": int(len(frame.index)),
+        "row_count_after_filters": int(len(filtered.index)),
+        "target_columns": selected_columns,
+        "group_by": group_columns,
+        "statistics": requested_stats,
+    }
+    if filters:
+        response["filters"] = filters
+
+    if group_columns:
+        grouped = (
+            working.groupby(group_columns, dropna=False)[selected_columns]
+            .agg(requested_stats)
+            .reset_index()
+        )
+        grouped.columns = [
+            "__".join([str(part) for part in column if str(part)])
+            if isinstance(column, tuple)
+            else str(column)
+            for column in grouped.columns
+        ]
+        grouped = grouped.where(pd.notna(grouped), None)
+        response["grouped_statistics"] = grouped.to_dict(orient="records")
+    else:
+        per_column_stats: dict[str, dict[str, object]] = {}
+        for column in selected_columns:
+            column_stats: dict[str, object] = {}
+            series = working[column]
+            for stat_name in requested_stats:
+                if stat_name == "count":
+                    value = int(series.count())
+                elif stat_name == "nunique":
+                    value = int(series.nunique(dropna=True))
+                else:
+                    value = sanitize_stat_value(getattr(series, stat_name)())
+                column_stats[stat_name] = value
+            per_column_stats[column] = column_stats
+        response["column_statistics"] = per_column_stats
+
+    return json.dumps(response, ensure_ascii=False, indent=2)
+
+
 def sanitize_sheet_title(title: str, used_titles: set[str]) -> str:
     """Create a valid and unique Excel sheet title."""
     cleaned = "".join(character for character in title if character not in '[]:*?/\\')
@@ -1601,6 +1792,15 @@ def execute_file_tool(name: str, arguments: dict) -> str:
             sheet_name=str(arguments["sheet_name"]),
             cell_range=str(arguments["cell_range"]),
             operation=str(arguments["operation"]).lower(),
+        )
+    if name == "excel_calculate_statistics":
+        return excel_calculate_statistics(
+            relative_path=str(arguments["path"]),
+            sheet_name=str(arguments["sheet_name"]),
+            target_columns=[str(item) for item in arguments.get("target_columns", [])] or None,
+            group_by=[str(item) for item in arguments.get("group_by", [])] or None,
+            filters=arguments.get("filters"),
+            statistics=[str(item) for item in arguments.get("statistics", [])] or None,
         )
     if name == "excel_merge_files":
         return excel_merge_files(

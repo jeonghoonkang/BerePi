@@ -28,6 +28,7 @@ tool calling. Workspace tools are enabled only for supported Qwen coder models.
 - User-selectable Ollama model storage path with model file migration support
 - Remember the selected model storage path across Streamlit restarts
 - Qwen can use Excel tools for workbook info, sheet preview, cell read/write, range aggregation, workbook merge, and vertical stacking into one sheet
+- Qwen can calculate dataframe-style Excel statistics with optional filters, target columns, and grouped summaries
 
 ## Assumption
 
@@ -128,6 +129,7 @@ When a supported Qwen coder model is selected, the app may expose tools such as:
 - `excel_read_cells`
 - `excel_write_cell`
 - `excel_aggregate_range`
+- `excel_calculate_statistics`
 - `excel_merge_files`
 - `excel_stack_files_to_single_sheet`
 
@@ -173,6 +175,26 @@ Behavior:
 - When `qwen2.5-coder:7b` or `qwen3-coder:30b` is selected, the app returns the registered Ollama tool list with each tool name and description.
 - When a `gemma3:*` model is selected, the app explains that Ollama tool calling is disabled for Gemma in this app and shows the available app-side helper flows such as `작업파일 <file>` and workspace scan prompts.
 
+### Excel Statistics Tool
+
+Supported Qwen coder models can also use `excel_calculate_statistics` to read an Excel sheet as a dataframe and calculate statistics.
+
+What it can do:
+
+- Read a sheet from an Excel file in `workspace`
+- Limit analysis to selected `target_columns`
+- Filter rows with rules such as `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, and `contains`
+- Group results by one or more columns with `group_by`
+- Calculate `count`, `sum`, `mean`, `min`, `max`, `median`, `std`, and `nunique`
+
+Example requests:
+
+```text
+workspace 의 sales.xlsx 에서 Sheet1 데이터를 읽고 amount 컬럼의 평균과 합계를 계산해줘
+report.xlsx 의 Orders 시트에서 region 이 APAC 인 행만 필터링해서 revenue 통계를 보여줘
+orders.xlsx 의 Data 시트에서 category 별로 sales 와 profit 평균을 계산해줘
+```
+
 ## Verify Shared RAG Wiring
 
 Use the unit test:
@@ -199,6 +221,7 @@ python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verif
 - `workspace` 내부 파일 다운로드 및 삭제
 - Nextcloud WebDAV 경로를 통한 Markdown/PDF 문서 RAG
 - `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 workspace tool calling 지원
+- `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 Excel 데이터 추출 및 통계 계산 tool 지원
 
 ### 모델별 동작
 
@@ -271,6 +294,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 ### Tool Calling
 
 - `qwen2.5-coder:7b`, `qwen3-coder:30b` 를 선택하면 Ollama tool calling 을 통해 `workspace` 와 Excel 관련 도구를 사용할 수 있습니다.
+- 새 `excel_calculate_statistics` tool 은 시트를 DataFrame 으로 읽고, 필터링과 컬럼 선택 후 통계를 계산할 수 있습니다.
 - `gemma` 계열은 현재 이 앱에서 Ollama tool calling 을 직접 사용하지 않습니다.
 - 대신 `gemma` 는 앱이 프롬프트를 먼저 해석해서 `workspace` 파일 내용을 읽어 프롬프트에 함께 넣는 방식으로 동작합니다.
 - 이때 화면에는 `workspace 스캔 중...` 메시지가 표시됩니다.
@@ -291,6 +315,14 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 - 못 찾으면 UI 경고와 함께 `workspace 에서 찾지 못했습니다` 문맥을 모델에도 전달합니다.
 - 일반 파일명 입력이나 파일 읽기 의도 문장은 `workspace` 텍스트 파일 스캔으로 처리합니다.
 
+Excel 통계용 tool 은 아래 기능을 지원합니다.
+
+- `workspace` 안의 Excel 파일 시트를 DataFrame 으로 읽기
+- `target_columns` 로 특정 컬럼만 선택
+- `filters` 로 행 필터링
+- `group_by` 로 그룹 통계 생성
+- `count`, `sum`, `mean`, `min`, `max`, `median`, `std`, `nunique` 계산
+
 예시 프롬프트:
 
 ```text
@@ -299,6 +331,14 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 작업파일 "report.txt" 요약해줘
 config.json 파일 내용 설명해줘
 workspace 에서 memo.md 찾아서 알려줘
+```
+
+Excel 통계 예시 프롬프트:
+
+```text
+sales.xlsx 의 Sheet1 에서 amount 컬럼 평균과 합계를 계산해줘
+report.xlsx 의 Orders 시트에서 region 이 APAC 인 행만 필터링해서 revenue 통계를 보여줘
+orders.xlsx 의 Data 시트에서 category 별로 sales 와 profit 평균을 계산해줘
 ```
 
 사용 가능한 도구 목록을 보고 싶으면 아래처럼 질문할 수 있습니다.
