@@ -139,14 +139,23 @@ def load_json_file(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def load_settings() -> dict[str, Any]:
+def resolve_settings_path(settings_path: str | Path | None = None) -> Path:
+    """Resolve a settings file path, defaulting to the app-local settings file."""
+    if settings_path is None:
+        return SETTINGS_PATH
+    return Path(settings_path).expanduser().resolve()
+
+
+def load_settings(settings_path: str | Path | None = None) -> dict[str, Any]:
     base = default_settings()
-    loaded = load_json_file(SETTINGS_PATH)
+    loaded = load_json_file(resolve_settings_path(settings_path))
     return deep_merge(base, loaded)
 
 
-def save_settings(settings: dict[str, Any]) -> None:
-    SETTINGS_PATH.write_text(
+def save_settings(settings: dict[str, Any], settings_path: str | Path | None = None) -> None:
+    target_path = resolve_settings_path(settings_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
@@ -713,8 +722,8 @@ def build_webdav_config(settings: dict[str, Any]) -> WebDAVConfig:
     )
 
 
-def send_once(settings: dict[str, Any] | None = None) -> dict[str, Any]:
-    settings = settings or load_settings()
+def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:
+    settings = settings or load_settings(settings_path)
     errors = validate_settings(settings)
     if errors:
         raise ValueError(" / ".join(errors))
@@ -749,8 +758,8 @@ def send_once(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-def run_loop(interval_minutes: int | None = None) -> None:
-    settings = load_settings()
+def run_loop(interval_minutes: int | None = None, settings_path: str | Path | None = None) -> None:
+    settings = load_settings(settings_path)
     minutes = interval_minutes or int(settings["schedule"].get("interval_minutes", DEFAULT_INTERVAL_MINUTES))
     while True:
         try:

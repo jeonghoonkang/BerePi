@@ -113,6 +113,8 @@ def main() -> None:
             [
                 quoted_command(["python3", "sender.py", "--once"]),
                 quoted_command(["python3", "sender.py", "--loop"]),
+                quoted_command(["python3", "sender.py", "--once", "--config", "/path/to/custom-settings.json"]),
+                quoted_command(["python3", "sender.py", "--loop", "--config", "/path/to/custom-settings.json"]),
                 quoted_command(["streamlit", "run", "app.py", "--server.address", "0.0.0.0", "--server.port", "2297"]),
             ]
         ),

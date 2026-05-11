@@ -10,16 +10,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--once", action="store_true", help="Send one report and exit.")
     parser.add_argument("--loop", action="store_true", help="Run continuously using the configured interval.")
     parser.add_argument("--interval-minutes", type=int, help="Override interval for loop mode.")
+    parser.add_argument(
+        "--config",
+        help="Path to a settings JSON file. Defaults to apps/tinyGW/pulsedav/settings.json",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     if args.loop:
-        run_loop(args.interval_minutes)
+        run_loop(args.interval_minutes, settings_path=args.config)
         return 0
 
-    send_once(load_settings())
+    send_once(load_settings(args.config), settings_path=args.config)
     return 0
 
 

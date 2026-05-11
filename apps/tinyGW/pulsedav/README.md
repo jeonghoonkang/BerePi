@@ -39,11 +39,29 @@ streamlit run app.py
 python3 sender.py --once
 ```
 
+설정 파일 경로를 직접 지정하려면:
+
+```bash
+python3 sender.py --once --config /path/to/custom-settings.json
+```
+
 반복 전송:
 
 ```bash
 python3 sender.py --loop
 ```
+
+반복 전송에서도 설정 파일 경로를 지정할 수 있습니다:
+
+```bash
+python3 sender.py --loop --config /path/to/custom-settings.json
+```
+
+## 설정 파일
+
+- 기본 설정 파일은 `/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/settings.json` 입니다.
+- CLI 에서 `--config` 를 주면 해당 JSON 파일을 설정 파일로 사용합니다.
+- 지정한 설정 파일이 없으면 기본값 템플릿과 병합되어 동작합니다.
 
 ## 부팅 자동 전송 예시
 
