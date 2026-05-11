@@ -125,8 +125,8 @@ def main() -> None:
     st.code(
         "\n".join(
             [
-                "@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && /usr/bin/python3 sender.py --once >> pulsedav.log 2>&1",
-                f"*/{max(1, min(int(interval_minutes), 59))} * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && /usr/bin/python3 sender.py --once >> pulsedav.log 2>&1",
+                "@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && /usr/bin/python3 sender.py --once > pulsedav.log 2>&1",
+                f"*/{max(1, min(int(interval_minutes), 59))} * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && /usr/bin/python3 sender.py --once > pulsedav.log 2>&1",
             ]
         ),
         language="cron",

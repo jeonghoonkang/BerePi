@@ -41,8 +41,8 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -
 
     base_command = f"{python_bin} sender.py --once{config_args}"
     return [
-        f"@reboot cd {app_dir} && {base_command} >> pulsedav.log 2>&1",
-        f"*/{cron_interval} * * * * cd {app_dir} && {base_command} >> pulsedav.log 2>&1",
+        f"@reboot cd {app_dir} && {base_command} > pulsedav.log 2>&1",
+        f"*/{cron_interval} * * * * cd {app_dir} && {base_command} > pulsedav.log 2>&1",
     ]
 
 
