@@ -10,7 +10,7 @@ import socket
 import subprocess
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote, urlparse
@@ -30,6 +30,7 @@ REQUEST_TIMEOUT = 60
 WEBDAV_NS = {"d": "DAV:"}
 RETENTION_MONTHS = 36
 DEFAULT_INTERVAL_MINUTES = 30
+UTC = timezone.utc
 
 ALL_SECTIONS = [
     "cpu",
@@ -375,6 +376,14 @@ def extract_timestamp_from_name(name: str) -> datetime | None:
 
 
 def hostname() -> str:
+    for command in (
+        ["scutil", "--get", "LocalHostName"],
+        ["scutil", "--get", "ComputerName"],
+        ["hostname"],
+    ):
+        value = run_command(command, timeout=10).strip()
+        if value and "unavailable" not in value and "usage:" not in value.lower() and not value.lower().startswith("hostname:"):
+            return value.splitlines()[0].strip()
     return socket.gethostname()
 
 
@@ -421,6 +430,9 @@ def get_public_ip() -> str:
 
 
 def get_ip_route_default() -> tuple[str, str]:
+    if platform.system() == "Darwin":
+        return get_ip_route_default_darwin()
+
     route_output = run_command(["ip", "route"], timeout=10)
     gateway = "확인 실패"
     internal_ip = "확인 실패"
@@ -436,8 +448,35 @@ def get_ip_route_default() -> tuple[str, str]:
 
     if internal_ip == "확인 실패":
         host_output = run_command(["hostname", "-I"], timeout=10).strip()
-        if host_output:
+        if host_output and "usage:" not in host_output.lower() and not host_output.lower().startswith("hostname:"):
             internal_ip = host_output.split()[0]
+    return internal_ip, gateway
+
+
+def get_ip_route_default_darwin() -> tuple[str, str]:
+    """Return internal IP and default gateway on macOS."""
+    gateway = "확인 실패"
+    interface_name = ""
+    route_output = run_command(["route", "-n", "get", "default"], timeout=10)
+    for line in route_output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("gateway:"):
+            gateway = stripped.split(":", 1)[1].strip() or gateway
+        elif stripped.startswith("interface:"):
+            interface_name = stripped.split(":", 1)[1].strip()
+
+    internal_ip = "확인 실패"
+    if interface_name:
+        ip_output = run_command(["ipconfig", "getifaddr", interface_name], timeout=10).strip()
+        if ip_output and "usage:" not in ip_output.lower() and not ip_output.lower().startswith("ipconfig:"):
+            internal_ip = ip_output.splitlines()[0].strip()
+
+    if internal_ip == "확인 실패" and interface_name:
+        ifconfig_output = run_command(["ifconfig", interface_name], timeout=10)
+        match = re.search(r"\binet\s+(\d{1,3}(?:\.\d{1,3}){3})\b", ifconfig_output)
+        if match:
+            internal_ip = match.group(1)
+
     return internal_ip, gateway
 
 
