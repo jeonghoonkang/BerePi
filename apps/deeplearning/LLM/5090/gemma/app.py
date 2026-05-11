@@ -1067,6 +1067,21 @@ def extract_workspace_file_references(prompt: str) -> list[str]:
     return references
 
 
+def extract_workspace_excel_references(prompt: str) -> list[str]:
+    """Extract likely Excel file names or relative paths mentioned in the prompt."""
+    references: list[str] = []
+    patterns = [
+        r"[\w./-]+\.(?:xlsx|xlsm|xltx|xltm|xls)",
+        r"[\w-]+\s*\.(?:xlsx|xlsm|xltx|xltm|xls)",
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, prompt, flags=re.IGNORECASE):
+            candidate = re.sub(r"\s+", "", str(match).strip().strip("\"'`"))
+            if candidate and candidate not in references:
+                references.append(candidate)
+    return references
+
+
 def extract_task_file_reference(prompt: str) -> str:
     """Extract the file reference that follows the '작업파일' marker."""
     quoted_match = re.search(
@@ -1148,6 +1163,39 @@ def resolve_workspace_file_reference(reference: str, workspace_files: list[Path]
         stem_matches.sort(key=lambda path: len(workspace_relative(path)))
         return stem_matches[0]
     return None
+
+
+def prompt_requests_excel_statistics(prompt: str) -> bool:
+    """Return whether the prompt likely asks for Excel statistics."""
+    normalized_prompt = prompt.strip().lower()
+    if not normalized_prompt:
+        return False
+
+    statistic_keywords = [
+        "통계",
+        "평균",
+        "합계",
+        "총합",
+        "최대",
+        "최소",
+        "건수",
+        "개수",
+        "중앙값",
+        "표준편차",
+        "average",
+        "mean",
+        "sum",
+        "total",
+        "max",
+        "min",
+        "count",
+        "median",
+        "std",
+        "statistics",
+    ]
+    return bool(extract_workspace_excel_references(prompt)) and any(
+        keyword in normalized_prompt for keyword in statistic_keywords
+    )
 
 
 def build_task_file_context(prompt: str, max_chars_per_file: int = MAX_WORKSPACE_SCAN_CHARS) -> tuple[str, str, bool]:
@@ -1632,6 +1680,136 @@ def excel_calculate_statistics(
     return json.dumps(response, ensure_ascii=False, indent=2)
 
 
+def infer_excel_statistics_from_prompt(prompt: str) -> list[str]:
+    """Infer requested statistic names from a prompt."""
+    normalized_prompt = prompt.lower()
+    keyword_map = [
+        ("count", ["건수", "개수", "count"]),
+        ("sum", ["합계", "총합", "sum", "total"]),
+        ("mean", ["평균", "average", "mean"]),
+        ("min", ["최소", "min", "minimum"]),
+        ("max", ["최대", "max", "maximum"]),
+        ("median", ["중앙값", "median"]),
+        ("std", ["표준편차", "std", "standard deviation"]),
+        ("nunique", ["고유값", "unique", "distinct", "nunique"]),
+    ]
+
+    requested: list[str] = []
+    for stat_name, keywords in keyword_map:
+        if any(keyword in normalized_prompt for keyword in keywords):
+            requested.append(stat_name)
+    return requested or ["count", "sum", "mean", "min", "max"]
+
+
+def infer_excel_sheet_name_from_prompt(prompt: str, sheet_names: list[str]) -> str:
+    """Infer the most likely sheet name from the prompt."""
+    normalized_prompt = prompt.lower()
+    for sheet_name in sheet_names:
+        if sheet_name.lower() in normalized_prompt:
+            return sheet_name
+    return sheet_names[0]
+
+
+def infer_excel_group_by_columns(prompt: str, columns: list[str]) -> list[str]:
+    """Infer group-by columns mentioned in the prompt."""
+    normalized_prompt = prompt.lower()
+    group_columns: list[str] = []
+    for column in columns:
+        lowered = column.lower()
+        if (
+            f"{column}별" in prompt
+            or f"{lowered}별" in normalized_prompt
+            or f"by {lowered}" in normalized_prompt
+        ):
+            group_columns.append(column)
+    return group_columns
+
+
+def infer_excel_target_columns(prompt: str, columns: list[str], group_columns: list[str]) -> list[str] | None:
+    """Infer target columns mentioned in the prompt."""
+    normalized_prompt = prompt.lower()
+    matched_columns = [
+        column for column in columns
+        if column not in group_columns and column.lower() in normalized_prompt
+    ]
+    return matched_columns or None
+
+
+def infer_excel_filters_from_prompt(prompt: str, columns: list[str]) -> list[dict] | None:
+    """Infer simple equality filters from a natural-language prompt."""
+    filters: list[dict] = []
+    for column in columns:
+        escaped_column = re.escape(column)
+        patterns = [
+            rf"{escaped_column}\s*(?:이|가|은|는)\s*([^\s,]+)\s*인",
+            rf"{escaped_column}\s*=\s*([^\s,]+)",
+            rf"{escaped_column}\s+is\s+([^\s,]+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, prompt, flags=re.IGNORECASE)
+            if match:
+                value = match.group(1).strip().strip("\"'`")
+                filters.append({"column": column, "operator": "eq", "value": value})
+                break
+    return filters or None
+
+
+def build_excel_statistics_context_for_prompt(prompt: str) -> tuple[str, str, bool]:
+    """Calculate Excel statistics for Gemma-style prompts and return context plus status."""
+    references = extract_workspace_excel_references(prompt)
+    if not references:
+        return "", "", False
+
+    workspace_files = list_workspace_files(limit=500)
+    resolved_path = None
+    for reference in references:
+        candidate = resolve_workspace_file_reference(reference, workspace_files)
+        if candidate is not None and candidate.suffix.lower() in {".xlsx", ".xlsm", ".xltx", ".xltm", ".xls"}:
+            resolved_path = candidate
+            break
+
+    if resolved_path is None:
+        return (
+            f"The requested Excel file was not found in the workspace: {references[0]}",
+            f"엑셀 파일 `{references[0]}` 을(를) workspace에서 찾지 못했습니다.",
+            True,
+        )
+
+    try:
+        excel_file = pd.ExcelFile(resolved_path)
+        sheet_name = infer_excel_sheet_name_from_prompt(prompt, excel_file.sheet_names)
+        sheet_frame = excel_file.parse(sheet_name)
+        columns = [str(column) for column in sheet_frame.columns]
+        group_columns = infer_excel_group_by_columns(prompt, columns)
+        target_columns = infer_excel_target_columns(prompt, columns, group_columns)
+        filters = infer_excel_filters_from_prompt(prompt, columns)
+        statistics = infer_excel_statistics_from_prompt(prompt)
+        result = excel_calculate_statistics(
+            relative_path=workspace_relative(resolved_path),
+            sheet_name=sheet_name,
+            target_columns=target_columns,
+            group_by=group_columns or None,
+            filters=filters,
+            statistics=statistics,
+        )
+    except Exception as exc:
+        return (
+            f"Failed to calculate Excel statistics for {workspace_relative(resolved_path)}: {exc}",
+            f"엑셀 통계 계산에 실패했습니다: {exc}",
+            True,
+        )
+
+    context = (
+        f"[Excel Statistics] {workspace_relative(resolved_path)}::{sheet_name}\n"
+        f"{result}"
+    )
+    return (
+        context,
+        f"엑셀 통계 계산 완료: `{workspace_relative(resolved_path)}` 시트 `{sheet_name}` 기준 결과를 모델에 전달했습니다.",
+        True,
+    )
+
+
 def sanitize_sheet_title(title: str, used_titles: set[str]) -> str:
     """Create a valid and unique Excel sheet title."""
     cleaned = "".join(character for character in title if character not in '[]:*?/\\')
@@ -1872,6 +2050,7 @@ def build_available_tool_response(model: str) -> str:
         lines.append("- `작업파일: <file>` and `작업파일 \"<file>\"`: same task-file flow with `:` or quoted file names")
         lines.append("- Direct file names such as `config.json`, `notes/todo.md`, or `report.txt`: search the `workspace` and prioritize matched files")
         lines.append("- File-reading prompts such as `파일 내용 알려줘`, `파일 읽어`, `read file`, `find file`, `check file`: scan text-like files in `workspace` and pass excerpts to the model")
+        lines.append("- Excel statistics prompts such as `sales.xlsx 의 Sheet1 에서 amount 평균 계산해줘`: read the Excel sheet, calculate statistics in the app, and pass the result to the model")
         lines.append("")
         lines.append("If you want true Ollama tool calling, switch to `qwen2.5-coder:7b` or `qwen3-coder:30b`.")
 
@@ -2909,7 +3088,15 @@ def main() -> None:
                     else:
                         workspace_context = ""
                         workspace_status = None
-                        if prompt_requests_workspace_scan(prompt):
+                        if (not model_supports_tools(model)) and prompt_requests_excel_statistics(prompt):
+                            workspace_status = st.info("Excel 통계 계산 중...")
+                            workspace_context, excel_status, excel_requested = build_excel_statistics_context_for_prompt(prompt)
+                            if excel_requested:
+                                if workspace_context.startswith("[Excel Statistics]"):
+                                    workspace_status.success(excel_status)
+                                else:
+                                    workspace_status.warning(excel_status)
+                        elif prompt_requests_workspace_scan(prompt):
                             workspace_status = st.info("workspace 스캔 중...")
                             task_file_context, task_file_status, task_file_requested = build_task_file_context(prompt)
                             if task_file_requested:
