@@ -55,6 +55,8 @@ SUPPORTED_MODEL_OPTIONS = [
     "gemma3:4b",
     "gemma3:12b",
     "gemma3:27b",
+    "qwen3:32b",
+    "qwen3.5:9b",
     "qwen2.5-coder:7b",
     "qwen3-coder:30b",
 ]
@@ -64,6 +66,8 @@ MODEL_MEMORY_GUIDE_GB = {
     "gemma3:4b": 8,
     "gemma3:12b": 20,
     "gemma3:27b": 40,
+    "qwen3:32b": 20,
+    "qwen3.5:9b": 11,
     "qwen2.5-coder:7b": 8,
     "qwen3-coder:30b": 20,
 }
@@ -73,6 +77,8 @@ MODEL_DEFAULT_TEMPERATURES = {
     "gemma3:4b": 0.7,
     "gemma3:12b": 0.6,
     "gemma3:27b": 0.5,
+    "qwen3:32b": 0.4,
+    "qwen3.5:9b": 0.3,
     "qwen2.5-coder:7b": 0.2,
     "qwen3-coder:30b": 0.2,
 }
@@ -2026,7 +2032,11 @@ def prompt_requests_tool_list(prompt: str) -> bool:
 
 def model_supports_tools(model: str) -> bool:
     """Return whether the selected model should use tool calling."""
-    return model.startswith("qwen2.5-coder:") or model.startswith("qwen3-coder:")
+    return (
+        model.startswith("qwen2.5-coder:")
+        or model.startswith("qwen3-coder:")
+        or model.startswith("qwen3.5:")
+    )
 
 
 def build_available_tool_response(model: str) -> str:
@@ -2043,7 +2053,7 @@ def build_available_tool_response(model: str) -> str:
             description = str(function.get("description", "")).strip()
             lines.append(f"- `{tool_name}`: {description}")
     else:
-        lines.append("Tool calling: disabled for this Gemma model")
+        lines.append("Tool calling: disabled for this model")
         lines.append("")
         lines.append("Available app-side helper actions:")
         lines.append("- `작업파일 <file>`: find the file in `workspace`, open it with Python `open()`, and pass the content to the model")
@@ -2052,7 +2062,7 @@ def build_available_tool_response(model: str) -> str:
         lines.append("- File-reading prompts such as `파일 내용 알려줘`, `파일 읽어`, `read file`, `find file`, `check file`: scan text-like files in `workspace` and pass excerpts to the model")
         lines.append("- Excel statistics prompts such as `sales.xlsx 의 Sheet1 에서 amount 평균 계산해줘`: read the Excel sheet, calculate statistics in the app, and pass the result to the model")
         lines.append("")
-        lines.append("If you want true Ollama tool calling, switch to `qwen2.5-coder:7b` or `qwen3-coder:30b`.")
+        lines.append("If you want true Ollama tool calling, switch to `qwen2.5-coder:7b`, `qwen3-coder:30b`, or `qwen3.5:9b`.")
 
     return "\n".join(lines)
 

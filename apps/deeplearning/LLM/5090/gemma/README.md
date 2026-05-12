@@ -2,13 +2,14 @@
 
 This app runs a Streamlit UI on port `2280` and sends prompts to a local
 Ollama server using the `gemma3:4b` model by default. It can also use
-`qwen2.5-coder:7b` and `qwen3-coder:30b` for coding-oriented prompts and
+`qwen3:32b` as a larger general-purpose Qwen model, plus
+`qwen3.5:9b`, `qwen2.5-coder:7b`, and `qwen3-coder:30b` for tool-capable or coding-oriented prompts and
 tool calling. Workspace tools are enabled only for supported Qwen coder models.
 
 ## Features
 
 - Text chat with `gemma3:4b`
-- Optional coding model support with `qwen2.5-coder:7b` and `qwen3-coder:30b`
+- Optional Qwen model support with `qwen3:32b`, `qwen3.5:9b`, `qwen2.5-coder:7b`, and `qwen3-coder:30b`
 - Excel upload support for `.xlsx` and `.xls`
 - Image upload support for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`
 - External access with Streamlit bound to `0.0.0.0:2280`
@@ -64,6 +65,8 @@ You can also download a larger Gemma model directly from the Streamlit sidebar.
 For coding and file-tool prompts, you can also download:
 
 ```bash
+ollama pull qwen3:32b
+ollama pull qwen3.5:9b
 ollama pull qwen2.5-coder:7b
 ollama pull qwen3-coder:30b
 ```
@@ -112,7 +115,8 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 
 This app has two different prompt-handling paths.
 
-- `qwen2.5-coder:7b` and `qwen3-coder:30b` use Ollama tool calling for validated workspace and Excel tools.
+- `qwen2.5-coder:7b`, `qwen3-coder:30b`, and `qwen3.5:9b` use Ollama tool calling for validated workspace and Excel tools.
+- `qwen3:32b` can be selected as a larger general-purpose Qwen chat model, but it does not enable workspace tool calling in this app.
 - `gemma3:*` models do not use Ollama workspace tool calling in this app. Instead, the Streamlit app pre-processes some prompt patterns and injects the matched file content into the model prompt.
 
 ### Qwen Tool Calling
@@ -228,8 +232,10 @@ python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verif
 - 이미지 업로드 및 모델 입력
 - `workspace` 내부 파일 다운로드 및 삭제
 - Nextcloud WebDAV 경로를 통한 Markdown/PDF 문서 RAG
-- `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 workspace tool calling 지원
-- `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 Excel 데이터 추출 및 통계 계산 tool 지원
+- `qwen3:32b` 선택 가능
+- `qwen3.5:9b` 선택 가능
+- `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 선택 시 workspace tool calling 지원
+- `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 선택 시 Excel 데이터 추출 및 통계 계산 tool 지원
 - `gemma` 선택 시에도 프롬프트 기반 Excel 통계 계산 보조 기능 지원
 
 ### 모델별 동작
@@ -265,6 +271,8 @@ ollama pull gemma3:4b
 코딩형 모델도 함께 쓰려면 아래 모델을 추가로 받을 수 있습니다.
 
 ```bash
+ollama pull qwen3:32b
+ollama pull qwen3.5:9b
 ollama pull qwen2.5-coder:7b
 ollama pull qwen3-coder:30b
 ```
@@ -302,7 +310,8 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 
 ### Tool Calling
 
-- `qwen2.5-coder:7b`, `qwen3-coder:30b` 를 선택하면 Ollama tool calling 을 통해 `workspace` 와 Excel 관련 도구를 사용할 수 있습니다.
+- `qwen3:32b` 는 일반 대화용 Qwen 모델로 선택할 수 있습니다.
+- `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 를 선택하면 Ollama tool calling 을 통해 `workspace` 와 Excel 관련 도구를 사용할 수 있습니다.
 - 새 `excel_calculate_statistics` tool 은 시트를 DataFrame 으로 읽고, 필터링과 컬럼 선택 후 통계를 계산할 수 있습니다.
 - `gemma` 계열은 현재 이 앱에서 Ollama tool calling 을 직접 사용하지 않습니다.
 - 대신 `gemma` 는 앱이 프롬프트를 먼저 해석해서 `workspace` 파일 내용을 읽어 프롬프트에 함께 넣는 방식으로 동작합니다.
@@ -369,7 +378,8 @@ available tools
 
 이때 동작은 아래와 같습니다.
 
-- `qwen2.5-coder:7b`, `qwen3-coder:30b` 선택 시 현재 등록된 Ollama tool 이름과 설명 목록을 바로 보여줍니다.
+- `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 선택 시 현재 등록된 Ollama tool 이름과 설명 목록을 바로 보여줍니다.
+- `qwen3:32b` 선택 시에는 coder 계열이 아니므로 tool calling 비활성 상태로 안내합니다.
 - `gemma` 선택 시 현재 앱에서 Gemma가 직접 쓰는 Ollama tool calling 은 비활성이라고 안내하고, 대신 사용할 수 있는 `작업파일 <file>` 과 `workspace` 스캔형 프롬프트 기능을 보여줍니다.
 
 ### 웹 접근 로그인 설정
