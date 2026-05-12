@@ -4,7 +4,14 @@ import argparse
 import sys
 from pathlib import Path
 
-from pulsedav import DEFAULT_INTERVAL_MINUTES, load_settings, resolve_settings_path, run_loop, send_once
+from pulsedav import (
+    DEFAULT_INTERVAL_MINUTES,
+    WebDAVConnectionError,
+    load_settings,
+    resolve_settings_path,
+    run_loop,
+    send_once,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,7 +63,11 @@ def main() -> int:
         run_loop(args.interval_minutes, settings_path=args.config)
         return 0
 
-    send_once(load_settings(args.config), settings_path=args.config)
+    try:
+        send_once(load_settings(args.config), settings_path=args.config)
+    except WebDAVConnectionError as exc:
+        print(str(exc))
+        return 1
     return 0
 
 

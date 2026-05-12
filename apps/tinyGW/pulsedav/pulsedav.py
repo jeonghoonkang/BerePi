@@ -57,6 +57,11 @@ class SimpleRequestException(Exception):
     pass
 
 
+class WebDAVConnectionError(ValueError):
+    """Raised when WebDAV connection or authentication fails."""
+    pass
+
+
 class SimpleResponse:
     def __init__(self, status_code: int, text: str, content: bytes):
         self.status_code = status_code
@@ -107,6 +112,11 @@ class SimpleSession:
 
 
 REQUEST_ERRORS = (requests.RequestException,) if requests is not None else (SimpleRequestException,)
+
+
+def friendly_webdav_error_message() -> str:
+    """Return a user-facing WebDAV connection error message."""
+    return "WebDAV 접속에 실패했습니다. URL이 잘못되었거나, WebDAV root 경로 또는 ID/비밀번호를 확인해 주세요."
 
 
 def default_settings() -> dict[str, Any]:
@@ -777,8 +787,11 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     remote_path = posixpath.join(host_dir, file_name).strip("/")
     webdav_config = build_webdav_config(settings)
-    upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
-    deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
+    try:
+        upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
+        deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
+    except REQUEST_ERRORS as exc:
+        raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
 
     new_state = {
         "last_boot_marker": current_boot_marker,
