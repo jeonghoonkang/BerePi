@@ -25,7 +25,7 @@ const App = struct {
     }
 };
 
-const dev_origins = [_][]const u8{ "zero://app", "zero://inline", "http://127.0.0.1:5173" };
+const dev_origins = [_][]const u8{ "zero://app", "zero://inline", "http://127.0.0.1:5173", "http://127.0.0.1:2280" };
 
 pub fn main(init: std.process.Init) !void {
     var app = App{ .env_map = init.environ_map };

@@ -41,6 +41,13 @@ code {
   padding: 2rem 0 1.5rem;
 }
 
+.shell-row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
 .eyebrow {
   margin: 0 0 0.75rem;
   color: var(--accent);
@@ -69,6 +76,50 @@ code {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
   margin-top: 2rem;
+}
+
+.open-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(29, 111, 98, 0.18);
+  background: rgba(29, 111, 98, 0.1);
+  color: var(--ink);
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.viewer-card {
+  margin-top: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.6rem;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 22px 60px rgba(18, 32, 41, 0.08);
+}
+
+.viewer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 250, 248, 0.92);
+  color: var(--muted);
+}
+
+.viewer {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 18rem);
+  min-height: 720px;
+  border: 0;
+  background: white;
 }
 
 .card,
@@ -112,7 +163,18 @@ code {
     padding-top: 2.5rem;
   }
 
+  .shell-row,
+  .viewer-meta {
+    flex-direction: column;
+    align-items: start;
+  }
+
   .lede {
     font-size: 1rem;
+  }
+
+  .viewer {
+    min-height: 640px;
+    height: 70vh;
   }
 }
