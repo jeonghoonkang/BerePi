@@ -1,0 +1,118 @@
+:root {
+  color-scheme: light;
+  --bg: #f3efe6;
+  --panel: rgba(255, 255, 255, 0.8);
+  --ink: #122029;
+  --muted: #4d5f69;
+  --line: rgba(18, 32, 41, 0.12);
+  --accent: #1d6f62;
+  --accent-soft: rgba(29, 111, 98, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  background:
+    radial-gradient(circle at top left, rgba(29, 111, 98, 0.18), transparent 28rem),
+    linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
+  color: var(--ink);
+}
+
+code {
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  font-size: 0.92em;
+  background: rgba(18, 32, 41, 0.06);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.35rem;
+}
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem 5rem;
+}
+
+.hero {
+  padding: 2rem 0 1.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.8rem, 6vw, 5.2rem);
+  line-height: 0.95;
+}
+
+.lede {
+  max-width: 52rem;
+  margin: 1.25rem 0 0;
+  font-size: 1.1rem;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.card,
+.panel {
+  backdrop-filter: blur(14px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 1.4rem;
+  box-shadow: 0 22px 60px rgba(18, 32, 41, 0.08);
+}
+
+.card {
+  padding: 1.25rem 1.2rem 1.35rem;
+}
+
+.card h2,
+.panel h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.05rem;
+}
+
+.card p,
+.panel li {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.panel {
+  margin-top: 1rem;
+  padding: 1.25rem 1.2rem 1.35rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 250, 248, 0.92));
+}
+
+.panel ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding-top: 2.5rem;
+  }
+
+  .lede {
+    font-size: 1rem;
+  }
+}
