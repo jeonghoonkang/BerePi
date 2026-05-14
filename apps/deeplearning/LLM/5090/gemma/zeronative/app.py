@@ -98,6 +98,10 @@ MODEL_DEFAULT_TEMPERATURES = {
     "qwen3-coder:30b": 0.2,
 }
 
+MODEL_ALIASES = {
+    "gemma4": "gemma4:e4b",
+}
+
 FILE_TOOLS = [
     {
         "type": "function",
@@ -2129,6 +2133,12 @@ def get_model_temperature(model: str) -> float:
     return float(MODEL_DEFAULT_TEMPERATURES.get(model, 0.7))
 
 
+def resolve_ollama_model(model: str) -> str:
+    """Resolve UI model aliases to concrete Ollama model tags."""
+    normalized_model = model.strip()
+    return MODEL_ALIASES.get(normalized_model, normalized_model)
+
+
 def summarize_tool_calls(tool_calls: list[dict]) -> str:
     """Return a stable summary string for loop detection and diagnostics."""
     summary_parts: list[str] = []
@@ -2149,6 +2159,7 @@ def request_final_answer(
     reason: str,
 ) -> str:
     """Ask the model for a final answer without exposing more tool options."""
+    resolved_model = resolve_ollama_model(model)
     final_messages = list(messages)
     final_messages.append(
         {
@@ -2164,7 +2175,7 @@ def request_final_answer(
     response = requests.post(
         url,
         json={
-            "model": model,
+            "model": resolved_model,
             "stream": False,
             "messages": final_messages,
             "options": {
@@ -2190,6 +2201,7 @@ def call_ollama(
 ) -> str:
     """Send a chat request to Ollama and allow validated workspace tool calls."""
     url = f"{host.rstrip('/')}/api/chat"
+    resolved_model = resolve_ollama_model(model)
     allow_tools = model_supports_tools(model)
     messages = [
         {
@@ -2216,7 +2228,7 @@ def call_ollama(
         response = requests.post(
             url,
             json={
-                "model": model,
+                "model": resolved_model,
                 "stream": False,
                 "messages": messages,
                 "options": {
@@ -2239,7 +2251,7 @@ def call_ollama(
         response = requests.post(
             url,
             json={
-                "model": model,
+                "model": resolved_model,
                 "stream": False,
                 "messages": messages,
                 "tools": FILE_TOOLS,
@@ -2331,9 +2343,10 @@ def fetch_installed_models(host: str) -> dict[str, dict]:
 
 def fetch_model_show_info(host: str, model: str) -> dict:
     """Return detailed model information from Ollama show API."""
+    resolved_model = resolve_ollama_model(model)
     response = requests.post(
         f"{host.rstrip('/')}/api/show",
-        json={"model": model},
+        json={"model": resolved_model},
         timeout=30,
     )
     response.raise_for_status()
@@ -2515,13 +2528,14 @@ def move_model_storage(source_root: Path, destination_root: Path) -> str:
 
 def get_model_storage_path(model: str) -> Path:
     """Infer the local Ollama manifest path for a model tag."""
+    resolved_model = resolve_ollama_model(model)
     registry = "registry.ollama.ai"
     namespace = "library"
-    repository = model
+    repository = resolved_model
     tag = "latest"
 
-    if ":" in model:
-        repository, tag = model.rsplit(":", maxsplit=1)
+    if ":" in resolved_model:
+        repository, tag = resolved_model.rsplit(":", maxsplit=1)
 
     if "/" in repository:
         namespace, repository = repository.split("/", maxsplit=1)
@@ -2531,7 +2545,8 @@ def get_model_storage_path(model: str) -> Path:
 
 def get_selected_model_info(host: str, model: str, installed_model_map: dict[str, dict]) -> tuple[dict | None, str | None]:
     """Return selected model metadata from tags and show API."""
-    installed_info = installed_model_map.get(model)
+    resolved_model = resolve_ollama_model(model)
+    installed_info = installed_model_map.get(model) or installed_model_map.get(resolved_model)
     try:
         show_info = fetch_model_show_info(host, model)
     except requests.RequestException as exc:
@@ -2549,9 +2564,10 @@ def get_selected_model_info(host: str, model: str, installed_model_map: dict[str
 
 def pull_model(host: str, model: str, status_placeholder, progress_placeholder) -> None:
     """Download a model from Ollama and show progress in the sidebar."""
+    resolved_model = resolve_ollama_model(model)
     response = requests.post(
         f"{host.rstrip('/')}/api/pull",
-        json={"model": model, "stream": True},
+        json={"model": resolved_model, "stream": True},
         timeout=REQUEST_TIMEOUT,
         stream=True,
     )
@@ -2567,6 +2583,8 @@ def pull_model(host: str, model: str, status_placeholder, progress_placeholder) 
             continue
 
         event = json.loads(raw_line.decode("utf-8"))
+        if event.get("error"):
+            raise RuntimeError(str(event["error"]))
         status_text = event.get("status", last_status)
         total = event.get("total")
         completed = event.get("completed")
@@ -2590,7 +2608,10 @@ def pull_model(host: str, model: str, status_placeholder, progress_placeholder) 
         status_placeholder.info(status_text)
 
     progress_bar.progress(1.0, text="Download complete")
-    status_placeholder.success(f"Model download completed: {model}")
+    if resolved_model != model:
+        status_placeholder.success(f"Model download completed: {model} -> {resolved_model}")
+    else:
+        status_placeholder.success(f"Model download completed: {resolved_model}")
 
 
 def render_sidebar() -> tuple[str, str]:
@@ -2691,6 +2712,7 @@ def render_sidebar() -> tuple[str, str]:
 
     custom_model = st.sidebar.text_input("Custom Model Tag", value=selected_model)
     model = custom_model.strip() or selected_model
+    resolved_model = resolve_ollama_model(model)
 
     if "model_temperatures" not in st.session_state:
         st.session_state.model_temperatures = {}
@@ -2736,6 +2758,8 @@ def render_sidebar() -> tuple[str, str]:
     storage_root = get_selected_ollama_models_root()
     storage_path = get_model_storage_path(model)
     st.sidebar.write(f"Model: `{model}`")
+    if resolved_model != model:
+        st.sidebar.write(f"Resolved tag: `{resolved_model}`")
     st.sidebar.write(f"Tool Support: `{'Enabled' if model_supports_tools(model) else 'Disabled'}`")
     st.sidebar.write(f"Temperature: `{get_model_temperature(model):.1f}`")
     st.sidebar.write(f"Storage root: `{storage_root}`")
@@ -2767,11 +2791,13 @@ def render_sidebar() -> tuple[str, str]:
         try:
             pull_model(host, model, status_placeholder, progress_placeholder)
             st.session_state.installed_models = fetch_installed_models(host)
-            st.session_state.preferred_model = model
+            st.session_state.preferred_model = resolved_model
             if st.session_state.auto_select_downloaded_model:
-                st.session_state.selected_model = model
+                st.session_state.selected_model = resolved_model
             st.rerun()
         except requests.RequestException as exc:
+            status_placeholder.error(f"Model download failed: {exc}")
+        except RuntimeError as exc:
             status_placeholder.error(f"Model download failed: {exc}")
 
     st.sidebar.markdown("Example: `OLLAMA_HOST=http://127.0.0.1:11434 ollama serve`")
