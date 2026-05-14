@@ -10,18 +10,18 @@
     "user_services": true
   },
   "metadata": {
-    "ddns_name": "",
-    "intro_text": "장비 상태 자동 보고",
+    "ddns_name": "gw.example.net",
+    "intro_text": "장비 상태 자동 보고 예시",
     "ssh_port": "22"
   },
   "schedule": {
     "interval_minutes": 30
   },
   "webdav": {
-    "hostname": "",
-    "password": "",
+    "hostname": "https://nextcloud.example.com:443",
+    "password": "app-password-or-token",
     "root": "/remote.php/dav/files/username",
-    "username": "",
+    "username": "username",
     "verify_ssl": true
   }
 }

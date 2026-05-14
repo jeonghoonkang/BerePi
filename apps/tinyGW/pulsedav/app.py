@@ -96,7 +96,20 @@ def main() -> None:
             except Exception as exc:
                 st.error(f"전송 실패: {exc}")
             else:
-                st.success(f"전송 완료: {result['remote_path']}")
+                st.success(
+                    "\n".join(
+                        [
+                            "전송 완료",
+                            f"- 호스트명: {result['host_name']}",
+                            f"- 파일명: {result['file_name']}",
+                            f"- 전송 주소: {result['webdav_hostname']}",
+                            f"- WebDAV 루트: {result['webdav_root']}",
+                            f"- 저장 디렉토리: {result['remote_directory']}",
+                            f"- 저장 경로: {result['remote_path']}",
+                            f"- 전체 URL: {result['destination_url']}",
+                        ]
+                    )
+                )
                 if result["deleted_paths"]:
                     st.info("36개월 초과 파일 삭제:\n" + "\n".join(result["deleted_paths"]))
                 with st.expander("업로드된 Markdown 미리보기", expanded=True):

@@ -122,16 +122,16 @@ def friendly_webdav_error_message() -> str:
 def default_settings() -> dict[str, Any]:
     return {
         "webdav": {
-            "hostname": "",
+            "hostname": "https://nextcloud.example.com",
             "root": "/remote.php/dav/files/username",
-            "username": "",
-            "password": "",
+            "username": "username",
+            "password": "app-password-or-token",
             "verify_ssl": True,
         },
         "metadata": {
-            "ddns_name": "",
+            "ddns_name": "gw.example.net",
             "ssh_port": "22",
-            "intro_text": "장비 상태 자동 보고",
+            "intro_text": "장비 상태 자동 보고 예시",
         },
         "schedule": {
             "interval_minutes": DEFAULT_INTERVAL_MINUTES,
@@ -787,6 +787,8 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     remote_path = posixpath.join(host_dir, file_name).strip("/")
     webdav_config = build_webdav_config(settings)
+    remote_directory = host_dir
+    destination_url = compose_webdav_url(webdav_config, remote_path)
     try:
         upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
         deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
@@ -803,6 +805,13 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
 
     return {
         "remote_path": remote_path,
+        "remote_directory": remote_directory,
+        "destination_url": destination_url,
+        "webdav_hostname": webdav_config.hostname,
+        "webdav_root": webdav_config.root,
+        "webdav_username": webdav_config.username,
+        "file_name": file_name,
+        "host_name": hostname(),
         "deleted_paths": deleted,
         "first_boot_message": first_boot,
         "uptime_minutes": snapshot["uptime_minutes"],

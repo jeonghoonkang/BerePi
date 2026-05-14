@@ -64,10 +64,18 @@ def main() -> int:
         return 0
 
     try:
-        send_once(load_settings(args.config), settings_path=args.config)
+        result = send_once(load_settings(args.config), settings_path=args.config)
     except WebDAVConnectionError as exc:
         print(str(exc))
         return 1
+    print("PulseDAV 전송 완료")
+    print(f"- 호스트명: {result['host_name']}")
+    print(f"- 파일명: {result['file_name']}")
+    print(f"- 전송 주소: {result['webdav_hostname']}")
+    print(f"- WebDAV 루트: {result['webdav_root']}")
+    print(f"- 저장 디렉토리: {result['remote_directory']}")
+    print(f"- 저장 경로: {result['remote_path']}")
+    print(f"- 전체 URL: {result['destination_url']}")
     return 0
 
 
