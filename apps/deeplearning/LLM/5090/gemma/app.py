@@ -3063,10 +3063,11 @@ def main() -> None:
                     workbook = pd.ExcelFile(uploaded_excel)
                     st.write(f"Workbook: `{uploaded_excel.name}`")
                     st.caption(f"Saved to: `{saved_path}`")
-                    for sheet_name in workbook.sheet_names:
-                        frame = workbook.parse(sheet_name)
-                        st.write(f"Sheet: `{sheet_name}`")
-                        st.dataframe(frame.head(MAX_PREVIEW_ROWS), use_container_width=True)
+                    with st.expander(f"Preview sheets in {uploaded_excel.name}", expanded=False):
+                        for sheet_name in workbook.sheet_names:
+                            frame = workbook.parse(sheet_name)
+                            st.write(f"Sheet: `{sheet_name}`")
+                            st.dataframe(frame.head(MAX_PREVIEW_ROWS), use_container_width=True)
                 except Exception as exc:
                     st.error(f"Failed to read Excel file {uploaded_excel.name}: {exc}")
 
