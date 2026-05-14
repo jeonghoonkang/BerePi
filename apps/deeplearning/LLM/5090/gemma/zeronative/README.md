@@ -45,6 +45,10 @@ The older prototype files are still present:
 
 Those Python files remain the feature-complete prototype for now.
 
+The Streamlit prototype can now also select `gemma4`, `gemma4:e2b`,
+`gemma4:e4b`, `gemma4:26b`, and `gemma4:31b` in addition to the earlier
+Gemma and Qwen model options.
+
 ## Prerequisites
 
 You need the following tools on the host:

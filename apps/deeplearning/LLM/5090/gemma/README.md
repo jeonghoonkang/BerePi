@@ -2,13 +2,14 @@
 
 This app runs a Streamlit UI on port `2280` and sends prompts to a local
 Ollama server using the `gemma3:4b` model by default. It can also use
+`gemma4`, `gemma4:e2b`, `gemma4:e4b`, `gemma4:26b`, and `gemma4:31b`,
 `qwen3:32b` as a larger general-purpose Qwen model, plus
 `qwen3.5:9b`, `qwen2.5-coder:7b`, and `qwen3-coder:30b` for tool-capable or coding-oriented prompts and
 tool calling. Workspace tools are enabled only for supported Qwen coder models.
 
 ## Features
 
-- Text chat with `gemma3:4b`
+- Text chat with `gemma3:4b` and selectable `gemma4` variants
 - Optional Qwen model support with `qwen3:32b`, `qwen3.5:9b`, `qwen2.5-coder:7b`, and `qwen3-coder:30b`
 - Excel upload support for `.xlsx` and `.xls`
 - Image upload support for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.bmp`
@@ -34,8 +35,8 @@ tool calling. Workspace tools are enabled only for supported Qwen coder models.
 
 ## Assumption
 
-`gemma model 4` is implemented as the Ollama model `gemma3:4b`, which is the
-current practical Gemma 4B-style multimodal target for text and image inputs.
+`gemma model 4` support is implemented with selectable Ollama `gemma4` tags,
+while `gemma3:4b` remains the default model for compatibility.
 
 ## Install
 
@@ -58,6 +59,11 @@ Download the model:
 
 ```bash
 ollama pull gemma3:4b
+ollama pull gemma4
+ollama pull gemma4:e2b
+ollama pull gemma4:e4b
+ollama pull gemma4:26b
+ollama pull gemma4:31b
 ```
 
 You can also download a larger Gemma model directly from the Streamlit sidebar.
@@ -117,7 +123,7 @@ This app has two different prompt-handling paths.
 
 - `qwen2.5-coder:7b`, `qwen3-coder:30b`, and `qwen3.5:9b` use Ollama tool calling for validated workspace and Excel tools.
 - `qwen3:32b` can be selected as a larger general-purpose Qwen chat model, but it does not enable workspace tool calling in this app.
-- `gemma3:*` models do not use Ollama workspace tool calling in this app. Instead, the Streamlit app pre-processes some prompt patterns and injects the matched file content into the model prompt.
+- `gemma3:*`, `gemma4`, and `gemma4:*` models do not use Ollama workspace tool calling in this app. Instead, the Streamlit app pre-processes some prompt patterns and injects the matched file content into the model prompt.
 
 ### Qwen Tool Calling
 
@@ -178,7 +184,7 @@ You can also ask the app to list the currently available tools directly from the
 Behavior:
 
 - When `qwen2.5-coder:7b` or `qwen3-coder:30b` is selected, the app returns the registered Ollama tool list with each tool name and description.
-- When a `gemma3:*` model is selected, the app explains that Ollama tool calling is disabled for Gemma in this app and shows the available app-side helper flows such as `작업파일 <file>` and workspace scan prompts.
+- When a `gemma3:*`, `gemma4`, or `gemma4:*` model is selected, the app explains that Ollama tool calling is disabled for Gemma in this app and shows the available app-side helper flows such as `작업파일 <file>` and workspace scan prompts.
 
 ### Excel Statistics Tool
 
@@ -223,7 +229,7 @@ python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verif
 
 ## Readme
 
-이 앱은 `RTX 5090` 환경에서 `Streamlit` 과 `Ollama` 를 이용해 `gemma` 와 `qwen` 계열 모델을 함께 사용할 수 있도록 만든 인터페이스입니다. 기본 모델은 `gemma3:4b` 이며, 필요하면 사이드바에서 다른 모델을 선택하거나 직접 다운로드할 수 있습니다.
+이 앱은 `RTX 5090` 환경에서 `Streamlit` 과 `Ollama` 를 이용해 `gemma` 와 `qwen` 계열 모델을 함께 사용할 수 있도록 만든 인터페이스입니다. 기본 모델은 `gemma3:4b` 이며, 필요하면 사이드바에서 `gemma4` 계열을 포함한 다른 모델을 선택하거나 직접 다운로드할 수 있습니다.
 
 ### 주요 기능
 
@@ -234,6 +240,7 @@ python3 /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/gemma/verif
 - Nextcloud WebDAV 경로를 통한 Markdown/PDF 문서 RAG
 - `qwen3:32b` 선택 가능
 - `qwen3.5:9b` 선택 가능
+- `gemma4`, `gemma4:e2b`, `gemma4:e4b`, `gemma4:26b`, `gemma4:31b` 선택 가능
 - `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 선택 시 workspace tool calling 지원
 - `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 선택 시 Excel 데이터 추출 및 통계 계산 tool 지원
 - `gemma` 선택 시에도 프롬프트 기반 Excel 통계 계산 보조 기능 지원
@@ -266,6 +273,11 @@ ollama serve
 
 ```bash
 ollama pull gemma3:4b
+ollama pull gemma4
+ollama pull gemma4:e2b
+ollama pull gemma4:e4b
+ollama pull gemma4:26b
+ollama pull gemma4:31b
 ```
 
 코딩형 모델도 함께 쓰려면 아래 모델을 추가로 받을 수 있습니다.
@@ -312,6 +324,7 @@ streamlit run app.py --server.address 0.0.0.0 --server.port 2280
 
 - `qwen3:32b` 는 일반 대화용 Qwen 모델로 선택할 수 있습니다.
 - `qwen2.5-coder:7b`, `qwen3-coder:30b`, `qwen3.5:9b` 를 선택하면 Ollama tool calling 을 통해 `workspace` 와 Excel 관련 도구를 사용할 수 있습니다.
+- `gemma3`, `gemma4` 계열 모델은 일반 질의응답 모드로 동작하며, 앱 쪽 보조 로직으로 파일 검색과 Excel 통계 같은 일부 기능을 지원합니다.
 - 새 `excel_calculate_statistics` tool 은 시트를 DataFrame 으로 읽고, 필터링과 컬럼 선택 후 통계를 계산할 수 있습니다.
 - `gemma` 계열은 현재 이 앱에서 Ollama tool calling 을 직접 사용하지 않습니다.
 - 대신 `gemma` 는 앱이 프롬프트를 먼저 해석해서 `workspace` 파일 내용을 읽어 프롬프트에 함께 넣는 방식으로 동작합니다.
