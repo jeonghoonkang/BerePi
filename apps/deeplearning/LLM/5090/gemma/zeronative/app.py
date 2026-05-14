@@ -83,9 +83,6 @@ MODEL_DEFAULT_TEMPERATURES = {
     "qwen3-coder:30b": 0.2,
 }
 
-DEFAULT_APP_LOGIN_ID = "admin"
-DEFAULT_APP_LOGIN_PASSWORD = "change-this-password"
-
 FILE_TOOLS = [
     {
         "type": "function",
@@ -387,20 +384,17 @@ def get_access_control_settings() -> dict:
         configured_id = access_control.get("login_id")
         if isinstance(configured_id, str) and configured_id.strip():
             login_id = configured_id.strip()
-        else:
-            login_id = DEFAULT_APP_LOGIN_ID
 
     login_password = os.getenv("ZERONATIVE_APP_LOGIN_PASSWORD")
     if not login_password:
         configured_password = access_control.get("login_password")
         if isinstance(configured_password, str) and configured_password.strip():
             login_password = configured_password
-        else:
-            login_password = DEFAULT_APP_LOGIN_PASSWORD
 
     return {
-        "login_id": login_id,
-        "login_password": login_password,
+        "login_id": login_id.strip() if isinstance(login_id, str) else "",
+        "login_password": login_password if isinstance(login_password, str) else "",
+        "is_configured": bool(isinstance(login_id, str) and login_id.strip() and isinstance(login_password, str) and login_password),
     }
 
 
@@ -419,45 +413,53 @@ def render_access_gate() -> bool:
     login_col, spacer_col = st.columns([1.2, 1.8], gap="large")
     with login_col:
         st.title("ZeroNative AI for RTX 5090")
-        st.caption("Sign in to access this page.")
-        with st.form("app_access_login", clear_on_submit=False):
-            login_id = st.text_input("ID", key="app_access_login_id")
-            login_password = st.text_input("Password", type="password", key="app_access_login_password")
-            submitted = st.form_submit_button("Sign In", use_container_width=True)
+        if not credentials["is_configured"]:
+            st.error("Access control is not configured. Set login credentials on the server before using this app.")
+        else:
+            st.caption("Sign in to access this page.")
+            with st.form("app_access_login", clear_on_submit=False):
+                login_id = st.text_input("ID", key="app_access_login_id")
+                login_password = st.text_input("Password", type="password", key="app_access_login_password")
+                submitted = st.form_submit_button("Sign In", use_container_width=True)
 
-        if submitted:
-            login_ok = secrets.compare_digest(login_id.strip(), credentials["login_id"])
-            password_ok = secrets.compare_digest(login_password, credentials["login_password"])
-            if login_ok and password_ok:
-                st.session_state.app_authenticated = True
-                st.session_state.app_auth_error = ""
-                st.rerun()
-            else:
-                st.session_state.app_auth_error = "Invalid ID or password."
+            if submitted:
+                login_ok = secrets.compare_digest(login_id.strip(), credentials["login_id"])
+                password_ok = secrets.compare_digest(login_password, credentials["login_password"])
+                if login_ok and password_ok:
+                    st.session_state.app_authenticated = True
+                    st.session_state.app_auth_error = ""
+                    st.rerun()
+                else:
+                    st.session_state.app_auth_error = "Invalid ID or password."
 
-        if st.session_state.app_auth_error:
-            st.error(st.session_state.app_auth_error)
-
-        if (
-            credentials["login_id"] == DEFAULT_APP_LOGIN_ID
-            and credentials["login_password"] == DEFAULT_APP_LOGIN_PASSWORD
-        ):
-            st.warning(
-                "Default login is active. Set ZERONATIVE_APP_LOGIN_ID and ZERONATIVE_APP_LOGIN_PASSWORD, "
-                "or configure access_control in app_settings.json."
-            )
+            if st.session_state.app_auth_error:
+                st.error(st.session_state.app_auth_error)
 
     with spacer_col:
-        st.markdown(
-            """
-            ### Access Control
-            This page now requires a login before the application UI is shown.
+        if not credentials["is_configured"]:
+            st.markdown(
+                """
+                ### Access Control Required
+                This page will not start with a default login anymore.
 
-            Configure credentials on the server with one of these methods:
-            - Environment variables: `ZERONATIVE_APP_LOGIN_ID`, `ZERONATIVE_APP_LOGIN_PASSWORD`
-            - `app_settings.json` entry: `access_control.login_id`, `access_control.login_password`
-            """
-        )
+                Configure credentials on the server with one of these methods:
+                - Environment variables: `ZERONATIVE_APP_LOGIN_ID`, `ZERONATIVE_APP_LOGIN_PASSWORD`
+                - `app_settings.json` entry: `access_control.login_id`, `access_control.login_password`
+
+                After credentials are configured, refresh the page and sign in.
+                """
+            )
+        else:
+            st.markdown(
+                """
+                ### Access Control
+                This page now requires a login before the application UI is shown.
+
+                Configure credentials on the server with one of these methods:
+                - Environment variables: `ZERONATIVE_APP_LOGIN_ID`, `ZERONATIVE_APP_LOGIN_PASSWORD`
+                - `app_settings.json` entry: `access_control.login_id`, `access_control.login_password`
+                """
+            )
 
     return False
 
