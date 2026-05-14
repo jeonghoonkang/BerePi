@@ -2758,6 +2758,12 @@ def render_sidebar() -> tuple[str, str]:
             status_placeholder.error(f"Model download failed: {exc}")
 
     st.sidebar.markdown("Example: `OLLAMA_HOST=http://127.0.0.1:11434 ollama serve`")
+    readme_path = APP_DIR / "README.md"
+    with st.sidebar.expander("README.md", expanded=False):
+        if readme_path.exists():
+            st.markdown(readme_path.read_text(encoding="utf-8"))
+        else:
+            st.caption(f"README not found: {readme_path}")
 
     return host, model
 
