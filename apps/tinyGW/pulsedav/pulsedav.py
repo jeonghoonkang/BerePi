@@ -51,6 +51,7 @@ class WebDAVConfig:
     username: str
     password: str
     verify_ssl: bool = True
+    sub: str = ""
 
 
 class SimpleRequestException(Exception):
@@ -124,6 +125,7 @@ def default_settings() -> dict[str, Any]:
         "webdav": {
             "hostname": "https://nextcloud.example.com",
             "root": "/remote.php/dav/files/username",
+            "sub": "",
             "username": "username",
             "password": "app-password-or-token",
             "verify_ssl": True,
@@ -227,13 +229,21 @@ def normalize_root(root: str) -> str:
     return root.strip("/")
 
 
+def get_effective_root(config: WebDAVConfig) -> str:
+    root = normalize_root(config.root)
+    sub = normalize_root(config.sub) if config.sub else ""
+    if sub:
+        return f"{root}/{sub}" if root else sub
+    return root
+
+
 def normalize_remote_path(path: str) -> str:
     return path.strip("/")
 
 
 def compose_webdav_url(config: WebDAVConfig, remote_path: str = "") -> str:
     host = config.hostname.rstrip("/")
-    root = normalize_root(config.root)
+    root = get_effective_root(config)
     path = normalize_remote_path(remote_path)
     if root and path:
         encoded = "/".join(quote(part) for part in path.split("/") if part)
@@ -314,7 +324,7 @@ def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, cont
 def list_remote_entries(config: WebDAVConfig, remote_dir: str) -> list[dict[str, Any]]:
     session = build_session(config)
     root = propfind(session, compose_webdav_url(config, remote_dir), depth="1")
-    expected_prefix = normalize_root(config.root)
+    expected_prefix = get_effective_root(config)
     results: list[dict[str, Any]] = []
     current_dir = normalize_remote_path(remote_dir)
 
@@ -768,6 +778,7 @@ def build_webdav_config(settings: dict[str, Any]) -> WebDAVConfig:
         username=str(webdav.get("username", "")).strip(),
         password=str(webdav.get("password", "")).strip(),
         verify_ssl=as_bool(webdav.get("verify_ssl"), True),
+        sub=str(webdav.get("sub", "")).strip(),
     )
 
 
@@ -809,6 +820,7 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
         "destination_url": destination_url,
         "webdav_hostname": webdav_config.hostname,
         "webdav_root": webdav_config.root,
+        "webdav_sub": webdav_config.sub,
         "webdav_username": webdav_config.username,
         "file_name": file_name,
         "host_name": hostname(),

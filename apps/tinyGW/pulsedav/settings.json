@@ -21,6 +21,7 @@
     "hostname": "https://nextcloud.example.com:443",
     "password": "app-password-or-token",
     "root": "/remote.php/dav/files/username",
+    "sub": "",
     "username": "username",
     "verify_ssl": true
   }

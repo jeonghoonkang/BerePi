@@ -73,6 +73,7 @@ def main() -> int:
     print(f"- 파일명: {result['file_name']}")
     print(f"- 전송 주소: {result['webdav_hostname']}")
     print(f"- WebDAV 루트: {result['webdav_root']}")
+    print(f"- WebDAV 서브: {result['webdav_sub']}")
     print(f"- 저장 디렉토리: {result['remote_directory']}")
     print(f"- 저장 경로: {result['remote_path']}")
     print(f"- 전체 URL: {result['destination_url']}")
