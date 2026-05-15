@@ -77,6 +77,6 @@ python3 sender.py --print-crontab --config /path/to/custom-settings.json
 ## 부팅 자동 전송 예시
 
 ```cron
-@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { date '+\%Y-\%m-\%d \%H:\%M:\%S \%Z'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
-*/30 * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { date '+\%Y-\%m-\%d \%H:\%M:\%S \%Z'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
+@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
+*/30 * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
 ```

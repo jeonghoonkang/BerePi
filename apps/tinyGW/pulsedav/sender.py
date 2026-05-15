@@ -46,8 +46,14 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -
     )
     cron_interval = max(1, min(configured_interval, 59))
 
+    timestamp_command = (
+        f"{python_bin} -c 'from datetime import datetime; "
+        'd=datetime.now().astimezone(); '
+        'print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} '
+        '{d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")\''
+    )
     base_command = f"{python_bin} sender.py --once{config_args}"
-    log_command = f"{{ date '+\\%Y-\\%m-\\%d \\%H:\\%M:\\%S \\%Z'; {base_command}; }} > pulsedav.log 2>&1"
+    log_command = f"{{ {timestamp_command}; {base_command}; }} > pulsedav.log 2>&1"
     return [
         f"@reboot cd {app_dir} && {log_command}",
         f"*/{cron_interval} * * * * cd {app_dir} && {log_command}",
