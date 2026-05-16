@@ -59,7 +59,24 @@ with st.sidebar:
     else:
         # 로컬 모델 다운로드 및 설정
         st.subheader("📥 로컬 모델 관리")
-        ollama_target_model = st.text_input("사용할 로컬 모델명", value="gemma4:e4b", help="Ollama에 설치된 모델명을 입력하세요.")
+        
+        # 로컬에 설치된 Ollama 모델 목록 가져오기
+        def get_local_ollama_models():
+            try:
+                res = requests.get("http://localhost:11434/api/tags", timeout=2)
+                if res.status_code == 200:
+                    return [m["name"] for m in res.json().get("models", [])]
+            except:
+                pass
+            return []
+            
+        local_models = get_local_ollama_models()
+        if local_models:
+            ollama_target_model = st.selectbox("사용할 로컬 모델 선택", local_models, help="로컬에 이미 다운로드된 모델 중 하나를 선택하세요.")
+        else:
+            ollama_target_model = st.text_input("사용할 로컬 모델명", value="gemma4:e4b", help="로컬 모델이 감지되지 않습니다. 직접 입력하거나 아래에서 다운로드하세요.")
+            st.warning("⚠️ 로컬에 설치된 모델이 없습니다. 아래에서 모델을 먼저 다운로드해 주세요.")
+            
         ollama_exec_path = st.text_input("Ollama 실행 파일 경로", value="ollama", help="기본값 'ollama'가 작동하지 않으면 전체 경로(예: /usr/local/bin/ollama)를 입력하세요.")
         if st.button("Ollama 서버 시작 (Serve)"):
             with st.spinner("Ollama 서버를 백그라운드에서 시작하는 중..."):
@@ -108,6 +125,12 @@ with st.sidebar:
                     for line in response.iter_lines():
                         if line:
                             chunk = json.loads(line)
+                            
+                            # API 에러 체크
+                            if "error" in chunk:
+                                st.error(f"Ollama 에러: {chunk['error']}")
+                                return
+                                
                             status = chunk.get("status", "")
                             completed = chunk.get("completed", 0)
                             total = chunk.get("total", 0)
@@ -116,7 +139,9 @@ with st.sidebar:
                                 progress = completed / total
                                 progress_bar.progress(progress, text=f"다운로드 중: {status} ({progress*100:.1f}%)")
                             else:
-                                status_text.text(f"상태: {status}")
+                                status_text.text(f"현재 상태: {status}")
+                                # 진행바가 0인 상태에서 텍스트만 갱신
+                                progress_bar.progress(0, text=f"준비 중: {status}")
                                 
                     st.success(f"'{dl_model_name}' 다운로드 및 준비 완료! ✅")
                     status_text.empty()
