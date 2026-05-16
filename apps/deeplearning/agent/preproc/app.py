@@ -375,13 +375,15 @@ with tab_chat:
         
         st.divider()
         st.markdown("##### 📂 업로드된 파일 목록 및 관리")
-        ws_files = [f.name for f in WORKSPACE_DIR.iterdir() if f.is_file()]
+        # .gitkeep 파일은 목록에서 제외
+        ws_files = [f.name for f in WORKSPACE_DIR.iterdir() if f.is_file() and f.name != ".gitkeep"]
         if ws_files:
             selected_ws_file = st.selectbox(
                 "관리할 파일을 선택하세요", 
                 sorted(ws_files), 
                 key="workspace_file_selector"
             )
+            st.session_state.active_workspace_file = selected_ws_file
             
             col_ws_info, col_ws_del = st.columns([3, 1])
             file_full_path = WORKSPACE_DIR / selected_ws_file
@@ -396,11 +398,25 @@ with tab_chat:
                         try:
                             file_full_path.unlink()
                             st.success(f"파일 삭제 완료: `{selected_ws_file}` 🗑️")
+                            if "active_workspace_file" in st.session_state:
+                                del st.session_state.active_workspace_file
                             safe_rerun()
                         except Exception as e:
                             st.error(f"파일 삭제 실패: {e}")
         else:
             st.info("현재 workspace 디렉토리에 파일이 없습니다. 위에 파일을 드래그하여 업로드해 주세요.")
+            if "active_workspace_file" in st.session_state:
+                del st.session_state.active_workspace_file
+            
+    # 대화 및 명령 대상 파일 지정
+    include_file_in_prompt = False
+    if "active_workspace_file" in st.session_state and st.session_state.active_workspace_file:
+        active_file = st.session_state.active_workspace_file
+        include_file_in_prompt = st.checkbox(
+            f"📄 선택된 파일 `{active_file}`을(를) AI 프롬프트 명령 대상으로 포함", 
+            value=False,
+            help="체크 시 파일 내용이 AI에게 전달되며, 프롬프트를 통해 AI에게 '열기/읽기', '삭제', '새로운 이름으로 저장'을 직접 명령할 수 있습니다."
+        )
             
     st.divider()
 
@@ -426,36 +442,128 @@ with tab_chat:
 
         # 에이전트 응답 처리
         start_time = time.time()
+        
+        # 워크스페이스 파일 명령 및 컨텍스트 결합
+        actual_prompt = prompt
+        if include_file_in_prompt and "active_workspace_file" in st.session_state and st.session_state.active_workspace_file:
+            active_file = st.session_state.active_workspace_file
+            selected_file_content = ""
+            file_full_path = WORKSPACE_DIR / active_file
+            try:
+                if file_full_path.exists():
+                    with open(file_full_path, "r", encoding="utf-8", errors="ignore") as f:
+                        selected_file_content = f.read()
+                else:
+                    selected_file_content = "<오류: 파일이 존재하지 않습니다.>"
+            except Exception as e:
+                selected_file_content = f"<오류: 파일을 읽을 수 없습니다: {e}>"
+
+            workspace_instruction = f"""
+[SYSTEM NOTICE: WORKSPACE FILE INSTRUCTION]
+현재 사용자가 선택하여 업로드/조회 중인 Workspace 파일 정보:
+- 파일명: {active_file}
+- 파일 경로: {file_full_path}
+
+[파일 본문 내용]
+---
+{selected_file_content}
+---
+
+[시스템 액션 가이드라인]
+사용자가 이 파일에 대해 '열기/읽기', '삭제', '새로운 이름으로 저장' 등을 명령할 경우, 대화를 자연스럽게 진행하면서 동시에 답변 가장 마지막 부분에 정확히 아래의 시스템 명령어 블록을 포함해 주세요:
+1. 파일 '삭제' 시:
+[SYSTEM_ACTION: DELETE {active_file}]
+
+2. '새로운 이름으로 저장' 또는 '수정/가공하여 다른 이름으로 저장' 시:
+[SYSTEM_ACTION: SAVE_AS <원하는_새로운_파일명>]
+<파일에 작성될 최종 텍스트 내용만을 그대로 출력>
+[/SYSTEM_ACTION]
+
+3. 파일 '열기' 나 '읽기' 시에는 단순히 위 제공된 [파일 본문 내용]을 바탕으로 설명하거나 답변을 생성하면 됩니다.
+"""
+            actual_prompt = f"{workspace_instruction}\n\n사용자 프롬프트:\n{prompt}"
+
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI가 프롬프트를 분석하고 보강 중입니다..."):
                 if provider == "Google Gemini":
                     target_model = "gemini-2.5-flash"
                     actual_reply = generate_enhanced_prompt(
-                        user_input=prompt,
+                        user_input=actual_prompt,
                         api_key=api_key,
                         config_data=config_data
                     )
                 else:
                     target_model = ollama_target_model
                     actual_reply = generate_enhanced_prompt_local(
-                        user_input=prompt,
+                        user_input=actual_prompt,
                         model_name=ollama_target_model,
                         config_data=config_data
                     )
+            
+            # 시스템 명령 태그 파싱 및 정제
+            system_action_msg = ""
+            clean_reply = actual_reply
+            
+            # 1. DELETE 명령어 파싱 및 실행
+            if "[SYSTEM_ACTION: DELETE " in actual_reply:
+                try:
+                    parts = actual_reply.split("[SYSTEM_ACTION: DELETE ")
+                    if len(parts) > 1:
+                        target_fn = parts[1].split("]")[0].strip()
+                        target_path = WORKSPACE_DIR / target_fn
+                        if target_path.exists():
+                            target_path.unlink()
+                            system_action_msg = f"🗑️ **시스템 액션 성공**: `{target_fn}` 파일을 성공적으로 삭제했습니다!"
+                            # 세션 상태에서도 제거
+                            if "active_workspace_file" in st.session_state and st.session_state.active_workspace_file == target_fn:
+                                del st.session_state.active_workspace_file
+                        else:
+                            system_action_msg = f"⚠️ **시스템 액션 실패**: 삭제하려는 파일 `{target_fn}`이(가) 존재하지 않습니다."
+                        
+                        clean_reply = parts[0] + (parts[1].split("]")[1] if "]" in parts[1] else "")
+                except Exception as ex:
+                    system_action_msg = f"❌ **시스템 액션 실패 (삭제 중 에러)**: {ex}"
+            
+            # 2. SAVE_AS 명령어 파싱 및 실행
+            elif "[SYSTEM_ACTION: SAVE_AS " in actual_reply:
+                try:
+                    parts = actual_reply.split("[SYSTEM_ACTION: SAVE_AS ")
+                    if len(parts) > 1:
+                        header_and_body = parts[1].split("]")
+                        target_fn = header_and_body[0].strip()
+                        rest = "]".join(header_and_body[1:])
+                        
+                        body = rest.split("[/SYSTEM_ACTION]")[0].strip()
+                        target_path = WORKSPACE_DIR / target_fn
+                        
+                        WORKSPACE_DIR.mkdir(exist_ok=True)
+                        with open(target_path, "w", encoding="utf-8") as f:
+                            f.write(body)
+                            
+                        system_action_msg = f"💾 **시스템 액션 성공**: `{target_fn}` 파일에 데이터를 성공적으로 저장했습니다!"
+                        
+                        clean_reply = parts[0] + (rest.split("[/SYSTEM_ACTION]")[1] if "[/SYSTEM_ACTION]" in rest else "")
+                except Exception as ex:
+                    system_action_msg = f"❌ **시스템 액션 실패 (저장 중 에러)**: {ex}"
                 
             full_response = ""
-            lines = actual_reply.split('\n')
+            lines = clean_reply.split('\n')
             for i, line in enumerate(lines):
                 words = line.split(' ')
                 for word in words:
                     full_response += word + " "
-                    time.sleep(0.01)
+                    time.sleep(0.005)
                     message_placeholder.markdown(full_response + "▌")
                 if i < len(lines) - 1:
                     full_response += "\n"
             
             message_placeholder.markdown(full_response)
+            
+            # 실행된 시스템 액션 알림 출력
+            if system_action_msg:
+                st.info(system_action_msg)
+                full_response += f"\n\n***\n{system_action_msg}"
             
             # 처리 시간 및 모델 정보 표시
             elapsed_time = time.time() - start_time
