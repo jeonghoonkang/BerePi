@@ -573,32 +573,61 @@ with tab_chat:
 
 
 with tab_system:
-    def get_mac_gpu_info():
+    def get_gpu_info():
         info = {"gpu_desc": "알 수 없음", "total_vram": "알 수 없음", "vram_usage": "알 수 없음"}
+        
+        # 1. Linux NVIDIA GPU 확인 (nvidia-smi 명령어 지원 여부)
+        try:
+            res = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,memory.used,memory.total", "--format=csv,noheader,nounits"], 
+                capture_output=True, 
+                text=True,
+                check=False
+            )
+            if res.returncode == 0:
+                lines = res.stdout.strip().split('\n')
+                if lines and lines[0]:
+                    parts = [p.strip() for p in lines[0].split(',')]
+                    if len(parts) >= 3:
+                        gpu_name = parts[0]
+                        used_mib = float(parts[1])
+                        total_mib = float(parts[2])
+                        used_gb = used_mib / 1024
+                        total_gb = total_mib / 1024
+                        percent = (used_mib / total_mib) * 100 if total_mib > 0 else 0.0
+                        
+                        info["gpu_desc"] = f"NVIDIA {gpu_name}"
+                        info["total_vram"] = f"{total_gb:.2f} GB"
+                        info["vram_usage"] = f"{used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)"
+                        return info
+        except Exception:
+            pass
+
+        # 2. Mac Displays & Displays & VRAM 확인 (기존 fallback)
         try:
             sp = subprocess.run(["system_profiler", "SPDisplaysDataType"], capture_output=True, text=True)
-            out = sp.stdout
-            
-            chipset = re.search(r"Chipset Model:\s*(.*)", out)
-            vram = re.search(r"VRAM \(Total\):\s*(.*)", out)
-            if chipset:
-                info["gpu_desc"] = f"{chipset.group(1)} (Total VRAM: {vram.group(1) if vram else 'N/A'})"
+            if sp.returncode == 0:
+                out = sp.stdout
+                chipset = re.search(r"Chipset Model:\s*(.*)", out)
+                vram = re.search(r"VRAM \(Total\):\s*(.*)", out)
+                if chipset:
+                    info["gpu_desc"] = f"{chipset.group(1)} (Total VRAM: {vram.group(1) if vram else 'N/A'})"
+                    
+                ioreg = subprocess.run(["ioreg", "-l"], capture_output=True, text=True)
+                free_bytes_match = re.search(r'"vramFreeBytes"=(\d+)', ioreg.stdout)
+                total_mb_match = re.search(r'"VRAM,totalMB"=(\d+)', ioreg.stdout)
                 
-            ioreg = subprocess.run(["ioreg", "-l"], capture_output=True, text=True)
-            free_bytes_match = re.search(r'"vramFreeBytes"=(\d+)', ioreg.stdout)
-            total_mb_match = re.search(r'"VRAM,totalMB"=(\d+)', ioreg.stdout)
-            
-            if free_bytes_match and total_mb_match:
-                free_bytes = int(free_bytes_match.group(1))
-                total_mb = int(total_mb_match.group(1))
-                total_bytes = total_mb * 1024 * 1024
-                used_bytes = total_bytes - free_bytes
-                percent = (used_bytes / total_bytes) * 100
-                
-                used_gb = used_bytes / (1024*1024*1024)
-                total_gb = total_mb / 1024
-                info["vram_usage"] = f"{used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)"
-                
+                if free_bytes_match and total_mb_match:
+                    free_bytes = int(free_bytes_match.group(1))
+                    total_mb = int(total_mb_match.group(1))
+                    total_bytes = total_mb * 1024 * 1024
+                    used_bytes = total_bytes - free_bytes
+                    percent = (used_bytes / total_bytes) * 100
+                    
+                    used_gb = used_bytes / (1024*1024*1024)
+                    total_gb = total_mb / 1024
+                    info["vram_usage"] = f"{used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)"
+                    return info
         except Exception:
             pass
         return info
@@ -635,7 +664,7 @@ with tab_system:
         st.subheader("📊 시스템 및 로컬 환경 모니터링")
         col1, col2, col3 = st.columns(3)
         
-        gpu_info = get_mac_gpu_info()
+        gpu_info = get_gpu_info()
         with col1:
             st.metric("GPU 종류 (개수 및 모델)", gpu_info["gpu_desc"])
             st.metric("현재 GPU 메모리 사용량", gpu_info["vram_usage"])
