@@ -13,6 +13,32 @@ from pathlib import Path
 from agent_google import generate_enhanced_prompt
 from agent_local import generate_enhanced_prompt_local
 
+# 워크스페이스 디렉토리 설정
+WORKSPACE_DIR = Path(__file__).parent / "workspace"
+WORKSPACE_DIR.mkdir(exist_ok=True)
+
+# 안전한 rerun 함수
+def safe_rerun():
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
+
+# pulsedav 동적 경로 탐색 함수
+def find_pulsedav_path():
+    curr = Path(__file__).resolve().parent
+    # 상위 디렉토리로 순차적으로 검색하며 BerePi 디렉토리 하위의 pulsedav 경로 탐색
+    for parent in [curr] + list(curr.parents):
+        # BerePi/apps/tinyGW/pulsedav 경로 확인
+        if parent.name == "BerePi":
+            target = parent / "apps" / "tinyGW" / "pulsedav"
+            if target.exists() and (target / "pulsedav.py").exists():
+                return target.resolve()
+        target = parent / "apps" / "tinyGW" / "pulsedav"
+        if target.exists() and (target / "pulsedav.py").exists():
+            return target.resolve()
+    return None
+
 # 히스토리 파일 설정
 HISTORY_FILE = Path("history_prompt.txt")
 
@@ -197,10 +223,15 @@ with st.sidebar:
 
     st.divider()
     st.subheader("🛠️ 시스템 설정")
+    
+    # pulsedav 경로 자동 탐색
+    detected_pulsedav = find_pulsedav_path()
+    default_pulsedav_path = str(detected_pulsedav) if detected_pulsedav else "/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav"
+    
     pulsedav_path_input = st.text_input(
         "pulsedav 모듈 경로", 
-        value="/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav",
-        help="pulsedav 모듈이 위치한 폴더의 전체 경로를 입력하세요."
+        value=default_pulsedav_path,
+        help="pulsedav 모듈이 위치한 폴더의 전체 경로를 입력하세요. 상위 디렉토리에서 검색된 경로가 자동으로 감지되어 설정됩니다."
     )
     st.divider()
     st.subheader("🎭 페르소나 관리")
@@ -324,7 +355,54 @@ with tab_chat:
     """
     components.html(js_code, height=0, width=0)
 
-    # 세션 상태 초기화 (상단으로 이동됨)
+    # Workspace 파일 관리 접히는 표시창
+    with st.expander("📁 Workspace 파일 관리 및 업로드", expanded=False):
+        st.markdown("##### 📥 신규 파일 업로드")
+        uploaded_file = st.file_uploader(
+            "업로드할 파일을 선택하세요. 업로드된 파일은 `workspace` 디렉토리에 저장됩니다.", 
+            accept_multiple_files=False, 
+            key="workspace_file_uploader"
+        )
+        if uploaded_file is not None:
+            save_path = WORKSPACE_DIR / uploaded_file.name
+            try:
+                with open(save_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                st.success(f"파일 업로드 성공: `{uploaded_file.name}` ✅")
+                safe_rerun()
+            except Exception as e:
+                st.error(f"파일 저장 실패: {e}")
+        
+        st.divider()
+        st.markdown("##### 📂 업로드된 파일 목록 및 관리")
+        ws_files = [f.name for f in WORKSPACE_DIR.iterdir() if f.is_file()]
+        if ws_files:
+            selected_ws_file = st.selectbox(
+                "관리할 파일을 선택하세요", 
+                sorted(ws_files), 
+                key="workspace_file_selector"
+            )
+            
+            col_ws_info, col_ws_del = st.columns([3, 1])
+            file_full_path = WORKSPACE_DIR / selected_ws_file
+            
+            # 파일 정보 출력
+            if file_full_path.exists():
+                file_size_kb = file_full_path.stat().st_size / 1024
+                with col_ws_info:
+                    st.info(f"📍 **경로**: `{file_full_path}`\n\n⚖️ **크기**: `{file_size_kb:.2f} KB`")
+                with col_ws_del:
+                    if st.button("🗑️ 파일 삭제", use_container_width=True, key="workspace_file_delete"):
+                        try:
+                            file_full_path.unlink()
+                            st.success(f"파일 삭제 완료: `{selected_ws_file}` 🗑️")
+                            safe_rerun()
+                        except Exception as e:
+                            st.error(f"파일 삭제 실패: {e}")
+        else:
+            st.info("현재 workspace 디렉토리에 파일이 없습니다. 위에 파일을 드래그하여 업로드해 주세요.")
+            
+    st.divider()
 
     # 기존 대화 내용 출력
     for message in st.session_state.messages:
