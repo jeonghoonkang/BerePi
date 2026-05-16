@@ -186,14 +186,14 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"다운로드 중 오류 발생: {e}\nOllama 서버가 실행 중인지 확인해 주세요.")
 
-        st.divider()
-        st.subheader("🛠️ 시스템 설정")
-        pulsedav_path_input = st.text_input(
-            "pulsedav 모듈 경로", 
-            value="/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav",
-            help="pulsedav 모듈이 위치한 폴더의 전체 경로를 입력하세요."
-        )
-        st.divider()
+    st.divider()
+    st.subheader("🛠️ 시스템 설정")
+    pulsedav_path_input = st.text_input(
+        "pulsedav 모듈 경로", 
+        value="/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav",
+        help="pulsedav 모듈이 위치한 폴더의 전체 경로를 입력하세요."
+    )
+    st.divider()
     st.subheader("🎭 페르소나 관리")
     # 페르소나 파일 선택
     persona_files = get_persona_files()
@@ -248,6 +248,74 @@ with st.sidebar:
 tab_chat, tab_system = st.tabs(["💬 프롬프트 보강", "🖥️ 시스템 상태"])
 
 with tab_chat:
+    # JS를 통한 Arrow Up/Down 히스토리 연동 (상단에서 로드)
+    history_json = json.dumps(st.session_state.prompt_history)
+    js_code = f"""
+    <script>
+    (function() {{
+        const history = {history_json};
+        let historyIndex = history.length;
+        const doc = window.parent.document;
+        
+        function setNativeValue(element, value) {{
+            const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+            const prototype = Object.getPrototypeOf(element);
+            const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value") ? Object.getOwnPropertyDescriptor(prototype, "value").set : null;
+            
+            if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {{
+                prototypeValueSetter.call(element, value);
+            }} else {{
+                valueSetter.call(element, value);
+            }}
+            element.dispatchEvent(new Event('input', {{ bubbles: true }}));
+        }}
+
+        function onKeyDown(e) {{
+            const chatInput = e.target;
+            if (chatInput.tagName !== 'TEXTAREA') return;
+            if (chatInput.getAttribute('data-testid') !== 'stChatInputTextArea') return;
+
+            if (e.key === 'ArrowUp') {{
+                if (historyIndex > 0) {{
+                    historyIndex--;
+                    setNativeValue(chatInput, history[historyIndex]);
+                }}
+                e.preventDefault();
+            }} else if (e.key === 'ArrowDown') {{
+                if (historyIndex < history.length - 1) {{
+                    historyIndex++;
+                    setNativeValue(chatInput, history[historyIndex]);
+                }} else if (historyIndex === history.length - 1) {{
+                    historyIndex = history.length;
+                    setNativeValue(chatInput, '');
+                }}
+                e.preventDefault();
+            }}
+        }}
+
+        function attach() {{
+            const chatInput = doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+            if (chatInput) {{
+                // 기존 리스너 제거 시도 (중복 방지)
+                chatInput.removeEventListener('keydown', chatInput._historyListener);
+                
+                // 새 리스너 등록
+                chatInput._historyListener = onKeyDown;
+                chatInput.addEventListener('keydown', onKeyDown);
+                
+                // 인덱스 초기화
+                historyIndex = history.length;
+            }}
+        }}
+
+        // 초기 실행 및 주기적 감시
+        setTimeout(attach, 100);
+        setInterval(attach, 1000);
+    }})();
+    </script>
+    """
+    components.html(js_code, height=0, width=0)
+
     # 세션 상태에 대화 기록 및 프롬프트 히스토리 저장
     if "messages" not in st.session_state:
         st.session_state.messages = [
@@ -316,61 +384,6 @@ with tab_chat:
             
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-    # JS를 통한 Arrow Up/Down 히스토리 연동
-    history_json = json.dumps(st.session_state.prompt_history)
-    js_code = f"""
-    <script>
-    (function() {{
-        const history = {history_json};
-        let historyIndex = history.length;
-        const doc = window.parent.document;
-        
-        function setNativeValue(element, value) {{
-            const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-            const prototype = Object.getPrototypeOf(element);
-            const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value") ? Object.getOwnPropertyDescriptor(prototype, "value").set : null;
-            
-            if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {{
-                prototypeValueSetter.call(element, value);
-            }} else {{
-                valueSetter.call(element, value);
-            }}
-            element.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        }}
-
-        function attachHistory() {{
-            const chatInput = doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
-            if (!chatInput) return;
-            
-            if (chatInput.hasAttribute('data-history-active')) return;
-            chatInput.setAttribute('data-history-active', 'true');
-            
-            chatInput.addEventListener('keydown', function(e) {{
-                if (e.key === 'ArrowUp') {{
-                    if (historyIndex > 0) {{
-                        historyIndex--;
-                        setNativeValue(chatInput, history[historyIndex]);
-                    }}
-                    e.preventDefault();
-                }} else if (e.key === 'ArrowDown') {{
-                    if (historyIndex < history.length - 1) {{
-                        historyIndex++;
-                        setNativeValue(chatInput, history[historyIndex]);
-                    }} else if (historyIndex === history.length - 1) {{
-                        historyIndex = history.length;
-                        setNativeValue(chatInput, '');
-                    }}
-                    e.preventDefault();
-                }}
-            }});
-        }}
-
-        // 정기적으로 체크하여 엘리먼트가 새로 생기면 바인딩
-        setInterval(attachHistory, 500);
-    }})();
-    </script>
-    """
-    components.html(js_code, height=0, width=0)
 
 with tab_system:
     def get_mac_gpu_info():
