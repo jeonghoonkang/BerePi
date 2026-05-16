@@ -8,16 +8,50 @@ import re
 import sys
 import socket
 import requests
+import importlib
 from pathlib import Path
 from agent_google import generate_enhanced_prompt
 from agent_local import generate_enhanced_prompt_local
 
-# pulsedav 경로 추가 (시스템 탭에서 사용)
-sys.path.append("/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav")
-try:
-    import pulsedav
-except ImportError:
-    pulsedav = None
+# 히스토리 파일 설정
+HISTORY_FILE = Path("history_prompt.txt")
+
+def load_prompt_history():
+    if HISTORY_FILE.exists():
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                # 줄바꿈 기준으로 읽어오되 빈 줄은 제외
+                return [line.strip() for line in f.readlines() if line.strip()]
+        except Exception:
+            return []
+    return []
+
+def save_prompt_history(history):
+    try:
+        # 최근 1000개만 유지하여 저장
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            for item in history[-1000:]:
+                f.write(f"{item}\n")
+    except Exception:
+        pass
+
+# pulsedav 모듈 로드 함수 (동적 경로 지원)
+def get_pulsedav_module(path_str):
+    if not path_str:
+        return None
+    p = Path(path_str)
+    if p.exists():
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+        try:
+            # 이미 임포트되어 있다면 리로드, 아니면 신규 임포트
+            if "pulsedav" in sys.modules:
+                return importlib.reload(sys.modules["pulsedav"])
+            else:
+                return importlib.import_module("pulsedav")
+        except Exception:
+            return None
+    return None
 
 # 페이지 설정
 st.set_page_config(page_title="Persona Agent", page_icon="🤖", layout="wide")
@@ -152,7 +186,14 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"다운로드 중 오류 발생: {e}\nOllama 서버가 실행 중인지 확인해 주세요.")
 
-    st.divider()
+        st.divider()
+        st.subheader("🛠️ 시스템 설정")
+        pulsedav_path_input = st.text_input(
+            "pulsedav 모듈 경로", 
+            value="/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav",
+            help="pulsedav 모듈이 위치한 폴더의 전체 경로를 입력하세요."
+        )
+        st.divider()
     st.subheader("🎭 페르소나 관리")
     # 페르소나 파일 선택
     persona_files = get_persona_files()
@@ -214,7 +255,7 @@ with tab_chat:
         ]
 
     if "prompt_history" not in st.session_state:
-        st.session_state.prompt_history = []
+        st.session_state.prompt_history = load_prompt_history()
 
     # 기존 대화 내용 출력
     for message in st.session_state.messages:
@@ -223,11 +264,13 @@ with tab_chat:
 
     # 사용자 입력 처리
     if prompt := st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)"):
-        # 히스토리에 추가 (최대 100개 유지, 중복 연속 입력 방지)
+        # 히스토리에 추가 (최대 1000개 유지, 중복 연속 입력 방지)
         if not st.session_state.prompt_history or st.session_state.prompt_history[-1] != prompt:
             st.session_state.prompt_history.append(prompt)
-            if len(st.session_state.prompt_history) > 100:
+            if len(st.session_state.prompt_history) > 1000:
                 st.session_state.prompt_history.pop(0)
+            # 로컬 파일에 즉시 저장
+            save_prompt_history(st.session_state.prompt_history)
 
         # 사용자 메시지 출력 및 저장
         with st.chat_message("user"):
@@ -235,16 +278,19 @@ with tab_chat:
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         # 에이전트 응답 처리
+        start_time = time.time()
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI가 프롬프트를 분석하고 보강 중입니다..."):
                 if provider == "Google Gemini":
+                    target_model = "gemini-2.5-flash"
                     actual_reply = generate_enhanced_prompt(
                         user_input=prompt,
                         api_key=api_key,
                         config_data=config_data
                     )
                 else:
+                    target_model = ollama_target_model
                     actual_reply = generate_enhanced_prompt_local(
                         user_input=prompt,
                         model_name=ollama_target_model,
@@ -257,12 +303,16 @@ with tab_chat:
                 words = line.split(' ')
                 for word in words:
                     full_response += word + " "
-                    time.sleep(0.02)
+                    time.sleep(0.01)
                     message_placeholder.markdown(full_response + "▌")
                 if i < len(lines) - 1:
                     full_response += "\n"
             
             message_placeholder.markdown(full_response)
+            
+            # 처리 시간 및 모델 정보 표시
+            elapsed_time = time.time() - start_time
+            st.caption(f"⏱️ {elapsed_time:.2f}s | 🤖 {target_model}")
             
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
@@ -399,16 +449,20 @@ with tab_system:
             
         st.divider()
         st.subheader("🖥️ 시스템 상세 내용 (pulsedav/sender.py)")
-        if pulsedav is not None:
+        
+        # 입력된 경로로 pulsedav 동적 로드
+        pulsedav_mod = get_pulsedav_module(pulsedav_path_input)
+        
+        if pulsedav_mod is not None:
             try:
                 # pulsedav 내부 로직을 통해 시스템 스냅샷 및 마크다운 생성
-                settings = pulsedav.load_settings()
-                snapshot = pulsedav.collect_snapshot(settings)
-                markdown = pulsedav.format_markdown(settings, snapshot, is_first_boot_message=False)
+                settings = pulsedav_mod.load_settings()
+                snapshot = pulsedav_mod.collect_snapshot(settings)
+                markdown = pulsedav_mod.format_markdown(settings, snapshot, is_first_boot_message=False)
                 st.markdown(markdown)
             except Exception as e:
                 st.error(f"pulsedav 정보를 불러오는 중 오류 발생: {e}")
         else:
-            st.error("pulsedav 모듈을 불러오지 못했습니다. 경로를 확인해주세요.")
+            st.error(f"pulsedav 모듈을 불러오지 못했습니다. 경로를 확인해주세요: {pulsedav_path_input}")
 
     render_system_status()
