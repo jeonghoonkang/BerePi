@@ -67,6 +67,15 @@ def get_persona_files():
     files = list(PERSONA_DIR.glob("*.json"))
     return [f.name for f in files] if files else ["persona_config.json"]
 
+# 세션 상태 초기화 (AttributeError 방지를 위해 상단 배치)
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "안녕하세요! 어떤 도움이 필요하신가요?"}
+    ]
+
+if "prompt_history" not in st.session_state:
+    st.session_state.prompt_history = load_prompt_history()
+
 # 사이드바 구성
 with st.sidebar:
     st.header("⚙️ 설정 (Settings)")
@@ -316,14 +325,7 @@ with tab_chat:
     """
     components.html(js_code, height=0, width=0)
 
-    # 세션 상태에 대화 기록 및 프롬프트 히스토리 저장
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant", "content": "안녕하세요! 어떤 도움이 필요하신가요?"}
-        ]
-
-    if "prompt_history" not in st.session_state:
-        st.session_state.prompt_history = load_prompt_history()
+    # 세션 상태 초기화 (상단으로 이동됨)
 
     # 기존 대화 내용 출력
     for message in st.session_state.messages:
