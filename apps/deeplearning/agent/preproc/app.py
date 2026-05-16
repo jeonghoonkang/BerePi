@@ -101,6 +101,10 @@ with st.sidebar:
         dl_model_name = st.text_input("다운로드할 모델명", value=default_dl_name, placeholder="예: gemma4:e4b")
         dl_model_path = st.text_input("Model Download Path (선택사항)", help="입력 시 OLLAMA_MODELS 환경변수로 적용됩니다.")
         
+        # 현재 적용 중인 경로 표시
+        current_path = dl_model_path if dl_model_path else os.environ.get("OLLAMA_MODELS", "~/.ollama/models (기본값)")
+        st.caption(f"📂 현재 모델 저장 위치: `{current_path}`")
+        
         col_dl1, col_dl2 = st.columns([1, 1])
         with col_dl1:
             pull_clicked = st.button("로컬 모델 다운로드 (Pull)", use_container_width=True)
@@ -266,27 +270,31 @@ with tab_chat:
     history_json = json.dumps(st.session_state.prompt_history)
     js_code = f"""
     <script>
-    const history = {history_json};
-    let historyIndex = history.length;
-    const doc = window.parent.document;
-
-    function setNativeValue(element, value) {{
-        const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-        const prototype = Object.getPrototypeOf(element);
-        const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value") ? Object.getOwnPropertyDescriptor(prototype, "value").set : null;
+    (function() {{
+        const history = {history_json};
+        let historyIndex = history.length;
+        const doc = window.parent.document;
         
-        if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {{
-            prototypeValueSetter.call(element, value);
-        }} else {{
-            valueSetter.call(element, value);
+        function setNativeValue(element, value) {{
+            const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+            const prototype = Object.getPrototypeOf(element);
+            const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value") ? Object.getOwnPropertyDescriptor(prototype, "value").set : null;
+            
+            if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {{
+                prototypeValueSetter.call(element, value);
+            }} else {{
+                valueSetter.call(element, value);
+            }}
+            element.dispatchEvent(new Event('input', {{ bubbles: true }}));
         }}
-        element.dispatchEvent(new Event('input', {{ bubbles: true }}));
-    }}
 
-    function attachHistory() {{
-        const chatInput = doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
-        if (chatInput && !chatInput.hasAttribute('data-history-attached')) {{
-            chatInput.setAttribute('data-history-attached', 'true');
+        function attachHistory() {{
+            const chatInput = doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+            if (!chatInput) return;
+            
+            if (chatInput.hasAttribute('data-history-active')) return;
+            chatInput.setAttribute('data-history-active', 'true');
+            
             chatInput.addEventListener('keydown', function(e) {{
                 if (e.key === 'ArrowUp') {{
                     if (historyIndex > 0) {{
@@ -298,17 +306,18 @@ with tab_chat:
                     if (historyIndex < history.length - 1) {{
                         historyIndex++;
                         setNativeValue(chatInput, history[historyIndex]);
-                    }} else {{
+                    }} else if (historyIndex === history.length - 1) {{
                         historyIndex = history.length;
                         setNativeValue(chatInput, '');
                     }}
                     e.preventDefault();
                 }}
             }});
-            clearInterval(timer);
         }}
-    }}
-    const timer = setInterval(attachHistory, 300);
+
+        // 정기적으로 체크하여 엘리먼트가 새로 생기면 바인딩
+        setInterval(attachHistory, 500);
+    }})();
     </script>
     """
     components.html(js_code, height=0, width=0)
