@@ -305,14 +305,13 @@ with tab_chat:
         function attach() {{
             const chatInput = doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
             if (chatInput) {{
-                // 기존 리스너 제거 시도 (중복 방지)
-                chatInput.removeEventListener('keydown', chatInput._historyListener);
+                if (chatInput._historyListener) return; // 이미 연결됨
                 
                 // 새 리스너 등록
                 chatInput._historyListener = onKeyDown;
                 chatInput.addEventListener('keydown', onKeyDown);
                 
-                // 인덱스 초기화
+                // 처음 연결될 때만 인덱스를 끝으로 설정
                 historyIndex = history.length;
             }}
         }}
