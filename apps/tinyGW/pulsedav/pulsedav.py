@@ -296,6 +296,23 @@ def parse_webdav_time(value: str | None) -> datetime | None:
     return None
 
 
+def ensure_sub_directory(session: requests.Session, config: WebDAVConfig) -> None:
+    sub = normalize_remote_path(config.sub)
+    if not sub:
+        return
+    host = config.hostname.rstrip("/")
+    root = normalize_root(config.root)
+    
+    current = root
+    for part in sub.split("/"):
+        current = f"{current}/{part}".strip("/")
+        encoded = "/".join(quote(p) for p in current.split("/") if p)
+        url = f"{host}/{encoded}"
+        response = session.request("MKCOL", url, timeout=REQUEST_TIMEOUT)
+        if response.status_code not in {201, 301, 405}:
+            response.raise_for_status()
+
+
 def ensure_remote_directories(session: requests.Session, config: WebDAVConfig, remote_dir: str) -> None:
     normalized = normalize_remote_path(remote_dir)
     if not normalized:
@@ -310,6 +327,7 @@ def ensure_remote_directories(session: requests.Session, config: WebDAVConfig, r
 
 def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, content_type: str = "text/markdown; charset=utf-8") -> None:
     session = build_session(config)
+    ensure_sub_directory(session, config)
     parent_dir = posixpath.dirname(normalize_remote_path(remote_path))
     ensure_remote_directories(session, config, parent_dir)
     response = session.put(
