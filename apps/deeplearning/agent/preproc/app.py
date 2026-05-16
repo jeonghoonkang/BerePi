@@ -129,7 +129,7 @@ with st.sidebar:
                             # API 에러 체크
                             if "error" in chunk:
                                 st.error(f"Ollama 에러: {chunk['error']}")
-                                return
+                                break
                                 
                             status = chunk.get("status", "")
                             completed = chunk.get("completed", 0)
