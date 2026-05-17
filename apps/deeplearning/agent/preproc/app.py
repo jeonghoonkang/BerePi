@@ -622,6 +622,78 @@ with tab_chat:
                             safe_rerun()
                         except Exception as e:
                             st.error(f"Python 코드 생성 실패: {e}")
+            
+            # AI의 생성된 파이썬 코드 아래에 'Workspace에서 실행' 버튼 및 결과 출력 주입
+            if message["role"] == "assistant" and message.get("is_python_code"):
+                # 정규식으로 마크다운 내의 파이썬 코드 블록 추출
+                code_blocks = re.findall(r"```python\s*\n(.*?)\n```", message["content"], re.DOTALL)
+                if code_blocks:
+                    code_to_run = "\n\n".join(code_blocks).strip()
+                    run_btn_key = f"run_python_code_btn_{idx}"
+                    
+                    st.write("") # 미세 공백 추가
+                    if st.button("⚡ Workspace에서 이 코드 실행", key=run_btn_key, use_container_width=True):
+                        with st.spinner("Workspace 환경에서 코드를 안전하게 실행하는 중..."):
+                            run_file = WORKSPACE_DIR / f"run_temp_{idx}.py"
+                            try:
+                                # 임시 파이썬 파일 쓰기
+                                with open(run_file, "w", encoding="utf-8") as f:
+                                    f.write(code_to_run)
+                                    
+                                # subprocess 실행 (실행 디렉토리는 WORKSPACE_DIR로 연동)
+                                res = subprocess.run(
+                                    ["python3", str(run_file)],
+                                    capture_output=True,
+                                    text=True,
+                                    cwd=str(WORKSPACE_DIR),
+                                    timeout=30 # 무한 루프 등 대비 30초 타임아웃
+                                )
+                                
+                                # 실행 결과 저장
+                                st.session_state[f"code_run_result_{idx}"] = {
+                                    "stdout": res.stdout,
+                                    "stderr": res.stderr,
+                                    "returncode": res.returncode
+                                }
+                            except subprocess.TimeoutExpired:
+                                st.session_state[f"code_run_result_{idx}"] = {
+                                    "stdout": "",
+                                    "stderr": "오류: 코드 실행 시간이 30초를 초과하여 강제 종료되었습니다. 무한 루프가 발생했는지 확인하세요.",
+                                    "returncode": -1
+                                }
+                            except Exception as e:
+                                st.session_state[f"code_run_result_{idx}"] = {
+                                    "stdout": "",
+                                    "stderr": f"코드 실행 실패: {e}",
+                                    "returncode": -1
+                                }
+                            finally:
+                                # 임시 파일 안전하게 삭제하여 workspace 보호
+                                if run_file.exists():
+                                    run_file.unlink()
+                                safe_rerun()
+                                
+                    # 실행 결과 렌더링
+                    result_key = f"code_run_result_{idx}"
+                    if result_key in st.session_state:
+                        run_res = st.session_state[result_key]
+                        st.markdown("---")
+                        st.markdown("##### 📊 Workspace 실행 피드백")
+                        if run_res["returncode"] == 0:
+                            st.success("🎉 코드가 성공적으로 실행되었습니다! (Exit Code: 0)")
+                            if run_res["stdout"].strip():
+                                st.markdown("**📤 표준 출력 (stdout):**")
+                                st.code(run_res["stdout"], language="text")
+                            else:
+                                st.info("ℹ️ 실행은 성공했으나, 표준 출력(stdout)으로 인쇄된 결과물이 없습니다.")
+                        else:
+                            st.error(f"❌ 코드 실행 중 에러가 감지되었습니다. (Exit Code: {run_res['returncode']})")
+                            if run_res["stderr"].strip():
+                                st.markdown("**🚨 표준 오류 메시지 (stderr):**")
+                                st.code(run_res["stderr"], language="text")
+                            if run_res["stdout"].strip():
+                                st.markdown("**📤 실행 도중 출력된 내용 (stdout):**")
+                                st.code(run_res["stdout"], language="text")
 
     # 사용자 입력 처리
     if prompt := st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)"):
