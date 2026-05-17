@@ -565,9 +565,63 @@ with tab_chat:
     st.divider()
 
     # 기존 대화 내용 출력
-    for message in st.session_state.messages:
+    for idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            
+            # AI의 보강된 답변 아래에 'Python 코드로 변환' 버튼 생성 (이미 생성된 코드 메시지에는 제외)
+            if message["role"] == "assistant" and not message.get("is_python_code"):
+                # 가독성과 클릭감이 좋은 스타일의 컴팩트 버튼 배치
+                btn_key = f"generate_python_code_btn_{idx}"
+                if st.button("💻 이 답변을 바탕으로 Python 코드 생성", key=btn_key):
+                    with st.spinner("보강된 답변을 해석하여 최적의 Python 코드를 생성 중..."):
+                        code_prompt = f"""
+다음은 AI가 보강한 프롬프트 및 답변 내용입니다:
+---
+{message["content"]}
+---
+
+위 내용을 바탕으로 실행 가능하고 잘 작성된 Python 코드를 작성해 주세요. 
+코드 블록(```python ... ```)을 사용하여 명확하게 출력하고, 필요시 코드의 동작 방식을 친절한 주석 및 설명으로 덧붙여 주세요.
+"""
+                        try:
+                            if provider == "Google Gemini":
+                                py_reply = generate_enhanced_prompt(
+                                    user_input=code_prompt,
+                                    api_key=api_key,
+                                    config_data={
+                                        "persona": "Python 소프트웨어 개발 전문가", 
+                                        "guidelines": [
+                                            "설명은 간결하고 핵심적인 부분만 다루며, 코드가 주가 되도록 한다.",
+                                            "반드시 마크다운 ```python 코드 블록을 사용하여 전체 코드를 제공한다."
+                                        ], 
+                                        "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
+                                        "examples": []
+                                    }
+                                )
+                            else:
+                                py_reply = generate_enhanced_prompt_local(
+                                    user_input=code_prompt,
+                                    model_name=ollama_target_model,
+                                    config_data={
+                                        "persona": "Python 소프트웨어 개발 전문가", 
+                                        "guidelines": [
+                                            "설명은 간결하고 핵심적인 부분만 다루며, 코드가 주가 되도록 한다.",
+                                            "반드시 마크다운 ```python 코드 블록을 사용하여 전체 코드를 제공한다."
+                                        ], 
+                                        "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
+                                        "examples": []
+                                    }
+                                )
+                            
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": py_reply,
+                                "is_python_code": True
+                            })
+                            safe_rerun()
+                        except Exception as e:
+                            st.error(f"Python 코드 생성 실패: {e}")
 
     # 사용자 입력 처리
     if prompt := st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)"):
