@@ -578,8 +578,8 @@ with tab_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             
-            # AI의 보강된 답변 아래의 액션 버튼 연동 (초기 웰컴 메시지 제외 및 파이썬 코드 감지 여부에 따라 분기)
-            if message["role"] == "assistant" and not message["content"].startswith("안녕하세요!"):
+            # AI의 보강된 답변 아래의 액션 버튼 연동 (첫 번째 웰컴 메시지인 idx == 0만 제외하고 모두 연동)
+            if message["role"] == "assistant" and idx > 0:
                 # 정규식으로 마크다운 내의 파이썬 코드 블록 추출 (py/python/python3 및 공백 혼용 등 모든 변칙에 대해 극도로 유연하게 매칭)
                 code_blocks = re.findall(r"```\s*(?:python|py|python3)?\s*(.*?)\s*```", message["content"], re.DOTALL)
                 
