@@ -664,17 +664,33 @@ with tab_system:
         st.subheader("📊 시스템 및 로컬 환경 모니터링")
         col1, col2, col3 = st.columns(3)
         
+        # 프리미엄 테마 대응형 컴팩트 메트릭 헬퍼 함수
+        def sys_metric(label, value):
+            st.markdown(f"""
+            <div style="
+                background: var(--background-secondary-color, rgba(128, 128, 128, 0.05));
+                border-left: 4px solid #6366F1;
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin-bottom: 10px;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            ">
+                <div style="font-size: 0.75rem; color: var(--text-color, #6B7280); font-weight: 600; opacity: 0.7; letter-spacing: 0.5px;">{label}</div>
+                <div style="font-size: 0.88rem; color: var(--text-color, #1F2937); font-weight: 700; margin-top: 4px; word-break: break-word; line-height: 1.35;">{value}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
         gpu_info = get_gpu_info()
         with col1:
-            st.metric("GPU 종류 (개수 및 모델)", gpu_info["gpu_desc"])
-            st.metric("현재 GPU 메모리 사용량", gpu_info["vram_usage"])
+            sys_metric("GPU 종류 (개수 및 모델)", gpu_info["gpu_desc"])
+            sys_metric("현재 GPU 메모리 사용량", gpu_info["vram_usage"])
             
         with col2:
-            st.metric("Ollama 구동 버전", get_ollama_version())
+            sys_metric("Ollama 구동 버전", get_ollama_version())
             
         with col3:
-            st.metric("Local IP", get_local_ip())
-            st.metric("Public IP", get_public_ip())
+            sys_metric("Local IP", get_local_ip())
+            sys_metric("Public IP", get_public_ip())
             
         st.divider()
         st.subheader("🖥️ 시스템 상세 내용 (pulsedav/sender.py)")
