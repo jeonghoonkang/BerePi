@@ -459,11 +459,38 @@ with tab_chat:
                 st.write("") # 미세 공백 추가
                 if st.button("⚡ Workspace에서 이 코드 실행", key=run_btn_key, use_container_width=True):
                     with st.spinner("Workspace 환경에서 코드를 안전하게 실행하는 중..."):
+                        # pip install 및 ! 주피터 쉘 구문 파싱 및 사전 자동 설치 처리
+                        lines = code_to_run.split("\n")
+                        clean_lines = []
+                        pip_packages = []
+                        
+                        for line in lines:
+                            stripped = line.strip()
+                            if stripped.startswith("pip install") or stripped.startswith("!pip install") or stripped.startswith("! pip install"):
+                                pkg_part = stripped.replace("!pip install", "").replace("! pip install", "").replace("pip install", "").strip()
+                                if pkg_part:
+                                    pip_packages.append(pkg_part)
+                            elif stripped.startswith("!"):
+                                continue
+                            else:
+                                clean_lines.append(line)
+                                
+                        # 라이브러리가 필요한 경우 자동 사전 설치 실행 (pip3 install)
+                        for pkgs in pip_packages:
+                            try:
+                                pkg_list = [p for p in pkgs.split(" ") if p.strip()]
+                                if pkg_list:
+                                    subprocess.run(["pip3", "install"] + pkg_list, capture_output=True, text=True, timeout=90)
+                            except Exception:
+                                pass
+                                
+                        code_to_run_clean = "\n".join(clean_lines).strip()
+                        
                         run_file = WORKSPACE_DIR / f"run_temp_{idx}.py"
                         try:
                             # 임시 파이썬 파일 쓰기
                             with open(run_file, "w", encoding="utf-8") as f:
-                                f.write(code_to_run)
+                                f.write(code_to_run_clean)
                                 
                             # subprocess 실행 (실행 디렉토리는 WORKSPACE_DIR로 연동)
                             res = subprocess.run(
