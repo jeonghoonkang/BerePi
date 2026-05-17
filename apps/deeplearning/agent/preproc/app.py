@@ -578,65 +578,13 @@ with tab_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             
-            # AI의 보강된 답변 아래에 'Python 코드로 변환' 버튼 생성 (이미 생성된 코드 메시지에는 제외)
-            if message["role"] == "assistant" and not message.get("is_python_code"):
-                # 가독성과 클릭감이 좋은 스타일의 컴팩트 버튼 배치
-                btn_key = f"generate_python_code_btn_{idx}"
-                if st.button("💻 이 답변을 바탕으로 Python 코드 생성", key=btn_key):
-                    with st.spinner("보강된 답변을 해석하여 최적의 Python 코드를 생성 중..."):
-                        code_prompt = f"""
-다음은 AI가 보강한 프롬프트 및 답변 내용입니다:
----
-{message["content"]}
----
-
-위 내용을 바탕으로 실행 가능하고 잘 작성된 Python 코드를 작성해 주세요. 
-코드 블록(```python ... ```)을 사용하여 명확하게 출력하고, 필요시 코드의 동작 방식을 친절한 주석 및 설명으로 덧붙여 주세요.
-"""
-                        try:
-                            if provider == "Google Gemini":
-                                py_reply = generate_enhanced_prompt(
-                                    user_input=code_prompt,
-                                    api_key=api_key,
-                                    config_data={
-                                        "persona": "Python 소프트웨어 개발 전문가", 
-                                        "guidelines": [
-                                            "설명은 간결하고 핵심적인 부분만 다루며, 코드가 주가 되도록 한다.",
-                                            "반드시 마크다운 ```python 코드 블록을 사용하여 전체 코드를 제공한다."
-                                        ], 
-                                        "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
-                                        "examples": []
-                                    }
-                                )
-                            else:
-                                py_reply = generate_enhanced_prompt_local(
-                                    user_input=code_prompt,
-                                    model_name=ollama_target_model,
-                                    config_data={
-                                        "persona": "Python 소프트웨어 개발 전문가", 
-                                        "guidelines": [
-                                            "설명은 간결하고 핵심적인 부분만 다루며, 코드가 주가 되도록 한다.",
-                                            "반드시 마크다운 ```python 코드 블록을 사용하여 전체 코드를 제공한다."
-                                        ], 
-                                        "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
-                                        "examples": []
-                                    }
-                                )
-                            
-                            st.session_state.messages.append({
-                                "role": "assistant",
-                                "content": py_reply,
-                                "is_python_code": True
-                            })
-                            safe_rerun()
-                        except Exception as e:
-                            st.error(f"Python 코드 생성 실패: {e}")
-            
-            # AI의 생성된 파이썬 코드 아래에 'Workspace에서 실행' 버튼 및 결과 출력 주입
-            if message["role"] == "assistant" and message.get("is_python_code"):
-                # 정규식으로 마크다운 내의 파이썬 코드 블록 추출
-                code_blocks = re.findall(r"```python\s*\n(.*?)\n```", message["content"], re.DOTALL)
+            # AI의 보강된 답변 아래의 액션 버튼 연동 (파이썬 코드 감지 여부에 따라 분기)
+            if message["role"] == "assistant":
+                # 정규식으로 마크다운 내의 파이썬 코드 블록 추출 (개행 및 빈 공간에 대해 극도로 유연하게 매칭)
+                code_blocks = re.findall(r"```python\s*(.*?)\s*```", message["content"], re.DOTALL)
+                
                 if code_blocks:
+                    # [케이스 1] 이미 파이썬 코드가 답변 내에 포함되어 있는 경우 -> 바로 'Workspace에서 실행' 버튼 노출
                     code_to_run = "\n\n".join(code_blocks).strip()
                     run_btn_key = f"run_python_code_btn_{idx}"
                     
@@ -703,6 +651,59 @@ with tab_chat:
                             if run_res["stdout"].strip():
                                 st.markdown("**📤 실행 도중 출력된 내용 (stdout):**")
                                 st.code(run_res["stdout"], language="text")
+                else:
+                    # [케이스 2] 파이썬 코드가 아직 없는 일반 보강 답변의 경우 -> 'Python 코드로 변환' 버튼 생성
+                    # 가독성과 클릭감이 좋은 스타일의 컴팩트 버튼 배치
+                    btn_key = f"generate_python_code_btn_{idx}"
+                    if st.button("💻 이 답변을 바탕으로 Python 코드 생성", key=btn_key):
+                        with st.spinner("보강된 답변을 해석하여 최적의 Python 코드를 생성 중..."):
+                            code_prompt = f"""
+다음은 AI가 보강한 프롬프트 및 답변 내용입니다:
+---
+{message["content"]}
+---
+
+위 내용을 바탕으로 실행 가능하고 잘 작성된 Python 코드를 작성해 주세요. 
+코드 블록(```python ... ```)을 사용하여 명확하게 출력하고, 필요시 코드의 동작 방식을 친절한 주석 및 설명으로 덧붙여 주세요.
+"""
+                            try:
+                                if provider == "Google Gemini":
+                                    py_reply = generate_enhanced_prompt(
+                                        user_input=code_prompt,
+                                        api_key=api_key,
+                                        config_data={
+                                            "persona": "Python 소프트웨어 개발 전문가", 
+                                            "guidelines": [
+                                                "설명은 간결하고 핵심적인 부분만 다루며, 코드가 주가 되도록 한다.",
+                                                "반드시 마크다운 ```python 코드 블록을 사용하여 전체 코드를 제공한다."
+                                            ], 
+                                            "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
+                                            "examples": []
+                                        }
+                                    )
+                                else:
+                                    py_reply = generate_enhanced_prompt_local(
+                                        user_input=code_prompt,
+                                        model_name=ollama_target_model,
+                                        config_data={
+                                            "persona": "Python 소프트웨어 개발 전문가", 
+                                            "guidelines": [
+                                                "설명은 간결하고 핵심적인 부분만 다루며, 코드가 주가 되도록 한다.",
+                                                "반드시 마크다운 ```python 코드 블록을 사용하여 전체 코드를 제공한다."
+                                            ], 
+                                            "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
+                                            "examples": []
+                                        }
+                                    )
+                                
+                                st.session_state.messages.append({
+                                    "role": "assistant",
+                                    "content": py_reply,
+                                    "is_python_code": True
+                                })
+                                safe_rerun()
+                            except Exception as e:
+                                st.error(f"Python 코드 생성 실패: {e}")
 
     # 사용자 입력 처리
     if prompt := st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)"):
