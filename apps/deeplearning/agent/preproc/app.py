@@ -435,6 +435,9 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"저장 실패: {e}")
 
+# 프롬프트 입력창을 root 레벨에 선언하여 항상 브라우저 뷰포트 최하단에 플로팅 핀 고정
+prompt = st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)")
+
 # 전체 탭 구성
 tab_chat, tab_system = st.tabs(["💬 프롬프트 보강", "🖥️ 시스템 상태"])
 
@@ -742,7 +745,7 @@ with tab_chat:
                                 st.error(f"Python 코드 생성 실패: {e}")
 
     # 사용자 입력 처리
-    if prompt := st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)"):
+    if prompt:
         # 히스토리에 추가 (최대 1000개 유지, 중복 연속 입력 방지)
         if not st.session_state.prompt_history or st.session_state.prompt_history[-1] != prompt:
             st.session_state.prompt_history.append(prompt)
