@@ -580,8 +580,8 @@ with tab_chat:
             
             # AI의 보강된 답변 아래의 액션 버튼 연동 (파이썬 코드 감지 여부에 따라 분기)
             if message["role"] == "assistant":
-                # 정규식으로 마크다운 내의 파이썬 코드 블록 추출 (개행 및 빈 공간에 대해 극도로 유연하게 매칭)
-                code_blocks = re.findall(r"```python\s*(.*?)\s*```", message["content"], re.DOTALL)
+                # 정규식으로 마크다운 내의 파이썬 코드 블록 추출 (py/python/python3 및 공백 혼용 등 모든 변칙에 대해 극도로 유연하게 매칭)
+                code_blocks = re.findall(r"```\s*(?:python|py|python3)?\s*(.*?)\s*```", message["content"], re.DOTALL)
                 
                 if code_blocks:
                     # [케이스 1] 이미 파이썬 코드가 답변 내에 포함되어 있는 경우 -> 바로 'Workspace에서 실행' 버튼 노출
