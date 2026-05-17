@@ -474,11 +474,14 @@ with tab_chat:
                                 continue
                             elif stripped.startswith("$"):
                                 continue
-                            elif (stripped.startswith("python ") or 
-                                  stripped.startswith("python3 ") or 
+                            elif (stripped in ("bash", "sh", "python", "python3", "node", "cmd", "powershell") or
                                   stripped.startswith("bash ") or 
                                   stripped.startswith("sh ") or 
-                                  stripped.startswith("node ")):
+                                  stripped.startswith("python ") or 
+                                  stripped.startswith("python3 ") or 
+                                  stripped.startswith("node ") or
+                                  stripped.startswith("cmd ") or
+                                  stripped.startswith("powershell ")):
                                 continue
                             else:
                                 clean_lines.append(line)
