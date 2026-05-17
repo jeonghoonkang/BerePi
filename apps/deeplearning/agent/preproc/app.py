@@ -184,12 +184,19 @@ if len(available_gpus) > 1:
 if "CPU (기본 디바이스)" not in gpu_options:
     gpu_options.append("CPU Only (프로세서 전용)")
 
+# 첫 번째 실제 GPU를 초기 선택값으로 지정 (없으면 0번 인덱스 지정)
+default_index = 0
+if available_gpus and len(available_gpus) > 0:
+    first_gpu = available_gpus[0]
+    if first_gpu in gpu_options:
+        default_index = gpu_options.index(first_gpu)
+
 col_gpu_sel, col_gpu_status = st.columns([3, 4])
 with col_gpu_sel:
     selected_target_device = st.selectbox(
         "⚙️ Preprocessing Target GPU Device 선택",
         options=gpu_options,
-        index=0,
+        index=default_index,
         help="에이전트 로컬 모델 추론 및 연산이 실행될 대상 GPU 디바이스를 선택합니다."
     )
     # CUDA_VISIBLE_DEVICES 환경변수 동적 반영
