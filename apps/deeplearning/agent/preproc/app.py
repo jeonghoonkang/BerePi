@@ -42,6 +42,92 @@ def find_pulsedav_path():
 # 히스토리 파일 설정
 HISTORY_FILE = Path("history_prompt.txt")
 
+# 글로벌 GPU 및 VRAM 실시간 탐색 함수 (Linux NVIDIA 및 Mac 가속 카드 지원)
+def get_gpu_info():
+    info = {
+        "gpu_desc": "알 수 없음", 
+        "total_vram": "알 수 없음", 
+        "vram_usage": "알 수 없음", 
+        "gpu_count": 0, 
+        "gpu_list": []
+    }
+    
+    # 1. Linux NVIDIA GPU 확인 (nvidia-smi 명령어 지원 여부)
+    try:
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total", "--format=csv,noheader,nounits"], 
+            capture_output=True, 
+            text=True,
+            check=False
+        )
+        if res.returncode == 0:
+            lines = res.stdout.strip().split('\n')
+            gpu_descs = []
+            vram_usages = []
+            gpu_list = []
+            
+            for idx, line in enumerate(lines):
+                if not line.strip():
+                    continue
+                parts = [p.strip() for p in line.split(',')]
+                if len(parts) >= 3:
+                    gpu_name = parts[0]
+                    used_mib = float(parts[1])
+                    total_mib = float(parts[2])
+                    used_gb = used_mib / 1024
+                    total_gb = total_mib / 1024
+                    percent = (used_mib / total_mib) * 100 if total_mib > 0 else 0.0
+                    
+                    gpu_descs.append(f"gpu{idx}: {gpu_name}")
+                    vram_usages.append(f"gpu{idx}: {used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)")
+                    gpu_list.append(f"gpu{idx} ({gpu_name})")
+            
+            if gpu_descs:
+                info["gpu_desc"] = " | ".join(gpu_descs)
+                info["vram_usage"] = " | ".join(vram_usages)
+                info["gpu_count"] = len(gpu_descs)
+                info["gpu_list"] = gpu_list
+                return info
+    except Exception:
+        pass
+
+    # 2. Mac Displays & VRAM 확인 (Apple Silicon / Fallback)
+    try:
+        sp = subprocess.run(["system_profiler", "SPDisplaysDataType"], capture_output=True, text=True)
+        if sp.returncode == 0:
+            out = sp.stdout
+            chipset = re.search(r"Chipset Model:\s*(.*)", out)
+            vram = re.search(r"VRAM \(Total\):\s*(.*)", out)
+            if chipset:
+                gpu_name = chipset.group(1)
+                info["gpu_desc"] = f"gpu0: {gpu_name} (Total VRAM: {vram.group(1) if vram else 'N/A'})"
+                info["gpu_list"] = [f"gpu0 ({gpu_name})"]
+                info["gpu_count"] = 1
+                
+            ioreg = subprocess.run(["ioreg", "-l"], capture_output=True, text=True)
+            free_bytes_match = re.search(r'"vramFreeBytes"=(\d+)', ioreg.stdout)
+            total_mb_match = re.search(r'"VRAM,totalMB"=(\d+)', ioreg.stdout)
+            
+            if free_bytes_match and total_mb_match:
+                free_bytes = int(free_bytes_match.group(1))
+                total_mb = int(total_mb_match.group(1))
+                total_bytes = total_mb * 1024 * 1024
+                used_bytes = total_bytes - free_bytes
+                percent = (used_bytes / total_bytes) * 100
+                
+                used_gb = used_bytes / (1024*1024*1024)
+                total_gb = total_mb / 1024
+                info["vram_usage"] = f"gpu0: {used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)"
+                return info
+    except Exception:
+        pass
+        
+    # 기본 CPU 디바이스 추가
+    if not info["gpu_list"]:
+        info["gpu_list"] = ["CPU (기본 디바이스)"]
+        
+    return info
+
 def load_prompt_history():
     if HISTORY_FILE.exists():
         try:
@@ -84,6 +170,64 @@ st.set_page_config(page_title="Persona Agent", page_icon="🤖", layout="wide")
 
 st.title("🤖 AI Persona Agent (Pre-processing)")
 st.caption("사용자의 프롬프트를 입력받고 에이전트의 응답을 확인 및 시스템 상태를 모니터링하는 UI입니다.")
+
+# -------------------------------------------------------------
+# 메인 랜딩 페이지 GPU 장치 선택 인터페이스
+# -------------------------------------------------------------
+gpu_details = get_gpu_info()
+available_gpus = gpu_details.get("gpu_list", ["CPU (기본 디바이스)"])
+
+# 다중 GPU 환경에서 '모든 GPU 사용' 및 'CPU 전용' 옵션 동적 추가
+gpu_options = available_gpus.copy()
+if len(available_gpus) > 1:
+    gpu_options = ["전체 GPU (All Devices)"] + gpu_options
+if "CPU (기본 디바이스)" not in gpu_options:
+    gpu_options.append("CPU Only (프로세서 전용)")
+
+col_gpu_sel, col_gpu_status = st.columns([3, 4])
+with col_gpu_sel:
+    selected_target_device = st.selectbox(
+        "⚙️ Preprocessing Target GPU Device 선택",
+        options=gpu_options,
+        index=0,
+        help="에이전트 로컬 모델 추론 및 연산이 실행될 대상 GPU 디바이스를 선택합니다."
+    )
+    # CUDA_VISIBLE_DEVICES 환경변수 동적 반영
+    if "gpu" in selected_target_device.lower():
+        try:
+            # "gpu1 (NVIDIA GeForce RTX 4090)" -> "1"
+            gpu_idx = selected_target_device.split("gpu")[1].split(" ")[0]
+            os.environ["CUDA_VISIBLE_DEVICES"] = gpu_idx
+            st.session_state.selected_gpu_device = selected_target_device
+        except Exception:
+            pass
+    elif "전체" in selected_target_device:
+        # 모든 GPU 사용시 CUDA_VISIBLE_DEVICES 제거
+        if "CUDA_VISIBLE_DEVICES" in os.environ:
+            del os.environ["CUDA_VISIBLE_DEVICES"]
+        st.session_state.selected_gpu_device = selected_target_device
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+        st.session_state.selected_gpu_device = "CPU"
+        
+with col_gpu_status:
+    # 현재 매핑된 디바이스 상태 및 가용성 카드 출력
+    active_env_device = os.environ.get("CUDA_VISIBLE_DEVICES", "All / Default")
+    st.markdown(f"""
+    <div style="
+        background: var(--background-secondary-color, rgba(128, 128, 128, 0.05));
+        border-left: 4px solid #10B981;
+        padding: 8px 14px;
+        border-radius: 6px;
+        margin-top: 4px;
+    ">
+        <div style="font-size: 0.72rem; color: var(--text-color, #6B7280); font-weight: 600; opacity: 0.8;">현재 타겟팅된 CUDA 디바이스</div>
+        <div style="font-size: 0.85rem; color: var(--text-color, #047857); font-weight: 700; margin-top: 3px;">
+            📍 {selected_target_device} <span style="font-size: 0.75rem; color: #6B7280; font-weight: normal; margin-left: 10px;">(CUDA_VISIBLE_DEVICES: <code>{active_env_device}</code>)</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+st.write("---")
 
 # 페르소나 디렉토리 설정
 PERSONA_DIR = Path(__file__).parent / "persona"
@@ -573,64 +717,7 @@ with tab_chat:
 
 
 with tab_system:
-    def get_gpu_info():
-        info = {"gpu_desc": "알 수 없음", "total_vram": "알 수 없음", "vram_usage": "알 수 없음"}
-        
-        # 1. Linux NVIDIA GPU 확인 (nvidia-smi 명령어 지원 여부)
-        try:
-            res = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.used,memory.total", "--format=csv,noheader,nounits"], 
-                capture_output=True, 
-                text=True,
-                check=False
-            )
-            if res.returncode == 0:
-                lines = res.stdout.strip().split('\n')
-                if lines and lines[0]:
-                    parts = [p.strip() for p in lines[0].split(',')]
-                    if len(parts) >= 3:
-                        gpu_name = parts[0]
-                        used_mib = float(parts[1])
-                        total_mib = float(parts[2])
-                        used_gb = used_mib / 1024
-                        total_gb = total_mib / 1024
-                        percent = (used_mib / total_mib) * 100 if total_mib > 0 else 0.0
-                        
-                        info["gpu_desc"] = f"NVIDIA {gpu_name}"
-                        info["total_vram"] = f"{total_gb:.2f} GB"
-                        info["vram_usage"] = f"{used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)"
-                        return info
-        except Exception:
-            pass
 
-        # 2. Mac Displays & Displays & VRAM 확인 (기존 fallback)
-        try:
-            sp = subprocess.run(["system_profiler", "SPDisplaysDataType"], capture_output=True, text=True)
-            if sp.returncode == 0:
-                out = sp.stdout
-                chipset = re.search(r"Chipset Model:\s*(.*)", out)
-                vram = re.search(r"VRAM \(Total\):\s*(.*)", out)
-                if chipset:
-                    info["gpu_desc"] = f"{chipset.group(1)} (Total VRAM: {vram.group(1) if vram else 'N/A'})"
-                    
-                ioreg = subprocess.run(["ioreg", "-l"], capture_output=True, text=True)
-                free_bytes_match = re.search(r'"vramFreeBytes"=(\d+)', ioreg.stdout)
-                total_mb_match = re.search(r'"VRAM,totalMB"=(\d+)', ioreg.stdout)
-                
-                if free_bytes_match and total_mb_match:
-                    free_bytes = int(free_bytes_match.group(1))
-                    total_mb = int(total_mb_match.group(1))
-                    total_bytes = total_mb * 1024 * 1024
-                    used_bytes = total_bytes - free_bytes
-                    percent = (used_bytes / total_bytes) * 100
-                    
-                    used_gb = used_bytes / (1024*1024*1024)
-                    total_gb = total_mb / 1024
-                    info["vram_usage"] = f"{used_gb:.2f} GB / {total_gb:.2f} GB ({percent:.1f}%)"
-                    return info
-        except Exception:
-            pass
-        return info
 
     def get_ollama_version():
         try:
