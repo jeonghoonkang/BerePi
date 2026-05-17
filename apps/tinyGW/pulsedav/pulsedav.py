@@ -230,11 +230,7 @@ def normalize_root(root: str) -> str:
 
 
 def get_effective_root(config: WebDAVConfig) -> str:
-    root = normalize_root(config.root)
-    sub = normalize_root(config.sub) if config.sub else ""
-    if sub:
-        return f"{root}/{sub}" if root else sub
-    return root
+    return normalize_root(config.root)
 
 
 def normalize_remote_path(path: str) -> str:
@@ -297,20 +293,8 @@ def parse_webdav_time(value: str | None) -> datetime | None:
 
 
 def ensure_sub_directory(session: requests.Session, config: WebDAVConfig) -> None:
-    sub = normalize_remote_path(config.sub)
-    if not sub:
-        return
-    host = config.hostname.rstrip("/")
-    root = normalize_root(config.root)
-    
-    current = root
-    for part in sub.split("/"):
-        current = f"{current}/{part}".strip("/")
-        encoded = "/".join(quote(p) for p in current.split("/") if p)
-        url = f"{host}/{encoded}"
-        response = session.request("MKCOL", url, timeout=REQUEST_TIMEOUT)
-        if response.status_code not in {201, 301, 405}:
-            response.raise_for_status()
+    # sub 디렉토리는 tinyGW 아래에 동적으로 위임되어 ensure_remote_directories 에서 재귀적으로 생성됩니다.
+    pass
 
 
 def ensure_remote_directories(session: requests.Session, config: WebDAVConfig, remote_dir: str) -> None:
@@ -812,10 +796,13 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
     snapshot = collect_snapshot(settings)
     markdown = format_markdown(settings, snapshot, first_boot)
 
-    host_dir = posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
+    webdav_config = build_webdav_config(settings)
+    if webdav_config.sub:
+        host_dir = posixpath.join("tinyGW", normalize_remote_path(webdav_config.sub), normalize_remote_path(hostname())).strip("/")
+    else:
+        host_dir = posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     remote_path = posixpath.join(host_dir, file_name).strip("/")
-    webdav_config = build_webdav_config(settings)
     remote_directory = host_dir
     destination_url = compose_webdav_url(webdav_config, remote_path)
     try:
