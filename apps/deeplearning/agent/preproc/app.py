@@ -491,9 +491,38 @@ with tab_chat:
             }}
         }}
 
+        function scrollToBottom() {{
+            try {{
+                // Streamlit의 실제 레이아웃 스크롤러 감지 및 최하단 스크롤
+                const scrollers = [
+                    window.parent.document.querySelector('section.main'),
+                    window.parent.document.querySelector('.main'),
+                    window.parent.document.querySelector('[data-testid="stAppViewContainer"]')
+                ];
+                scrollers.forEach(el => {{
+                    if (el) {{
+                        el.scrollTo({{
+                            top: el.scrollHeight + 2000, // 여유 있게 끝까지 스크롤
+                            behavior: 'smooth'
+                        }});
+                    }}
+                }});
+            }} catch (e) {{
+                // 보안 제약 또는 기타 예외 방어용 폴백
+                try {{
+                    window.parent.scrollTo(0, 999999);
+                }} catch (err) {{}}
+            }}
+        }}
+
         // 초기 실행 및 주기적 감시
         setTimeout(attach, 100);
         setInterval(attach, 1000);
+        
+        // 화면 렌더링 흐름에 맞춰 단계별 부드러운 스크롤 실행 (비동기 위젯 로딩 완벽 대응)
+        setTimeout(scrollToBottom, 150);
+        setTimeout(scrollToBottom, 500);
+        setTimeout(scrollToBottom, 1000);
     }})();
     </script>
     """
