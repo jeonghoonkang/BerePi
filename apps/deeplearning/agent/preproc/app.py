@@ -472,6 +472,14 @@ with tab_chat:
                                     pip_packages.append(pkg_part)
                             elif stripped.startswith("!"):
                                 continue
+                            elif stripped.startswith("$"):
+                                continue
+                            elif (stripped.startswith("python ") or 
+                                  stripped.startswith("python3 ") or 
+                                  stripped.startswith("bash ") or 
+                                  stripped.startswith("sh ") or 
+                                  stripped.startswith("node ")):
+                                continue
                             else:
                                 clean_lines.append(line)
                                 
