@@ -497,7 +497,16 @@ with tab_chat:
     }})();
     </script>
     """
-    components.html(js_code, height=0, width=0)
+    # st.components.v1.html deprecation 대처 및 st.iframe / st.html dynamic fallback 연동
+    try:
+        if hasattr(st, "iframe"):
+            st.iframe(js_code, height=0, width=0)
+        elif hasattr(st, "html"):
+            st.html(js_code)
+        else:
+            components.html(js_code, height=0, width=0)
+    except Exception:
+        components.html(js_code, height=0, width=0)
 
     # Workspace 파일 관리 접히는 표시창
     with st.expander("📁 Workspace 파일 관리 및 업로드", expanded=False):
