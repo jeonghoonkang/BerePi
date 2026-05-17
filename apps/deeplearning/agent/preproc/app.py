@@ -583,9 +583,9 @@ with tab_chat:
                 # 정규식으로 마크다운 내의 파이썬 코드 블록 추출 (py/python/python3 및 공백 혼용 등 모든 변칙에 대해 극도로 유연하게 매칭)
                 code_blocks = re.findall(r"```\s*(?:python|py|python3)?\s*(.*?)\s*```", message["content"], re.DOTALL)
                 
-                if code_blocks:
-                    # [케이스 1] 이미 파이썬 코드가 답변 내에 포함되어 있는 경우 -> 바로 'Workspace에서 실행' 버튼 노출
-                    code_to_run = "\n\n".join(code_blocks).strip()
+                if code_blocks or message.get("is_python_code"):
+                    # [케이스 1] 이미 파이썬 코드가 답변 내에 포함되어 있거나 코드 전용 메시지인 경우 -> 바로 'Workspace에서 실행' 버튼 노출
+                    code_to_run = "\n\n".join(code_blocks).strip() if code_blocks else message["content"].strip()
                     run_btn_key = f"run_python_code_btn_{idx}"
                     
                     st.write("") # 미세 공백 추가
