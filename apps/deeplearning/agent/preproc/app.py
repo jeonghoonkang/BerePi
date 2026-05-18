@@ -13,6 +13,8 @@ from pathlib import Path
 from agent_google import generate_enhanced_prompt
 from agent_local import generate_enhanced_prompt_local
 
+DEFAULT_OLLAMA_MODEL = "gemma4:31b"
+
 # 워크스페이스 디렉토리 설정
 WORKSPACE_DIR = Path(__file__).parent / "workspace"
 WORKSPACE_DIR.mkdir(exist_ok=True)
@@ -292,9 +294,15 @@ with st.sidebar:
             
         local_models = get_local_ollama_models()
         if local_models:
-            ollama_target_model = st.selectbox("사용할 로컬 모델 선택", local_models, help="로컬에 이미 다운로드된 모델 중 하나를 선택하세요.")
+            default_model_index = local_models.index(DEFAULT_OLLAMA_MODEL) if DEFAULT_OLLAMA_MODEL in local_models else 0
+            ollama_target_model = st.selectbox(
+                "사용할 로컬 모델 선택",
+                local_models,
+                index=default_model_index,
+                help="로컬에 이미 다운로드된 모델 중 하나를 선택하세요."
+            )
         else:
-            ollama_target_model = st.text_input("사용할 로컬 모델명", value="gemma4:e4b", help="로컬 모델이 감지되지 않습니다. 직접 입력하거나 아래에서 다운로드하세요.")
+            ollama_target_model = st.text_input("사용할 로컬 모델명", value=DEFAULT_OLLAMA_MODEL, help="로컬 모델이 감지되지 않습니다. 직접 입력하거나 아래에서 다운로드하세요.")
             st.warning("⚠️ 로컬에 설치된 모델이 없습니다. 아래에서 모델을 먼저 다운로드해 주세요.")
             
         ollama_exec_path = st.text_input("Ollama 실행 파일 경로", value="ollama", help="기본값 'ollama'가 작동하지 않으면 전체 경로(예: /usr/local/bin/ollama)를 입력하세요.")
