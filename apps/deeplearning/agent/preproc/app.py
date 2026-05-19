@@ -758,7 +758,7 @@ with tab_chat:
     </script>
     """
     # JS를 iframe으로 삽입
-    st.iframe(js_code, height=0, width="content")
+    st.iframe(js_code, height="content", width="content")
 
     # Workspace 파일 관리 접히는 표시창
     with st.expander("📁 Workspace 파일 관리 및 업로드", expanded=False):
