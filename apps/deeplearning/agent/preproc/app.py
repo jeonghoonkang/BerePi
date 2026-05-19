@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import time
 import json
 import os
@@ -14,6 +13,13 @@ from agent_google import generate_enhanced_prompt
 from agent_local import generate_enhanced_prompt_local
 
 DEFAULT_OLLAMA_MODEL = "gemma4:31b"
+NO_PERSONA_FILE = "no_persona_config.json"
+NO_PERSONA_CONFIG = {
+    "persona": "",
+    "guidelines": [],
+    "output_format": "",
+    "examples": []
+}
 
 # 워크스페이스 디렉토리 설정
 WORKSPACE_DIR = Path(__file__).parent / "workspace"
@@ -242,9 +248,19 @@ st.write("---")
 PERSONA_DIR = Path(__file__).parent / "persona"
 PERSONA_DIR.mkdir(exist_ok=True)
 
+def ensure_no_persona_file():
+    file_path = PERSONA_DIR / NO_PERSONA_FILE
+    if not file_path.exists():
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(NO_PERSONA_CONFIG, f, ensure_ascii=False, indent=4)
+
 def get_persona_files():
-    files = list(PERSONA_DIR.glob("*.json"))
-    return [f.name for f in files] if files else ["persona_config.json"]
+    ensure_no_persona_file()
+    file_names = sorted(f.name for f in PERSONA_DIR.glob("*.json"))
+    if NO_PERSONA_FILE in file_names:
+        file_names.remove(NO_PERSONA_FILE)
+        file_names.insert(0, NO_PERSONA_FILE)
+    return file_names if file_names else [NO_PERSONA_FILE]
 
 # 세션 상태 초기화 (AttributeError 방지를 위해 상단 배치)
 if "messages" not in st.session_state:
@@ -396,7 +412,11 @@ with st.sidebar:
     st.subheader("🎭 페르소나 관리")
     # 페르소나 파일 선택
     persona_files = get_persona_files()
-    selected_file = st.selectbox("페르소나 파일 선택", persona_files)
+    selected_file = st.selectbox(
+        "페르소나 파일 선택",
+        persona_files,
+        format_func=lambda name: "페르소나 없음" if name == NO_PERSONA_FILE else name
+    )
     
     # 선택된 페르소나 파일 로드
     file_path = PERSONA_DIR / selected_file
@@ -737,16 +757,8 @@ with tab_chat:
     }})();
     </script>
     """
-    # st.components.v1.html deprecation 대처 및 st.iframe / st.html dynamic fallback 연동
-    try:
-        if hasattr(st, "iframe"):
-            st.iframe(js_code, height=0, width=0)
-        elif hasattr(st, "html"):
-            st.html(js_code)
-        else:
-            components.html(js_code, height=0, width=0)
-    except Exception:
-        components.html(js_code, height=0, width=0)
+    # JS를 iframe으로 삽입
+    st.iframe(js_code, height=0, width=0)
 
     # Workspace 파일 관리 접히는 표시창
     with st.expander("📁 Workspace 파일 관리 및 업로드", expanded=False):
