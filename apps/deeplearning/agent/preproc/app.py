@@ -456,6 +456,12 @@ with tab_chat:
             st.markdown(f"**{label}**")
             st.markdown(content)
 
+    def render_message_metadata(message):
+        elapsed_time = message.get("elapsed_time")
+        model_name = message.get("model_name")
+        if elapsed_time is not None and model_name:
+            st.caption(f"⏱️ {elapsed_time:.2f}s | {model_name}")
+
     # -------------------------------------------------------------
     # AI 보강 답변용 동적 액션 버튼 렌더링 헬퍼 함수 (클로저 구조)
     # -------------------------------------------------------------
@@ -573,6 +579,9 @@ with tab_chat:
                             st.code(run_res["stdout"], language="text")
             else:
                 # [케이스 2] 파이썬 코드가 아직 없는 일반 보강 답변의 경우 -> 'Python 코드로 변환' 버튼 생성
+                if message.get("code_generated"):
+                    return
+
                 btn_key = f"generate_python_code_btn_{idx}"
                 if st.button("💻 이 답변을 바탕으로 Python 코드 생성", key=btn_key):
                     with st.spinner("보강된 답변을 해석하여 최적의 Python 코드를 생성 중..."):
@@ -586,7 +595,9 @@ with tab_chat:
 코드 블록(```python ... ```)을 사용하여 명확하게 출력하고, 필요시 코드의 동작 방식을 친절한 주석 및 설명으로 덧붙여 주세요.
 """
                         try:
+                            code_start_time = time.time()
                             if provider == "Google Gemini":
+                                code_model_name = "gemini-2.5-flash"
                                 py_reply = generate_enhanced_prompt(
                                     user_input=code_prompt,
                                     api_key=api_key,
@@ -601,6 +612,7 @@ with tab_chat:
                                     }
                                 )
                             else:
+                                code_model_name = ollama_target_model
                                 py_reply = generate_enhanced_prompt_local(
                                     user_input=code_prompt,
                                     model_name=ollama_target_model,
@@ -614,11 +626,18 @@ with tab_chat:
                                         "examples": []
                                     }
                                 )
+
+                            code_elapsed_time = time.time() - code_start_time
+
+                            if idx < len(st.session_state.messages):
+                                st.session_state.messages[idx]["code_generated"] = True
                             
                             st.session_state.messages.append({
                                 "role": "assistant",
                                 "content": py_reply,
-                                "is_python_code": True
+                                "is_python_code": True,
+                                "elapsed_time": code_elapsed_time,
+                                "model_name": code_model_name
                             })
                             safe_rerun()
                         except Exception as e:
@@ -797,6 +816,7 @@ with tab_chat:
     # 기존 대화 내용 출력
     for idx, message in enumerate(st.session_state.messages):
         render_message(message["role"], message["content"])
+        render_message_metadata(message)
         
         # AI의 보강된 답변 아래의 액션 버튼 연동 (첫 번째 웰컴 메시지인 idx == 0만 제외하고 모두 연동)
         render_action_buttons(message, idx)
@@ -946,11 +966,16 @@ with tab_chat:
             st.caption(f"⏱️ {elapsed_time:.2f}s | {target_model}")
 
             # 스트리밍 완료 후 즉시 코드 실행 또는 코드 변환 버튼을 실시간으로 렌더링 (대기 시간 0초)
-            new_message = {"role": "assistant", "content": full_response}
+            new_message = {
+                "role": "assistant",
+                "content": full_response,
+                "elapsed_time": elapsed_time,
+                "model_name": target_model
+            }
             new_idx = len(st.session_state.messages)
             render_action_buttons(new_message, new_idx)
             
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.session_state.messages.append(new_message)
 
 
 with tab_system:
