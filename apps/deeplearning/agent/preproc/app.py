@@ -463,8 +463,24 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"저장 실패: {e}")
 
-# 프롬프트 입력창을 root 레벨에 선언하여 항상 브라우저 뷰포트 최하단에 플로팅 핀 고정
-prompt = st.chat_input("프롬프트를 입력하세요 (화살표 ↑ 키로 이전 기록 불러오기 가능)")
+# 프롬프트 입력창을 root 레벨에 선언하여 항상 브라우저 뷰포트 하단에서 2줄 높이로 입력 가능하게 구성
+if "prompt_input" not in st.session_state:
+    st.session_state.prompt_input = ""
+
+prompt = ""
+with st.form("prompt_input_form", clear_on_submit=True):
+    prompt = st.text_area(
+        "프롬프트를 입력하세요",
+        key="prompt_input",
+        height=68,
+        placeholder="프롬프트를 입력하세요",
+    )
+    prompt_submitted = st.form_submit_button("전송", use_container_width=True)
+
+if prompt_submitted:
+    prompt = prompt.strip()
+else:
+    prompt = ""
 
 # 전체 탭 구성
 tab_chat, tab_system = st.tabs(["💬 프롬프트 보강", "🖥️ 시스템 상태"])
