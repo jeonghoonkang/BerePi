@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import time
 import json
 import os
@@ -271,6 +272,9 @@ if "messages" not in st.session_state:
 if "prompt_history" not in st.session_state:
     st.session_state.prompt_history = load_prompt_history()
 
+if "gemma_thinking_history" not in st.session_state:
+    st.session_state.gemma_thinking_history = []
+
 # 사이드바 구성
 with st.sidebar:
     st.header("⚙️ 설정 (Settings)")
@@ -483,7 +487,7 @@ else:
     prompt = ""
 
 # 전체 탭 구성
-tab_chat, tab_system = st.tabs(["💬 프롬프트 보강", "🖥️ 시스템 상태"])
+tab_chat, tab_thinking, tab_system = st.tabs(["💬 프롬프트 보강", "💭 Gemma4 Think", "🖥️ 시스템 상태"])
 
 with tab_chat:
     def render_message(role, content):
@@ -773,8 +777,11 @@ with tab_chat:
     }})();
     </script>
     """
-    # JS를 iframe으로 삽입
-    st.iframe(js_code, height="content", width="content")
+    # Streamlit 버전에 따라 JS 삽입 API가 다르므로 호환 처리
+    if hasattr(st, "iframe"):
+        st.iframe(js_code, height="content", width="content")
+    else:
+        components.html(js_code, height=1, width=1)
 
     # Workspace 파일 관리 접히는 표시창
     with st.expander("📁 Workspace 파일 관리 및 업로드", expanded=False):
@@ -919,11 +926,19 @@ with tab_chat:
                     )
                 else:
                     target_model = ollama_target_model
-                    actual_reply = generate_enhanced_prompt_local(
+                    include_gemma_thinking = target_model.startswith("gemma4")
+                    local_result = generate_enhanced_prompt_local(
                         user_input=actual_prompt,
                         model_name=ollama_target_model,
-                        config_data=config_data
+                        config_data=config_data,
+                        include_thinking=include_gemma_thinking
                     )
+                    if isinstance(local_result, dict):
+                        actual_reply = local_result.get("response", "")
+                        gemma_thinking = local_result.get("thinking", "")
+                    else:
+                        actual_reply = local_result
+                        gemma_thinking = ""
             
             # 시스템 명령 태그 파싱 및 정제
             system_action_msg = ""
@@ -1000,10 +1015,36 @@ with tab_chat:
                 "elapsed_time": elapsed_time,
                 "model_name": target_model
             }
+            if provider == "Local (Ollama)" and target_model.startswith("gemma4"):
+                new_message["gemma_thinking"] = gemma_thinking
+                st.session_state.gemma_thinking_history.append({
+                    "prompt": prompt,
+                    "model_name": target_model,
+                    "elapsed_time": elapsed_time,
+                    "thinking": gemma_thinking
+                })
+                st.session_state.gemma_thinking_history = st.session_state.gemma_thinking_history[-20:]
             new_idx = len(st.session_state.messages)
             render_action_buttons(new_message, new_idx)
             
         st.session_state.messages.append(new_message)
+
+
+with tab_thinking:
+    st.subheader("💭 Gemma4 Think")
+    if not st.session_state.gemma_thinking_history:
+        st.info("아직 Gemma4 thinking 내용이 없습니다. Local (Ollama)에서 gemma4 모델로 프롬프트를 실행하면 여기에 표시됩니다.")
+    else:
+        for idx, item in enumerate(reversed(st.session_state.gemma_thinking_history), 1):
+            label = f"{idx}. {item['model_name']} · ⏱️ {item['elapsed_time']:.2f}s"
+            with st.expander(label, expanded=(idx == 1)):
+                st.markdown("**프롬프트**")
+                st.markdown(item["prompt"])
+                st.markdown("**Thinking**")
+                if item.get("thinking"):
+                    st.markdown(item["thinking"])
+                else:
+                    st.info("이 응답에서는 Ollama가 thinking 필드를 반환하지 않았습니다.")
 
 
 with tab_system:

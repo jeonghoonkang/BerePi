@@ -1,6 +1,6 @@
 import requests
 
-def generate_enhanced_prompt_local(user_input: str, model_name: str, config_data: dict) -> str:
+def generate_enhanced_prompt_local(user_input: str, model_name: str, config_data: dict, include_thinking: bool = False):
     persona = config_data.get("persona", "")
     guidelines = "\n- ".join(config_data.get("guidelines", []))
     output_format = config_data.get("output_format", "")
@@ -18,13 +18,23 @@ def generate_enhanced_prompt_local(user_input: str, model_name: str, config_data
     full_prompt = f"System Instruction:\n{system_instruction}\n\nUser Request:\n{user_input}"
     
     try:
+        payload = {"model": model_name, "prompt": full_prompt, "stream": False}
+        if include_thinking:
+            payload["think"] = True
+
         response = requests.post(
             "http://localhost:11434/api/generate",
-            json={"model": model_name, "prompt": full_prompt, "stream": False},
+            json=payload,
             timeout=120
         )
         if response.status_code == 200:
-            return response.json().get("response", "")
+            data = response.json()
+            if include_thinking:
+                return {
+                    "response": data.get("response", ""),
+                    "thinking": data.get("thinking", "")
+                }
+            return data.get("response", "")
         else:
             return f"Ollama API 에러 ({response.status_code}): {response.text}"
     except requests.exceptions.ConnectionError:
