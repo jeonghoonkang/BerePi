@@ -9,7 +9,9 @@ GPU_SELECTION_FILE="${APP_DIR}/gpu-selection"
 MODEL_SELECTION_FILE="${APP_DIR}/model-selection"
 mkdir -p "${LOG_DIR}"
 
-export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4}"
+export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:31b}"
+export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-8192}"
+export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-60m}"
 export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
 export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
 export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
@@ -38,6 +40,17 @@ find_ollama_bin() {
   done
 
   return 1
+}
+
+start_detached() {
+  local log_file="$1"
+  shift
+  if command -v setsid >/dev/null 2>&1; then
+    nohup setsid "$@" > "${log_file}" 2>&1 &
+  else
+    nohup "$@" > "${log_file}" 2>&1 &
+  fi
+  echo "$!"
 }
 
 install_ollama() {
@@ -119,6 +132,26 @@ wait_for_ollama() {
   return 1
 }
 
+cuda_device_for_gpu_selection() {
+  local selected="$1"
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    printf '%s\n' "${selected}"
+    return 0
+  fi
+
+  local index uuid
+  while IFS=, read -r index uuid; do
+    index="$(echo "${index}" | xargs)"
+    uuid="$(echo "${uuid}" | xargs)"
+    if [[ "${index}" == "${selected}" && -n "${uuid}" ]]; then
+      printf '%s\n' "${uuid}"
+      return 0
+    fi
+  done < <(nvidia-smi --query-gpu=index,uuid --format=csv,noheader,nounits 2>/dev/null || true)
+
+  printf '%s\n' "${selected}"
+}
+
 apply_gpu_selection() {
   local selected="auto"
   if [[ -f "${GPU_SELECTION_FILE}" ]]; then
@@ -133,7 +166,7 @@ apply_gpu_selection() {
       export CUDA_VISIBLE_DEVICES="-1"
       ;;
     *)
-      export CUDA_VISIBLE_DEVICES="${selected}"
+      export CUDA_VISIBLE_DEVICES="$(cuda_device_for_gpu_selection "${selected}")"
       ;;
   esac
 }
@@ -154,8 +187,7 @@ start_ollama_if_needed() {
     echo "To stop the existing Ollama service, run: sudo systemctl stop ollama"
   else
     apply_gpu_selection
-    nohup "${OLLAMA_BIN}" serve > "${LOG_DIR}/ollama.log" 2>&1 &
-    echo "$!" > "${OLLAMA_PID_FILE}"
+    start_detached "${LOG_DIR}/ollama.log" "${OLLAMA_BIN}" serve > "${OLLAMA_PID_FILE}"
   fi
   wait_for_ollama
 }
@@ -163,8 +195,7 @@ start_ollama_if_needed() {
 restart_started_ollama() {
   stop_all_ollama_processes
   apply_gpu_selection
-  nohup "${OLLAMA_BIN}" serve > "${LOG_DIR}/ollama.log" 2>&1 &
-  echo "$!" > "${OLLAMA_PID_FILE}"
+  start_detached "${LOG_DIR}/ollama.log" "${OLLAMA_BIN}" serve > "${OLLAMA_PID_FILE}"
   wait_for_ollama
 }
 
@@ -231,7 +262,6 @@ if [[ "${AUTO_PULL}" == "1" ]]; then
   ensure_ollama_model
 fi
 
-nohup python3 "${APP_DIR}/server.py" > "${LOG_DIR}/server.log" 2>&1 &
-echo "$!" > "${PID_FILE}"
+start_detached "${LOG_DIR}/server.log" python3 -u "${APP_DIR}/server.py" > "${PID_FILE}"
 echo "Started Gemma4 service with PID $(cat "${PID_FILE}")"
 echo "Open http://localhost:8082"

@@ -1,7 +1,7 @@
 # Gemma4 Ollama Server
 
 This directory runs a small service page on port `8082` and uses local
-Ollama as the backend for `gemma4`.
+Ollama as the backend for `gemma4:31b`.
 
 ## Run
 
@@ -22,12 +22,38 @@ The page checks:
 - web server status
 - Ollama reachability
 - available Ollama models
-- whether `gemma4` is available
+- whether `gemma4:31b` is available
 - a quick prompt test through `/api/generate`
 - two prompt input boxes and recent prompts saved in `prompt_history.txt`
 - Ollama server start through `/api/start-ollama`
 - model unload through `/api/unload-model`
 - Ollama server stop through `/api/stop-ollama`
+
+## Prompt Authentication
+
+Prompt calls through the web page and `POST /api/generate` require a user ID and
+password from `api_key.conf`.
+
+```json
+{
+  "enabled": true,
+  "allow_only_user": "",
+  "users": [
+    {"id": "admin", "password": "change-me-now", "enabled": true},
+    {"id": "operator", "password": "change-me-too", "enabled": true}
+  ]
+}
+```
+
+Set `allow_only_user` to one user ID, such as `admin`, to invalidate every other
+account while leaving that one account active. Set it back to an empty string to
+allow every enabled account again.
+
+API clients can pass credentials with HTTP Basic Auth or with JSON fields:
+
+```json
+{"user_id": "admin", "password": "change-me-now", "prompt": "hello"}
+```
 
 ## Stop
 
@@ -42,7 +68,7 @@ The page checks:
 ```
 
 By default `run_service.sh` starts Ollama locally on `127.0.0.1:11434`,
-uses an already installed `gemma4` model when present, pulls it only when
+uses an already installed `gemma4:31b` model when present, pulls it only when
 missing, and exposes the service page on `0.0.0.0:8082`.
 
 ## systemd user service
@@ -73,9 +99,12 @@ launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 
 ## Environment
 
-- `OLLAMA_MODEL`: default `gemma4`
+- `OLLAMA_MODEL`: default `gemma4:31b`
+- `OLLAMA_CONTEXT_LENGTH`: default `8192` so `gemma4:31b` fits on a 24 GB RTX 4090
+- `OLLAMA_KEEP_ALIVE`: default `60m` to keep the loaded model warm between prompts
 - `OLLAMA_BIN`: default discovered `ollama`, or `/usr/local/bin/ollama`
 - `OLLAMA_PID_FILE`: default `ollama.pid` in this directory
+- `API_KEY_CONF_FILE`: default `api_key.conf` in this directory
 - `OLLAMA_BASE_URL`: default `http://127.0.0.1:11434`
 - `OLLAMA_HOST`: default `127.0.0.1:11434`
 - `GEMMA4_SERVER_HOST`: default `0.0.0.0`

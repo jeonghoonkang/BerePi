@@ -7,7 +7,9 @@ GPU_SELECTION_FILE="${APP_DIR}/gpu-selection"
 MODEL_SELECTION_FILE="${APP_DIR}/model-selection"
 mkdir -p "${LOG_DIR}"
 
-export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4}"
+export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:31b}"
+export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-8192}"
+export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-60m}"
 export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
 export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
 export GEMMA4_SERVER_PORT="${GEMMA4_SERVER_PORT:-8082}"
@@ -127,6 +129,26 @@ wait_for_ollama() {
   return 1
 }
 
+cuda_device_for_gpu_selection() {
+  local selected="$1"
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    printf '%s\n' "${selected}"
+    return 0
+  fi
+
+  local index uuid
+  while IFS=, read -r index uuid; do
+    index="$(echo "${index}" | xargs)"
+    uuid="$(echo "${uuid}" | xargs)"
+    if [[ "${index}" == "${selected}" && -n "${uuid}" ]]; then
+      printf '%s\n' "${uuid}"
+      return 0
+    fi
+  done < <(nvidia-smi --query-gpu=index,uuid --format=csv,noheader,nounits 2>/dev/null || true)
+
+  printf '%s\n' "${selected}"
+}
+
 apply_gpu_selection() {
   local selected="auto"
   if [[ -f "${GPU_SELECTION_FILE}" ]]; then
@@ -141,7 +163,7 @@ apply_gpu_selection() {
       export CUDA_VISIBLE_DEVICES="-1"
       ;;
     *)
-      export CUDA_VISIBLE_DEVICES="${selected}"
+      export CUDA_VISIBLE_DEVICES="$(cuda_device_for_gpu_selection "${selected}")"
       ;;
   esac
 }
