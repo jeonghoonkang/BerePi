@@ -716,6 +716,24 @@ def format_iptime_rows(stations: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def parse_iptime_address(address: str) -> tuple[str, str]:
+    normalized = address.strip()
+    if not normalized:
+        normalized = "10.0.0.1"
+    if "://" not in normalized:
+        normalized = f"http://{normalized}"
+
+    parsed = urlparse(normalized)
+    if not parsed.hostname:
+        raise ValueError(f"Invalid ipTIME address: {address}")
+
+    scheme = parsed.scheme or "http"
+    netloc = parsed.netloc
+    base_path = parsed.path.rstrip("/")
+    base_url = f"{scheme}://{netloc}{base_path}".rstrip("/")
+    return base_url, parsed.hostname
+
+
 def get_iptime_report(settings: dict[str, Any]) -> str:
     iptime_settings = settings.get("iptime", {})
     if not as_bool(iptime_settings.get("enabled"), True):
@@ -729,13 +747,18 @@ def get_iptime_report(settings: dict[str, Any]) -> str:
     ping_count = int(iptime_settings.get("ping_count") or 3)
     timeout_seconds = int(iptime_settings.get("timeout_seconds") or 10)
 
-    lines = [f"Checking router status with ping: {router_ip}"]
-    ping_result = run_command(["ping", "-c", str(max(1, ping_count)), router_ip], timeout=max(5, ping_count * 4))
+    try:
+        base_url, ping_host = parse_iptime_address(router_ip)
+    except ValueError as exc:
+        return f"ipTIME 주소 설정 오류: {exc}"
+
+    lines = [f"Checking router status with ping: {ping_host}"]
+    ping_result = run_command(["ping", "-c", str(max(1, ping_count)), ping_host], timeout=max(5, ping_count * 4))
     lines.append(ping_result.strip() or "ping 결과 없음")
     if " 0.0% packet loss" in ping_result or " 0% packet loss" in ping_result:
-        lines.append(f"Ping status: reachable ({router_ip})")
+        lines.append(f"Ping status: reachable ({ping_host})")
     else:
-        lines.append(f"Ping status: unreachable ({router_ip})")
+        lines.append(f"Ping status: unreachable ({ping_host})")
     lines.append("")
 
     if not user_id or not user_pw:
@@ -745,7 +768,6 @@ def get_iptime_report(settings: dict[str, Any]) -> str:
         lines.append("requests 모듈이 없어 ipTIME API를 호출할 수 없습니다.")
         return "\n".join(lines)
 
-    base_url = f"http://{router_ip}"
     api_url = f"{base_url}/cgi/service.cgi"
     headers = {
         "Content-Type": "application/json; charset=utf-8",
@@ -941,6 +963,64 @@ def build_webdav_config(settings: dict[str, Any]) -> WebDAVConfig:
     )
 
 
+def build_host_remote_dir(webdav_config: WebDAVConfig) -> str:
+    if webdav_config.sub:
+        return posixpath.join("tinyGW", normalize_remote_path(webdav_config.sub), normalize_remote_path(hostname())).strip("/")
+    return posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
+
+
+def format_iptime_markdown(report: str, settings: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"# ipTIME LAN List - {hostname()}",
+            "",
+            settings["metadata"].get("intro_text", "").strip() or "ipTIME 장치 목록",
+            "",
+            f"- 생성 시각: {datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')}",
+            f"- 호스트명: {hostname()}",
+            "",
+            "```text",
+            report.rstrip(),
+            "```",
+            "",
+        ]
+    )
+
+
+def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:
+    settings = settings or load_settings(settings_path)
+    errors = validate_settings(settings)
+    if errors:
+        raise ValueError(" / ".join(errors))
+
+    report = get_iptime_report(settings)
+    markdown = format_iptime_markdown(report, settings)
+    webdav_config = build_webdav_config(settings)
+    host_dir = build_host_remote_dir(webdav_config)
+    file_name = f"iptime_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    remote_path = posixpath.join(host_dir, file_name).strip("/")
+    destination_url = compose_webdav_url(webdav_config, remote_path)
+    try:
+        upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
+        deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
+    except REQUEST_ERRORS as exc:
+        raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
+
+    return {
+        "remote_path": remote_path,
+        "remote_directory": host_dir,
+        "destination_url": destination_url,
+        "webdav_hostname": webdav_config.hostname,
+        "webdav_root": webdav_config.root,
+        "webdav_sub": webdav_config.sub,
+        "webdav_username": webdav_config.username,
+        "file_name": file_name,
+        "host_name": hostname(),
+        "deleted_paths": deleted,
+        "preview": report,
+    }
+
+
 def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:
     settings = settings or load_settings(settings_path)
     errors = validate_settings(settings)
@@ -954,10 +1034,7 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
     markdown = format_markdown(settings, snapshot, first_boot)
 
     webdav_config = build_webdav_config(settings)
-    if webdav_config.sub:
-        host_dir = posixpath.join("tinyGW", normalize_remote_path(webdav_config.sub), normalize_remote_path(hostname())).strip("/")
-    else:
-        host_dir = posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
+    host_dir = build_host_remote_dir(webdav_config)
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     remote_path = posixpath.join(host_dir, file_name).strip("/")
     remote_directory = host_dir

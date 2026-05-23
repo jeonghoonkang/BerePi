@@ -7,10 +7,10 @@ from pathlib import Path
 from pulsedav import (
     DEFAULT_INTERVAL_MINUTES,
     WebDAVConnectionError,
-    get_iptime_report,
     load_settings,
     resolve_settings_path,
     run_loop,
+    send_iptime_list,
     send_once,
 )
 
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--iptime-list",
         action="store_true",
-        help="Print ipTIME ping status and device list, then exit.",
+        help="Send ipTIME ping status and device list to WebDAV, then exit.",
     )
     return parser.parse_args()
 
@@ -73,7 +73,22 @@ def main() -> int:
         return 0
 
     if args.iptime_list:
-        print(get_iptime_report(load_settings(args.config)))
+        try:
+            result = send_iptime_list(load_settings(args.config), settings_path=args.config)
+        except WebDAVConnectionError as exc:
+            print(str(exc))
+            return 1
+        print(result["preview"])
+        print()
+        print("ipTIME 목록 WebDAV 전송 완료")
+        print(f"- 호스트명: {result['host_name']}")
+        print(f"- 파일명: {result['file_name']}")
+        print(f"- 전송 주소: {result['webdav_hostname']}")
+        print(f"- WebDAV 루트: {result['webdav_root']}")
+        print(f"- WebDAV 서브: {result['webdav_sub']}")
+        print(f"- 저장 디렉토리: {result['remote_directory']}")
+        print(f"- 저장 경로: {result['remote_path']}")
+        print(f"- 전체 URL: {result['destination_url']}")
         return 0
 
     if args.loop:
