@@ -6,6 +6,7 @@ import os
 import signal
 import socket
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -23,12 +24,15 @@ OLLAMA_BIN = os.getenv("OLLAMA_BIN", "/usr/local/bin/ollama")
 OLLAMA_PID_FILE = Path(os.getenv("OLLAMA_PID_FILE", Path(__file__).resolve().with_name("ollama.pid")))
 GPU_SELECTION_FILE = Path(os.getenv("GPU_SELECTION_FILE", Path(__file__).resolve().with_name("gpu-selection")))
 MODEL_SELECTION_FILE = Path(os.getenv("MODEL_SELECTION_FILE", Path(__file__).resolve().with_name("model-selection")))
+PROMPT_HISTORY_FILE = Path(os.getenv("PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("prompt_history.txt")))
 LOG_DIR = Path(__file__).resolve().with_name("logs")
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
 PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"))
 PUBLIC_IP_CACHE: dict[str, Any] = {"value": "", "checked_at": 0.0}
+PROMPT_HISTORY_LIMIT = 100
+PROMPT_HISTORY_LOCK = threading.RLock()
 
 
 INDEX_HTML = """<!doctype html>
@@ -142,6 +146,24 @@ INDEX_HTML = """<!doctype html>
       padding: 12px;
       font: inherit;
     }
+    .prompt-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .prompt-box label {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .prompt-box textarea {
+      min-height: 150px;
+    }
+    .history-select {
+      min-width: min(520px, 100%);
+    }
     pre {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -162,6 +184,7 @@ INDEX_HTML = """<!doctype html>
       header { display: block; }
       header button { margin-top: 14px; }
       .grid { grid-template-columns: 1fr 1fr; }
+      .prompt-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 460px) {
       .grid { grid-template-columns: 1fr; }
@@ -210,10 +233,24 @@ INDEX_HTML = """<!doctype html>
 
     <section>
       <h2>Prompt Test</h2>
-      <textarea id="prompt">Reply with one short sentence that the Gemma4 Ollama service is running.</textarea>
+      <div class="prompt-grid">
+        <div class="prompt-box">
+          <label for="prompt1">Prompt 1</label>
+          <textarea id="prompt1">Reply with one short sentence that the Gemma4 Ollama service is running.</textarea>
+        </div>
+        <div class="prompt-box">
+          <label for="prompt2">Prompt 2</label>
+          <textarea id="prompt2"></textarea>
+        </div>
+      </div>
       <div class="row">
         <button class="primary" id="send">Send to Gemma4</button>
         <span id="busy"></span>
+      </div>
+      <div class="row">
+        <select class="history-select" id="promptHistory"></select>
+        <button id="loadHistoryPrompt1">Load to Prompt 1</button>
+        <button id="loadHistoryPrompt2">Load to Prompt 2</button>
       </div>
       <pre id="answer">Waiting for a prompt.</pre>
     </section>
@@ -234,6 +271,9 @@ INDEX_HTML = """<!doctype html>
     const modelSelect = document.getElementById("modelSelect");
     const modelStatus = document.getElementById("modelStatus");
     const pythonCode = document.getElementById("pythonCode");
+    const prompt1 = document.getElementById("prompt1");
+    const prompt2 = document.getElementById("prompt2");
+    const promptHistory = document.getElementById("promptHistory");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -312,6 +352,44 @@ if __name__ == "__main__":
 `;
     }
 
+    function promptPreview(prompt) {
+      const singleLine = prompt.replace(/\\s+/g, " ").trim();
+      return singleLine.length > 90 ? `${singleLine.slice(0, 90)}...` : singleLine;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function refreshPromptHistory() {
+      try {
+        const res = await fetch("/api/prompt-history");
+        const data = await res.json();
+        const history = data.history || [];
+        promptHistory.innerHTML = history.length
+          ? history.map((prompt, index) => `<option value="${index}">${escapeHtml(promptPreview(prompt))}</option>`).join("")
+          : `<option value="">No prompt history</option>`;
+        promptHistory.dataset.history = JSON.stringify(history);
+        promptHistory.disabled = history.length === 0;
+      } catch (err) {
+        promptHistory.innerHTML = `<option value="">Prompt history unavailable</option>`;
+        promptHistory.dataset.history = "[]";
+        promptHistory.disabled = true;
+      }
+    }
+
+    function loadHistory(target) {
+      const history = JSON.parse(promptHistory.dataset.history || "[]");
+      const index = Number(promptHistory.value);
+      if (!history[index]) return;
+      target.value = history[index];
+      target.focus();
+    }
+
     async function refreshStatus() {
       metrics.innerHTML = metric("Status", "Loading...");
       try {
@@ -337,13 +415,14 @@ if __name__ == "__main__":
 
     async function sendPrompt() {
       const startedAt = performance.now();
+      const prompts = [prompt1.value, prompt2.value].map((value) => value.trim()).filter(Boolean);
       busy.textContent = "Running...";
       answer.textContent = "";
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({prompt: document.getElementById("prompt").value})
+          body: JSON.stringify({prompts})
         });
         const data = await res.json();
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
@@ -357,6 +436,7 @@ if __name__ == "__main__":
         busy.textContent = `Failed after ${elapsedSeconds.toFixed(2)}s`;
         return;
       } finally {
+        refreshPromptHistory();
         refreshStatus();
       }
     }
@@ -413,17 +493,84 @@ if __name__ == "__main__":
 
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     document.getElementById("send").addEventListener("click", sendPrompt);
+    document.getElementById("loadHistoryPrompt1").addEventListener("click", () => loadHistory(prompt1));
+    document.getElementById("loadHistoryPrompt2").addEventListener("click", () => loadHistory(prompt2));
     document.getElementById("startOllama").addEventListener("click", () => postControl("/api/start-ollama", "Starting Ollama"));
     document.getElementById("unload").addEventListener("click", () => postControl("/api/unload-model", "Stopping model"));
     document.getElementById("stopOllama").addEventListener("click", () => postControl("/api/stop-ollama", "Stopping Ollama"));
     document.getElementById("saveGpu").addEventListener("click", saveGpuSelection);
     document.getElementById("saveModel").addEventListener("click", saveModelSelection);
     renderPythonCode();
+    refreshPromptHistory();
     refreshStatus();
   </script>
 </body>
 </html>
 """
+
+
+def read_prompt_history() -> list[str]:
+    with PROMPT_HISTORY_LOCK:
+        try:
+            lines = PROMPT_HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            PROMPT_HISTORY_FILE.touch()
+            return []
+        except OSError:
+            return []
+
+    prompts: list[str] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            value = line
+        if isinstance(value, str) and value.strip():
+            prompts.append(value.strip())
+    return prompts[:PROMPT_HISTORY_LIMIT]
+
+
+def save_prompt_history(prompts: list[str]) -> None:
+    unique_prompts: list[str] = []
+    seen: set[str] = set()
+    for prompt in prompts:
+        prompt = prompt.strip()
+        if not prompt or prompt in seen:
+            continue
+        unique_prompts.append(prompt)
+        seen.add(prompt)
+        if len(unique_prompts) >= PROMPT_HISTORY_LIMIT:
+            break
+
+    body = "".join(f"{json.dumps(prompt, ensure_ascii=False)}\n" for prompt in unique_prompts)
+    with PROMPT_HISTORY_LOCK:
+        PROMPT_HISTORY_FILE.write_text(body, encoding="utf-8")
+
+
+def remember_prompts(prompts: list[str]) -> None:
+    cleaned = [prompt.strip() for prompt in prompts if prompt.strip()]
+    if not cleaned:
+        return
+
+    with PROMPT_HISTORY_LOCK:
+        existing = read_prompt_history()
+        save_prompt_history(cleaned + existing)
+
+
+def combined_prompt_from_request(incoming: dict[str, Any]) -> tuple[str, list[str]]:
+    raw_prompts = incoming.get("prompts")
+    prompts: list[str] = []
+    if isinstance(raw_prompts, list):
+        prompts = [str(prompt).strip() for prompt in raw_prompts if str(prompt).strip()]
+    else:
+        prompt = str(incoming.get("prompt", "")).strip()
+        if prompt:
+            prompts = [prompt]
+
+    return "\n\n".join(prompts), prompts
 
 
 def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int = REQUEST_TIMEOUT_SECONDS) -> dict[str, Any]:
@@ -747,6 +894,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/status":
             self.send_json(status_payload())
             return
+        if self.path == "/api/prompt-history":
+            self.send_json({"history": read_prompt_history()})
+            return
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -823,10 +973,11 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-            prompt = str(incoming.get("prompt", "")).strip()
+            prompt, prompts = combined_prompt_from_request(incoming)
             if not prompt:
                 self.send_json({"error": "prompt is required"}, HTTPStatus.BAD_REQUEST)
                 return
+            remember_prompts(prompts)
             payload = {
                 "model": str(incoming.get("model") or read_selected_model()),
                 "prompt": prompt,
@@ -841,6 +992,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    PROMPT_HISTORY_FILE.touch(exist_ok=True)
     httpd = ThreadingHTTPServer((HOST, PORT), Gemma4Handler)
     print(f"Gemma4 service page: http://{HOST}:{PORT}")
     print(f"Ollama backend: {OLLAMA_BASE_URL}, model={OLLAMA_MODEL}")

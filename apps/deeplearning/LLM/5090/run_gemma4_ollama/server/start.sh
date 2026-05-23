@@ -194,6 +194,30 @@ pull_ollama_model() {
   return 1
 }
 
+model_is_installed() {
+  local model_name="$1"
+  local installed_name
+  while read -r installed_name; do
+    if [[ "${installed_name}" == "${model_name}" ]]; then
+      return 0
+    fi
+    if [[ "${model_name}" != *:* && "${installed_name}" == "${model_name}:latest" ]]; then
+      return 0
+    fi
+  done < <("${OLLAMA_BIN}" list 2>/dev/null | awk 'NR > 1 {print $1}')
+
+  return 1
+}
+
+ensure_ollama_model() {
+  if model_is_installed "${OLLAMA_MODEL}"; then
+    echo "Ollama model ${OLLAMA_MODEL} is already installed. Skipping download."
+    return 0
+  fi
+
+  pull_ollama_model
+}
+
 if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
   echo "Gemma4 service is already running with PID $(cat "${PID_FILE}")"
   exit 0
@@ -204,7 +228,7 @@ start_ollama_if_needed
 apply_model_selection
 
 if [[ "${AUTO_PULL}" == "1" ]]; then
-  pull_ollama_model
+  ensure_ollama_model
 fi
 
 nohup python3 "${APP_DIR}/server.py" > "${LOG_DIR}/server.log" 2>&1 &

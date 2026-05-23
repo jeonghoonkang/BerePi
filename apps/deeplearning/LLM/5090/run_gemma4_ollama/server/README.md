@@ -24,6 +24,7 @@ The page checks:
 - available Ollama models
 - whether `gemma4` is available
 - a quick prompt test through `/api/generate`
+- two prompt input boxes and recent prompts saved in `prompt_history.txt`
 - Ollama server start through `/api/start-ollama`
 - model unload through `/api/unload-model`
 - Ollama server stop through `/api/stop-ollama`
@@ -41,7 +42,8 @@ The page checks:
 ```
 
 By default `run_service.sh` starts Ollama locally on `127.0.0.1:11434`,
-pulls `gemma4` if needed, and exposes the service page on `0.0.0.0:8082`.
+uses an already installed `gemma4` model when present, pulls it only when
+missing, and exposes the service page on `0.0.0.0:8082`.
 
 ## systemd user service
 
@@ -79,3 +81,4 @@ launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 - `GEMMA4_SERVER_HOST`: default `0.0.0.0`
 - `GEMMA4_SERVER_PORT`: default `8082`
 - `AUTO_PULL`: default `1`; set `0` to skip `ollama pull`
+- `PROMPT_HISTORY_FILE`: default `prompt_history.txt` in this directory
