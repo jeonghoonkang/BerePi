@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.berepi.gemma4-ollama-8082</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/run_service.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>OLLAMA_MODEL</key>
+    <string>gemma4</string>
+    <key>OLLAMA_BIN</key>
+    <string>/usr/local/bin/ollama</string>
+    <key>OLLAMA_BASE_URL</key>
+    <string>http://127.0.0.1:11434</string>
+    <key>OLLAMA_HOST</key>
+    <string>127.0.0.1:11434</string>
+    <key>GEMMA4_SERVER_HOST</key>
+    <string>0.0.0.0</string>
+    <key>GEMMA4_SERVER_PORT</key>
+    <string>8082</string>
+    <key>AUTO_PULL</key>
+    <string>1</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/logs/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/logs/launchd.err.log</string>
+</dict>
+</plist>
