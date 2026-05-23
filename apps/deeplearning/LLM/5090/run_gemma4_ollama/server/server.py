@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import socket
+import subprocess
 import time
 import urllib.error
 import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 
@@ -16,6 +19,7 @@ HOST = os.getenv("GEMMA4_SERVER_HOST", "0.0.0.0")
 PORT = int(os.getenv("GEMMA4_SERVER_PORT", "8082"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4")
+OLLAMA_PID_FILE = Path(os.getenv("OLLAMA_PID_FILE", Path(__file__).resolve().with_name("ollama.pid")))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
 
@@ -78,6 +82,11 @@ INDEX_HTML = """<!doctype html>
       background: var(--accent);
       color: #fff;
       border-color: var(--accent);
+    }
+    button.danger {
+      color: #fff;
+      background: var(--bad);
+      border-color: var(--bad);
     }
     section {
       margin-top: 24px;
@@ -155,6 +164,15 @@ INDEX_HTML = """<!doctype html>
     <section class="grid" id="metrics"></section>
 
     <section>
+      <h2>Service Controls</h2>
+      <div class="row">
+        <button id="unload">Stop Model</button>
+        <button class="danger" id="stopOllama">Stop Ollama Server</button>
+        <span id="controlStatus"></span>
+      </div>
+    </section>
+
+    <section>
       <h2>Prompt Test</h2>
       <textarea id="prompt">Reply with one short sentence that the Gemma4 Ollama service is running.</textarea>
       <div class="row">
@@ -169,6 +187,7 @@ INDEX_HTML = """<!doctype html>
     const metrics = document.getElementById("metrics");
     const answer = document.getElementById("answer");
     const busy = document.getElementById("busy");
+    const controlStatus = document.getElementById("controlStatus");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -214,8 +233,24 @@ INDEX_HTML = """<!doctype html>
       }
     }
 
+    async function postControl(path, label) {
+      controlStatus.textContent = `${label}...`;
+      try {
+        const res = await fetch(path, {method: "POST"});
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        controlStatus.textContent = data.message || `${label} done`;
+      } catch (err) {
+        controlStatus.textContent = String(err);
+      } finally {
+        refreshStatus();
+      }
+    }
+
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     document.getElementById("send").addEventListener("click", sendPrompt);
+    document.getElementById("unload").addEventListener("click", () => postControl("/api/unload-model", "Stopping model"));
+    document.getElementById("stopOllama").addEventListener("click", () => postControl("/api/stop-ollama", "Stopping Ollama"));
     refreshStatus();
   </script>
 </body>
@@ -267,6 +302,57 @@ def status_payload() -> dict[str, Any]:
     }
 
 
+def unload_model() -> dict[str, Any]:
+    return request_json("/api/generate", payload={"model": OLLAMA_MODEL, "keep_alive": 0, "stream": False}, timeout=30)
+
+
+def child_ollama_pids() -> list[int]:
+    try:
+        output = subprocess.check_output(["pgrep", "-P", str(os.getpid()), "-f", "ollama"], text=True)
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    pids: list[int] = []
+    for line in output.splitlines():
+        try:
+            pids.append(int(line.strip()))
+        except ValueError:
+            continue
+    return pids
+
+
+def known_ollama_pids() -> list[int]:
+    pids: list[int] = []
+    if OLLAMA_PID_FILE.exists():
+        try:
+            pids.append(int(OLLAMA_PID_FILE.read_text(encoding="utf-8").strip()))
+        except (OSError, ValueError):
+            pass
+    for pid in child_ollama_pids():
+        if pid not in pids:
+            pids.append(pid)
+    return pids
+
+
+def stop_ollama_server() -> dict[str, Any]:
+    stopped: list[int] = []
+    missing: list[int] = []
+    for pid in known_ollama_pids():
+        try:
+            os.kill(pid, signal.SIGTERM)
+            stopped.append(pid)
+        except ProcessLookupError:
+            missing.append(pid)
+        except PermissionError as exc:
+            return {"ok": False, "message": f"Permission denied stopping Ollama PID {pid}", "error": str(exc)}
+    try:
+        OLLAMA_PID_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+    return {"ok": True, "stopped_pids": stopped, "missing_pids": missing}
+
+
 class Gemma4Handler(BaseHTTPRequestHandler):
     server_version = "Gemma4OllamaServer/1.0"
 
@@ -299,6 +385,31 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if self.path == "/api/unload-model":
+            try:
+                result = unload_model()
+            except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                return
+            self.send_json({"message": f"Model {OLLAMA_MODEL} stopped", "ollama": result})
+            return
+
+        if self.path == "/api/stop-ollama":
+            try:
+                try:
+                    unload_model()
+                except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                    pass
+                result = stop_ollama_server()
+            except OSError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                return
+            if not result.get("stopped_pids") and not result.get("missing_pids"):
+                self.send_json({"message": "No Ollama PID found for this service", **result})
+                return
+            self.send_json({"message": "Ollama server stopped", **result})
+            return
+
         if self.path != "/api/generate":
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return

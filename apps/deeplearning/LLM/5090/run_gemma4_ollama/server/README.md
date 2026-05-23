@@ -24,6 +24,8 @@ The page checks:
 - available Ollama models
 - whether `gemma4` is available
 - a quick prompt test through `/api/generate`
+- model unload through `/api/unload-model`
+- Ollama server stop through `/api/stop-ollama`
 
 ## Stop
 
@@ -70,6 +72,7 @@ launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 
 - `OLLAMA_MODEL`: default `gemma4`
 - `OLLAMA_BIN`: default discovered `ollama`, or `/usr/local/bin/ollama`
+- `OLLAMA_PID_FILE`: default `ollama.pid` in this directory
 - `OLLAMA_BASE_URL`: default `http://127.0.0.1:11434`
 - `OLLAMA_HOST`: default `127.0.0.1:11434`
 - `GEMMA4_SERVER_HOST`: default `0.0.0.0`

@@ -12,6 +12,7 @@ export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
 export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
 export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
 export GEMMA4_SERVER_PORT="${GEMMA4_SERVER_PORT:-8082}"
+export OLLAMA_PID_FILE
 export AUTO_PULL="${AUTO_PULL:-1}"
 OLLAMA_BIN="${OLLAMA_BIN:-$(command -v ollama || echo /usr/local/bin/ollama)}"
 
