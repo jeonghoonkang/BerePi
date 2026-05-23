@@ -62,6 +62,55 @@ cleanup() {
 }
 trap cleanup EXIT
 
+stop_ollama_pid() {
+  local pid="$1"
+  if kill -0 "${pid}" 2>/dev/null; then
+    kill "${pid}" 2>/dev/null || true
+    for _ in {1..10}; do
+      if ! kill -0 "${pid}" 2>/dev/null; then
+        return 0
+      fi
+      sleep 1
+    done
+    kill -9 "${pid}" 2>/dev/null || true
+  fi
+}
+
+wait_until_ollama_stops() {
+  for _ in {1..10}; do
+    if ! curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Ollama is still reachable at ${OLLAMA_BASE_URL} after restart attempt." >&2
+  return 1
+}
+
+stop_all_ollama_processes() {
+  if [[ -n "${OLLAMA_PID}" ]]; then
+    stop_ollama_pid "${OLLAMA_PID}"
+    OLLAMA_PID=""
+  fi
+
+  if [[ -f "${OLLAMA_PID_FILE}" ]]; then
+    local pid
+    pid="$(cat "${OLLAMA_PID_FILE}")"
+    stop_ollama_pid "${pid}"
+    rm -f "${OLLAMA_PID_FILE}"
+  fi
+
+  if command -v pgrep >/dev/null 2>&1; then
+    local pid
+    while read -r pid; do
+      [[ -n "${pid}" ]] && stop_ollama_pid "${pid}"
+    done < <(pgrep -x ollama 2>/dev/null || true)
+  fi
+
+  wait_until_ollama_stops
+}
+
 wait_for_ollama() {
   for _ in {1..30}; do
     if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
@@ -86,17 +135,7 @@ start_ollama_if_needed() {
 }
 
 restart_started_ollama() {
-  if [[ -n "${OLLAMA_PID}" ]] && kill -0 "${OLLAMA_PID}" 2>/dev/null; then
-    kill "${OLLAMA_PID}" 2>/dev/null || true
-    for _ in {1..10}; do
-      if ! kill -0 "${OLLAMA_PID}" 2>/dev/null; then
-        break
-      fi
-      sleep 1
-    done
-  fi
-  rm -f "${OLLAMA_PID_FILE}"
-  OLLAMA_PID=""
+  stop_all_ollama_processes
   "${OLLAMA_BIN}" serve >> "${LOG_DIR}/ollama.log" 2>&1 &
   OLLAMA_PID="$!"
   echo "${OLLAMA_PID}" > "${OLLAMA_PID_FILE}"
