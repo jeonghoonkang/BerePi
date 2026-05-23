@@ -11,9 +11,48 @@ export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
 export GEMMA4_SERVER_PORT="${GEMMA4_SERVER_PORT:-8082}"
 export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
 export OLLAMA_PID_FILE="${OLLAMA_PID_FILE:-${APP_DIR}/ollama.pid}"
-OLLAMA_BIN="${OLLAMA_BIN:-$(command -v ollama || echo /usr/local/bin/ollama)}"
 
 OLLAMA_PID=""
+
+find_ollama_bin() {
+  if [[ -n "${OLLAMA_BIN:-}" ]] && [[ -x "${OLLAMA_BIN}" ]]; then
+    printf '%s\n' "${OLLAMA_BIN}"
+    return 0
+  fi
+
+  if command -v ollama >/dev/null 2>&1; then
+    command -v ollama
+    return 0
+  fi
+
+  for candidate in /usr/local/bin/ollama /opt/homebrew/bin/ollama; do
+    if [[ -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+install_ollama() {
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "Ollama is not installed, and curl is required to install it." >&2
+    exit 1
+  fi
+
+  echo "${1:-Installing Ollama...}"
+  curl -fsSL https://ollama.com/install.sh | sh
+}
+
+if ! OLLAMA_BIN="$(find_ollama_bin)"; then
+  install_ollama "Ollama is not installed. Installing Ollama..."
+  if ! OLLAMA_BIN="$(find_ollama_bin)"; then
+    echo "Ollama installation finished, but the ollama command was not found." >&2
+    exit 1
+  fi
+fi
+export OLLAMA_BIN
 
 cleanup() {
   if [[ -n "${OLLAMA_PID}" ]] && kill -0 "${OLLAMA_PID}" 2>/dev/null; then
@@ -23,21 +62,77 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+wait_for_ollama() {
+  for _ in {1..30}; do
+    if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Ollama did not become reachable at ${OLLAMA_BASE_URL}" >&2
+  return 1
+}
+
+start_ollama_if_needed() {
+  if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+    return 0
+  fi
+
   "${OLLAMA_BIN}" serve >> "${LOG_DIR}/ollama.log" 2>&1 &
   OLLAMA_PID="$!"
   echo "${OLLAMA_PID}" > "${OLLAMA_PID_FILE}"
-fi
+  wait_for_ollama
+}
 
-for _ in {1..30}; do
-  if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
-    break
+restart_started_ollama() {
+  if [[ -n "${OLLAMA_PID}" ]] && kill -0 "${OLLAMA_PID}" 2>/dev/null; then
+    kill "${OLLAMA_PID}" 2>/dev/null || true
+    for _ in {1..10}; do
+      if ! kill -0 "${OLLAMA_PID}" 2>/dev/null; then
+        break
+      fi
+      sleep 1
+    done
   fi
-  sleep 1
-done
+  rm -f "${OLLAMA_PID_FILE}"
+  OLLAMA_PID=""
+  "${OLLAMA_BIN}" serve >> "${LOG_DIR}/ollama.log" 2>&1 &
+  OLLAMA_PID="$!"
+  echo "${OLLAMA_PID}" > "${OLLAMA_PID_FILE}"
+  wait_for_ollama
+}
+
+pull_ollama_model() {
+  local output_file
+  output_file="$(mktemp)"
+
+  if "${OLLAMA_BIN}" pull "${OLLAMA_MODEL}" 2>&1 | tee "${output_file}"; then
+    rm -f "${output_file}"
+    return 0
+  fi
+
+  if grep -qi "requires a newer version of Ollama" "${output_file}"; then
+    rm -f "${output_file}"
+    install_ollama "Ollama is too old for ${OLLAMA_MODEL}. Updating Ollama..."
+    if ! OLLAMA_BIN="$(find_ollama_bin)"; then
+      echo "Ollama update finished, but the ollama command was not found." >&2
+      exit 1
+    fi
+    export OLLAMA_BIN
+    restart_started_ollama
+    "${OLLAMA_BIN}" pull "${OLLAMA_MODEL}"
+    return
+  fi
+
+  rm -f "${output_file}"
+  return 1
+}
+
+start_ollama_if_needed
 
 if [[ "${AUTO_PULL:-1}" == "1" ]]; then
-  "${OLLAMA_BIN}" pull "${OLLAMA_MODEL}"
+  pull_ollama_model
 fi
 
 exec python3 "${APP_DIR}/server.py"
