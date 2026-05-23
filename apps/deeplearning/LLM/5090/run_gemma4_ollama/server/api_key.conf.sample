@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "allow_only_user": "admin",
+  "users": [
+    {
+      "id": "admin",
+      "password": "change-me-now",
+      "enabled": true
+    },
+    {
+      "id": "operator",
+      "password": "change-me-too",
+      "enabled": false
+    }
+  ]
+}
