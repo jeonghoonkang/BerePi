@@ -5,6 +5,8 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${APP_DIR}/logs"
 PID_FILE="${APP_DIR}/server.pid"
 OLLAMA_PID_FILE="${APP_DIR}/ollama.pid"
+GPU_SELECTION_FILE="${APP_DIR}/gpu-selection"
+MODEL_SELECTION_FILE="${APP_DIR}/model-selection"
 mkdir -p "${LOG_DIR}"
 
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4}"
@@ -13,6 +15,8 @@ export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
 export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
 export GEMMA4_SERVER_PORT="${GEMMA4_SERVER_PORT:-8082}"
 export OLLAMA_PID_FILE
+export GPU_SELECTION_FILE
+export MODEL_SELECTION_FILE
 export AUTO_PULL="${AUTO_PULL:-1}"
 
 find_ollama_bin() {
@@ -115,8 +119,41 @@ wait_for_ollama() {
   return 1
 }
 
+apply_gpu_selection() {
+  local selected="auto"
+  if [[ -f "${GPU_SELECTION_FILE}" ]]; then
+    selected="$(tr -d '[:space:]' < "${GPU_SELECTION_FILE}")"
+  fi
+
+  case "${selected}" in
+    ""|"auto"|"all")
+      unset CUDA_VISIBLE_DEVICES
+      ;;
+    "cpu"|"none")
+      export CUDA_VISIBLE_DEVICES="-1"
+      ;;
+    *)
+      export CUDA_VISIBLE_DEVICES="${selected}"
+      ;;
+  esac
+}
+
+apply_model_selection() {
+  if [[ -f "${MODEL_SELECTION_FILE}" ]]; then
+    local selected
+    selected="$(tr -d '[:space:]' < "${MODEL_SELECTION_FILE}")"
+    if [[ -n "${selected}" ]]; then
+      export OLLAMA_MODEL="${selected}"
+    fi
+  fi
+}
+
 start_ollama_if_needed() {
-  if ! curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+  if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+    echo "Ollama is already running at ${OLLAMA_BASE_URL}."
+    echo "To stop the existing Ollama service, run: sudo systemctl stop ollama"
+  else
+    apply_gpu_selection
     nohup "${OLLAMA_BIN}" serve > "${LOG_DIR}/ollama.log" 2>&1 &
     echo "$!" > "${OLLAMA_PID_FILE}"
   fi
@@ -125,6 +162,7 @@ start_ollama_if_needed() {
 
 restart_started_ollama() {
   stop_all_ollama_processes
+  apply_gpu_selection
   nohup "${OLLAMA_BIN}" serve > "${LOG_DIR}/ollama.log" 2>&1 &
   echo "$!" > "${OLLAMA_PID_FILE}"
   wait_for_ollama
@@ -162,6 +200,8 @@ if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
 fi
 
 start_ollama_if_needed
+
+apply_model_selection
 
 if [[ "${AUTO_PULL}" == "1" ]]; then
   pull_ollama_model

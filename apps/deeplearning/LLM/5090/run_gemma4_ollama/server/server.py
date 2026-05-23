@@ -21,9 +21,14 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip(
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4")
 OLLAMA_BIN = os.getenv("OLLAMA_BIN", "/usr/local/bin/ollama")
 OLLAMA_PID_FILE = Path(os.getenv("OLLAMA_PID_FILE", Path(__file__).resolve().with_name("ollama.pid")))
+GPU_SELECTION_FILE = Path(os.getenv("GPU_SELECTION_FILE", Path(__file__).resolve().with_name("gpu-selection")))
+MODEL_SELECTION_FILE = Path(os.getenv("MODEL_SELECTION_FILE", Path(__file__).resolve().with_name("model-selection")))
 LOG_DIR = Path(__file__).resolve().with_name("logs")
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
+PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
+PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"))
+PUBLIC_IP_CACHE: dict[str, Any] = {"value": "", "checked_at": 0.0}
 
 
 INDEX_HTML = """<!doctype html>
@@ -89,6 +94,16 @@ INDEX_HTML = """<!doctype html>
       color: #fff;
       background: var(--bad);
       border-color: var(--bad);
+    }
+    select {
+      min-height: 38px;
+      min-width: min(420px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
     }
     section {
       margin-top: 24px;
@@ -176,6 +191,24 @@ INDEX_HTML = """<!doctype html>
     </section>
 
     <section>
+      <h2>GPU Selection</h2>
+      <div class="row">
+        <select id="gpuSelect"></select>
+        <button id="saveGpu">Save GPU Selection</button>
+        <span id="gpuStatus"></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Model Selection</h2>
+      <div class="row">
+        <select id="modelSelect"></select>
+        <button id="saveModel">Save Model Selection</button>
+        <span id="modelStatus"></span>
+      </div>
+    </section>
+
+    <section>
       <h2>Prompt Test</h2>
       <textarea id="prompt">Reply with one short sentence that the Gemma4 Ollama service is running.</textarea>
       <div class="row">
@@ -184,6 +217,11 @@ INDEX_HTML = """<!doctype html>
       </div>
       <pre id="answer">Waiting for a prompt.</pre>
     </section>
+
+    <section>
+      <h2>Python Client Code</h2>
+      <pre id="pythonCode"></pre>
+    </section>
   </main>
 
   <script>
@@ -191,9 +229,87 @@ INDEX_HTML = """<!doctype html>
     const answer = document.getElementById("answer");
     const busy = document.getElementById("busy");
     const controlStatus = document.getElementById("controlStatus");
+    const gpuSelect = document.getElementById("gpuSelect");
+    const gpuStatus = document.getElementById("gpuStatus");
+    const modelSelect = document.getElementById("modelSelect");
+    const modelStatus = document.getElementById("modelStatus");
+    const pythonCode = document.getElementById("pythonCode");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
+    }
+
+    function gpuLabel(gpu) {
+      const memory = gpu.memory_total_mb ? `, ${gpu.memory_total_mb} MB` : "";
+      const bus = gpu.bus_address ? `, ${gpu.bus_address}` : "";
+      const source = gpu.source === "lspci" ? "detected by lspci" : "CUDA";
+      return `${gpu.index}: ${gpu.name}${memory}${bus} (${source})`;
+    }
+
+    function renderGpuOptions(data) {
+      const selected = data.selected_gpu || "auto";
+      const options = [
+        {value: "auto", label: "Auto (all available GPUs)"},
+        {value: "cpu", label: "CPU only"}
+      ];
+      for (const gpu of data.gpus || []) {
+        if (gpu.selectable) options.push({value: String(gpu.index), label: gpuLabel(gpu)});
+      }
+      gpuSelect.innerHTML = options
+        .map((option) => `<option value="${option.value}">${option.label}</option>`)
+        .join("");
+      gpuSelect.value = options.some((option) => option.value === selected) ? selected : "auto";
+      gpuStatus.textContent = data.gpu_detection_error ? `GPU detection warning: ${data.gpu_detection_error}` : "";
+    }
+
+    function renderModelOptions(data) {
+      const selected = data.model || "gemma4";
+      const models = data.models && data.models.length ? data.models : [selected];
+      modelSelect.innerHTML = models
+        .map((model) => `<option value="${model}">${model}</option>`)
+        .join("");
+      if (!models.includes(selected)) {
+        modelSelect.insertAdjacentHTML("afterbegin", `<option value="${selected}">${selected} (missing)</option>`);
+      }
+      modelSelect.value = selected;
+      modelStatus.textContent = data.model_available ? "" : "Selected model is not installed.";
+    }
+
+    function renderPythonCode() {
+      const serverUrl = window.location.origin;
+      pythonCode.textContent = `#!/usr/bin/env python3
+import json
+import urllib.request
+from time import perf_counter
+
+
+SERVER_URL = "${serverUrl}"
+PROMPT = "Reply with one short sentence that the Gemma4 Ollama service is running."
+
+
+def send_prompt(prompt: str) -> tuple[str, float]:
+    payload = json.dumps({"prompt": prompt}).encode("utf-8")
+    request = urllib.request.Request(
+        f"{SERVER_URL}/api/generate",
+        data=payload,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    started_at = perf_counter()
+    with urllib.request.urlopen(request, timeout=120) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    elapsed_seconds = perf_counter() - started_at
+    return data.get("response", json.dumps(data, ensure_ascii=False, indent=2)), elapsed_seconds
+
+
+if __name__ == "__main__":
+    response_text, elapsed_seconds = send_prompt(PROMPT)
+    print(response_text)
+    print(f"Elapsed time: {elapsed_seconds:.2f}s")
+`;
     }
 
     async function refreshStatus() {
@@ -204,19 +320,23 @@ INDEX_HTML = """<!doctype html>
         const modelClass = data.model_available ? "ok" : "warn";
         const ollamaClass = data.ollama_reachable ? "ok" : "bad";
         metrics.innerHTML = [
-          metric("Web Server", `${data.host}:${data.port}`, "ok"),
+          metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
           metric("Uptime", data.uptime_seconds + "s"),
           metric("Ollama URL", data.ollama_base_url),
+          metric("Selected GPU", data.selected_gpu_label),
           metric("Known Models", data.models.length ? data.models.join(", ") : "None")
         ].join("");
+        renderGpuOptions(data);
+        renderModelOptions(data);
       } catch (err) {
         metrics.innerHTML = metric("Status", String(err), "bad");
       }
     }
 
     async function sendPrompt() {
+      const startedAt = performance.now();
       busy.textContent = "Running...";
       answer.textContent = "";
       try {
@@ -226,12 +346,17 @@ INDEX_HTML = """<!doctype html>
           body: JSON.stringify({prompt: document.getElementById("prompt").value})
         });
         const data = await res.json();
+        const elapsedSeconds = (performance.now() - startedAt) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
-        answer.textContent = data.response || JSON.stringify(data, null, 2);
+        const responseText = data.response || JSON.stringify(data, null, 2);
+        answer.textContent = `${responseText}\n\nElapsed time: ${elapsedSeconds.toFixed(2)}s`;
+        busy.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
       } catch (err) {
+        const elapsedSeconds = (performance.now() - startedAt) / 1000;
         answer.textContent = String(err);
+        busy.textContent = `Failed after ${elapsedSeconds.toFixed(2)}s`;
+        return;
       } finally {
-        busy.textContent = "";
         refreshStatus();
       }
     }
@@ -250,11 +375,50 @@ INDEX_HTML = """<!doctype html>
       }
     }
 
+    async function saveGpuSelection() {
+      gpuStatus.textContent = "Saving...";
+      try {
+        const res = await fetch("/api/select-gpu", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({gpu: gpuSelect.value})
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        gpuStatus.textContent = data.message || "GPU selection saved";
+      } catch (err) {
+        gpuStatus.textContent = String(err);
+      } finally {
+        refreshStatus();
+      }
+    }
+
+    async function saveModelSelection() {
+      modelStatus.textContent = "Saving...";
+      try {
+        const res = await fetch("/api/select-model", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({model: modelSelect.value})
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        modelStatus.textContent = data.message || "Model selection saved";
+      } catch (err) {
+        modelStatus.textContent = String(err);
+      } finally {
+        refreshStatus();
+      }
+    }
+
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     document.getElementById("send").addEventListener("click", sendPrompt);
     document.getElementById("startOllama").addEventListener("click", () => postControl("/api/start-ollama", "Starting Ollama"));
     document.getElementById("unload").addEventListener("click", () => postControl("/api/unload-model", "Stopping model"));
     document.getElementById("stopOllama").addEventListener("click", () => postControl("/api/stop-ollama", "Stopping Ollama"));
+    document.getElementById("saveGpu").addEventListener("click", saveGpuSelection);
+    document.getElementById("saveModel").addEventListener("click", saveModelSelection);
+    renderPythonCode();
     refreshStatus();
   </script>
 </body>
@@ -278,6 +442,163 @@ def list_ollama_models() -> list[str]:
     return sorted(model.get("name", "") for model in data.get("models", []) if model.get("name"))
 
 
+def normalize_model_selection(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return OLLAMA_MODEL
+    return value
+
+
+def read_selected_model() -> str:
+    if "GEMMA4_SELECTED_MODEL" in os.environ:
+        return normalize_model_selection(os.environ["GEMMA4_SELECTED_MODEL"])
+    try:
+        return normalize_model_selection(MODEL_SELECTION_FILE.read_text(encoding="utf-8").strip())
+    except OSError:
+        return normalize_model_selection(OLLAMA_MODEL)
+
+
+def write_selected_model(value: str) -> str:
+    selected = normalize_model_selection(value)
+    MODEL_SELECTION_FILE.write_text(f"{selected}\n", encoding="utf-8")
+    return selected
+
+
+def list_gpus() -> tuple[list[dict[str, Any]], str]:
+    try:
+        output = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,name,memory.total,uuid",
+                "--format=csv,noheader,nounits",
+            ],
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        fallback_gpus = list_pci_gpus()
+        error = str(exc)
+        if isinstance(exc, subprocess.CalledProcessError):
+            error = exc.output.strip() or error
+        return fallback_gpus, error
+
+    gpus: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        parts = [part.strip() for part in line.split(",", 3)]
+        if len(parts) < 4:
+            continue
+        index, name, memory_total_mb, uuid = parts
+        try:
+            memory_value = int(memory_total_mb)
+        except ValueError:
+            memory_value = 0
+        gpus.append(
+            {
+                "index": index,
+                "name": name,
+                "memory_total_mb": memory_value,
+                "uuid": uuid,
+                "source": "nvidia-smi",
+                "selectable": True,
+            }
+        )
+    return gpus, ""
+
+
+def list_pci_gpus() -> list[dict[str, Any]]:
+    try:
+        output = subprocess.check_output(["lspci", "-D"], stderr=subprocess.DEVNULL, text=True, timeout=5)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return []
+
+    gpus: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        lower = line.lower()
+        if not any(marker in lower for marker in ("vga", "3d controller", "display controller")):
+            continue
+        address, _, description = line.partition(" ")
+        gpus.append(
+            {
+                "index": str(len(gpus)),
+                "name": description.strip(),
+                "bus_address": address,
+                "memory_total_mb": 0,
+                "uuid": "",
+                "source": "lspci",
+                "selectable": "nvidia" in lower,
+            }
+        )
+    return gpus
+
+
+def read_selected_gpu() -> str:
+    if "GEMMA4_SELECTED_GPU" in os.environ:
+        return normalize_gpu_selection(os.environ["GEMMA4_SELECTED_GPU"])
+    try:
+        return normalize_gpu_selection(GPU_SELECTION_FILE.read_text(encoding="utf-8").strip())
+    except OSError:
+        return "auto"
+
+
+def normalize_gpu_selection(value: str) -> str:
+    value = value.strip().lower()
+    if value in {"", "auto", "all"}:
+        return "auto"
+    if value in {"cpu", "none"}:
+        return "cpu"
+    if value.isdigit():
+        return value
+    return "auto"
+
+
+def write_selected_gpu(value: str) -> str:
+    selected = normalize_gpu_selection(value)
+    GPU_SELECTION_FILE.write_text(f"{selected}\n", encoding="utf-8")
+    return selected
+
+
+def selected_gpu_label(selected: str, gpus: list[dict[str, Any]]) -> str:
+    if selected == "auto":
+        return "Auto (all available GPUs)"
+    if selected == "cpu":
+        return "CPU only"
+    for gpu in gpus:
+        if gpu.get("selectable") and str(gpu.get("index")) == selected:
+            return f"GPU {selected}: {gpu.get('name')}"
+    return f"GPU {selected}"
+
+
+def ollama_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    selected = read_selected_gpu()
+    if selected == "auto":
+        env.pop("CUDA_VISIBLE_DEVICES", None)
+    elif selected == "cpu":
+        env["CUDA_VISIBLE_DEVICES"] = "-1"
+    else:
+        env["CUDA_VISIBLE_DEVICES"] = selected
+    return env
+
+
+def public_ip() -> str:
+    now = time.time()
+    cached_ip = str(PUBLIC_IP_CACHE.get("value") or "")
+    checked_at = float(PUBLIC_IP_CACHE.get("checked_at") or 0)
+    if cached_ip and now - checked_at < PUBLIC_IP_CACHE_TTL_SECONDS:
+        return cached_ip
+
+    try:
+        with urllib.request.urlopen(PUBLIC_IP_URL, timeout=3) as response:
+            ip = response.read().decode("utf-8").strip()
+    except (OSError, urllib.error.URLError, TimeoutError):
+        ip = ""
+
+    PUBLIC_IP_CACHE["value"] = ip
+    PUBLIC_IP_CACHE["checked_at"] = now
+    return ip
+
+
 def model_matches(name: str, target: str) -> bool:
     return name == target or name == f"{target}:latest"
 
@@ -286,6 +607,9 @@ def status_payload() -> dict[str, Any]:
     models: list[str] = []
     ollama_reachable = False
     error = ""
+    gpus, gpu_detection_error = list_gpus()
+    selected_gpu = read_selected_gpu()
+    selected_model = read_selected_model()
     try:
         models = list_ollama_models()
         ollama_reachable = True
@@ -296,18 +620,24 @@ def status_payload() -> dict[str, Any]:
         "host": HOST,
         "port": PORT,
         "hostname": socket.gethostname(),
+        "public_ip": public_ip(),
+        "gpus": gpus,
+        "gpu_detection_error": gpu_detection_error,
+        "selected_gpu": selected_gpu,
+        "selected_gpu_label": selected_gpu_label(selected_gpu, gpus),
         "ollama_base_url": OLLAMA_BASE_URL,
         "ollama_reachable": ollama_reachable,
         "ollama_error": error,
-        "model": OLLAMA_MODEL,
-        "model_available": any(model_matches(name, OLLAMA_MODEL) for name in models),
+        "model": selected_model,
+        "default_model": OLLAMA_MODEL,
+        "model_available": any(model_matches(name, selected_model) for name in models),
         "models": models,
         "uptime_seconds": int(time.time() - STARTED_AT),
     }
 
 
 def unload_model() -> dict[str, Any]:
-    return request_json("/api/generate", payload={"model": OLLAMA_MODEL, "keep_alive": 0, "stream": False}, timeout=30)
+    return request_json("/api/generate", payload={"model": read_selected_model(), "keep_alive": 0, "stream": False}, timeout=30)
 
 
 def ollama_is_reachable() -> bool:
@@ -328,6 +658,7 @@ def start_ollama_server() -> dict[str, Any]:
         [OLLAMA_BIN, "serve"],
         stdout=log_file,
         stderr=subprocess.STDOUT,
+        env=ollama_environment(),
         start_new_session=True,
     )
     OLLAMA_PID_FILE.write_text(str(process.pid), encoding="utf-8")
@@ -435,7 +766,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
                 return
-            self.send_json({"message": f"Model {OLLAMA_MODEL} stopped", "ollama": result})
+            self.send_json({"message": f"Model {read_selected_model()} stopped", "ollama": result})
             return
 
         if self.path == "/api/stop-ollama":
@@ -454,6 +785,38 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             self.send_json({"message": "Ollama server stopped", **result})
             return
 
+        if self.path == "/api/select-gpu":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                selected = write_selected_gpu(str(incoming.get("gpu", "auto")))
+            except (OSError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+                return
+            self.send_json(
+                {
+                    "message": "GPU selection saved. Restart Ollama to apply it.",
+                    "selected_gpu": selected,
+                }
+            )
+            return
+
+        if self.path == "/api/select-model":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                selected = write_selected_model(str(incoming.get("model", OLLAMA_MODEL)))
+            except (OSError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+                return
+            self.send_json(
+                {
+                    "message": f"Model selection saved: {selected}",
+                    "selected_model": selected,
+                }
+            )
+            return
+
         if self.path != "/api/generate":
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -465,11 +828,13 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "prompt is required"}, HTTPStatus.BAD_REQUEST)
                 return
             payload = {
-                "model": str(incoming.get("model") or OLLAMA_MODEL),
+                "model": str(incoming.get("model") or read_selected_model()),
                 "prompt": prompt,
                 "stream": False,
             }
+            started_at = time.perf_counter()
             result = request_json("/api/generate", payload=payload)
+            result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
             self.send_json(result)
         except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
