@@ -81,6 +81,7 @@ def main() -> None:
         "schedule": {
             "interval_minutes": int(interval_minutes),
         },
+        "iptime": settings.get("iptime", base["iptime"]),
         "include": include_settings,
     }
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from pulsedav import (
     DEFAULT_INTERVAL_MINUTES,
     WebDAVConnectionError,
+    get_iptime_report,
     load_settings,
     resolve_settings_path,
     run_loop,
@@ -27,6 +28,11 @@ def parse_args() -> argparse.Namespace:
         "--print-crontab",
         action="store_true",
         help="Print cron lines that can be added to crontab and exit.",
+    )
+    parser.add_argument(
+        "--iptime-list",
+        action="store_true",
+        help="Print ipTIME ping status and device list, then exit.",
     )
     return parser.parse_args()
 
@@ -64,6 +70,10 @@ def main() -> int:
     args = parse_args()
     if args.print_crontab:
         print("\n".join(build_crontab_lines(args.config, args.interval_minutes)))
+        return 0
+
+    if args.iptime_list:
+        print(get_iptime_report(load_settings(args.config)))
         return 0
 
     if args.loop:

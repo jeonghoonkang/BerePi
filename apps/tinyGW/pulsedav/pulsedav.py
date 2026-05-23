@@ -138,6 +138,15 @@ def default_settings() -> dict[str, Any]:
         "schedule": {
             "interval_minutes": DEFAULT_INTERVAL_MINUTES,
         },
+        "iptime": {
+            "enabled": True,
+            "config_path": "../list_ip/setting.conf",
+            "router_ip": "",
+            "user_id": "",
+            "user_pw": "",
+            "ping_count": 3,
+            "timeout_seconds": 10,
+        },
         "include": {key: True for key in ALL_SECTIONS},
     }
 
@@ -643,6 +652,154 @@ def get_user_services() -> str:
     if len(parts) == 1:
         parts.append("확인 가능한 사용자 서비스가 없습니다.")
     return "\n\n".join(parts)
+
+
+def resolve_app_relative_path(path_value: str) -> Path:
+    path = Path(path_value).expanduser()
+    if path.is_absolute():
+        return path
+    return (APP_DIR / path).resolve()
+
+
+def load_key_value_config(path: Path) -> dict[str, str]:
+    config: dict[str, str] = {}
+    if not path.exists():
+        return config
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+            continue
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+        config[key] = value
+    return config
+
+
+def ip_sort_key(value: str) -> tuple[int, Any]:
+    try:
+        parts = [int(part) for part in value.split(".")]
+    except ValueError:
+        return (1, value)
+    if len(parts) == 4 and all(0 <= part <= 255 for part in parts):
+        return (0, tuple(parts))
+    return (1, value)
+
+
+def format_iptime_rows(stations: list[dict[str, Any]]) -> str:
+    rows: list[dict[str, str]] = []
+    for station in stations:
+        info = station.get("info") or {}
+        connection = station.get("connection") or {}
+        ip = str(info.get("ip") or "").strip()
+        if not ip:
+            continue
+        rows.append(
+            {
+                "ip": ip,
+                "name": str(info.get("name") or "-"),
+                "mac": str(station.get("mac") or "-"),
+                "type": str(connection.get("type") or "-"),
+            }
+        )
+
+    rows.sort(key=lambda row: ip_sort_key(row["ip"]))
+    lines = [f"{'IP':<15} {'NAME':<28} {'MAC':<17} TYPE", f"{'-' * 15} {'-' * 28} {'-' * 17} {'-' * 8}"]
+    for row in rows:
+        lines.append(f"{row['ip']:<15} {row['name'][:28]:<28} {row['mac']:<17} {row['type']}")
+    lines.append("")
+    lines.append(f"Total devices with IP: {len(rows)}")
+    return "\n".join(lines)
+
+
+def get_iptime_report(settings: dict[str, Any]) -> str:
+    iptime_settings = settings.get("iptime", {})
+    if not as_bool(iptime_settings.get("enabled"), True):
+        return "ipTIME 장치 목록 수집이 비활성화되어 있습니다."
+
+    config_path_value = str(iptime_settings.get("config_path", "../list_ip/setting.conf")).strip()
+    file_config = load_key_value_config(resolve_app_relative_path(config_path_value)) if config_path_value else {}
+    router_ip = str(iptime_settings.get("router_ip") or file_config.get("ROUTER_IP") or "10.0.0.1").strip()
+    user_id = str(iptime_settings.get("user_id") or file_config.get("USER_ID") or "").strip()
+    user_pw = str(iptime_settings.get("user_pw") or file_config.get("USER_PW") or "")
+    ping_count = int(iptime_settings.get("ping_count") or 3)
+    timeout_seconds = int(iptime_settings.get("timeout_seconds") or 10)
+
+    lines = [f"Checking router status with ping: {router_ip}"]
+    ping_result = run_command(["ping", "-c", str(max(1, ping_count)), router_ip], timeout=max(5, ping_count * 4))
+    lines.append(ping_result.strip() or "ping 결과 없음")
+    if " 0.0% packet loss" in ping_result or " 0% packet loss" in ping_result:
+        lines.append(f"Ping status: reachable ({router_ip})")
+    else:
+        lines.append(f"Ping status: unreachable ({router_ip})")
+    lines.append("")
+
+    if not user_id or not user_pw:
+        lines.append("ipTIME 로그인 설정이 없습니다. USER_ID/USER_PW 또는 iptime.user_id/user_pw를 설정해 주세요.")
+        return "\n".join(lines)
+    if requests is None:
+        lines.append("requests 모듈이 없어 ipTIME API를 호출할 수 없습니다.")
+        return "\n".join(lines)
+
+    base_url = f"http://{router_ip}"
+    api_url = f"{base_url}/cgi/service.cgi"
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Origin": base_url,
+        "Referer": f"{base_url}/ui/",
+        "X-Requested-With": "XMLHttpRequest",
+        "User-Agent": "Mozilla/5.0",
+    }
+    session = requests.Session()
+
+    try:
+        login_response = session.post(
+            api_url,
+            headers=headers,
+            json={"method": "session/login", "params": {"id": user_id, "pw": user_pw}},
+            timeout=timeout_seconds,
+        )
+        login_response.raise_for_status()
+        login_data = login_response.json()
+        if login_data.get("result") != "done":
+            lines.append("Login failed")
+            lines.append(json.dumps(login_data, ensure_ascii=False))
+            return "\n".join(lines)
+
+        session_response = session.post(api_url, headers=headers, json={"method": "session/info"}, timeout=timeout_seconds)
+        session_response.raise_for_status()
+        session_data = session_response.json()
+        session_result = session_data.get("result") or {}
+        session_level = session_result.get("level") if isinstance(session_result, dict) else session_data.get("level")
+        if session_level != "auth":
+            lines.append("Session auth check failed")
+            lines.append(json.dumps(session_data, ensure_ascii=False))
+            return "\n".join(lines)
+
+        stations_response = session.post(
+            api_url,
+            headers=headers,
+            json={"method": "network/interface/lan/stations"},
+            timeout=timeout_seconds,
+        )
+        stations_response.raise_for_status()
+        stations_data = stations_response.json()
+    except REQUEST_ERRORS + (ValueError,) as exc:
+        lines.append(f"ipTIME API 호출 실패: {exc}")
+        return "\n".join(lines)
+
+    if stations_data.get("error"):
+        lines.append("Failed to load station list")
+        lines.append(json.dumps(stations_data["error"], ensure_ascii=False))
+        return "\n".join(lines)
+
+    lines.append(format_iptime_rows(stations_data.get("result") or []))
+    return "\n".join(lines)
 
 
 def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first_boot_message: bool) -> str:

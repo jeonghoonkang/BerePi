@@ -64,6 +64,13 @@ python3 sender.py --print-crontab
 python3 sender.py --print-crontab --config /path/to/custom-settings.json
 ```
 
+ipTIME ping 상태와 LAN 장치 목록만 확인하려면:
+
+```bash
+python3 sender.py --iptime-list
+python3 sender.py --iptime-list --config /path/to/custom-settings.json
+```
+
 ## 설정 파일
 
 - 기본 설정 파일은 `/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/settings.json` 입니다.
@@ -73,6 +80,7 @@ python3 sender.py --print-crontab --config /path/to/custom-settings.json
 - `--config` 와 함께 쓰면 해당 설정 파일 경로가 포함된 cron 라인을 출력합니다.
 - cron 예시의 실행 시각은 `pulsedav.log` 첫 줄에 기록됩니다.
 - cron 예시의 로그 리다이렉션은 `>` 를 사용하므로, `pulsedav.log` 가 매 실행마다 새로 써져서 무한정 커지지 않습니다.
+- ipTIME 설정은 기본적으로 `../list_ip/setting.conf` 를 읽습니다. JSON 설정의 `iptime.config_path`, `iptime.router_ip`, `iptime.user_id`, `iptime.user_pw`, `iptime.timeout_seconds` 값으로 직접 지정할 수도 있습니다.
 
 ## 부팅 자동 전송 예시
 

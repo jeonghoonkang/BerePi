@@ -9,6 +9,15 @@
     "screen": true,
     "user_services": true
   },
+  "iptime": {
+    "config_path": "../list_ip/setting.conf",
+    "enabled": true,
+    "ping_count": 3,
+    "router_ip": "",
+    "timeout_seconds": 10,
+    "user_id": "",
+    "user_pw": ""
+  },
   "metadata": {
     "ddns_name": "gw.example.net",
     "intro_text": "장비 상태 자동 보고 예시",
