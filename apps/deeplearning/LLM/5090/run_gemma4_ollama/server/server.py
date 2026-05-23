@@ -19,7 +19,9 @@ HOST = os.getenv("GEMMA4_SERVER_HOST", "0.0.0.0")
 PORT = int(os.getenv("GEMMA4_SERVER_PORT", "8082"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4")
+OLLAMA_BIN = os.getenv("OLLAMA_BIN", "/usr/local/bin/ollama")
 OLLAMA_PID_FILE = Path(os.getenv("OLLAMA_PID_FILE", Path(__file__).resolve().with_name("ollama.pid")))
+LOG_DIR = Path(__file__).resolve().with_name("logs")
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
 
@@ -166,6 +168,7 @@ INDEX_HTML = """<!doctype html>
     <section>
       <h2>Service Controls</h2>
       <div class="row">
+        <button class="primary" id="startOllama">Start Ollama Server</button>
         <button id="unload">Stop Model</button>
         <button class="danger" id="stopOllama">Stop Ollama Server</button>
         <span id="controlStatus"></span>
@@ -249,6 +252,7 @@ INDEX_HTML = """<!doctype html>
 
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     document.getElementById("send").addEventListener("click", sendPrompt);
+    document.getElementById("startOllama").addEventListener("click", () => postControl("/api/start-ollama", "Starting Ollama"));
     document.getElementById("unload").addEventListener("click", () => postControl("/api/unload-model", "Stopping model"));
     document.getElementById("stopOllama").addEventListener("click", () => postControl("/api/stop-ollama", "Stopping Ollama"));
     refreshStatus();
@@ -304,6 +308,36 @@ def status_payload() -> dict[str, Any]:
 
 def unload_model() -> dict[str, Any]:
     return request_json("/api/generate", payload={"model": OLLAMA_MODEL, "keep_alive": 0, "stream": False}, timeout=30)
+
+
+def ollama_is_reachable() -> bool:
+    try:
+        list_ollama_models()
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return False
+    return True
+
+
+def start_ollama_server() -> dict[str, Any]:
+    if ollama_is_reachable():
+        return {"ok": True, "message": "Ollama server is already running", "already_running": True}
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = (LOG_DIR / "ollama.log").open("ab")
+    process = subprocess.Popen(
+        [OLLAMA_BIN, "serve"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    OLLAMA_PID_FILE.write_text(str(process.pid), encoding="utf-8")
+
+    for _ in range(30):
+        if ollama_is_reachable():
+            return {"ok": True, "message": "Ollama server started", "pid": process.pid}
+        time.sleep(1)
+
+    return {"ok": False, "message": "Ollama server start timed out", "pid": process.pid}
 
 
 def child_ollama_pids() -> list[int]:
@@ -385,6 +419,16 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if self.path == "/api/start-ollama":
+            try:
+                result = start_ollama_server()
+            except OSError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                return
+            status = HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_GATEWAY
+            self.send_json(result, status)
+            return
+
         if self.path == "/api/unload-model":
             try:
                 result = unload_model()

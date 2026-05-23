@@ -24,6 +24,7 @@ The page checks:
 - available Ollama models
 - whether `gemma4` is available
 - a quick prompt test through `/api/generate`
+- Ollama server start through `/api/start-ollama`
 - model unload through `/api/unload-model`
 - Ollama server stop through `/api/stop-ollama`
 
