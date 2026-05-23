@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: bash list.sh setting.conf"
+  echo "Usage: bash list_iptime.sh setting.conf"
   echo
   echo "Required config keys:"
   echo "  USER_ID=admin"
@@ -61,6 +61,16 @@ COOKIE_FILE="${COOKIE_FILE:-/tmp/iptime_cookie.txt}"
 BASE_URL="http://${ROUTER_IP}"
 API_URL="${BASE_URL}/cgi/service.cgi"
 
+check_router_ping() {
+  echo "Checking router status with ping: ${ROUTER_IP}"
+  if ping -c 3 "${ROUTER_IP}"; then
+    echo "Ping status: reachable (${ROUTER_IP})"
+  else
+    echo "Ping status: unreachable (${ROUTER_IP})"
+  fi
+  echo
+}
+
 cleanup() {
   rm -f "${COOKIE_FILE}"
 }
@@ -88,6 +98,8 @@ json_value() {
 }
 
 rm -f "${COOKIE_FILE}"
+
+check_router_ping
 
 login_payload=$(printf '{"method":"session/login","params":{"id":"%s","pw":"%s"}}' "${USER_ID}" "${USER_PW}")
 login_response=$(api_call "${login_payload}")
