@@ -45,7 +45,7 @@ INDEX_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gemma4 Ollama Server</title>
+  <title>Ollama Service by Local Download Model</title>
   <style>
     :root {
       color-scheme: light;
@@ -284,7 +284,7 @@ INDEX_HTML = """<!doctype html>
   <main>
     <header>
       <div>
-        <h1>Gemma4 Ollama Server</h1>
+        <h1>Ollama Service by Local Download Model</h1>
         <p>Port 8082 service page for checking Ollama and sending a quick Gemma4 prompt.</p>
       </div>
       <button id="refresh">Refresh</button>

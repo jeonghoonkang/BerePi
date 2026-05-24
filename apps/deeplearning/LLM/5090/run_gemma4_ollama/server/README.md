@@ -1,4 +1,4 @@
-# Gemma4 Ollama Server
+# Ollama Service by Local Download Model
 
 This directory runs a small service page on port `8082` and uses local
 Ollama as the backend for `gemma4:31b`.
