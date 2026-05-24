@@ -5,6 +5,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
@@ -26,6 +27,14 @@ GEMMA4_PASSWORD = os.environ.get("GEMMA4_PASSWORD", "")
 REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "180"))
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 MAX_PENDING_UPDATES_ON_STARTUP = int(os.environ.get("MAX_PENDING_UPDATES_ON_STARTUP", "10"))
+ALLOWED_TELEGRAM_USER_IDS_FROM_ENV = {
+    user_id.strip()
+    for user_id in os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "").split(",")
+    if user_id.strip()
+}
+ALLOWED_TELEGRAM_USER_IDS_FILE = Path(
+    os.environ.get("ALLOWED_TELEGRAM_USER_IDS_FILE", Path(__file__).resolve().with_name("allowed_telegram_user_ids.txt"))
+)
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -144,6 +153,29 @@ def prompt_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> st
     return ""
 
 
+def is_allowed_user(update: Update) -> bool:
+    allowed_user_ids = allowed_telegram_user_ids()
+    if not allowed_user_ids:
+        return True
+
+    user = update.effective_user
+    return bool(user and str(user.id) in allowed_user_ids)
+
+
+def allowed_telegram_user_ids() -> set[str]:
+    allowed_user_ids = set(ALLOWED_TELEGRAM_USER_IDS_FROM_ENV)
+    try:
+        for line in ALLOWED_TELEGRAM_USER_IDS_FILE.read_text(encoding="utf-8").splitlines():
+            user_id = line.split("#", 1)[0].strip()
+            if user_id:
+                allowed_user_ids.add(user_id)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        logger.warning("Failed to read allowed Telegram user IDs from %s: %s", ALLOWED_TELEGRAM_USER_IDS_FILE, exc)
+    return allowed_user_ids
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
     await update.message.reply_text("프롬프트를 보내면 Gemma4 Ollama 서버에 전달하고 답변을 회신합니다.")
@@ -160,6 +192,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_allowed_user(update):
+        user = update.effective_user
+        logger.info(
+            "Ignored message from unauthorized user: user_id=%s username=%s",
+            getattr(user, "id", None),
+            getattr(user, "username", None),
+        )
+        return
+
     prompt = prompt_from_update(update, context)
     if not prompt:
         if update.effective_chat.type == ChatType.PRIVATE:
@@ -190,7 +231,13 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
-    logger.info("Telegram bot started. LLM_API_URL=%s prefixes=%s", LLM_API_URL, mention_prefixes(TELEGRAM_BOT_USERNAMES))
+    logger.info(
+        "Telegram bot started. LLM_API_URL=%s prefixes=%s allowed_user_ids_file=%s allowed_user_count=%s",
+        LLM_API_URL,
+        mention_prefixes(TELEGRAM_BOT_USERNAMES),
+        ALLOWED_TELEGRAM_USER_IDS_FILE,
+        len(allowed_telegram_user_ids()),
+    )
     application.run_polling()
 
 

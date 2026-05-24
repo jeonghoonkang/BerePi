@@ -1,0 +1,2 @@
+# One Telegram numeric user ID per line.
+# Use ./allowed_user_ids.sh add 123456789 to add an ID.

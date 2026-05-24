@@ -15,6 +15,8 @@ export BEREPI_DIR="/absolute/path/to/BerePi"
 - `LLM_API_URL`
 - `GEMMA4_USER_ID`
 - `GEMMA4_PASSWORD`
+- `ALLOWED_TELEGRAM_USER_IDS`
+- `ALLOWED_TELEGRAM_USER_IDS_FILE`
 - `REQUEST_TIMEOUT`
 - `LOG_LEVEL`
 
@@ -129,9 +131,18 @@ export TELEGRAM_BOT_TOKEN="BotFather에서_받은_토큰"
 export LLM_API_URL="http://127.0.0.1:8082/api/generate"
 export GEMMA4_USER_ID="admin"
 export GEMMA4_PASSWORD="실제_서버_비밀번호"
+export ALLOWED_TELEGRAM_USER_IDS="123456789,987654321"
 ```
 
 이 방식은 소스 파일 수정 없이 안전하게 키를 주입할 수 있어 권장됩니다.
+
+`ALLOWED_TELEGRAM_USER_IDS`를 설정하면 지정된 Telegram 사용자 숫자 ID만 봇을 사용할 수 있습니다.
+값을 비워두면 모든 사용자를 허용합니다. 개인별 숫자 ID는 Telegram에서 `@userinfobot`에게
+메시지를 보내 확인할 수 있습니다.
+
+여러 ID를 파일로 관리하려면 `allowed_telegram_user_ids.txt`에 숫자 ID를 한 줄에 하나씩 저장합니다.
+기본 파일 경로는 텔레그램 봇 디렉토리의 `allowed_telegram_user_ids.txt`이며,
+`ALLOWED_TELEGRAM_USER_IDS_FILE`로 다른 파일을 지정할 수 있습니다.
 
 ### 방법 B. 비권장: `bot.py`에 직접 문자열 입력
 
@@ -194,6 +205,7 @@ export TELEGRAM_BOT_TOKEN="BotFather에서_받은_토큰"
 export LLM_API_URL="http://127.0.0.1:8082/api/generate"
 export GEMMA4_USER_ID="admin"
 export GEMMA4_PASSWORD="실제_서버_비밀번호"
+export ALLOWED_TELEGRAM_USER_IDS="123456789,987654321"
 python3 bot.py
 ```
 
@@ -243,7 +255,28 @@ python3 bot.py
 - `/help` : 사용 방법 표시
 - 일반 텍스트 메시지 : Gemma4 프롬프트로 처리
 
-## 9. 문제 해결
+## 9. 허용 사용자 ID 관리
+
+개인별 Telegram 숫자 ID는 Telegram에서 `@userinfobot`에게 메시지를 보내 확인할 수 있습니다.
+확인한 숫자 ID는 `allowed_user_ids.sh`로 `allowed_telegram_user_ids.txt`에 추가하거나 삭제합니다.
+
+```bash
+cd "${BEREPI_DIR}/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram"
+./allowed_user_ids.sh add 123456789
+./allowed_user_ids.sh list
+./allowed_user_ids.sh delete 123456789
+```
+
+`add`는 기존 ID 목록을 유지하면서 새 ID 하나를 추가합니다. 이미 같은 ID가 있으면 중복 저장하지 않습니다.
+`delete` 또는 `remove`는 지정한 ID 하나를 목록에서 삭제합니다.
+
+환경변수 형태로 보고 싶으면 아래 명령을 사용할 수 있습니다.
+
+```bash
+./allowed_user_ids.sh export
+```
+
+## 10. 문제 해결
 
 ### `TELEGRAM_BOT_TOKEN 환경 변수를 설정하세요.`
 
@@ -281,16 +314,18 @@ curl -X POST "http://127.0.0.1:8082/api/generate" \
 export REQUEST_TIMEOUT="300"
 ```
 
-## 10. 환경 변수 정리
+## 11. 환경 변수 정리
 
 - `TELEGRAM_BOT_TOKEN`: BotFather에서 발급받은 텔레그램 봇 토큰
 - `LLM_API_URL`: 프롬프트를 보낼 API 주소, 기본값 `http://127.0.0.1:8082/api/generate`
 - `GEMMA4_USER_ID`: `api_key.conf`에 등록된 사용자 ID
 - `GEMMA4_PASSWORD`: `api_key.conf`에 등록된 비밀번호
+- `ALLOWED_TELEGRAM_USER_IDS`: 봇 사용을 허용할 Telegram 사용자 숫자 ID 목록. 콤마로 구분하며, 비어 있으면 모든 사용자 허용
+- `ALLOWED_TELEGRAM_USER_IDS_FILE`: 허용할 Telegram 사용자 숫자 ID를 한 줄에 하나씩 저장한 파일. 기본값은 `allowed_telegram_user_ids.txt`
 - `REQUEST_TIMEOUT`: API 응답 대기 시간, 기본값 `180`
 - `LOG_LEVEL`: 로그 레벨, 기본값 `INFO`
 
-## 11. 보안 주의 사항
+## 12. 보안 주의 사항
 
 - `TELEGRAM_BOT_TOKEN`을 Git 저장소에 커밋하지 마세요.
 - `api_key.conf`는 `.gitignore`에 포함되어 있으므로 실제 운영 키는 이 파일에 두고 커밋하지 않는 것이 안전합니다.
