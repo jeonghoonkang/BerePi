@@ -3,7 +3,13 @@
 텔레그램 사용자가 입력한 프롬프트를 Gemma4 Ollama 서버의 `/api/generate`로 전달하고,
 응답의 `response` 값을 다시 텔레그램으로 회신하는 봇입니다.
 
-현재 코드는 `/absolute/path/to/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram/bot.py`에서 아래 환경 변수를 읽어 동작합니다.
+이 문서에서는 BerePi 저장소 절대 경로를 아래처럼 `BEREPI_DIR`로 가정합니다.
+
+```bash
+export BEREPI_DIR="/absolute/path/to/BerePi"
+```
+
+현재 코드는 `${BEREPI_DIR}/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram/bot.py`에서 아래 환경 변수를 읽어 동작합니다.
 
 - `TELEGRAM_BOT_TOKEN`
 - `LLM_API_URL`
@@ -16,13 +22,7 @@
 
 ## 1. 사전 준비
 
-예시에서는 BerePi 저장소가 아래 절대 경로에 있다고 가정합니다.
-
-```bash
-export BEREPI_DIR="/absolute/path/to/BerePi"
-```
-
-실제 환경에서는 자신의 저장소 경로로 바꿔서 사용합니다.
+위 `BEREPI_DIR` 값을 실제 저장소 절대 경로로 바꿔서 사용합니다.
 
 Gemma4 Ollama 서버 관련 파일 위치:
 
@@ -149,13 +149,19 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
+서버 스크립트에 실행 권한이 없다면 최초 1회만 아래 명령을 실행합니다.
+
+```bash
+cd "${BEREPI_DIR}/apps/deeplearning/LLM/5090/run_gemma4_ollama/server"
+chmod +x run_service.sh start.sh stop.sh
+```
+
 ## 6. 실행 방법
 
 ### 6-1. 먼저 Gemma4 Ollama 서버 실행
 
 ```bash
 cd "${BEREPI_DIR}/apps/deeplearning/LLM/5090/run_gemma4_ollama/server"
-chmod +x run_service.sh start.sh stop.sh
 ./start.sh
 ```
 
