@@ -140,7 +140,8 @@ export ALLOWED_TELEGRAM_USER_IDS="123456789,987654321"
 값을 비워두면 모든 사용자를 허용합니다. 개인별 숫자 ID는 Telegram에서 `@userinfobot`에게
 메시지를 보내 확인할 수 있습니다.
 
-여러 ID를 파일로 관리하려면 `allowed_telegram_user_ids.txt`에 숫자 ID를 한 줄에 하나씩 저장합니다.
+여러 ID를 파일로 관리하려면 `allowed_telegram_user_ids_sample.txt`를 `allowed_telegram_user_ids.txt`로 복사한 뒤,
+숫자 ID를 한 줄에 하나씩 저장합니다.
 기본 파일 경로는 텔레그램 봇 디렉토리의 `allowed_telegram_user_ids.txt`이며,
 `ALLOWED_TELEGRAM_USER_IDS_FILE`로 다른 파일을 지정할 수 있습니다.
 
@@ -262,6 +263,7 @@ python3 bot.py
 
 ```bash
 cd "${BEREPI_DIR}/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram"
+cp allowed_telegram_user_ids_sample.txt allowed_telegram_user_ids.txt
 ./allowed_user_ids.sh add 123456789
 ./allowed_user_ids.sh list
 ./allowed_user_ids.sh delete 123456789
@@ -329,4 +331,5 @@ export REQUEST_TIMEOUT="300"
 
 - `TELEGRAM_BOT_TOKEN`을 Git 저장소에 커밋하지 마세요.
 - `api_key.conf`는 `.gitignore`에 포함되어 있으므로 실제 운영 키는 이 파일에 두고 커밋하지 않는 것이 안전합니다.
+- `allowed_telegram_user_ids.txt`는 `.gitignore`에 포함되어 있으므로 실제 Telegram 사용자 ID는 이 파일에 두고 커밋하지 않는 것이 안전합니다.
 - 운영 환경에서는 예시 비밀번호 대신 충분히 긴 실제 비밀번호를 사용하세요.

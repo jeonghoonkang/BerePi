@@ -1,0 +1,2 @@
+# One Telegram numeric user ID per line.
+# Managed by allowed_user_ids.sh.
