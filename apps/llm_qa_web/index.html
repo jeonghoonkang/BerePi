@@ -17,26 +17,24 @@
   <pre id="answer"></pre>
   <script>
     async function askLLM() {
-      const question = document.getElementById('question').value;
-      const apiKey = localStorage.getItem('openai_api_key');
-      if (!apiKey) {
-        alert('OpenAI API 키가 필요합니다. localStorage.openai_api_key 에 저장하세요.');
+      const question = document.getElementById('question').value.trim();
+      const answerEl = document.getElementById('answer');
+      if (!question) {
+        answerEl.textContent = '질문을 입력하세요.';
         return;
       }
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      answerEl.textContent = '답변 생성 중...';
+      const res = await fetch('/api/ask', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: question }]
+          prompt: question
         })
       });
       const data = await res.json();
-      const answer = data?.choices?.[0]?.message?.content || '응답이 없습니다.';
-      document.getElementById('answer').textContent = answer;
+      answerEl.textContent = res.ok ? data.answer : (data.error || '오류가 발생했습니다.');
     }
     document.getElementById('askBtn').addEventListener('click', askLLM);
   </script>

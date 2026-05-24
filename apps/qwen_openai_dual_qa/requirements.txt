@@ -1,0 +1,6 @@
+streamlit
+transformers
+huggingface_hub
+openai
+fastapi
+uvicorn
