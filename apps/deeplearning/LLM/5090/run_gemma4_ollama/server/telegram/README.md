@@ -264,13 +264,13 @@ python3 bot.py
 ```bash
 cd "${BEREPI_DIR}/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram"
 cp allowed_telegram_user_ids_sample.txt allowed_telegram_user_ids.txt
-./allowed_user_ids.sh add 123456789
+./allowed_user_ids.sh add 123456789 987654321
 ./allowed_user_ids.sh list
-./allowed_user_ids.sh delete 123456789
+./allowed_user_ids.sh delete 123456789 987654321
 ```
 
-`add`는 기존 ID 목록을 유지하면서 새 ID 하나를 추가합니다. 이미 같은 ID가 있으면 중복 저장하지 않습니다.
-`delete` 또는 `remove`는 지정한 ID 하나를 목록에서 삭제합니다.
+`add`는 기존 ID 목록을 유지하면서 새 ID를 하나 이상 추가합니다. 이미 같은 ID가 있으면 중복 저장하지 않습니다.
+`delete` 또는 `remove`는 지정한 ID를 하나 이상 목록에서 삭제합니다.
 
 환경변수 형태로 보고 싶으면 아래 명령을 사용할 수 있습니다.
 

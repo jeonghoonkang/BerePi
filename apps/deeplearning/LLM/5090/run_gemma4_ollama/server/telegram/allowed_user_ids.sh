@@ -6,9 +6,9 @@ IDS_FILE="${ALLOWED_TELEGRAM_USER_IDS_FILE:-${APP_DIR}/allowed_telegram_user_ids
 
 usage() {
   printf 'Usage:\n'
-  printf '  %s add USER_ID\n' "$0"
-  printf '  %s delete USER_ID\n' "$0"
-  printf '  %s remove USER_ID\n' "$0"
+  printf '  %s add USER_ID [USER_ID ...]\n' "$0"
+  printf '  %s delete USER_ID [USER_ID ...]\n' "$0"
+  printf '  %s remove USER_ID [USER_ID ...]\n' "$0"
   printf '  %s list\n' "$0"
   printf '  %s export\n' "$0"
 }
@@ -53,20 +53,32 @@ write_ids() {
 }
 
 add_id() {
-  local user_id="$1"
-  validate_user_id "${user_id}"
+  local user_id
+  for user_id in "$@"; do
+    validate_user_id "${user_id}"
+  done
+
   {
     read_ids
-    printf '%s\n' "${user_id}"
+    printf '%s\n' "$@"
   } | write_ids
-  printf 'Added Telegram user ID: %s\n' "${user_id}"
+  printf 'Added Telegram user IDs: %s\n' "$*"
 }
 
 delete_id() {
-  local user_id="$1"
-  validate_user_id "${user_id}"
-  read_ids | awk -v id="${user_id}" '$0 != id' | write_ids
-  printf 'Deleted Telegram user ID: %s\n' "${user_id}"
+  local user_id
+  for user_id in "$@"; do
+    validate_user_id "${user_id}"
+  done
+
+  read_ids | awk -v ids="$*" '
+    BEGIN {
+      split(ids, values, " ")
+      for (i in values) deleted[values[i]] = 1
+    }
+    !($0 in deleted)
+  ' | write_ids
+  printf 'Deleted Telegram user IDs: %s\n' "$*"
 }
 
 list_ids() {
@@ -82,12 +94,14 @@ export_ids() {
 command="${1:-}"
 case "${command}" in
   add)
-    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
-    add_id "$2"
+    [[ $# -ge 2 ]] || { usage >&2; exit 1; }
+    shift
+    add_id "$@"
     ;;
   delete|remove)
-    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
-    delete_id "$2"
+    [[ $# -ge 2 ]] || { usage >&2; exit 1; }
+    shift
+    delete_id "$@"
     ;;
   list)
     [[ $# -eq 1 ]] || { usage >&2; exit 1; }
