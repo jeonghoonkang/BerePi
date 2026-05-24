@@ -1,0 +1,16 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+SERVER_DIR=/home/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server
+TELEGRAM_DIR=/home/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram
+TELEGRAM_PYTHON=/home/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram/install/bin/python
+
+# Boot: start Gemma4/Ollama service and Telegram bot.
+@reboot sleep 30; cd "$SERVER_DIR" && ./start.sh >> "$SERVER_DIR/logs/cron-service.log" 2>&1
+@reboot sleep 60; mkdir -p "$TELEGRAM_DIR/logs"; cd "$TELEGRAM_DIR" && source ./this_conf_keys.sh && nohup "$TELEGRAM_PYTHON" bot.py >> "$TELEGRAM_DIR/logs/telegram-bot.log" 2>&1 &
+
+# Every 10 minutes: restart Gemma4/Ollama service if the HTTP health check fails.
+*/10 * * * * flock -n /tmp/gemma4-service-cron.lock bash -lc 'curl -fsS --max-time 5 http://127.0.0.1:8082/health >/dev/null || (cd "$SERVER_DIR" && ./start.sh >> "$SERVER_DIR/logs/cron-service.log" 2>&1)'
+
+# Every 10 minutes: restart Telegram bot if bot.py is not running.
+*/10 * * * * flock -n /tmp/gemma4-telegram-cron.lock bash -lc 'pgrep -f "$TELEGRAM_DIR/bot.py" >/dev/null || (mkdir -p "$TELEGRAM_DIR/logs"; cd "$TELEGRAM_DIR" && source ./this_conf_keys.sh && nohup "$TELEGRAM_PYTHON" bot.py >> "$TELEGRAM_DIR/logs/telegram-bot.log" 2>&1 &)'
