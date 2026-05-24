@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from telegram import Update
@@ -15,6 +16,7 @@ GEMMA4_USER_ID = os.environ.get("GEMMA4_USER_ID", "").strip()
 GEMMA4_PASSWORD = os.environ.get("GEMMA4_PASSWORD", "")
 REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "180"))
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
+MAX_PENDING_UPDATES_ON_STARTUP = int(os.environ.get("MAX_PENDING_UPDATES_ON_STARTUP", "10"))
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -60,6 +62,27 @@ def split_message(text: str) -> list[str]:
         text[index : index + MAX_TELEGRAM_MESSAGE_LENGTH]
         for index in range(0, len(text), MAX_TELEGRAM_MESSAGE_LENGTH)
     ] or [""]
+
+
+def keep_recent_pending_updates(limit: int) -> None:
+    if limit < 1:
+        return
+
+    params = urllib.parse.urlencode({"offset": -limit, "limit": limit, "timeout": 0})
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates?{params}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        logger.warning("Failed to trim pending Telegram updates: %s", exc)
+        return
+
+    if not data.get("ok"):
+        logger.warning("Telegram getUpdates returned an error while trimming pending updates: %s", data)
+        return
+
+    pending_count = len(data.get("result") or [])
+    logger.info("Kept up to %s pending Telegram updates on startup; current batch=%s", limit, pending_count)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -108,6 +131,7 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt))
 
+    keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
     logger.info("Telegram bot started. LLM_API_URL=%s", LLM_API_URL)
     application.run_polling()
 
