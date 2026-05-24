@@ -2,4 +2,8 @@ logs/
 *.pid
 __pycache__/
 api_key.conf
+telegram/install/
+telegram/logs/
+telegram/__pycache__/
+telegram/this_conf_keys.sh
 telegram/allowed_telegram_user_ids.txt
