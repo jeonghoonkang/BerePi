@@ -47,3 +47,9 @@ nocommit/
 __pycache__/
 
 /apps/deeplearning/models/
+
+# Local tinyGW runtime/config files
+/apps/tinyGW/list_ip/this_setting.conf
+/apps/tinyGW/pulsedav/this_settings.json
+/apps/tinyGW/pulsedav/state.json
+/apps/tinyGW/pulsedav/*.log

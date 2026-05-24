@@ -6,7 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server
-Environment=OLLAMA_MODEL=gemma4
+Environment=OLLAMA_MODEL=gemma4:31b
+Environment=OLLAMA_CONTEXT_LENGTH=8192
 Environment=OLLAMA_BASE_URL=http://127.0.0.1:11434
 Environment=OLLAMA_HOST=127.0.0.1:11434
 Environment=GEMMA4_SERVER_HOST=0.0.0.0

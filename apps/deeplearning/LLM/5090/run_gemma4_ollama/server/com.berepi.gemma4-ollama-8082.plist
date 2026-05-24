@@ -17,7 +17,9 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>OLLAMA_MODEL</key>
-    <string>gemma4</string>
+    <string>gemma4:31b</string>
+    <key>OLLAMA_CONTEXT_LENGTH</key>
+    <string>8192</string>
     <key>OLLAMA_BIN</key>
     <string>/usr/local/bin/ollama</string>
     <key>OLLAMA_BASE_URL</key>
