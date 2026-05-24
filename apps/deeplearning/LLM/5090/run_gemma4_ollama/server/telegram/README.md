@@ -3,7 +3,7 @@
 텔레그램 사용자가 입력한 프롬프트를 Gemma4 Ollama 서버의 `/api/generate`로 전달하고,
 응답의 `response` 값을 다시 텔레그램으로 회신하는 봇입니다.
 
-현재 코드는 `/home/runner/work/BerePi/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram/bot.py`에서 아래 환경 변수를 읽어 동작합니다.
+현재 코드는 `/absolute/path/to/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server/telegram/bot.py`에서 아래 환경 변수를 읽어 동작합니다.
 
 - `TELEGRAM_BOT_TOKEN`
 - `LLM_API_URL`
