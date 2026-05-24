@@ -5,7 +5,7 @@ import urllib.error
 import urllib.request
 
 from telegram import Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ChatType
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 
@@ -78,6 +78,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_chat.type != ChatType.PRIVATE:
+        return
+
     prompt = (update.message.text or "").strip()
     if not prompt:
         await update.message.reply_text("프롬프트를 입력해 주세요.")
