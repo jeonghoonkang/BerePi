@@ -58,6 +58,8 @@ BotFather에서 아래 명령도 함께 설정하면 사용이 편합니다.
 - `/setabouttext` : 채팅 목록에 보일 소개 문구 설정
 - `/setuserpic` : 봇 프로필 이미지 설정
 - `/setcommands` : 명령어 목록 등록
+- `/setinline` : Inline Mode 설정. 현재 운영 설정은 `On`
+- `/setprivacy` : Group Privacy 설정. 현재 운영 설정은 `Off`
 
 예시 명령어:
 
@@ -65,6 +67,10 @@ BotFather에서 아래 명령도 함께 설정하면 사용이 편합니다.
 start - 봇 사용 시작
 help - 사용 방법 보기
 ```
+
+그룹 채팅에서 `@봇username 질문` 형태의 메시지를 받으려면 BotFather에서
+Group Privacy가 `Off`로 설정되어 있어야 합니다. Privacy가 켜져 있으면 그룹의
+일반 텍스트 메시지가 봇 프로세스까지 전달되지 않을 수 있습니다.
 
 ## 3. Gemma4 서버 인증 키 준비
 

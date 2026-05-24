@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -11,6 +12,14 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_USERNAMES = {
+    username.strip().lstrip("@").lower()
+    for username in os.environ.get(
+        "TELEGRAM_BOT_USERNAMES",
+        os.environ.get("TELEGRAM_BOT_USERNAME", "berepi_gemma_bot,berepi_gemma_model,model_gemma"),
+    ).split(",")
+    if username.strip()
+}
 LLM_API_URL = os.environ.get("LLM_API_URL", "http://127.0.0.1:8082/api/generate")
 GEMMA4_USER_ID = os.environ.get("GEMMA4_USER_ID", "").strip()
 GEMMA4_PASSWORD = os.environ.get("GEMMA4_PASSWORD", "")
@@ -85,6 +94,56 @@ def keep_recent_pending_updates(limit: int) -> None:
     logger.info("Kept up to %s pending Telegram updates on startup; current batch=%s", limit, pending_count)
 
 
+def bot_usernames(context: ContextTypes.DEFAULT_TYPE) -> set[str]:
+    usernames = set(TELEGRAM_BOT_USERNAMES)
+    runtime_username = getattr(context.bot, "username", None)
+    if runtime_username:
+        usernames.add(runtime_username.lstrip("@").lower())
+    return {username for username in usernames if username}
+
+
+def mention_prefixes(usernames: set[str]) -> list[str]:
+    return [f"@{username}" for username in sorted(usernames)]
+
+
+def text_without_bot_mentions(text: str, usernames: set[str]) -> tuple[str, bool]:
+    prompt = text
+    mentioned = False
+    for username in usernames:
+        pattern = re.compile(rf"@{re.escape(username)}\b", re.IGNORECASE)
+        if pattern.search(prompt):
+            mentioned = True
+            prompt = pattern.sub("", prompt)
+    return prompt.strip(" \t\n\r,:"), mentioned
+
+
+def prompt_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    text = (update.message.text or "").strip()
+    if update.effective_chat.type == ChatType.PRIVATE:
+        logger.info("Update prefix check: chat_type=%s prefixes=%s private_chat=True", update.effective_chat.type, mention_prefixes(bot_usernames(context)))
+        return text
+
+    usernames = bot_usernames(context)
+    prefixes = mention_prefixes(usernames)
+    prompt, mentioned = text_without_bot_mentions(text, usernames)
+    logger.info(
+        "Update prefix check: chat_type=%s prefixes=%s mentioned=%s text=%r prompt=%r",
+        update.effective_chat.type,
+        prefixes,
+        mentioned,
+        text,
+        prompt,
+    )
+    if mentioned:
+        return prompt
+
+    reply_to = update.message.reply_to_message
+    if reply_to and reply_to.from_user and reply_to.from_user.id == context.bot.id:
+        return text
+
+    return ""
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
     await update.message.reply_text("프롬프트를 보내면 Gemma4 Ollama 서버에 전달하고 답변을 회신합니다.")
@@ -101,15 +160,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_chat.type != ChatType.PRIVATE:
-        return
-
-    prompt = (update.message.text or "").strip()
+    prompt = prompt_from_update(update, context)
     if not prompt:
-        await update.message.reply_text("프롬프트를 입력해 주세요.")
+        if update.effective_chat.type == ChatType.PRIVATE:
+            await update.message.reply_text("프롬프트를 입력해 주세요.")
         return
 
-    await update.message.reply_text("thinking ...")
+    await update.message.reply_text("thinking...")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
     try:
@@ -133,7 +190,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
-    logger.info("Telegram bot started. LLM_API_URL=%s", LLM_API_URL)
+    logger.info("Telegram bot started. LLM_API_URL=%s prefixes=%s", LLM_API_URL, mention_prefixes(TELEGRAM_BOT_USERNAMES))
     application.run_polling()
 
 
