@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -38,6 +39,19 @@ PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"
 PUBLIC_IP_CACHE: dict[str, Any] = {"value": "", "checked_at": 0.0}
 PROMPT_HISTORY_LIMIT = 100
 PROMPT_HISTORY_LOCK = threading.RLock()
+PROMPT_QUEUE_MAX_SIZE = int(os.getenv("PROMPT_QUEUE_MAX_SIZE", "10"))
+PROMPT_QUEUE_CONDITION = threading.Condition()
+PROMPT_QUEUE: list["PromptJob"] = []
+PROMPT_QUEUE_ACTIVE = False
+PROMPT_QUEUE_NEXT_ID = 1
+
+
+@dataclass
+class PromptJob:
+    id: int
+    payload: dict[str, Any]
+    enqueued_at: float = field(default_factory=time.time)
+    cancelled: bool = False
 
 
 INDEX_HTML = """<!doctype html>
@@ -344,6 +358,7 @@ INDEX_HTML = """<!doctype html>
       </div>
       <div class="row">
         <button class="primary" id="send">Send Prompt</button>
+        <button id="cancelPendingPrompts">Cancel Pending Prompts</button>
         <span id="busy"></span>
       </div>
       <div class="history-row">
@@ -719,6 +734,28 @@ if __name__ == "__main__":
       }
     }
 
+    async function cancelPendingPrompts() {
+      busy.textContent = "Cancelling pending prompts...";
+      try {
+        const auth = authPayload();
+        if (!auth.user_id || !auth.password) {
+          throw new Error("User ID and password are required.");
+        }
+        const res = await fetch("/api/cancel-pending-prompts", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(auth)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        busy.textContent = data.message || "Pending prompts cancelled";
+      } catch (err) {
+        busy.textContent = String(err);
+      } finally {
+        refreshStatus();
+      }
+    }
+
     async function saveGpuSelection() {
       gpuStatus.textContent = "Saving...";
       try {
@@ -763,6 +800,7 @@ if __name__ == "__main__":
     document.getElementById("startOllama").addEventListener("click", () => postControl("/api/start-ollama", "Starting Ollama"));
     document.getElementById("unload").addEventListener("click", () => postControl("/api/unload-model", "Stopping model"));
     document.getElementById("stopOllama").addEventListener("click", () => postControl("/api/stop-ollama", "Stopping Ollama"));
+    document.getElementById("cancelPendingPrompts").addEventListener("click", cancelPendingPrompts);
     document.getElementById("saveGpu").addEventListener("click", saveGpuSelection);
     document.getElementById("saveModel").addEventListener("click", saveModelSelection);
     renderPythonCode();
@@ -940,6 +978,101 @@ def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int 
     request = urllib.request.Request(f"{OLLAMA_BASE_URL}{path}", data=data, headers=headers)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def prompt_queue_status() -> dict[str, Any]:
+    with PROMPT_QUEUE_CONDITION:
+        return {
+            "active": PROMPT_QUEUE_ACTIVE,
+            "pending_count": len(PROMPT_QUEUE),
+            "max_pending_count": PROMPT_QUEUE_MAX_SIZE,
+            "pending_prompt_ids": [job.id for job in PROMPT_QUEUE],
+        }
+
+
+def cancel_pending_prompts() -> dict[str, Any]:
+    with PROMPT_QUEUE_CONDITION:
+        cancelled_prompt_ids = [job.id for job in PROMPT_QUEUE]
+        for job in PROMPT_QUEUE:
+            job.cancelled = True
+        PROMPT_QUEUE.clear()
+        PROMPT_QUEUE_CONDITION.notify_all()
+
+    cancelled_count = len(cancelled_prompt_ids)
+    return {
+        "message": f"Cancelled {cancelled_count} pending prompt(s).",
+        "cancelled_count": cancelled_count,
+        "cancelled_prompt_ids": cancelled_prompt_ids,
+        "queue": prompt_queue_status(),
+    }
+
+
+def queue_full_response() -> dict[str, Any]:
+    return {
+        "response": (
+            f"대기 중인 프롬프트가 {PROMPT_QUEUE_MAX_SIZE}개라 더 이상 처리하기 어렵습니다. "
+            "잠시 기다린 뒤 다시 요청해 주세요."
+        ),
+        "queue_full": True,
+        "queue": prompt_queue_status(),
+    }
+
+
+def cancelled_prompt_response(job: PromptJob) -> dict[str, Any]:
+    return {
+        "response": "대기 중이던 프롬프트가 취소되었습니다.",
+        "cancelled": True,
+        "prompt_queue_id": job.id,
+        "queue": prompt_queue_status(),
+    }
+
+
+def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    result = request_json("/api/generate", payload=payload)
+    result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
+    result["model"] = payload["model"]
+    result["server_ip"] = server_ip()
+    result["server_port"] = PORT
+    result["elapsed_line"] = (
+        f"Elapsed time: {result['elapsed_seconds']:.2f}s | "
+        f"Model: {result['model']} | IP: {result['server_ip']} | Port: {result['server_port']}"
+    )
+    return result
+
+
+def run_queued_prompt(payload: dict[str, Any]) -> dict[str, Any]:
+    global PROMPT_QUEUE_ACTIVE, PROMPT_QUEUE_NEXT_ID
+
+    with PROMPT_QUEUE_CONDITION:
+        if len(PROMPT_QUEUE) >= PROMPT_QUEUE_MAX_SIZE:
+            return queue_full_response()
+
+        job = PromptJob(id=PROMPT_QUEUE_NEXT_ID, payload=payload)
+        PROMPT_QUEUE_NEXT_ID += 1
+        PROMPT_QUEUE.append(job)
+        PROMPT_QUEUE_CONDITION.notify_all()
+
+        while True:
+            if job.cancelled:
+                return cancelled_prompt_response(job)
+            if PROMPT_QUEUE and PROMPT_QUEUE[0] is job and not PROMPT_QUEUE_ACTIVE:
+                PROMPT_QUEUE_ACTIVE = True
+                PROMPT_QUEUE.pop(0)
+                PROMPT_QUEUE_CONDITION.notify_all()
+                break
+            PROMPT_QUEUE_CONDITION.wait()
+
+    try:
+        result = run_ollama_generate(payload)
+        result["prompt_queue_id"] = job.id
+        result["queue_wait_seconds"] = round(time.time() - job.enqueued_at - result["elapsed_seconds"], 3)
+        result["queue"] = prompt_queue_status()
+        return result
+    finally:
+        with PROMPT_QUEUE_CONDITION:
+            PROMPT_QUEUE_ACTIVE = False
+            PROMPT_QUEUE_CONDITION.notify_all()
 
 
 def list_ollama_models() -> list[str]:
@@ -1159,6 +1292,7 @@ def status_payload() -> dict[str, Any]:
         "context_length": OLLAMA_CONTEXT_LENGTH,
         "model_available": any(model_matches(name, selected_model) for name in models),
         "models": models,
+        "prompt_queue": prompt_queue_status(),
         "uptime_seconds": int(time.time() - STARTED_AT),
     }
 
@@ -1356,6 +1490,19 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             )
             return
 
+        if self.path == "/api/cancel-pending-prompts":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                user_id, password = credentials_from_request(self.headers, incoming)
+                if not is_authorized_user(user_id, password):
+                    self.send_auth_error("invalid user id or password")
+                    return
+                self.send_json(cancel_pending_prompts())
+            except json.JSONDecodeError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
         if self.path != "/api/generate":
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -1378,16 +1525,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 "keep_alive": request_keep_alive(incoming),
                 "stream": False,
             }
-            started_at = time.perf_counter()
-            result = request_json("/api/generate", payload=payload)
-            result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
-            result["model"] = payload["model"]
-            result["server_ip"] = server_ip()
-            result["server_port"] = PORT
-            result["elapsed_line"] = (
-                f"Elapsed time: {result['elapsed_seconds']:.2f}s | "
-                f"Model: {result['model']} | IP: {result['server_ip']} | Port: {result['server_port']}"
-            )
+            result = run_queued_prompt(payload)
             self.send_json(result)
         except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
