@@ -109,6 +109,7 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("프롬프트를 입력해 주세요.")
         return
 
+    await update.message.reply_text("thinking ...")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
     try:
