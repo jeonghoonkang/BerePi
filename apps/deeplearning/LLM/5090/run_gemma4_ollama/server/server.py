@@ -12,6 +12,7 @@ import socket
 import subprocess
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -948,7 +949,7 @@ def ensure_workspace_dir() -> Path:
 
 
 def sanitize_workspace_filename(name: str) -> str:
-    raw = Path(str(name or "")).name
+    raw = unicodedata.normalize("NFC", Path(str(name or "")).name)
     value = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*]+', "_", raw).strip()
     value = value.strip(". ")
     return value[:180] if value else ""

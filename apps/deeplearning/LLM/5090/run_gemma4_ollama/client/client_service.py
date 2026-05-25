@@ -8,6 +8,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -195,7 +196,7 @@ def sanitize_chain_filename(name: str) -> str:
 
 
 def sanitize_workspace_filename(name: str) -> str:
-    raw = Path(str(name or "")).name
+    raw = unicodedata.normalize("NFC", Path(str(name or "")).name)
     value = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*]+', "_", raw).strip()
     value = value.strip(". ")
     return value[:180] if value else ""
