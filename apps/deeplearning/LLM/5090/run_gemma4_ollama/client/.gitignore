@@ -1,0 +1,10 @@
+frontend/node_modules
+frontend/dist
+.zig-cache
+zig-out
+data/client_config.json
+data/prompt_history.json
+data/client-service.log
+data/*.txt
+data/result_logs/*.txt
+data/thinking_logs/*.txt

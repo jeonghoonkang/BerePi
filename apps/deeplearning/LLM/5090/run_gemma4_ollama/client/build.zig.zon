@@ -1,0 +1,8 @@
+.{
+    .name = .gemma4_prompt_client,
+    .fingerprint = 0x8e5da4f3b984d702,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{ "build.zig", "build.zig.zon", "src", "frontend", "app.zon", "README.md", "run_zero_native.sh" },
+}

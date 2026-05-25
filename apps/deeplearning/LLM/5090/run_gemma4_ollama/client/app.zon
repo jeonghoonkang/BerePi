@@ -1,0 +1,31 @@
+.{
+    .id = "com.berepi.gemma4promptclient",
+    .name = "gemma4promptclient",
+    .display_name = "Gemma4 Prompt Client",
+    .version = "0.1.0",
+    .platforms = .{ "macos", "linux", "windows" },
+    .permissions = .{},
+    .capabilities = .{ "webview" },
+    .frontend = .{
+        .dist = "frontend/dist",
+        .entry = "index.html",
+        .spa_fallback = true,
+        .dev = .{
+            .url = "http://127.0.0.1:5173/",
+            .command = .{ "npm", "--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1" },
+            .ready_path = "/",
+            .timeout_ms = 30000,
+        },
+    },
+    .security = .{
+        .navigation = .{
+            .allowed_origins = .{ "zero://app", "zero://inline", "http://127.0.0.1:5173", "http://127.0.0.1:8765" },
+            .external_links = .{ .action = "deny" },
+        },
+    },
+    .web_engine = "system",
+    .cef = .{ .dir = "third_party/cef/macos", .auto_install = false },
+    .windows = .{
+        .{ .label = "main", .title = "Gemma4 Prompt Client", .width = 1440, .height = 940, .restore_state = true },
+    },
+}

@@ -1,0 +1,117 @@
+:root {
+  color-scheme: light;
+  --bg: #f4efe5;
+  --panel: rgba(255, 252, 247, 0.84);
+  --ink: #18242a;
+  --muted: #57656e;
+  --line: rgba(24, 36, 42, 0.14);
+  --accent: #0d7c66;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(13, 124, 102, 0.18), transparent 28rem),
+    linear-gradient(180deg, #fcf7ee 0%, var(--bg) 100%);
+}
+
+code {
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  background: rgba(24, 36, 42, 0.07);
+  border-radius: 0.35rem;
+  padding: 0.15rem 0.35rem;
+}
+
+.shell {
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: 2rem 1.2rem 2.4rem;
+}
+
+.hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.4rem;
+  padding-bottom: 1rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.65rem;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  line-height: 0.95;
+}
+
+.lede {
+  max-width: 52rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.open-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(13, 124, 102, 0.18);
+  background: rgba(13, 124, 102, 0.1);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.viewer-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.35rem;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 22px 50px rgba(24, 36, 42, 0.1);
+}
+
+.viewer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.viewer {
+  width: 100%;
+  height: calc(100vh - 9.5rem);
+  min-height: 780px;
+  border: 0;
+  background: white;
+}
+
+@media (max-width: 760px) {
+  .hero,
+  .viewer-meta {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .viewer {
+    min-height: 720px;
+    height: 72vh;
+  }
+}

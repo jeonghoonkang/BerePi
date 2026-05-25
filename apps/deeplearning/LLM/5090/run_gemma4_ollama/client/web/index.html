@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemma4 Prompt Client</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">remote chain client</p>
+        <h1>Gemma4 Prompt Client</h1>
+        <p class="lede">
+          `run_gemma4_ollama/server` API를 대상으로 6개 프롬프트를 그룹 체인으로 실행하는 로컬 데스크톱 클라이언트입니다.
+        </p>
+      </div>
+      <div class="header-actions">
+        <button id="testConnection" class="secondary">연결 확인</button>
+        <button id="runChain" class="primary">체인 실행</button>
+        <div id="headerRuntimeStatus" class="header-runtime-status">상태: 정지 중 | 연결 상태 확인 전</div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="left-column">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>서버 설정</h2>
+              <p>`server/server.py`의 `/api/status`, `/api/generate`, 인증 필드에 맞춘 설정입니다.</p>
+            </div>
+            <div class="panel-actions">
+              <input id="configFileInput" type="file" accept="application/json" hidden>
+              <button id="importConfig" class="secondary">설정 불러오기</button>
+              <button id="exportConfig" class="secondary">설정 내보내기</button>
+              <button id="saveConfig" class="primary">설정 저장</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>Server Base URL<input id="serverBaseUrl" placeholder="http://127.0.0.1:8082"></label>
+            <label>Generate Path<input id="generatePath" placeholder="/api/generate"></label>
+            <label>Status Path<input id="statusPath" placeholder="/api/status"></label>
+            <label>Timeout Seconds<input id="requestTimeout" type="number" min="5" step="1"></label>
+            <label>User ID<input id="userId" autocomplete="username"></label>
+            <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+            <label>Model Override<input id="model" placeholder="gemma4:31b or blank"></label>
+            <label>Keep Alive<input id="keepAlive" placeholder="60m"></label>
+            <label>num_ctx<input id="numCtx" type="number" min="0" step="1"></label>
+          </div>
+          <div class="auth-save-row">
+            <button id="saveAuth" class="primary">User ID / Password 저장</button>
+            <span id="authStatus">인증 정보 저장 대기</span>
+          </div>
+          <div class="status-strip">
+            <span id="configStatus">설정을 불러오는 중입니다.</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>프롬프트 그룹</h2>
+              <p>각 프롬프트는 선택 여부와 그룹 1~3을 가집니다. 그룹 2부터는 이전 그룹 응답 뒤에 현재 그룹 프롬프트를 이어 붙여 재전송합니다.</p>
+            </div>
+            <div class="group-legend">
+              <button id="saveAllPrompts" class="primary" type="button">전체 저장</button>
+              <span>총 6개 프롬프트</span>
+              <span>그룹 1 → 2 → 3 순차 실행</span>
+            </div>
+          </div>
+          <div id="promptGrid" class="prompt-grid"></div>
+          <div class="status-strip">
+            <span id="runStatus">실행 대기 중</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>실행 결과</h2>
+              <p>각 그룹별 요청 본문과 모델 응답을 순서대로 표시합니다.</p>
+            </div>
+            <button id="clearResults" class="secondary">결과 지우기</button>
+          </div>
+          <div class="result-tabs">
+            <button id="resultTabButton" class="result-tab active" type="button">Result</button>
+            <button id="thinkingTabButton" class="result-tab" type="button">Thinking</button>
+          </div>
+          <div id="resultTabPanel" class="result-tab-panel active">
+            <div class="tab-copy-row">
+              <button id="copyResultText" class="secondary" type="button">Result 복사</button>
+              <span id="copyResultStatus">복사 대기</span>
+            </div>
+            <div id="resultSummary" class="summary-card">아직 실행 기록이 없습니다.</div>
+            <div id="resultSteps" class="step-stack"></div>
+          </div>
+          <div id="thinkingTabPanel" class="result-tab-panel">
+            <div class="tab-copy-row">
+              <button id="copyThinkingText" class="secondary" type="button">Thinking 복사</button>
+              <span id="copyThinkingStatus">복사 대기</span>
+            </div>
+            <div id="thinkingSummary" class="summary-card">아직 thinking 기록이 없습니다.</div>
+            <div id="thinkingSteps" class="thinking-stack"></div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="right-column">
+        <section class="panel sticky-panel">
+          <div class="panel-header">
+            <div>
+              <h2>프롬프트 히스토리</h2>
+              <p>저장된 프롬프트를 선택해 원하는 입력창으로 다시 넣거나 삭제할 수 있습니다.</p>
+            </div>
+          </div>
+          <div class="history-toolbar">
+            <label>대상 입력창
+              <select id="historyTarget"></select>
+            </label>
+            <button id="loadHistoryToPrompt" class="primary">선택 프롬프트 불러오기</button>
+            <button id="deleteHistory" class="danger">선택 삭제</button>
+          </div>
+          <div id="historyList" class="history-list"></div>
+          <div class="status-strip">
+            <span id="historyStatus">히스토리를 불러오는 중입니다.</span>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
