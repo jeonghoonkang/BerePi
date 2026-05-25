@@ -326,6 +326,25 @@ def extract_thinking_blocks(text: str) -> tuple[str, str]:
     return thinking, cleaned
 
 
+def extract_structured_thinking(data: dict[str, Any]) -> str:
+    direct = data.get("thinking")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+
+    for key in ("thoughts", "reasoning", "reasoning_content", "thinking_text"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    message = data.get("message")
+    if isinstance(message, dict):
+        for key in ("thinking", "thoughts", "reasoning", "reasoning_content"):
+            value = message.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+
 def next_log_path(directory: Path, prefix: str) -> Path:
     candidates = sorted(directory.glob(f"{prefix}_*.txt"))
     if not candidates:
@@ -401,7 +420,10 @@ def format_thinking_log(result: dict[str, Any]) -> str:
         "",
     ]
     for step in result.get("steps", []):
-        thinking, visible = extract_thinking_blocks(str(step.get("response", "")))
+        thinking = str(step.get("thinking", "") or "").strip()
+        visible = str(step.get("visible_response", "") or "").strip()
+        if not thinking:
+            thinking, visible = extract_thinking_blocks(str(step.get("response", "")))
         lines.extend(
             [
                 f"[Group {step.get('group')}]",
@@ -507,6 +529,9 @@ def run_chain(config: dict[str, Any]) -> dict[str, Any]:
         started = time.perf_counter()
         response_data = request_json(generate_url, build_generate_payload(config, request_prompt), timeout)
         response_text = str(response_data.get("response") or "")
+        structured_thinking = extract_structured_thinking(response_data)
+        block_thinking, visible_response = extract_thinking_blocks(response_text)
+        final_thinking = structured_thinking or block_thinking
         elapsed_seconds = time.perf_counter() - started
         steps.append(
             {
@@ -514,6 +539,8 @@ def run_chain(config: dict[str, Any]) -> dict[str, Any]:
                 "slot_labels": [f"Prompt {prompt.slot}" for prompt in sorted(prompts, key=lambda item: item.slot)],
                 "request_prompt": request_prompt,
                 "response": response_text,
+                "thinking": final_thinking,
+                "visible_response": visible_response or response_text,
                 "model": str(response_data.get("model") or config.get("model") or ""),
                 "server_ip": str(response_data.get("server_ip") or ""),
                 "server_port": str(response_data.get("server_port") or ""),

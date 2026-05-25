@@ -454,7 +454,7 @@ function extractThinkingBlocks(text) {
 }
 
 function summarizeThinking(data) {
-  const thoughtCount = data.steps.filter((step) => extractThinkingBlocks(step.response).thinking).length;
+  const thoughtCount = data.steps.filter((step) => String(step.thinking || "").trim() || extractThinkingBlocks(step.response).thinking).length;
   const lines = [
     `Thinking 포함 단계 수: ${thoughtCount}`,
     `전체 체인 단계 수: ${data.steps.length}`,
@@ -500,8 +500,8 @@ function renderThinkingSteps(steps) {
   }
   elements.thinkingSteps.innerHTML = steps.map((step) => {
     const parsed = extractThinkingBlocks(step.response);
-    const thinkingText = parsed.thinking || "응답 안에 별도 thinking 블록이 없습니다. 아래는 이 단계의 전체 과정입니다.";
-    const visibleResponse = parsed.cleaned || step.response || "(empty)";
+    const thinkingText = String(step.thinking || "").trim() || parsed.thinking || "응답 안에 별도 thinking 블록이 없습니다. 아래는 이 단계의 전체 과정입니다.";
+    const visibleResponse = String(step.visible_response || "").trim() || parsed.cleaned || step.response || "(empty)";
     return `
       <article class="thinking-card">
         <h3>Group ${step.group} Thinking</h3>
