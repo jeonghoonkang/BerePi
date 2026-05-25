@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 import base64
+import binascii
 import hmac
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -32,6 +34,7 @@ MODEL_SELECTION_FILE = Path(os.getenv("MODEL_SELECTION_FILE", Path(__file__).res
 PROMPT_HISTORY_FILE = Path(os.getenv("PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("prompt_history.txt")))
 API_KEY_CONF_FILE = Path(os.getenv("API_KEY_CONF_FILE", Path(__file__).resolve().with_name("api_key.conf")))
 LOG_DIR = Path(__file__).resolve().with_name("logs")
+WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
@@ -939,6 +942,83 @@ def remember_prompts(prompts: list[str]) -> None:
         save_prompt_history(cleaned + existing)
 
 
+def ensure_workspace_dir() -> Path:
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    return WORKSPACE_DIR
+
+
+def sanitize_workspace_filename(name: str) -> str:
+    raw = Path(str(name or "")).name
+    value = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*]+', "_", raw).strip()
+    value = value.strip(". ")
+    return value[:180] if value else ""
+
+
+def unique_workspace_path(file_name: str) -> Path:
+    root = ensure_workspace_dir()
+    candidate = root / file_name
+    if not candidate.exists():
+        return candidate
+    stem = candidate.stem
+    suffix = candidate.suffix
+    index = 2
+    while True:
+        next_path = root / f"{stem}_{index:02d}{suffix}"
+        if not next_path.exists():
+            return next_path
+        index += 1
+
+
+def list_workspace_files() -> list[dict[str, Any]]:
+    root = ensure_workspace_dir()
+    files: list[dict[str, Any]] = []
+    for path in sorted(root.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file():
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        files.append(
+            {
+                "name": path.name,
+                "path": f"workspace/{path.name}",
+                "absolute_path": str(path),
+                "size_bytes": stat.st_size,
+                "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
+            }
+        )
+    return files
+
+
+def upload_workspace_files(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    saved: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        file_name = sanitize_workspace_filename(str(item.get("name") or ""))
+        if not file_name:
+            continue
+        content_base64 = str(item.get("content_base64") or "")
+        try:
+            content = base64.b64decode(content_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError(f"Invalid file payload for {file_name}: {exc}") from exc
+        path = unique_workspace_path(file_name)
+        path.write_bytes(content)
+        stat = path.stat()
+        saved.append(
+            {
+                "name": path.name,
+                "path": f"workspace/{path.name}",
+                "absolute_path": str(path),
+                "size_bytes": stat.st_size,
+                "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
+            }
+        )
+    return saved
+
+
 def combined_prompt_from_request(incoming: dict[str, Any]) -> tuple[str, list[str]]:
     raw_prompts = incoming.get("prompts")
     prompts: list[str] = []
@@ -1420,6 +1500,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/prompt-history":
             self.send_json({"history": read_prompt_history()})
             return
+        if self.path == "/api/workspace/files":
+            self.send_json({"workspace_dir": str(ensure_workspace_dir()), "files": list_workspace_files()})
+            return
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -1500,6 +1583,26 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                     return
                 self.send_json(cancel_pending_prompts())
             except json.JSONDecodeError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if self.path == "/api/workspace/upload":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                user_id, password = credentials_from_request(self.headers, incoming)
+                if not is_authorized_user(user_id, password):
+                    self.send_auth_error("invalid user id or password")
+                    return
+                saved = upload_workspace_files(incoming.get("files") or [])
+                self.send_json(
+                    {
+                        "workspace_dir": str(ensure_workspace_dir()),
+                        "saved": saved,
+                        "files": list_workspace_files(),
+                    }
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 

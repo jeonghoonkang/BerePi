@@ -4,6 +4,12 @@ const state = {
   config: null,
   history: [],
   promptMemories: {},
+  workspaceFiles: [],
+  workspaceDir: "",
+  remoteWorkspaceFiles: [],
+  remoteWorkspaceDir: "",
+  remoteWorkspaceError: "",
+  pendingWorkspaceFiles: [],
   lastResult: null,
 };
 
@@ -11,11 +17,23 @@ const elements = {
   configStatus: document.getElementById("configStatus"),
   authStatus: document.getElementById("authStatus"),
   runStatus: document.getElementById("runStatus"),
+  chainOrderStatus: document.getElementById("chainOrderStatus"),
+  chainSaveStatus: document.getElementById("chainSaveStatus"),
   historyStatus: document.getElementById("historyStatus"),
   headerRuntimeStatus: document.getElementById("headerRuntimeStatus"),
+  workspaceStatus: document.getElementById("workspaceStatus"),
+  workspaceUploadStatus: document.getElementById("workspaceUploadStatus"),
+  workspaceDirStatus: document.getElementById("workspaceDirStatus"),
+  remoteWorkspaceDirStatus: document.getElementById("remoteWorkspaceDirStatus"),
   promptGrid: document.getElementById("promptGrid"),
   historyList: document.getElementById("historyList"),
   historyTarget: document.getElementById("historyTarget"),
+  workspaceTarget: document.getElementById("workspaceTarget"),
+  workspaceFileList: document.getElementById("workspaceFileList"),
+  remoteWorkspaceFileList: document.getElementById("remoteWorkspaceFileList"),
+  workspacePendingList: document.getElementById("workspacePendingList"),
+  workspaceFileInput: document.getElementById("workspaceFileInput"),
+  dropZone: document.getElementById("dropZone"),
   resultSummary: document.getElementById("resultSummary"),
   resultSteps: document.getElementById("resultSteps"),
   thinkingSummary: document.getElementById("thinkingSummary"),
@@ -27,6 +45,7 @@ const elements = {
   resultTabPanel: document.getElementById("resultTabPanel"),
   thinkingTabPanel: document.getElementById("thinkingTabPanel"),
   configFileInput: document.getElementById("configFileInput"),
+  chainFileName: document.getElementById("chainFileName"),
 };
 
 const fieldMap = {
@@ -39,6 +58,7 @@ const fieldMap = {
   model: document.getElementById("model"),
   keep_alive: document.getElementById("keepAlive"),
   num_ctx: document.getElementById("numCtx"),
+  local_workspace_dir: document.getElementById("localWorkspaceDir"),
 };
 
 function escapeHtml(value) {
@@ -89,8 +109,11 @@ function buildPromptGrid() {
       button.addEventListener("click", () => {
         card.querySelectorAll(".group-button").forEach((candidate) => candidate.classList.remove("active"));
         button.classList.add("active");
+        updateChainOrderStatus();
       });
     });
+    card.querySelector('[data-role="enabled"]').addEventListener("change", updateChainOrderStatus);
+    card.querySelector('[data-role="text"]').addEventListener("input", updateChainOrderStatus);
     card.querySelector('[data-role="save-memory"]').addEventListener("click", () => savePromptMemory(slot));
     card.querySelector('[data-role="load-memory"]').addEventListener("click", () => loadPromptMemory(slot));
     card.querySelector('[data-role="delete-memory"]').addEventListener("click", () => deletePromptMemory(slot));
@@ -99,6 +122,9 @@ function buildPromptGrid() {
 
 function buildHistoryTargetOptions() {
   elements.historyTarget.innerHTML = promptSlots
+    .map((slot) => `<option value="${slot}">Prompt ${slot}</option>`)
+    .join("");
+  elements.workspaceTarget.innerHTML = promptSlots
     .map((slot) => `<option value="${slot}">Prompt ${slot}</option>`)
     .join("");
 }
@@ -140,6 +166,157 @@ function readPromptState() {
   });
 }
 
+function selectedPromptEntries() {
+  return readPromptState()
+    .filter((prompt) => prompt.enabled && String(prompt.text || "").trim())
+    .sort((left, right) => (left.group - right.group) || (left.slot - right.slot));
+}
+
+function formatChainOrder(entries = selectedPromptEntries()) {
+  if (!entries.length) {
+    return "선택된 프롬프트 없음";
+  }
+  const grouped = new Map();
+  for (const entry of entries) {
+    const items = grouped.get(entry.group) || [];
+    items.push(`Prompt ${entry.slot}`);
+    grouped.set(entry.group, items);
+  }
+  return [1, 2, 3]
+    .filter((group) => grouped.has(group))
+    .map((group) => `Group ${group}: ${grouped.get(group).join(", ")}`)
+    .join(" -> ");
+}
+
+function updateChainOrderStatus() {
+  elements.chainOrderStatus.textContent = `현재 체인 순서: ${formatChainOrder()}`;
+}
+
+function humanSize(sizeBytes) {
+  const value = Number(sizeBytes || 0);
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${value} bytes`;
+}
+
+function updateWorkspaceDirStatus() {
+  const value = fieldMap.local_workspace_dir.value.trim() || state.workspaceDir || state.config?.local_workspace_dir || "";
+  elements.workspaceDirStatus.textContent = value ? `클라이언트 workspace 경로: ${value}` : "클라이언트 workspace 경로 미설정";
+}
+
+function updateRemoteWorkspaceDirStatus() {
+  if (state.remoteWorkspaceError) {
+    elements.remoteWorkspaceDirStatus.textContent = `서버 workspace 조회 실패: ${state.remoteWorkspaceError}`;
+    return;
+  }
+  const value = state.remoteWorkspaceDir || "";
+  elements.remoteWorkspaceDirStatus.textContent = value ? `서버 workspace 경로: ${value}` : "서버 workspace 경로 확인 전";
+}
+
+function renderWorkspacePendingFiles() {
+  if (!state.pendingWorkspaceFiles.length) {
+    elements.workspacePendingList.innerHTML = `<div class="workspace-item"><div class="workspace-meta">업로드 대기 파일이 없습니다.</div></div>`;
+    return;
+  }
+  elements.workspacePendingList.innerHTML = state.pendingWorkspaceFiles.map((file, index) => `
+    <article class="workspace-item">
+      <header>
+        <div class="workspace-title">${escapeHtml(file.name)}</div>
+        <div class="workspace-meta">${humanSize(file.size)}</div>
+      </header>
+      <div class="workspace-actions">
+        <button class="secondary" type="button" data-remove-upload="${index}">목록 제거</button>
+      </div>
+    </article>
+  `).join("");
+  elements.workspacePendingList.querySelectorAll("[data-remove-upload]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.pendingWorkspaceFiles.splice(Number(button.dataset.removeUpload), 1);
+      renderWorkspacePendingFiles();
+    });
+  });
+}
+
+function renderWorkspaceFiles() {
+  if (!state.workspaceFiles.length) {
+    elements.workspaceFileList.innerHTML = `<div class="workspace-item"><div class="workspace-meta">workspace 파일이 없습니다.</div></div>`;
+    elements.workspaceStatus.textContent = "workspace 비어 있음";
+    updateWorkspaceDirStatus();
+    return;
+  }
+  elements.workspaceFileList.innerHTML = state.workspaceFiles.map((file) => `
+    <article class="workspace-item">
+      <header>
+        <div class="workspace-title">${escapeHtml(file.name)}</div>
+        <div class="workspace-meta">${escapeHtml(file.modified_at || "")} | ${humanSize(file.size_bytes)}</div>
+      </header>
+      <div class="workspace-path"><strong>로컬 상대 경로</strong><br>${escapeHtml(file.path)}</div>
+      <div class="workspace-path"><strong>로컬 절대 경로</strong><br>${escapeHtml(file.absolute_path || file.path || "")}</div>
+      <div class="workspace-actions">
+        <button class="secondary" type="button" data-insert-workspace="${escapeHtml(file.absolute_path || file.path)}">로컬 경로 입력</button>
+        <button class="secondary" type="button" data-download-workspace="${escapeHtml(file.name)}">다운로드</button>
+        <button class="secondary" type="button" data-rename-workspace="${escapeHtml(file.name)}">이름변경</button>
+        <button class="danger" type="button" data-delete-workspace="${escapeHtml(file.name)}">삭제</button>
+      </div>
+    </article>
+  `).join("");
+  elements.workspaceFileList.querySelectorAll("[data-insert-workspace]").forEach((button) => {
+    button.addEventListener("click", () => insertWorkspacePath(button.dataset.insertWorkspace));
+  });
+  elements.workspaceFileList.querySelectorAll("[data-download-workspace]").forEach((button) => {
+    button.addEventListener("click", () => downloadWorkspaceFile(button.dataset.downloadWorkspace));
+  });
+  elements.workspaceFileList.querySelectorAll("[data-rename-workspace]").forEach((button) => {
+    button.addEventListener("click", () => renameWorkspaceFile(button.dataset.renameWorkspace));
+  });
+  elements.workspaceFileList.querySelectorAll("[data-delete-workspace]").forEach((button) => {
+    button.addEventListener("click", () => deleteWorkspaceFile(button.dataset.deleteWorkspace));
+  });
+  elements.workspaceStatus.textContent = `${state.workspaceFiles.length}개 workspace 파일`;
+  updateWorkspaceDirStatus();
+}
+
+function renderRemoteWorkspaceFiles() {
+  if (state.remoteWorkspaceError) {
+    elements.remoteWorkspaceFileList.innerHTML = `<div class="workspace-item"><div class="workspace-meta">${escapeHtml(state.remoteWorkspaceError)}</div></div>`;
+    updateRemoteWorkspaceDirStatus();
+    return;
+  }
+  if (!state.remoteWorkspaceFiles.length) {
+    elements.remoteWorkspaceFileList.innerHTML = `<div class="workspace-item"><div class="workspace-meta">서버 workspace 파일이 없습니다.</div></div>`;
+    updateRemoteWorkspaceDirStatus();
+    return;
+  }
+  elements.remoteWorkspaceFileList.innerHTML = state.remoteWorkspaceFiles.map((file) => `
+    <article class="workspace-item">
+      <header>
+        <div class="workspace-title">${escapeHtml(file.name)}</div>
+        <div class="workspace-meta">${escapeHtml(file.modified_at || "")} | ${humanSize(file.size_bytes)}</div>
+      </header>
+      <div class="workspace-path"><strong>서버 상대 경로</strong><br>${escapeHtml(file.path || "")}</div>
+      <div class="workspace-path"><strong>서버 절대 경로</strong><br>${escapeHtml(file.absolute_path || file.path || "")}</div>
+      <div class="workspace-actions">
+        <button class="secondary" type="button" data-insert-remote-workspace="${escapeHtml(file.absolute_path || file.path)}">서버 경로 입력</button>
+      </div>
+    </article>
+  `).join("");
+  elements.remoteWorkspaceFileList.querySelectorAll("[data-insert-remote-workspace]").forEach((button) => {
+    button.addEventListener("click", () => insertWorkspacePath(button.dataset.insertRemoteWorkspace));
+  });
+  updateRemoteWorkspaceDirStatus();
+}
+
+function insertWorkspacePath(path) {
+  const slot = Number(elements.workspaceTarget.value);
+  const card = getPromptCard(slot);
+  const textarea = card.querySelector('[data-role="text"]');
+  const nextValue = textarea.value.trim() ? `${textarea.value}\n${path}` : path;
+  textarea.value = nextValue;
+  card.querySelector('[data-role="enabled"]').checked = true;
+  elements.workspaceStatus.textContent = `Prompt ${slot}에 ${path} 경로를 입력했습니다.`;
+  updateChainOrderStatus();
+}
+
 function applyPromptState(prompts) {
   const bySlot = new Map((prompts || []).map((prompt) => [Number(prompt.slot), prompt]));
   promptSlots.forEach((slot) => {
@@ -154,6 +331,7 @@ function applyPromptState(prompts) {
       button.classList.toggle("active", Number(button.dataset.group) === Number(value.group || 1));
     });
   });
+  updateChainOrderStatus();
 }
 
 function readConfigFromForm() {
@@ -167,6 +345,7 @@ function readConfigFromForm() {
     model: fieldMap.model.value.trim(),
     keep_alive: fieldMap.keep_alive.value.trim(),
     num_ctx: Number(fieldMap.num_ctx.value || 0),
+    local_workspace_dir: fieldMap.local_workspace_dir.value.trim(),
   };
 }
 
@@ -234,11 +413,18 @@ async function loadInitialState() {
   state.config = data.config;
   state.history = data.history;
   state.promptMemories = data.prompt_memories || {};
+  state.workspaceFiles = data.workspace_files || [];
+  state.workspaceDir = data.workspace_dir || data.config?.local_workspace_dir || "";
   applyConfigToForm(state.config);
   applyPromptState(state.config.prompts);
   promptSlots.forEach(renderPromptMemoryOptions);
   renderHistory();
+  renderWorkspacePendingFiles();
+  renderWorkspaceFiles();
+  updateWorkspaceDirStatus();
+  updateChainOrderStatus();
   setHeaderRuntimeStatus({runState: "정지 중", connectionState: "확인 전", detail: activeServerBaseUrl() || "Server Base URL 미입력"});
+  await refreshRemoteWorkspaceFiles();
 }
 
 async function saveConfig(config) {
@@ -248,8 +434,11 @@ async function saveConfig(config) {
     body: JSON.stringify({config: {...config, prompts: readPromptState()}}),
   });
   state.config = data.config;
+  state.workspaceDir = data.config?.local_workspace_dir || state.workspaceDir;
   applyConfigToForm(state.config);
   applyPromptState(state.config.prompts);
+  await refreshWorkspaceFiles();
+  await refreshRemoteWorkspaceFiles();
   elements.configStatus.textContent = "설정을 저장했습니다.";
 }
 
@@ -266,9 +455,33 @@ async function saveAllPrompts() {
     body: JSON.stringify({config: nextConfig}),
   });
   state.config = data.config;
+  state.workspaceDir = data.config?.local_workspace_dir || state.workspaceDir;
   applyConfigToForm(state.config);
   applyPromptState(state.config.prompts);
+  await refreshWorkspaceFiles();
+  await refreshRemoteWorkspaceFiles();
   elements.runStatus.textContent = "프롬프트 전체를 저장했습니다.";
+}
+
+async function saveChainFile() {
+  elements.chainSaveStatus.textContent = "체인 파일을 저장하는 중입니다.";
+  const payload = {
+    name: elements.chainFileName.value.trim(),
+    config: {
+      ...(state.config || {}),
+      ...readConfigFromForm(),
+      prompts: readPromptState(),
+    },
+  };
+  const data = await requestJson("/api/save-chain-file", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload),
+  });
+  elements.chainSaveStatus.textContent = `체인 파일 저장 완료: ${data.file_path} (${Number(data.size_bytes || 0).toLocaleString()} bytes) | ${data.order_label}`;
+  if (!elements.chainFileName.value.trim()) {
+    elements.chainFileName.value = data.file_name || "";
+  }
 }
 
 async function saveAuthOnly() {
@@ -307,6 +520,13 @@ function renderHistory() {
     elements.historyStatus.textContent = "히스토리 비어 있음";
     return;
   }
+  const previewText = (value) => {
+    const singleLine = String(value || "").replace(/\s+/g, " ").trim();
+    if (singleLine.length <= 90) {
+      return singleLine;
+    }
+    return `${singleLine.slice(0, 90)}...`;
+  };
   elements.historyList.innerHTML = state.history.map((entry) => `
     <article class="history-item">
       <header>
@@ -316,7 +536,7 @@ function renderHistory() {
         </div>
         <div class="history-meta">Group ${entry.group} | ${escapeHtml(entry.updated_at)}</div>
       </header>
-      <div class="history-preview">${escapeHtml(entry.text)}</div>
+      <div class="history-preview">${escapeHtml(previewText(entry.text))}</div>
     </article>
   `).join("");
   elements.historyStatus.textContent = `${state.history.length}개 프롬프트 저장됨`;
@@ -341,6 +561,138 @@ async function refreshPromptMemories() {
   const data = await requestJson("/api/prompt-memories");
   state.promptMemories = data.prompt_memories || {};
   promptSlots.forEach(renderPromptMemoryOptions);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      const marker = "base64,";
+      const offset = value.indexOf(marker);
+      if (offset < 0) {
+        reject(new Error(`base64 인코딩 실패: ${file.name}`));
+        return;
+      }
+      resolve(value.slice(offset + marker.length));
+    };
+    reader.onerror = () => reject(reader.error || new Error(`파일 읽기 실패: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+function addPendingWorkspaceFiles(fileList) {
+  const nextFiles = [...(fileList || [])].filter((file) => file && file.name);
+  if (!nextFiles.length) {
+    return;
+  }
+  const existing = new Set(state.pendingWorkspaceFiles.map((file) => `${file.name}:${file.size}:${file.lastModified || 0}`));
+  for (const file of nextFiles) {
+    const key = `${file.name}:${file.size}:${file.lastModified || 0}`;
+    if (!existing.has(key)) {
+      state.pendingWorkspaceFiles.push(file);
+      existing.add(key);
+    }
+  }
+  renderWorkspacePendingFiles();
+  elements.workspaceUploadStatus.textContent = `${state.pendingWorkspaceFiles.length}개 파일 업로드 대기 중`;
+}
+
+async function refreshWorkspaceFiles() {
+  const data = await requestJson("/api/workspace/files");
+  state.workspaceFiles = data.files || [];
+  state.workspaceDir = data.workspace_dir || fieldMap.local_workspace_dir.value.trim() || state.workspaceDir;
+  renderWorkspaceFiles();
+}
+
+async function refreshRemoteWorkspaceFiles() {
+  const data = await requestJson("/api/workspace/remote-files");
+  state.remoteWorkspaceFiles = data.files || [];
+  state.remoteWorkspaceDir = data.workspace_dir || "";
+  state.remoteWorkspaceError = data.ok === false ? String(data.error || data.url || "remote workspace unavailable") : "";
+  renderRemoteWorkspaceFiles();
+}
+
+async function uploadWorkspaceFiles() {
+  if (!state.pendingWorkspaceFiles.length) {
+    elements.workspaceUploadStatus.textContent = "업로드할 파일을 먼저 추가하세요.";
+    return;
+  }
+  elements.workspaceUploadStatus.textContent = `${state.pendingWorkspaceFiles.length}개 파일을 업로드하는 중입니다.`;
+  const files = await Promise.all(state.pendingWorkspaceFiles.map(async (file) => ({
+    name: file.name,
+    content_base64: await fileToBase64(file),
+  })));
+  const data = await requestJson("/api/workspace/upload", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({files, config: readConfigFromForm()}),
+  });
+  const remoteSync = data.remote_sync || {};
+  state.workspaceFiles = data.files || [];
+  state.workspaceDir = data.workspace_dir || state.workspaceDir;
+  state.pendingWorkspaceFiles = [];
+  renderWorkspacePendingFiles();
+  renderWorkspaceFiles();
+  if (remoteSync.ok) {
+    await refreshRemoteWorkspaceFiles();
+  } else {
+    renderRemoteWorkspaceFiles();
+  }
+  const localSaved = (data.saved || []).length;
+  if (remoteSync.attempted && remoteSync.ok) {
+    elements.workspaceUploadStatus.textContent = `${localSaved}개 파일을 로컬 workspace와 서버 workspace에 저장했습니다. 서버 저장 ${Number(remoteSync.saved_count || 0)}개`;
+    return;
+  }
+  if (remoteSync.attempted && !remoteSync.ok) {
+    elements.workspaceUploadStatus.textContent = `${localSaved}개 파일을 로컬 workspace에 저장했습니다. 서버 workspace 업로드 실패: ${remoteSync.error || remoteSync.url || "unknown error"}`;
+    return;
+  }
+  elements.workspaceUploadStatus.textContent = `${localSaved}개 파일을 로컬 workspace에 저장했습니다.`;
+}
+
+async function deleteWorkspaceFile(name) {
+  if (!window.confirm(`${name} 파일을 workspace에서 삭제하시겠습니까?`)) {
+    return;
+  }
+  elements.workspaceStatus.textContent = `${name} 삭제 중`;
+  const data = await requestJson("/api/workspace/delete", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name}),
+  });
+  state.workspaceFiles = data.files || [];
+  state.workspaceDir = data.workspace_dir || state.workspaceDir;
+  renderWorkspaceFiles();
+  elements.workspaceStatus.textContent = `${data.deleted} 파일을 삭제했습니다.`;
+  await refreshRemoteWorkspaceFiles();
+}
+
+async function renameWorkspaceFile(name) {
+  const nextName = window.prompt("새 파일 이름을 입력하세요.", name);
+  if (nextName === null) {
+    return;
+  }
+  if (!String(nextName).trim()) {
+    elements.workspaceStatus.textContent = "새 파일 이름을 입력하세요.";
+    return;
+  }
+  elements.workspaceStatus.textContent = `${name} 이름 변경 중`;
+  const data = await requestJson("/api/workspace/rename", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({old_name: name, new_name: String(nextName).trim()}),
+  });
+  state.workspaceFiles = data.files || [];
+  state.workspaceDir = data.workspace_dir || state.workspaceDir;
+  renderWorkspaceFiles();
+  elements.workspaceStatus.textContent = `${name} -> ${data.renamed.name}`;
+  await refreshRemoteWorkspaceFiles();
+}
+
+function downloadWorkspaceFile(name) {
+  window.location.href = `/api/workspace/download?name=${encodeURIComponent(name)}`;
+  elements.workspaceStatus.textContent = `${name} 다운로드를 시작했습니다.`;
 }
 
 async function savePromptMemory(slot) {
@@ -426,6 +778,7 @@ function loadHistoryToPrompt() {
 
 function summarizeResult(data) {
   const lines = [
+    `실행 프롬프트 순서: ${data.order_label || "-"}`,
     `사용 서버: ${data.server_base_url || "-"}`,
     `Generate URL: ${data.generate_url || "-"}`,
     `최종 모델: ${data.final_model || "-"}`,
@@ -456,6 +809,7 @@ function extractThinkingBlocks(text) {
 function summarizeThinking(data) {
   const thoughtCount = data.steps.filter((step) => String(step.thinking || "").trim() || extractThinkingBlocks(step.response).thinking).length;
   const lines = [
+    `실행 프롬프트 순서: ${data.order_label || "-"}`,
     `Thinking 포함 단계 수: ${thoughtCount}`,
     `전체 체인 단계 수: ${data.steps.length}`,
     `최종 서버: ${data.server_base_url || "-"}`,
@@ -532,6 +886,7 @@ function activateTab(name) {
 
 async function runChain() {
   elements.runStatus.textContent = "그룹 체인 실행 중입니다.";
+  elements.chainOrderStatus.textContent = `현재 체인 순서: ${formatChainOrder()}`;
   setHeaderRuntimeStatus({runState: "실행 중", connectionState: "연결 시도 중", detail: activeServerBaseUrl()});
   const config = {...readConfigFromForm(), prompts: readPromptState()};
   const data = await requestJson("/api/run-chain", {
@@ -545,6 +900,7 @@ async function runChain() {
   summarizeThinking(data);
   renderThinkingSteps(data.steps);
   elements.runStatus.textContent = `실행 완료: ${data.elapsed_seconds.toFixed(2)}s, 그룹 ${data.steps.length}개`;
+  elements.chainOrderStatus.textContent = `현재 체인 순서: ${data.order_label || formatChainOrder()}`;
   setHeaderRuntimeStatus({runState: "정지 중", connectionState: "연결됨", detail: data.generate_url || data.server_base_url || activeServerBaseUrl()});
   await refreshHistory();
 }
@@ -575,6 +931,8 @@ async function importConfigFromFile(file) {
   const config = JSON.parse(text);
   applyConfigToForm(config);
   applyPromptState(config.prompts || []);
+  state.workspaceDir = config.local_workspace_dir || state.workspaceDir;
+  updateWorkspaceDirStatus();
   elements.configStatus.textContent = "설정 파일을 불러왔습니다. 저장 버튼으로 반영하세요.";
 }
 
@@ -591,6 +949,14 @@ document.getElementById("saveAllPrompts").addEventListener("click", async () => 
     await saveAllPrompts();
   } catch (error) {
     elements.runStatus.textContent = String(error);
+  }
+});
+
+document.getElementById("saveChainFile").addEventListener("click", async () => {
+  try {
+    await saveChainFile();
+  } catch (error) {
+    elements.chainSaveStatus.textContent = String(error);
   }
 });
 
@@ -635,6 +1001,46 @@ document.getElementById("deleteHistory").addEventListener("click", async () => {
 document.getElementById("loadHistoryToPrompt").addEventListener("click", loadHistoryToPrompt);
 document.getElementById("exportConfig").addEventListener("click", exportConfig);
 document.getElementById("importConfig").addEventListener("click", () => elements.configFileInput.click());
+document.getElementById("uploadWorkspaceFiles").addEventListener("click", async () => {
+  try {
+    await uploadWorkspaceFiles();
+  } catch (error) {
+    elements.workspaceUploadStatus.textContent = `업로드 실패: ${error}`;
+  }
+});
+document.getElementById("refreshWorkspaceFiles").addEventListener("click", async () => {
+  try {
+    elements.workspaceStatus.textContent = "workspace 파일 목록을 새로고침하는 중입니다.";
+    await refreshWorkspaceFiles();
+    await refreshRemoteWorkspaceFiles();
+  } catch (error) {
+    elements.workspaceStatus.textContent = `목록 갱신 실패: ${error}`;
+  }
+});
+fieldMap.local_workspace_dir.addEventListener("input", updateWorkspaceDirStatus);
+elements.workspaceFileInput.addEventListener("change", (event) => {
+  addPendingWorkspaceFiles(event.target.files || []);
+  event.target.value = "";
+});
+elements.dropZone.addEventListener("click", () => elements.workspaceFileInput.click());
+elements.dropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  elements.dropZone.classList.add("dragover");
+});
+elements.dropZone.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  elements.dropZone.classList.add("dragover");
+});
+elements.dropZone.addEventListener("dragleave", (event) => {
+  if (!elements.dropZone.contains(event.relatedTarget)) {
+    elements.dropZone.classList.remove("dragover");
+  }
+});
+elements.dropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  elements.dropZone.classList.remove("dragover");
+  addPendingWorkspaceFiles(event.dataTransfer?.files || []);
+});
 elements.configFileInput.addEventListener("change", async (event) => {
   const [file] = event.target.files || [];
   if (!file) return;

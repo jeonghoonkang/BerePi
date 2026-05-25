@@ -8,7 +8,7 @@ app.innerHTML = `
     <section class="hero">
       <div>
         <p class="eyebrow">zero-native desktop shell</p>
-        <h1>Gemma4 Prompt Client</h1>
+        <h1>Prompt Chain Client</h1>
         <p class="lede">
           This native shell embeds the local client service that manages remote prompt chaining,
           config files, and prompt history for <code>run_gemma4_ollama/server</code>.
@@ -22,7 +22,7 @@ app.innerHTML = `
         <span>Embedded local client</span>
         <code>${clientUrl}</code>
       </div>
-      <iframe class="viewer" src="${clientUrl}" title="Gemma4 Prompt Client"></iframe>
+      <iframe class="viewer" src="${clientUrl}" title="Prompt Chain Client"></iframe>
     </section>
   </main>
 `;

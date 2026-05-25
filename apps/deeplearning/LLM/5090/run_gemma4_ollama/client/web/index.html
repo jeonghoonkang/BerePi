@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gemma4 Prompt Client</title>
+  <title>Prompt Chain Client</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <header class="masthead">
       <div>
         <p class="eyebrow">remote chain client</p>
-        <h1>Gemma4 Prompt Client</h1>
+        <h1>Prompt Chain Client</h1>
         <p class="lede">
           `run_gemma4_ollama/server` API를 대상으로 6개 프롬프트를 그룹 체인으로 실행하는 로컬 데스크톱 클라이언트입니다.
         </p>
@@ -48,6 +48,7 @@
             <label>Model Override<input id="model" placeholder="gemma4:31b or blank"></label>
             <label>Keep Alive<input id="keepAlive" placeholder="60m"></label>
             <label>num_ctx<input id="numCtx" type="number" min="0" step="1"></label>
+            <label>Client Workspace Dir<input id="localWorkspaceDir" placeholder="/Users/you/Documents/PromptChainWorkspace"></label>
           </div>
           <div class="auth-save-row">
             <button id="saveAuth" class="primary">User ID / Password 저장</button>
@@ -65,6 +66,10 @@
               <p>각 프롬프트는 선택 여부와 그룹 1~3을 가집니다. 그룹 2부터는 이전 그룹 응답 뒤에 현재 그룹 프롬프트를 이어 붙여 재전송합니다.</p>
             </div>
             <div class="group-legend">
+              <label class="chain-name-field">체인 파일 이름
+                <input id="chainFileName" placeholder="비우면 자동 파일명">
+              </label>
+              <button id="saveChainFile" class="secondary" type="button">체인 파일 저장</button>
               <button id="saveAllPrompts" class="primary" type="button">전체 저장</button>
               <span>총 6개 프롬프트</span>
               <span>그룹 1 → 2 → 3 순차 실행</span>
@@ -73,6 +78,12 @@
           <div id="promptGrid" class="prompt-grid"></div>
           <div class="status-strip">
             <span id="runStatus">실행 대기 중</span>
+          </div>
+          <div class="status-strip">
+            <span id="chainOrderStatus">현재 체인 순서: 선택된 프롬프트 없음</span>
+          </div>
+          <div class="status-strip">
+            <span id="chainSaveStatus">체인 파일 저장 대기</span>
           </div>
         </section>
 
@@ -108,7 +119,42 @@
       </section>
 
       <aside class="right-column">
-        <section class="panel sticky-panel">
+        <section class="panel history-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Workspace Files</h2>
+              <p>엑셀 같은 데이터 파일을 드래그앤드롭으로 올리고, 업로드 후 경로를 프롬프트에 삽입하거나 다운로드, 이름변경, 삭제할 수 있습니다.</p>
+            </div>
+          </div>
+          <div id="dropZone" class="drop-zone">
+            <input id="workspaceFileInput" type="file" multiple hidden>
+            <strong>파일을 여기에 드래그앤드롭</strong>
+            <span>또는 클릭해서 선택</span>
+          </div>
+          <div class="workspace-toolbar">
+            <label>경로 삽입 대상
+              <select id="workspaceTarget"></select>
+            </label>
+            <button id="uploadWorkspaceFiles" class="primary" type="button">업로드</button>
+            <button id="refreshWorkspaceFiles" class="secondary" type="button">새로고침</button>
+          </div>
+          <div class="status-strip">
+            <span id="workspaceDirStatus">workspace 경로를 불러오는 중입니다.</span>
+          </div>
+          <div id="workspacePendingList" class="workspace-list"></div>
+          <div class="status-strip">
+            <span id="workspaceUploadStatus">업로드 대기</span>
+          </div>
+          <div id="workspaceFileList" class="workspace-list"></div>
+          <div class="status-strip">
+            <span id="remoteWorkspaceDirStatus">서버 workspace 경로를 불러오는 중입니다.</span>
+          </div>
+          <div id="remoteWorkspaceFileList" class="workspace-list"></div>
+          <div class="status-strip">
+            <span id="workspaceStatus">workspace 파일을 불러오는 중입니다.</span>
+          </div>
+        </section>
+        <section class="panel history-panel">
           <div class="panel-header">
             <div>
               <h2>프롬프트 히스토리</h2>

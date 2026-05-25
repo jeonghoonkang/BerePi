@@ -1,4 +1,4 @@
-# ZeroNative Prompt Client
+# Prompt Chain Client
 
 This directory contains a cross-platform desktop client shell for the
 `run_gemma4_ollama/server` service.

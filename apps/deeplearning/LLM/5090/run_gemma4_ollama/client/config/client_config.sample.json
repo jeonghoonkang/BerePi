@@ -7,5 +7,6 @@
   "password": "change-me-now",
   "model": "",
   "keep_alive": "60m",
-  "num_ctx": 8192
+  "num_ctx": 8192,
+  "local_workspace_dir": "~/Documents/PromptChainWorkspace"
 }
