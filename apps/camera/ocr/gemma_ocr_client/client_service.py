@@ -37,6 +37,10 @@ DEFAULT_CONFIG = {
     "ocr_prompt": "Extract all visible text from the image. Preserve line breaks and reading order. Return only the OCR text.",
 }
 
+TEST_IMAGE_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
+
 
 def ensure_data_files() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -250,6 +254,56 @@ def run_ocr(config: dict[str, Any], images: list[dict[str, Any]], prompt: str) -
     return {"result": entry, "raw": data, "history": append_history(entry)}
 
 
+def build_image_transfer_test_payload(config: dict[str, Any], images: list[dict[str, Any]]) -> dict[str, Any]:
+    clean_images = [clean_image_item(item) for item in images]
+    if not clean_images:
+        clean_images = [
+            {
+                "name": "embedded-1x1-test.png",
+                "mime_type": "image/png",
+                "content_base64": TEST_IMAGE_BASE64,
+            }
+        ]
+    payload: dict[str, Any] = {
+        "user_id": config["user_id"],
+        "password": config["password"],
+        "images": [image["content_base64"] for image in clean_images],
+    }
+    if config.get("model"):
+        payload["model"] = config["model"]
+    return payload
+
+
+def test_image_transfer(config: dict[str, Any], images: list[dict[str, Any]]) -> dict[str, Any]:
+    if not config.get("server_base_url"):
+        raise ValueError("Gemma model URL is required.")
+    url = join_url(config["server_base_url"], "/api/test-image-transfer")
+    payload = build_image_transfer_test_payload(config, images)
+    image_count = len(payload["images"])
+    started = time.perf_counter()
+    try:
+        data = request_json(url, payload, int(config["request_timeout_seconds"]), basic_auth_header(config))
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.NOT_FOUND:
+            raise ValueError(
+                f"Image transfer test endpoint not found: {url}. "
+                "Restart or update the Gemma server with /api/test-image-transfer support."
+            ) from exc
+        raise
+    except urllib.error.URLError as exc:
+        raise ValueError(f"Could not connect to Gemma image-transfer test endpoint: {url} | {exc}") from exc
+    elapsed = time.perf_counter() - started
+    return {
+        "ok": bool(data.get("ok")),
+        "test_url": url,
+        "client_image_count": image_count,
+        "server_image_count": data.get("image_count"),
+        "elapsed_seconds": elapsed,
+        "message": str(data.get("message") or ""),
+        "raw": data,
+    }
+
+
 def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
     url = join_url(config["server_base_url"], config["status_path"])
     try:
@@ -319,6 +373,10 @@ class ClientHandler(BaseHTTPRequestHandler):
             if self.path == "/api/test-connection":
                 config = runtime_config(incoming.get("config"))
                 self.send_json({"status": fetch_remote_status(config)})
+                return
+            if self.path == "/api/test-image-transfer":
+                config = runtime_config(incoming.get("config"))
+                self.send_json({"status": test_image_transfer(config, incoming.get("images") or [])})
                 return
             if self.path == "/api/ocr":
                 config = runtime_config(incoming.get("config"))

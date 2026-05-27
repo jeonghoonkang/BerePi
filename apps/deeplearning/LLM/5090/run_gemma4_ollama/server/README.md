@@ -71,6 +71,15 @@ forwards `images` to Ollama's `/api/generate` payload.
 Use a model that supports image input. If the selected model is text-only, it may
 ignore the image and hallucinate a plausible answer.
 
+To verify image delivery without running model inference, call:
+
+```text
+POST /api/test-image-transfer
+```
+
+with the same authentication fields and an `images` array. The response includes
+`image_count`.
+
 ## Stop
 
 ```bash

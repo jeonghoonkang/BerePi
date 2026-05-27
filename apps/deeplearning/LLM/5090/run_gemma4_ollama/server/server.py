@@ -1627,6 +1627,27 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+        if self.path == "/api/test-image-transfer":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                user_id, password = credentials_from_request(self.headers, incoming)
+                if not is_authorized_user(user_id, password):
+                    self.send_auth_error("invalid user id or password")
+                    return
+                images = images_from_request(incoming)
+                self.send_json(
+                    {
+                        "ok": True,
+                        "message": f"Received {len(images)} image(s).",
+                        "image_count": len(images),
+                        "model": str(incoming.get("model") or read_selected_model()),
+                    }
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
         if self.path != "/api/generate":
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return

@@ -25,6 +25,7 @@ const elements = {
   imageList: document.getElementById("imageList"),
   runStatus: document.getElementById("runStatus"),
   runOcr: document.getElementById("runOcr"),
+  testImageTransfer: document.getElementById("testImageTransfer"),
   resultText: document.getElementById("resultText"),
   historyList: document.getElementById("historyList"),
 };
@@ -322,6 +323,41 @@ async function runOcr() {
   }
 }
 
+function selectedImagePayloads() {
+  return state.images
+    .filter((image) => image.selected)
+    .map(({name, mime_type, content_base64}) => ({name, mime_type, content_base64}));
+}
+
+async function testImageTransfer() {
+  elements.testImageTransfer.disabled = true;
+  elements.runStatus.textContent = "이미지 전송 테스트 중";
+  try {
+    const payloadImages = selectedImagePayloads();
+    const data = await requestJson("/api/test-image-transfer", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        config: readConfigFromForm(),
+        images: payloadImages,
+      }),
+    });
+    const status = data.status || {};
+    const clientCount = status.client_image_count === undefined || status.client_image_count === null
+      ? "확인 불가"
+      : `${Number(status.client_image_count || 0)}개`;
+    const serverCount = status.server_image_count === undefined || status.server_image_count === null
+      ? "확인 불가"
+      : `${Number(status.server_image_count || 0)}개`;
+    const sourceLabel = payloadImages.length ? "선택 이미지" : "내장 테스트 이미지";
+    elements.runStatus.textContent = `이미지 전송 테스트 완료: ${sourceLabel} ${clientCount} 전송 · 서버 수신 ${serverCount} · ${(Number(status.elapsed_seconds || 0)).toFixed(2)}초`;
+  } catch (error) {
+    elements.runStatus.textContent = `이미지 전송 테스트 실패: ${error}`;
+  } finally {
+    elements.testImageTransfer.disabled = false;
+  }
+}
+
 async function copyResult() {
   const text = elements.resultText.textContent || "";
   if (!text.trim()) {
@@ -348,6 +384,10 @@ document.getElementById("pasteClipboard").addEventListener("click", () => pasteC
 }));
 document.getElementById("runOcr").addEventListener("click", () => runOcr().catch((error) => {
   elements.runStatus.textContent = `OCR 실패: ${error}`;
+}));
+document.getElementById("testImageTransfer").addEventListener("click", () => testImageTransfer().catch((error) => {
+  elements.runStatus.textContent = `이미지 전송 테스트 실패: ${error}`;
+  elements.testImageTransfer.disabled = false;
 }));
 document.getElementById("copyResult").addEventListener("click", () => copyResult().catch((error) => {
   elements.runStatus.textContent = `복사 실패: ${error}`;
