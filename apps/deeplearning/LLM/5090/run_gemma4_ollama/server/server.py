@@ -1033,6 +1033,26 @@ def combined_prompt_from_request(incoming: dict[str, Any]) -> tuple[str, list[st
     return "\n\n".join(prompts), prompts
 
 
+def images_from_request(incoming: dict[str, Any]) -> list[str]:
+    raw_images = incoming.get("images")
+    if raw_images is None:
+        return []
+    if not isinstance(raw_images, list):
+        raise ValueError("images must be a list of base64-encoded image strings")
+
+    images: list[str] = []
+    for index, raw_image in enumerate(raw_images, start=1):
+        image = str(raw_image or "").strip()
+        if not image:
+            continue
+        try:
+            base64.b64decode(image, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError(f"images[{index}] is not valid base64: {exc}") from exc
+        images.append(image)
+    return images
+
+
 def request_options(incoming: dict[str, Any]) -> dict[str, Any]:
     raw_options = incoming.get("options")
     options = dict(raw_options) if isinstance(raw_options, dict) else {}
@@ -1629,8 +1649,15 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 "keep_alive": request_keep_alive(incoming),
                 "stream": False,
             }
+            images = images_from_request(incoming)
+            if images:
+                payload["images"] = images
             result = run_queued_prompt(payload)
+            if images:
+                result["image_count"] = len(images)
             self.send_json(result)
+        except ValueError as exc:
+            self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
 

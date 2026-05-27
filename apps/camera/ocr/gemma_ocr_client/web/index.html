@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemma OCR Client</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="settings-panel">
+      <div class="brand-block">
+        <p class="eyebrow">foundation model OCR</p>
+        <h1>Gemma OCR Client</h1>
+      </div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Gemma 연결</h2>
+          <span id="connectionStatus">설정 대기</span>
+        </div>
+        <div class="form-stack">
+          <label>Gemma Model URL<input id="serverBaseUrl" placeholder="http://127.0.0.1:8082"></label>
+          <label>Generate Path<input id="generatePath" placeholder="/api/generate"></label>
+          <label>Status Path<input id="statusPath" placeholder="/api/status"></label>
+          <label>User ID<input id="userId" autocomplete="username"></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+          <label>Model Override<input id="model" placeholder="gemma3:27b or blank"></label>
+          <div class="inline-fields">
+            <label>Timeout<input id="requestTimeout" type="number" min="5" step="1"></label>
+            <label>num_ctx<input id="numCtx" type="number" min="0" step="1"></label>
+          </div>
+          <label>Keep Alive<input id="keepAlive" placeholder="60m"></label>
+        </div>
+        <div class="button-row">
+          <button id="saveConfig" type="button">설정 저장</button>
+          <button id="testConnection" class="secondary" type="button">연결 확인</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>OCR 프롬프트</h2>
+        </div>
+        <textarea id="ocrPrompt" spellcheck="false"></textarea>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <header class="workspace-header">
+        <div>
+          <h2>이미지 OCR</h2>
+          <p>클립보드 이미지를 붙여넣거나 이미지 파일을 올려 모델에 전송합니다.</p>
+        </div>
+        <div class="run-actions">
+          <button id="pasteClipboard" class="secondary" type="button">클립보드 이미지</button>
+          <button id="runOcr" type="button">OCR 실행</button>
+        </div>
+      </header>
+
+      <section id="dropZone" class="drop-zone">
+        <input id="fileInput" type="file" accept="image/*" multiple hidden>
+        <strong>이미지 파일을 놓거나 클릭해서 선택</strong>
+        <span>PNG, JPG, WEBP 등 브라우저가 읽을 수 있는 이미지</span>
+      </section>
+
+      <div class="status-line" id="imageStatus">선택된 이미지 없음</div>
+      <section id="imageList" class="image-list"></section>
+
+      <section class="result-layout">
+        <article class="result-panel">
+          <div class="panel-heading">
+            <h2>OCR 결과</h2>
+            <div class="button-row compact">
+              <button id="copyResult" class="secondary" type="button">복사</button>
+              <button id="clearResult" class="secondary" type="button">비우기</button>
+            </div>
+          </div>
+          <pre id="resultText" class="result-text">아직 OCR 결과가 없습니다.</pre>
+          <div id="runStatus" class="status-line">실행 대기</div>
+        </article>
+
+        <aside class="history-panel">
+          <div class="panel-heading">
+            <h2>최근 결과</h2>
+            <button id="clearHistory" class="secondary compact-button" type="button">초기화</button>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </aside>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

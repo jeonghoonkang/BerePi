@@ -55,6 +55,22 @@ API clients can pass credentials with HTTP Basic Auth or with JSON fields:
 {"user_id": "admin", "password": "change-me-now", "prompt": "hello"}
 ```
 
+Vision/OCR clients can also pass Ollama-compatible base64 images. The server
+forwards `images` to Ollama's `/api/generate` payload.
+
+```json
+{
+  "user_id": "admin",
+  "password": "change-me-now",
+  "prompt": "Extract all visible text from this image.",
+  "images": ["base64-image-data"],
+  "model": "vision-capable-model"
+}
+```
+
+Use a model that supports image input. If the selected model is text-only, it may
+ignore the image and hallucinate a plausible answer.
+
 ## Stop
 
 ```bash
