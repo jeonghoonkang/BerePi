@@ -34,6 +34,9 @@ sequenceDiagram
     Client-->>UI: Updated Config
 
     Note over UI, Client: 5. 이미지 전송 및 OCR 실행
+    UI->>Client: POST /api/webdav-image/search (WebDAV path)
+    Client->>Client: HEAD/Range GET or PROPFIND Depth:1
+    Client-->>UI: WebDAV remote image file list
     UI->>Client: POST /api/ocr (config, prompt, images)
     Client->>Client: clean_image_item() (Validation)
     Client->>Client: build_generate_payload()
@@ -50,7 +53,8 @@ sequenceDiagram
 3. **연결 및 통신 확인**:
    - **연결 확인**: 사용자가 '연결 확인' 버튼을 누르면 `/api/test-connection` 엔드포인트를 통해 원격 Ollama/Gemma 서버의 `/api/status` (혹은 지정된 경로)로 요청을 전송해 원격 서버의 구동 유무를 검사합니다.
    - **이미지 전송 확인**: 런타임 추론(Inference) 비용을 발생시키지 않고 서버에 파일 데이터를 실어 보낼 수 있는지 테스트하기 위해 `/api/test-image-transfer`를 원격 서버의 동명 API로 프록시하여 확인합니다.
-4. **OCR 수행**: 사용자가 이미지(업로드 또는 클립보드)를 업로드하고 'OCR 실행' 버튼을 누르면 브라우저가 base64로 인코딩된 이미지 목록을 로컬 서버로 전달하며, 로컬 서버는 이를 원격 모델 사양에 맞는 구조로 패키징하여 전달하고, 수신된 응답에서 최종 텍스트만 추출하여 사용자에게 리턴하는 동시에 히스토리 데이터베이스에 영구 기록합니다.
+4. **WebDAV 파일 검색 및 선택**: 사용자가 WebDAV 경로를 입력하면 `/api/webdav-image/search`가 직접 이미지 URL 또는 WebDAV 디렉터리에서 이미지 파일을 검색합니다. 검색된 원격 파일 목록은 브라우저의 파일 선택 영역 아래에 표시되며, 사용자가 선택한 항목만 `/api/webdav-image`로 다운로드되어 OCR 이미지 목록에 추가됩니다. 원격 파일을 체크한 상태에서 바로 OCR을 실행하면 선택된 WebDAV 파일을 먼저 다운로드한 뒤 OCR 요청 이미지에 포함합니다.
+5. **OCR 수행**: 사용자가 이미지(업로드, 클립보드 또는 WebDAV 원격 파일)를 업로드하고 'OCR 실행' 버튼을 누르면 브라우저가 선택 이미지를 순서대로 한 장씩 로컬 서버로 전달합니다. 각 이미지의 OCR 응답을 받은 뒤 다음 이미지를 전송하며, 파일별 결과를 화면에 누적 표시하고 히스토리 데이터베이스에 각각 기록합니다.
 
 ---
 
@@ -72,7 +76,7 @@ sequenceDiagram
       "server_base_url": str,
       "generate_path": str,
       "status_path": str,
-      "request_timeout_seconds": int (최솟값 5),
+      "request_timeout_seconds": int (최솟값 5, 기본값 600),
       "user_id": str,
       "password": str,
       "model": str,
@@ -98,6 +102,12 @@ sequenceDiagram
   - `entry`: 기록하고자 하는 개별 OCR 작업 결과물 정보.
 - **출력**: 신규 데이터가 최상단에 병합된 전체 이력 목록.
 
+#### `read_webdav_history() -> list[dict[str, Any]]`
+- **출력**: `data/webdav_history.json` 파일에 저장된 WebDAV 연결 설정 목록 (최대 20개 제한).
+
+#### `read_result_webdav_history() -> list[dict[str, Any]]`
+- **출력**: `data/result_webdav_history.json` 파일에 저장된 OCR 결과 저장용 WebDAV 경로 목록 (최대 50개 제한).
+
 ---
 
 ### 2.2. 통신 및 비즈니스 로직 함수
@@ -107,7 +117,7 @@ sequenceDiagram
 - **입력**:
   - `url`: 대상 API Endpoint URL (String)
   - `payload`: POST 전송할 JSON 딕셔너리 (GET의 경우 `None` 전달)
-  - `timeout`: 타임아웃 제한 시간 (Seconds)
+  - `timeout`: 타임아웃 제한 시간 (Seconds). 기본 요청 제한 시간은 600초입니다.
   - `extra_headers`: 추가로 첨부할 HTTP 헤더 딕셔너리
 - **출력**: 수신 후 파싱이 완료된 JSON 결과 딕셔너리.
 - **예외**: 통신 장애 혹은 JSON 파싱 에러 시 `ValueError`가 발생합니다.
@@ -141,6 +151,15 @@ sequenceDiagram
           "generate_url": str,     # 실제 타격한 API 주소
           "model": str,            # 실제 적용된 모델 이름
           "image_names": list[str],# 파일명 리스트
+          "images": [
+              {
+                  "name": str,
+                  "mime_type": str,
+                  "source": str,    # webdav/file/clipboard 등
+                  "url": str        # WebDAV 파일인 경우 접근 URL
+              }
+          ],
+          "webdav_urls": list[str], # WebDAV OCR 입력 파일 접근 URL 목록
           "image_count": int,      # 전달한 이미지 개수
           "server_image_count": int|None,
           "server_response_keys": list[str],
@@ -168,6 +187,47 @@ sequenceDiagram
   }
   ```
 
+#### `search_webdav_image_path(config: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]`
+- **설명**: WebDAV 경로 또는 직접 이미지 URL에서 이미지 파일을 검색합니다. 직접 이미지 URL은 `HEAD`/`Range GET`으로 확인하고, WebDAV 디렉터리는 `PROPFIND Depth: 1`로 하위 이미지 파일을 찾습니다.
+- **입력**: `config`, `slot`, `url`, `username`, `password`
+- **출력**:
+  ```python
+  {
+      "ok": True,
+      "slot": 1,
+      "url": "...",
+      "method": "HEAD|GET Range|PROPFIND",
+      "matched_image_count": 2,
+      "matched_images": [
+          {
+              "id": "webdav-file-...",
+              "slot": 1,
+              "name": "image.png",
+              "url": "https://...",
+              "content_type": "image/png",
+              "content_length": 12345
+          }
+      ]
+  }
+  ```
+
+#### `save_ocr_result_to_webdav(config: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]`
+- **설명**: 현재 OCR 결과 표시창의 텍스트를 WebDAV 출력 경로에 `.txt` 파일로 저장합니다. `Sub Path`가 있으면 `MKCOL`로 하위 경로 생성을 시도한 뒤 `PUT`으로 업로드합니다.
+- **입력**: `config`, `content`, `url`, `sub_path`, `username`, `password`
+- **출력**:
+  ```python
+  {
+      "ok": True,
+      "url": "https://.../hostname_YYYYMMDD_HHMMSS_mmm.txt",
+      "file_name": "hostname_YYYYMMDD_HHMMSS_mmm.txt",
+      "host": "hostname",
+      "sub_path": "optional/sub/path",
+      "status_code": 201,
+      "elapsed_seconds": 0.12,
+      "history": list[dict[str, Any]]
+  }
+  ```
+
 ---
 
 ## 3. 웹 클라이언트 HTTP API 사양 (API Endpoints)
@@ -180,7 +240,9 @@ sequenceDiagram
   ```json
   {
     "config": { ... },
-    "history": [ ... ]
+    "history": [ ... ],
+    "webdav_history": [ ... ],
+    "result_webdav_history": [ ... ]
   }
   ```
 
@@ -189,7 +251,9 @@ sequenceDiagram
 - **요청 본문**:
   ```json
   {
-    "config": { ... }
+    "config": { ... },
+    "webdav_history": [ ... ],
+    "result_webdav_history": [ ... ]
   }
   ```
 - **응답 본문**:
@@ -211,8 +275,8 @@ sequenceDiagram
   ```json
   {
     "status": {
-      "server_base_url": "http://127.0.0.1:8082",
-      "status_url": "http://127.0.0.1:8082/api/status",
+      "server_base_url": "http://keti-ev1.iptime.org:8082",
+      "status_url": "http://keti-ev1.iptime.org:8082/api/status",
       "host": "127.0.0.1",
       "port": "8082",
       "model": "gemma",
@@ -279,6 +343,15 @@ sequenceDiagram
       "generate_url": "...",
       "model": "...",
       "image_names": ["invoice.png"],
+      "images": [
+        {
+          "name": "invoice.png",
+          "mime_type": "image/png",
+          "source": "webdav",
+          "url": "https://server/remote.php/dav/files/user/folder/invoice.png"
+        }
+      ],
+      "webdav_urls": ["https://server/remote.php/dav/files/user/folder/invoice.png"],
       "image_count": 1,
       "server_image_count": 1,
       "elapsed_seconds": 2.45,
@@ -289,7 +362,74 @@ sequenceDiagram
   }
   ```
 
-### 3.6. POST `/api/history/clear`
+### 3.6. POST `/api/webdav-image/search`
+- **역할**: WebDAV 경로 또는 직접 이미지 URL에서 원격 이미지 파일 목록을 검색합니다.
+- **요청 본문**:
+  ```json
+  {
+    "config": { ... },
+    "slot": 1,
+    "url": "https://server/remote.php/dav/files/user/folder/",
+    "username": "user",
+    "password": "password"
+  }
+  ```
+- **응답 본문**:
+  ```json
+  {
+    "status": {
+      "ok": true,
+      "matched_image_count": 1,
+      "matched_images": [
+        {
+          "id": "webdav-file-...",
+          "slot": 1,
+          "name": "invoice.png",
+          "url": "https://server/remote.php/dav/files/user/folder/invoice.png",
+          "content_type": "image/png",
+          "content_length": 1024
+        }
+      ]
+    },
+    "webdav_history": [ ... ]
+  }
+  ```
+
+### 3.7. POST `/api/webdav-config/save`
+- **역할**: 현재 WebDAV 탭의 연결 설정을 저장하고 WebDAV 설정 히스토리를 갱신합니다. 히스토리는 최대 20개까지 유지합니다.
+
+### 3.8. POST `/api/result-webdav-config/save`
+- **역할**: OCR 결과 저장용 WebDAV 경로, 하위 경로, credential을 저장하고 결과 저장 경로 히스토리를 갱신합니다. 히스토리는 최대 50개까지 유지합니다.
+
+### 3.9. POST `/api/result-webdav-history/delete`
+- **역할**: 저장된 OCR 결과 WebDAV 경로 히스토리 항목 하나를 삭제합니다.
+
+### 3.10. POST `/api/ocr-result/save-webdav`
+- **역할**: 현재 OCR 결과 표시 텍스트를 WebDAV 출력 경로에 저장합니다. 파일 이름은 `hostname_YYYYMMDD_HHMMSS_mmm.txt` 형식으로 생성합니다.
+- **요청 본문**:
+  ```json
+  {
+    "config": { "...": "..." },
+    "content": "## 1. image.png\nFile: image.png\nWebDAV: https://...\n\nOCR text",
+    "url": "https://server/remote.php/dav/files/user/results/",
+    "sub_path": "site-a/2026-05",
+    "username": "user",
+    "password": "password"
+  }
+  ```
+- **응답 본문**:
+  ```json
+  {
+    "status": {
+      "ok": true,
+      "url": "https://server/remote.php/dav/files/user/results/site-a/2026-05/hostname_20260528_103015_123.txt",
+      "file_name": "hostname_20260528_103015_123.txt",
+      "history": [ ... ]
+    }
+  }
+  ```
+
+### 3.11. POST `/api/history/clear`
 - **역할**: 저장되어 있는 로컬 OCR 작업 히스토리를 전부 비웁니다.
 - **응답 본문**:
   ```json

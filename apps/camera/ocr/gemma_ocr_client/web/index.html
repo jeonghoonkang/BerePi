@@ -20,7 +20,7 @@
           <span id="connectionStatus">설정 대기</span>
         </div>
         <div class="form-stack">
-          <label>Gemma Model URL<input id="serverBaseUrl" placeholder="http://127.0.0.1:8082"></label>
+          <label>Gemma Model URL<input id="serverBaseUrl" placeholder="http://keti-ev1.iptime.org:8082"></label>
           <label>Generate Path<input id="generatePath" placeholder="/api/generate"></label>
           <label>Status Path<input id="statusPath" placeholder="/api/status"></label>
           <label>User ID<input id="userId" autocomplete="username"></label>
@@ -56,14 +56,14 @@
         </div>
         <div id="webdavPanel1" class="webdav-panel active" data-webdav-panel="1">
           <div class="form-stack">
-            <label>Image URL<input id="webdavUrl1" placeholder="https://server/remote.php/dav/files/user/image.png"></label>
+            <label>WebDAV Path / Image URL<input id="webdavUrl1" placeholder="https://server/remote.php/dav/files/user/folder/"></label>
             <label>WebDAV User<input id="webdavUser1" autocomplete="username"></label>
             <label>WebDAV Password<input id="webdavPassword1" type="password" autocomplete="current-password"></label>
           </div>
         </div>
         <div id="webdavPanel2" class="webdav-panel" data-webdav-panel="2">
           <div class="form-stack">
-            <label>Image URL<input id="webdavUrl2" placeholder="https://server/remote.php/dav/files/user/other-image.png"></label>
+            <label>WebDAV Path / Image URL<input id="webdavUrl2" placeholder="https://server/remote.php/dav/files/user/other-folder/"></label>
             <label>WebDAV User<input id="webdavUser2" autocomplete="username"></label>
             <label>WebDAV Password<input id="webdavPassword2" type="password" autocomplete="current-password"></label>
           </div>
@@ -72,9 +72,30 @@
           <label>저장된 WebDAV 설정<select id="webdavHistory"></select></label>
         </div>
         <div class="button-row">
-          <button id="loadWebdavImage" class="secondary" type="button">WebDAV 이미지 불러오기</button>
+          <button id="testWebdavImage" class="secondary" type="button">이미지 경로 확인</button>
+          <button id="loadWebdavImage" class="secondary" type="button">WebDAV 경로 불러오기</button>
+          <button id="saveWebdavConfig" class="secondary" type="button">WebDAV 설정 저장</button>
           <button id="loadWebdavHistory" class="secondary" type="button">설정 불러오기</button>
           <button id="deleteWebdavHistory" class="secondary" type="button">설정 삭제</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>OCR 결과 저장</h2>
+          <span id="resultWebdavStatus">대기</span>
+        </div>
+        <div class="form-stack">
+          <label>Result WebDAV Path<input id="resultWebdavUrl" placeholder="https://server/remote.php/dav/files/user/ocr-results/"></label>
+          <label>Sub Path<input id="resultWebdavSubPath" placeholder="project-a/day-1"></label>
+          <label>Result WebDAV User<input id="resultWebdavUser" autocomplete="username"></label>
+          <label>Result WebDAV Password<input id="resultWebdavPassword" type="password" autocomplete="current-password"></label>
+          <label>저장된 결과 경로<select id="resultWebdavHistory"></select></label>
+        </div>
+        <div class="button-row">
+          <button id="saveResultWebdavConfig" class="secondary" type="button">저장 경로 저장</button>
+          <button id="loadResultWebdavHistory" class="secondary" type="button">경로 불러오기</button>
+          <button id="deleteResultWebdavHistory" class="secondary" type="button">경로 삭제</button>
         </div>
       </section>
     </aside>
@@ -98,6 +119,15 @@
         <span>PNG, JPG, WEBP 등 브라우저가 읽을 수 있는 이미지</span>
       </section>
 
+      <section class="remote-file-panel">
+        <div class="panel-heading">
+          <h2>WebDAV 원격 파일</h2>
+          <button id="addSelectedWebdavFiles" class="secondary compact-button" type="button" disabled>선택 파일 추가</button>
+        </div>
+        <div id="webdavFileStatus" class="status-line">경로 확인 또는 WebDAV 경로 불러오기를 실행하면 파일 목록이 표시됩니다.</div>
+        <div id="webdavFileList" class="remote-file-list"></div>
+      </section>
+
       <div class="status-line" id="imageStatus">선택된 이미지 없음</div>
       <section id="imageList" class="image-list"></section>
 
@@ -106,6 +136,7 @@
           <div class="panel-heading">
             <h2>OCR 결과</h2>
             <div class="button-row compact">
+              <button id="saveResultWebdav" class="secondary" type="button">WebDAV 저장</button>
               <button id="copyResult" class="secondary" type="button">복사</button>
               <button id="clearResult" class="secondary" type="button">비우기</button>
             </div>

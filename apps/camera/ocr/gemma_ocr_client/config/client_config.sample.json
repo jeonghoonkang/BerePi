@@ -1,10 +1,10 @@
 {
-  "server_base_url": "http://127.0.0.1:8082",
+  "server_base_url": "http://keti-ev1.iptime.org:8082",
   "generate_path": "/api/generate",
   "status_path": "/api/status",
-  "request_timeout_seconds": 120,
+  "request_timeout_seconds": 600,
   "user_id": "admin",
-  "password": "change-me-now",
+  "password": "aimodel",
   "model": "",
   "keep_alive": "60m",
   "num_ctx": 8192,
@@ -25,5 +25,9 @@
       "username": "",
       "password": ""
     }
-  ]
+  ],
+  "result_webdav_url": "",
+  "result_webdav_sub_path": "",
+  "result_webdav_user": "",
+  "result_webdav_password": ""
 }

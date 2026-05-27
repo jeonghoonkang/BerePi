@@ -261,6 +261,46 @@ h2 {
   background: #edf8f5;
 }
 
+.remote-file-panel {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.remote-file-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.remote-file-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 0.65rem;
+}
+
+.remote-file-item input {
+  width: auto;
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+}
+
+.remote-file-item strong,
+.remote-file-item small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.remote-file-item small {
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
 .status-line {
   border: 1px solid var(--line);
   border-radius: 8px;
