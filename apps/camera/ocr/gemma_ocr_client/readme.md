@@ -51,11 +51,26 @@ py -3 .\client_service.py
 3. `설정 저장`을 눌러 현재 설정을 `data/client_config.json`에 저장합니다.
 4. 이미지 파일을 드래그 앤 드롭하거나 클릭해서 선택합니다.
 5. 클립보드 이미지는 `클립보드 이미지` 버튼 또는 `Ctrl+V`로 추가합니다.
-6. `이미지 전송 확인`으로 선택 이미지가 서버까지 도착하는지 확인합니다.
-7. 필요한 경우 `OCR 프롬프트`를 수정합니다.
-8. `OCR 실행`을 눌러 결과를 확인합니다.
+6. WebDAV 이미지는 좌측 `WebDAV 이미지` 패널의 `주소 1` 또는 `주소 2` 탭에 이미지 URL, User, Password를 입력하고 `WebDAV 이미지 불러오기`를 누릅니다.
+7. `이미지 전송 확인`으로 선택 이미지가 서버까지 도착하는지 확인합니다.
+8. 필요한 경우 `OCR 프롬프트`를 수정합니다.
+9. `OCR 실행`을 눌러 결과를 확인합니다.
 
 `이미지 전송 확인`은 모델 추론을 실행하지 않고 서버의 `/api/test-image-transfer`로 이미지를 보내 수신 개수만 확인합니다. 선택된 이미지가 없으면 내장된 1x1 PNG 테스트 이미지를 보냅니다.
+
+## WebDAV 이미지
+
+WebDAV 이미지는 브라우저가 직접 가져오지 않고 로컬 `client_service.py`가 대신 다운로드합니다. 따라서 CORS 제한을 피할 수 있고, Basic Auth가 필요한 WebDAV URL도 사용할 수 있습니다.
+
+입력값:
+
+- `Image URL`: 실제 이미지 파일 URL
+- `WebDAV User`: WebDAV 사용자 ID
+- `WebDAV Password`: WebDAV 비밀번호 또는 앱 비밀번호
+
+`주소 1`, `주소 2` 탭에 서로 다른 WebDAV 이미지 주소와 credential을 입력할 수 있습니다. `WebDAV 이미지 불러오기`는 현재 선택된 탭의 설정을 사용합니다. 불러온 이미지는 업로드/클립보드 이미지와 동일하게 이미지 목록에 추가되며, 체크된 이미지만 OCR 프롬프트 전송에 포함됩니다.
+
+WebDAV 연결 설정은 `data/webdav_history.json`에 최대 100개까지 저장됩니다. `설정 저장` 또는 `WebDAV 이미지 불러오기`를 실행하면 현재 WebDAV 탭들의 URL/User/Password가 히스토리에 기록됩니다. 저장된 항목은 `저장된 WebDAV 설정`에서 다시 불러오거나 삭제할 수 있으며, 항목에는 저장 당시의 탭 번호도 함께 기록됩니다.
 
 ## 연결 설정
 
@@ -116,9 +131,10 @@ py -3 .\client_service.py
 ```text
 data/client_config.json
 data/ocr_history.json
+data/webdav_history.json
 ```
 
-`data/client_config.json`에는 URL과 인증 정보가 저장되므로 외부 공유에 주의하세요.
+`data/client_config.json`에는 Gemma 서버 및 WebDAV URL/인증 정보가 저장되므로 외부 공유에 주의하세요.
 
 ## 문제 해결
 
@@ -136,3 +152,4 @@ py -3 .\client_service.py
 - User ID와 Password가 서버 설정과 일치하는지
 - 선택한 모델이 vision/image 입력을 지원하는지
 - 서버가 최신 코드인지. 이미지 전송 확인 API는 서버의 `/api/test-image-transfer`가 필요합니다.
+- WebDAV 이미지가 실패하면 URL이 직접 이미지 파일을 가리키는지, WebDAV 사용자/비밀번호가 맞는지, 응답 `Content-Type`이 `image/*`인지 확인

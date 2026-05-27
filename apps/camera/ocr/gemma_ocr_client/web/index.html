@@ -44,6 +44,39 @@
         </div>
         <textarea id="ocrPrompt" spellcheck="false"></textarea>
       </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>WebDAV 이미지</h2>
+          <span id="webdavStatus">대기</span>
+        </div>
+        <div class="webdav-tabs" role="tablist" aria-label="WebDAV source tabs">
+          <button id="webdavTab1" class="webdav-tab active" type="button" data-webdav-tab="1">주소 1</button>
+          <button id="webdavTab2" class="webdav-tab" type="button" data-webdav-tab="2">주소 2</button>
+        </div>
+        <div id="webdavPanel1" class="webdav-panel active" data-webdav-panel="1">
+          <div class="form-stack">
+            <label>Image URL<input id="webdavUrl1" placeholder="https://server/remote.php/dav/files/user/image.png"></label>
+            <label>WebDAV User<input id="webdavUser1" autocomplete="username"></label>
+            <label>WebDAV Password<input id="webdavPassword1" type="password" autocomplete="current-password"></label>
+          </div>
+        </div>
+        <div id="webdavPanel2" class="webdav-panel" data-webdav-panel="2">
+          <div class="form-stack">
+            <label>Image URL<input id="webdavUrl2" placeholder="https://server/remote.php/dav/files/user/other-image.png"></label>
+            <label>WebDAV User<input id="webdavUser2" autocomplete="username"></label>
+            <label>WebDAV Password<input id="webdavPassword2" type="password" autocomplete="current-password"></label>
+          </div>
+        </div>
+        <div class="form-stack webdav-history-row">
+          <label>저장된 WebDAV 설정<select id="webdavHistory"></select></label>
+        </div>
+        <div class="button-row">
+          <button id="loadWebdavImage" class="secondary" type="button">WebDAV 이미지 불러오기</button>
+          <button id="loadWebdavHistory" class="secondary" type="button">설정 불러오기</button>
+          <button id="deleteWebdavHistory" class="secondary" type="button">설정 삭제</button>
+        </div>
+      </section>
     </aside>
 
     <section class="workspace">

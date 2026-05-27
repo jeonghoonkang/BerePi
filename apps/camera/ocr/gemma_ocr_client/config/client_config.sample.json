@@ -8,5 +8,22 @@
   "model": "",
   "keep_alive": "60m",
   "num_ctx": 8192,
-  "ocr_prompt": "Extract all visible text from the image. Preserve line breaks and reading order. Return only the OCR text."
+  "ocr_prompt": "Extract all visible text from the image. Preserve line breaks and reading order. Return only the OCR text.",
+  "webdav_url": "",
+  "webdav_user": "",
+  "webdav_password": "",
+  "webdav_slots": [
+    {
+      "slot": 1,
+      "url": "",
+      "username": "",
+      "password": ""
+    },
+    {
+      "slot": 2,
+      "url": "",
+      "username": "",
+      "password": ""
+    }
+  ]
 }

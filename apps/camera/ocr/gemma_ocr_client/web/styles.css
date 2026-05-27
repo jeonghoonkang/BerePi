@@ -25,6 +25,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -56,6 +57,7 @@ button.secondary:hover {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -134,11 +136,13 @@ h2 {
 }
 
 .panel-heading span,
+#webdavStatus,
 .workspace-header p,
 .status-line,
 .empty-note,
 .image-card span {
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .form-stack {
@@ -169,6 +173,38 @@ h2 {
 
 .button-row {
   margin-top: 0.8rem;
+}
+
+.webdav-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.webdav-tab {
+  min-height: 2.35rem;
+  border-color: var(--line);
+  background: white;
+  color: var(--ink);
+}
+
+.webdav-tab.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.webdav-panel {
+  display: none;
+}
+
+.webdav-panel.active {
+  display: block;
+}
+
+.webdav-history-row {
+  margin-top: 0.75rem;
 }
 
 .button-row.compact {
@@ -311,8 +347,8 @@ h2 {
   overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #111a1e;
-  color: #eef8f4;
+  background: #eef0f2;
+  color: var(--ink);
   padding: 1rem;
   line-height: 1.65;
 }

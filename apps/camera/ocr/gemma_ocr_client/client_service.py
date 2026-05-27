@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import mimetypes
 import os
 import time
 import urllib.error
@@ -21,6 +22,7 @@ WEB_DIR = BASE_DIR / "web"
 DATA_DIR = BASE_DIR / "data"
 CONFIG_PATH = DATA_DIR / "client_config.json"
 HISTORY_PATH = DATA_DIR / "ocr_history.json"
+WEBDAV_HISTORY_PATH = DATA_DIR / "webdav_history.json"
 SAMPLE_CONFIG_PATH = BASE_DIR / "config" / "client_config.sample.json"
 HISTORY_LIMIT = 100
 
@@ -35,6 +37,13 @@ DEFAULT_CONFIG = {
     "keep_alive": "60m",
     "num_ctx": 8192,
     "ocr_prompt": "Extract all visible text from the image. Preserve line breaks and reading order. Return only the OCR text.",
+    "webdav_url": "",
+    "webdav_user": "",
+    "webdav_password": "",
+    "webdav_slots": [
+        {"slot": 1, "url": "", "username": "", "password": ""},
+        {"slot": 2, "url": "", "username": "", "password": ""},
+    ],
 }
 
 TEST_IMAGE_BASE64 = (
@@ -54,12 +63,51 @@ def ensure_data_files() -> None:
         CONFIG_PATH.write_text(json.dumps(sample, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if not HISTORY_PATH.exists():
         HISTORY_PATH.write_text("[]\n", encoding="utf-8")
+    if not WEBDAV_HISTORY_PATH.exists():
+        WEBDAV_HISTORY_PATH.write_text("[]\n", encoding="utf-8")
+
+
+def normalize_webdav_slot_number(value: Any) -> int:
+    try:
+        slot = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return 2 if slot == 2 else 1
+
+
+def normalize_webdav_slots(incoming: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_slots = incoming.get("webdav_slots")
+    slots_by_number: dict[int, dict[str, Any]] = {}
+    if isinstance(raw_slots, list):
+        for index, item in enumerate(raw_slots[:2], start=1):
+            if not isinstance(item, dict):
+                continue
+            slot = normalize_webdav_slot_number(item.get("slot", index))
+            slots_by_number[slot] = {
+                "slot": slot,
+                "url": str(item.get("url") or item.get("webdav_url") or "").strip(),
+                "username": str(item.get("username") or item.get("user") or item.get("webdav_user") or "").strip(),
+                "password": str(item.get("password") or item.get("webdav_password") or ""),
+            }
+
+    if 1 not in slots_by_number:
+        slots_by_number[1] = {
+            "slot": 1,
+            "url": str(incoming.get("webdav_url") or "").strip(),
+            "username": str(incoming.get("webdav_user") or "").strip(),
+            "password": str(incoming.get("webdav_password") or ""),
+        }
+    if 2 not in slots_by_number:
+        slots_by_number[2] = {"slot": 2, "url": "", "username": "", "password": ""}
+
+    return [slots_by_number[1], slots_by_number[2]]
 
 
 def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     incoming = dict(raw or {})
     timeout = int(incoming.get("request_timeout_seconds") or DEFAULT_CONFIG["request_timeout_seconds"])
     num_ctx = int(incoming.get("num_ctx") or DEFAULT_CONFIG["num_ctx"])
+    webdav_slots = normalize_webdav_slots(incoming)
     return {
         "server_base_url": str(incoming.get("server_base_url") or DEFAULT_CONFIG["server_base_url"]).rstrip("/"),
         "generate_path": str(incoming.get("generate_path") or DEFAULT_CONFIG["generate_path"]),
@@ -71,6 +119,10 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "keep_alive": str(incoming.get("keep_alive") or DEFAULT_CONFIG["keep_alive"]),
         "num_ctx": max(0, num_ctx),
         "ocr_prompt": str(incoming.get("ocr_prompt") or DEFAULT_CONFIG["ocr_prompt"]),
+        "webdav_url": webdav_slots[0]["url"],
+        "webdav_user": webdav_slots[0]["username"],
+        "webdav_password": webdav_slots[0]["password"],
+        "webdav_slots": webdav_slots,
     }
 
 
@@ -120,6 +172,131 @@ def clear_history() -> list[dict[str, Any]]:
     return []
 
 
+def webdav_slot_config(config: dict[str, Any], slot: int) -> dict[str, Any]:
+    slots = config.get("webdav_slots")
+    if isinstance(slots, list):
+        for item in slots:
+            if isinstance(item, dict) and normalize_webdav_slot_number(item.get("slot")) == slot:
+                return item
+    if slot == 1:
+        return {
+            "slot": 1,
+            "url": str(config.get("webdav_url") or ""),
+            "username": str(config.get("webdav_user") or ""),
+            "password": str(config.get("webdav_password") or ""),
+        }
+    return {"slot": 2, "url": "", "username": "", "password": ""}
+
+
+def webdav_history_entry(config: dict[str, Any] | None = None, incoming: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = config or {}
+    incoming = incoming or {}
+    slot = normalize_webdav_slot_number(incoming.get("slot", 1))
+    slot_config = webdav_slot_config(config, slot)
+    return {
+        "slot": slot,
+        "url": str(incoming.get("url") or slot_config.get("url") or "").strip(),
+        "username": str(incoming.get("username") or slot_config.get("username") or "").strip(),
+        "password": str(incoming.get("password") or slot_config.get("password") or ""),
+    }
+
+
+def webdav_history_label(entry: dict[str, Any]) -> str:
+    url = str(entry.get("url") or "")
+    username = str(entry.get("username") or "")
+    slot = normalize_webdav_slot_number(entry.get("slot", 1))
+    prefix = f"탭 {slot}: "
+    return f"{prefix}{username}@{url}" if username else f"{prefix}{url}"
+
+
+def read_webdav_history() -> list[dict[str, Any]]:
+    ensure_data_files()
+    try:
+        data = json.loads(WEBDAV_HISTORY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        url = str(entry.get("url") or "").strip()
+        if not url:
+            continue
+        cleaned.append(
+            {
+                "id": str(entry.get("id") or f"webdav-{len(cleaned)+1}"),
+                "slot": normalize_webdav_slot_number(entry.get("slot", 1)),
+                "url": url,
+                "username": str(entry.get("username") or ""),
+                "password": str(entry.get("password") or ""),
+                "label": str(entry.get("label") or webdav_history_label(entry)),
+                "updated_at": str(entry.get("updated_at") or ""),
+            }
+        )
+        if len(cleaned) >= HISTORY_LIMIT:
+            break
+    return cleaned
+
+
+def write_webdav_history(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique: list[dict[str, Any]] = []
+    seen: set[tuple[int, str, str]] = set()
+    for entry in entries:
+        slot = normalize_webdav_slot_number(entry.get("slot", 1))
+        url = str(entry.get("url") or "").strip()
+        username = str(entry.get("username") or "").strip()
+        if not url:
+            continue
+        key = (slot, url, username)
+        if key in seen:
+            continue
+        normalized = {
+            "id": str(entry.get("id") or f"webdav-{int(time.time() * 1000)}-{len(unique)+1}"),
+            "slot": slot,
+            "url": url,
+            "username": username,
+            "password": str(entry.get("password") or ""),
+            "label": webdav_history_label({"slot": slot, "url": url, "username": username}),
+            "updated_at": str(entry.get("updated_at") or time.strftime("%Y-%m-%d %H:%M:%S")),
+        }
+        unique.append(normalized)
+        seen.add(key)
+        if len(unique) >= HISTORY_LIMIT:
+            break
+    WEBDAV_HISTORY_PATH.write_text(json.dumps(unique, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return unique
+
+
+def remember_webdav_config(config: dict[str, Any] | None = None, incoming: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    entry = webdav_history_entry(config, incoming)
+    if not entry["url"]:
+        return read_webdav_history()
+    return write_webdav_history([{**entry, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")}] + read_webdav_history())
+
+
+def remember_webdav_config_slots(config: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = [
+        {
+            "slot": slot["slot"],
+            "url": slot["url"],
+            "username": slot["username"],
+            "password": slot["password"],
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for slot in normalize_webdav_slots(config)
+        if str(slot.get("url") or "").strip()
+    ]
+    if not entries:
+        return read_webdav_history()
+    return write_webdav_history(entries + read_webdav_history())
+
+
+def delete_webdav_history_id(entry_id: str) -> list[dict[str, Any]]:
+    return write_webdav_history([entry for entry in read_webdav_history() if entry["id"] != str(entry_id)])
+
+
 def join_url(base_url: str, path: str) -> str:
     if path.startswith("http://") or path.startswith("https://"):
         return path
@@ -160,6 +337,67 @@ def basic_auth_header(config: dict[str, Any]) -> dict[str, str]:
         return {}
     token = base64.b64encode(f"{config['user_id']}:{config['password']}".encode("utf-8")).decode("ascii")
     return {"Authorization": f"Basic {token}"}
+
+
+def webdav_auth_header(config: dict[str, Any]) -> dict[str, str]:
+    user = str(config.get("webdav_user") or config.get("username") or "")
+    password = str(config.get("webdav_password") or config.get("password") or "")
+    if not user and not password:
+        return {}
+    token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
+    return {"Authorization": f"Basic {token}"}
+
+
+def image_name_from_url(url: str) -> str:
+    path = urllib.parse.urlsplit(url).path
+    name = Path(urllib.parse.unquote(path)).name
+    return name or f"webdav-image-{int(time.time())}.png"
+
+
+def load_webdav_image(config: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    slot = normalize_webdav_slot_number(incoming.get("slot", 1))
+    slot_config = webdav_slot_config(config, slot)
+    url = str(incoming.get("url") or slot_config.get("url") or "").strip()
+    if not url:
+        raise ValueError("WebDAV image URL is required.")
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("WebDAV image URL must start with http:// or https://.")
+
+    merged_config = {
+        "username": str(slot_config.get("username") or ""),
+        "password": str(slot_config.get("password") or ""),
+    }
+    for source_key in ("username", "password"):
+        if source_key in incoming:
+            merged_config[source_key] = str(incoming.get(source_key) or "")
+
+    headers = {"Accept": "image/*,*/*;q=0.8", **webdav_auth_header(merged_config)}
+    request = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=int(config["request_timeout_seconds"])) as response:
+            content = response.read()
+            content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    except urllib.error.URLError as exc:
+        raise ValueError(f"Could not load WebDAV image: {url} | {exc}") from exc
+
+    name = image_name_from_url(url)
+    inferred_type = mimetypes.guess_type(name)[0] or ""
+    mime_type = content_type or inferred_type or "application/octet-stream"
+    if not mime_type.startswith("image/"):
+        if inferred_type.startswith("image/"):
+            mime_type = inferred_type
+        else:
+            raise ValueError(f"WebDAV URL did not return an image. Content-Type={content_type or 'unknown'}")
+
+    return {
+        "name": name,
+        "mime_type": mime_type,
+        "size": len(content),
+        "source": "webdav",
+        "slot": slot,
+        "content_base64": base64.b64encode(content).decode("ascii"),
+        "url": url,
+    }
 
 
 def extract_response_text(data: dict[str, Any]) -> str:
@@ -360,29 +598,41 @@ class ClientHandler(BaseHTTPRequestHandler):
             self.serve_file(WEB_DIR / "app.js", "application/javascript; charset=utf-8")
             return
         if self.path == "/api/state":
-            self.send_json({"config": read_config(), "history": read_history()})
+            self.send_json({"config": read_config(), "history": read_history(), "webdav_history": read_webdav_history()})
             return
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
         try:
             incoming = parse_json_body(self)
-            if self.path == "/api/config":
-                self.send_json({"config": write_config(incoming.get("config") or {})})
+            request_path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+            if request_path == "/api/config":
+                config = write_config(incoming.get("config") or {})
+                webdav_history = remember_webdav_config_slots(config)
+                self.send_json({"config": config, "webdav_history": webdav_history})
                 return
-            if self.path == "/api/test-connection":
+            if request_path == "/api/test-connection":
                 config = runtime_config(incoming.get("config"))
                 self.send_json({"status": fetch_remote_status(config)})
                 return
-            if self.path == "/api/test-image-transfer":
+            if request_path == "/api/test-image-transfer":
                 config = runtime_config(incoming.get("config"))
                 self.send_json({"status": test_image_transfer(config, incoming.get("images") or [])})
                 return
-            if self.path == "/api/ocr":
+            if request_path == "/api/webdav-image":
+                config = runtime_config(incoming.get("config"))
+                image = load_webdav_image(config, incoming)
+                webdav_history = remember_webdav_config(config, incoming)
+                self.send_json({"image": image, "webdav_history": webdav_history})
+                return
+            if request_path == "/api/webdav-history/delete":
+                self.send_json({"webdav_history": delete_webdav_history_id(str(incoming.get("id") or ""))})
+                return
+            if request_path == "/api/ocr":
                 config = runtime_config(incoming.get("config"))
                 self.send_json(run_ocr(config, incoming.get("images") or [], str(incoming.get("prompt") or "")))
                 return
-            if self.path == "/api/history/clear":
+            if request_path == "/api/history/clear":
                 self.send_json({"history": clear_history()})
                 return
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)

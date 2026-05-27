@@ -2,6 +2,8 @@ const state = {
   config: null,
   images: [],
   history: [],
+  webdavHistory: [],
+  activeWebdavSlot: 1,
   ocrTimerId: null,
   ocrStartedAt: 0,
   ocrRunning: false,
@@ -19,6 +21,25 @@ const elements = {
   keepAlive: document.getElementById("keepAlive"),
   numCtx: document.getElementById("numCtx"),
   ocrPrompt: document.getElementById("ocrPrompt"),
+  webdavStatus: document.getElementById("webdavStatus"),
+  webdavTabs: [...document.querySelectorAll("[data-webdav-tab]")],
+  webdavPanels: [...document.querySelectorAll("[data-webdav-panel]")],
+  webdavUrl: {
+    1: document.getElementById("webdavUrl1"),
+    2: document.getElementById("webdavUrl2"),
+  },
+  webdavUser: {
+    1: document.getElementById("webdavUser1"),
+    2: document.getElementById("webdavUser2"),
+  },
+  webdavPassword: {
+    1: document.getElementById("webdavPassword1"),
+    2: document.getElementById("webdavPassword2"),
+  },
+  webdavHistory: document.getElementById("webdavHistory"),
+  loadWebdavImage: document.getElementById("loadWebdavImage"),
+  loadWebdavHistory: document.getElementById("loadWebdavHistory"),
+  deleteWebdavHistory: document.getElementById("deleteWebdavHistory"),
   dropZone: document.getElementById("dropZone"),
   fileInput: document.getElementById("fileInput"),
   imageStatus: document.getElementById("imageStatus"),
@@ -63,6 +84,7 @@ function applyConfigToForm(config) {
     const value = config?.[key];
     element.value = value === null || value === undefined ? "" : String(value);
   });
+  applyWebdavSlotsToForm(config);
 }
 
 function readConfigFromForm() {
@@ -77,7 +99,40 @@ function readConfigFromForm() {
     keep_alive: elements.keepAlive.value.trim(),
     num_ctx: Number(elements.numCtx.value || 0),
     ocr_prompt: elements.ocrPrompt.value,
+    webdav_url: elements.webdavUrl[1].value.trim(),
+    webdav_user: elements.webdavUser[1].value.trim(),
+    webdav_password: elements.webdavPassword[1].value,
+    webdav_slots: [readWebdavSlot(1), readWebdavSlot(2)],
   };
+}
+
+function readWebdavSlot(slot) {
+  return {
+    slot,
+    url: elements.webdavUrl[slot].value.trim(),
+    username: elements.webdavUser[slot].value.trim(),
+    password: elements.webdavPassword[slot].value,
+  };
+}
+
+function applyWebdavSlotsToForm(config) {
+  const slots = Array.isArray(config?.webdav_slots) ? config.webdav_slots : [];
+  [1, 2].forEach((slot) => {
+    const value = slots.find((entry) => Number(entry.slot) === slot) || {};
+    elements.webdavUrl[slot].value = value.url || (slot === 1 ? config?.webdav_url || "" : "");
+    elements.webdavUser[slot].value = value.username || (slot === 1 ? config?.webdav_user || "" : "");
+    elements.webdavPassword[slot].value = value.password || (slot === 1 ? config?.webdav_password || "" : "");
+  });
+}
+
+function activateWebdavTab(slot) {
+  state.activeWebdavSlot = Number(slot) === 2 ? 2 : 1;
+  elements.webdavTabs.forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.webdavTab) === state.activeWebdavSlot);
+  });
+  elements.webdavPanels.forEach((panel) => {
+    panel.classList.toggle("active", Number(panel.dataset.webdavPanel) === state.activeWebdavSlot);
+  });
 }
 
 function formatElapsedSeconds(startedAt) {
@@ -160,6 +215,21 @@ async function addFiles(fileList, source = "file") {
   renderImages();
 }
 
+function addRemoteImageItem(image) {
+  const mimeType = image.mime_type || "image/png";
+  state.images.push({
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: image.name || "webdav-image",
+    mime_type: mimeType,
+    size: image.size || 0,
+    source: image.source || "webdav",
+    selected: true,
+    previewUrl: `data:${mimeType};base64,${image.content_base64}`,
+    content_base64: image.content_base64,
+  });
+  renderImages();
+}
+
 function renderImages() {
   const selectedCount = state.images.filter((image) => image.selected).length;
   elements.imageStatus.textContent = state.images.length
@@ -233,12 +303,48 @@ function renderHistory() {
   });
 }
 
+function renderWebdavHistory() {
+  if (!state.webdavHistory.length) {
+    elements.webdavHistory.innerHTML = `<option value="">저장된 설정 없음</option>`;
+    elements.webdavHistory.disabled = true;
+    elements.loadWebdavHistory.disabled = true;
+    elements.deleteWebdavHistory.disabled = true;
+    return;
+  }
+  elements.webdavHistory.disabled = false;
+  elements.loadWebdavHistory.disabled = false;
+  elements.deleteWebdavHistory.disabled = false;
+  elements.webdavHistory.innerHTML = state.webdavHistory.map((entry) => `
+    <option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label || entry.url || entry.id)}</option>
+  `).join("");
+}
+
+function selectedWebdavHistoryEntry() {
+  const id = elements.webdavHistory.value;
+  return state.webdavHistory.find((entry) => entry.id === id);
+}
+
+function applyWebdavHistoryEntry(entry) {
+  if (!entry) {
+    elements.webdavStatus.textContent = "불러올 WebDAV 설정을 선택해 주세요.";
+    return;
+  }
+  const slot = Number(entry.slot) === 2 ? 2 : state.activeWebdavSlot;
+  activateWebdavTab(slot);
+  elements.webdavUrl[slot].value = entry.url || "";
+  elements.webdavUser[slot].value = entry.username || "";
+  elements.webdavPassword[slot].value = entry.password || "";
+  elements.webdavStatus.textContent = `설정 불러옴: ${entry.label || entry.url || entry.id}`;
+}
+
 async function loadInitialState() {
   const data = await requestJson("/api/state");
   state.config = data.config;
   state.history = data.history || [];
+  state.webdavHistory = data.webdav_history || [];
   applyConfigToForm(state.config);
   renderHistory();
+  renderWebdavHistory();
   elements.connectionStatus.textContent = state.config?.server_base_url || "설정 대기";
 }
 
@@ -249,7 +355,9 @@ async function saveConfig() {
     body: JSON.stringify({config: readConfigFromForm()}),
   });
   state.config = data.config;
+  state.webdavHistory = data.webdav_history || state.webdavHistory;
   applyConfigToForm(state.config);
+  renderWebdavHistory();
   elements.connectionStatus.textContent = "설정 저장됨";
 }
 
@@ -282,6 +390,49 @@ async function pasteClipboardImage() {
     return;
   }
   await addFiles(files, "clipboard");
+}
+
+async function loadWebdavImage() {
+  elements.loadWebdavImage.disabled = true;
+  elements.webdavStatus.textContent = "불러오는 중";
+  try {
+    const slot = state.activeWebdavSlot;
+    const data = await requestJson("/api/webdav-image", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        config: readConfigFromForm(),
+        slot,
+        url: elements.webdavUrl[slot].value.trim(),
+        username: elements.webdavUser[slot].value.trim(),
+        password: elements.webdavPassword[slot].value,
+      }),
+    });
+    addRemoteImageItem(data.image || {});
+    state.webdavHistory = data.webdav_history || state.webdavHistory;
+    renderWebdavHistory();
+    elements.webdavStatus.textContent = `주소 ${slot} 추가됨: ${data.image?.name || "webdav image"}`;
+  } catch (error) {
+    elements.webdavStatus.textContent = `실패: ${error}`;
+  } finally {
+    elements.loadWebdavImage.disabled = false;
+  }
+}
+
+async function deleteSelectedWebdavHistory() {
+  const entry = selectedWebdavHistoryEntry();
+  if (!entry) {
+    elements.webdavStatus.textContent = "삭제할 WebDAV 설정을 선택해 주세요.";
+    return;
+  }
+  const data = await requestJson("/api/webdav-history/delete", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({id: entry.id}),
+  });
+  state.webdavHistory = data.webdav_history || [];
+  renderWebdavHistory();
+  elements.webdavStatus.textContent = "WebDAV 설정을 삭제했습니다.";
 }
 
 async function runOcr() {
@@ -382,6 +533,17 @@ document.getElementById("testConnection").addEventListener("click", () => testCo
 document.getElementById("pasteClipboard").addEventListener("click", () => pasteClipboardImage().catch((error) => {
   elements.imageStatus.textContent = `클립보드 읽기 실패: ${error}`;
 }));
+document.getElementById("loadWebdavImage").addEventListener("click", () => loadWebdavImage().catch((error) => {
+  elements.webdavStatus.textContent = `실패: ${error}`;
+  elements.loadWebdavImage.disabled = false;
+}));
+document.getElementById("loadWebdavHistory").addEventListener("click", () => applyWebdavHistoryEntry(selectedWebdavHistoryEntry()));
+document.getElementById("deleteWebdavHistory").addEventListener("click", () => deleteSelectedWebdavHistory().catch((error) => {
+  elements.webdavStatus.textContent = `삭제 실패: ${error}`;
+}));
+elements.webdavTabs.forEach((button) => {
+  button.addEventListener("click", () => activateWebdavTab(Number(button.dataset.webdavTab)));
+});
 document.getElementById("runOcr").addEventListener("click", () => runOcr().catch((error) => {
   elements.runStatus.textContent = `OCR 실패: ${error}`;
 }));
