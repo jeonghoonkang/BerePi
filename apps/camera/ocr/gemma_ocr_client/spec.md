@@ -45,6 +45,12 @@ sequenceDiagram
     Client->>Client: extract_response_text()
     Client->>Client: append_history() (Save to JSON)
     Client-->>UI: { result, raw, history }
+
+    UI->>Client: POST /api/detect (config, prompt, images)
+    Client->>Remote: POST /api/generate (Detection Prompt + Image)
+    Remote-->>Client: Detection JSON/Text
+    Client->>Client: normalize_detection_response()
+    Client-->>UI: { result.detections, raw, history }
 ```
 
 ### 세부 단계 설명:
@@ -184,6 +190,29 @@ sequenceDiagram
       "elapsed_seconds": float,
       "message": str,
       "raw": dict[str, Any]
+  }
+  ```
+
+#### `run_object_detection(config: dict[str, Any], images: list[dict[str, Any]], prompt: str) -> dict[str, Any]`
+- **설명**: Gemma4 모델에 이미지와 객체 탐지 프롬프트를 보내고, 응답에서 객체 이름, confidence, bounding box를 추출합니다.
+- **출력**:
+  ```python
+  {
+      "result": {
+          "task": "object_detection",
+          "image_names": list[str],
+          "detections": [
+              {
+                  "label": str,
+                  "confidence": float|None,
+                  "bbox": list[float]|None
+              }
+          ],
+          "text": str,
+          "raw_text": str
+      },
+      "raw": dict[str, Any],
+      "history": list[dict[str, Any]]
   }
   ```
 
@@ -429,7 +458,41 @@ sequenceDiagram
   }
   ```
 
-### 3.11. POST `/api/history/clear`
+### 3.11. POST `/api/detect`
+- **역할**: 선택 이미지에 대해 Gemma4 기반 객체 탐지를 수행합니다. OCR과 동일한 이미지 전송 형식을 사용하며, 응답에서 `detections` 배열 또는 텍스트 안의 JSON을 파싱합니다.
+- **요청 본문**:
+  ```json
+  {
+    "config": { "...": "..." },
+    "prompt": "Detect visible objects...",
+    "images": [
+      {
+        "name": "image.png",
+        "mime_type": "image/png",
+        "content_base64": "..."
+      }
+    ]
+  }
+  ```
+- **응답 본문**:
+  ```json
+  {
+    "result": {
+      "task": "object_detection",
+      "detections": [
+        {
+          "label": "person",
+          "confidence": 0.91,
+          "bbox": [0.12, 0.18, 0.48, 0.92]
+        }
+      ],
+      "text": "1. person - 91.0%"
+    },
+    "history": [ ... ]
+  }
+  ```
+
+### 3.12. POST `/api/history/clear`
 - **역할**: 저장되어 있는 로컬 OCR 작업 히스토리를 전부 비웁니다.
 - **응답 본문**:
   ```json

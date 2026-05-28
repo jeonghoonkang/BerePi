@@ -9,6 +9,7 @@
   "keep_alive": "60m",
   "num_ctx": 8192,
   "ocr_prompt": "Extract all visible text from the image. Preserve line breaks and reading order. Return only the OCR text.",
+  "detection_prompt": "Detect visible objects in the image. Return only valid JSON with this shape: {\"detections\":[{\"label\":\"object name\",\"confidence\":0.0,\"bbox\":[x1,y1,x2,y2]}]}. Use normalized bbox coordinates from 0 to 1.",
   "webdav_url": "",
   "webdav_user": "",
   "webdav_password": "",

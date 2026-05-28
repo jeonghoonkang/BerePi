@@ -40,9 +40,18 @@
 
       <section class="panel">
         <div class="panel-heading">
-          <h2>OCR 프롬프트</h2>
+          <h2>모델 프롬프트</h2>
         </div>
-        <textarea id="ocrPrompt" spellcheck="false"></textarea>
+        <div class="task-tabs" role="tablist" aria-label="Prompt tabs">
+          <button class="task-tab active" type="button" data-task-tab="ocr">OCR</button>
+          <button class="task-tab" type="button" data-task-tab="detect">YOLO Detection</button>
+        </div>
+        <div class="task-panel active" data-task-panel="ocr">
+          <textarea id="ocrPrompt" spellcheck="false"></textarea>
+        </div>
+        <div class="task-panel" data-task-panel="detect">
+          <textarea id="detectionPrompt" spellcheck="false"></textarea>
+        </div>
       </section>
 
       <section class="panel">
@@ -103,13 +112,14 @@
     <section class="workspace">
       <header class="workspace-header">
         <div>
-          <h2>이미지 OCR</h2>
+          <h2>이미지 분석</h2>
           <p>클립보드 이미지를 붙여넣거나 이미지 파일을 올려 모델에 전송합니다.</p>
         </div>
         <div class="run-actions">
           <button id="pasteClipboard" class="secondary" type="button">클립보드 이미지</button>
           <button id="testImageTransfer" class="secondary" type="button">이미지 전송 확인</button>
           <button id="runOcr" type="button">OCR 실행</button>
+          <button id="runDetection" type="button">YOLO Detection</button>
         </div>
       </header>
 
@@ -134,7 +144,7 @@
       <section class="result-layout">
         <article class="result-panel">
           <div class="panel-heading">
-            <h2>OCR 결과</h2>
+            <h2>분석 결과</h2>
             <div class="button-row compact">
               <button id="saveResultWebdav" class="secondary" type="button">WebDAV 저장</button>
               <button id="copyResult" class="secondary" type="button">복사</button>
@@ -142,6 +152,10 @@
             </div>
           </div>
           <pre id="resultText" class="result-text">아직 OCR 결과가 없습니다.</pre>
+          <div id="detectionPlot" class="detection-plot empty">
+            <canvas id="detectionCanvas"></canvas>
+            <span>탐지 결과 박스 플롯 없음</span>
+          </div>
           <div id="runStatus" class="status-line">실행 대기</div>
         </article>
 

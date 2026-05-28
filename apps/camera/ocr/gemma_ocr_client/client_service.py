@@ -44,6 +44,11 @@ DEFAULT_CONFIG = {
     "keep_alive": "60m",
     "num_ctx": 8192,
     "ocr_prompt": "Extract all visible text from the image. Preserve line breaks and reading order. Return only the OCR text.",
+    "detection_prompt": (
+        "Detect visible objects in the image. Return only valid JSON with this shape: "
+        "{\"detections\":[{\"label\":\"object name\",\"confidence\":0.0,"
+        "\"bbox\":[x1,y1,x2,y2]}]}. Use normalized bbox coordinates from 0 to 1."
+    ),
     "webdav_url": "",
     "webdav_user": "",
     "webdav_password": "",
@@ -132,6 +137,7 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "keep_alive": str(incoming.get("keep_alive") or DEFAULT_CONFIG["keep_alive"]),
         "num_ctx": max(0, num_ctx),
         "ocr_prompt": str(incoming.get("ocr_prompt") or DEFAULT_CONFIG["ocr_prompt"]),
+        "detection_prompt": str(incoming.get("detection_prompt") or DEFAULT_CONFIG["detection_prompt"]),
         "webdav_url": webdav_slots[0]["url"],
         "webdav_user": webdav_slots[0]["username"],
         "webdav_password": webdav_slots[0]["password"],
@@ -876,6 +882,153 @@ def run_ocr(config: dict[str, Any], images: list[dict[str, Any]], prompt: str) -
     return {"result": entry, "raw": data, "history": append_history(entry)}
 
 
+def extract_json_object_from_text(text: str) -> Any:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return None
+    for candidate in (stripped, stripped.strip("`")):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    start = min([index for index in (stripped.find("{"), stripped.find("[")) if index >= 0], default=-1)
+    if start < 0:
+        return None
+    opening = stripped[start]
+    closing = "}" if opening == "{" else "]"
+    end = stripped.rfind(closing)
+    while end > start:
+        try:
+            return json.loads(stripped[start : end + 1])
+        except json.JSONDecodeError:
+            end = stripped.rfind(closing, start, end)
+    return None
+
+
+def float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def detection_bbox(item: dict[str, Any]) -> list[float] | None:
+    raw_box = item.get("bbox") or item.get("box") or item.get("bounding_box")
+    if isinstance(raw_box, list) and len(raw_box) >= 4:
+        values = [float_or_none(value) for value in raw_box[:4]]
+        return [value for value in values if value is not None] if all(value is not None for value in values) else None
+    if not isinstance(raw_box, dict):
+        raw_box = item
+    x1 = float_or_none(raw_box.get("x1") or raw_box.get("xmin") or raw_box.get("x_min") or raw_box.get("left"))
+    y1 = float_or_none(raw_box.get("y1") or raw_box.get("ymin") or raw_box.get("y_min") or raw_box.get("top"))
+    x2 = float_or_none(raw_box.get("x2") or raw_box.get("xmax") or raw_box.get("x_max") or raw_box.get("right"))
+    y2 = float_or_none(raw_box.get("y2") or raw_box.get("ymax") or raw_box.get("y_max") or raw_box.get("bottom"))
+    width = float_or_none(raw_box.get("width") or raw_box.get("w"))
+    height = float_or_none(raw_box.get("height") or raw_box.get("h"))
+    if x2 is None and x1 is not None and width is not None:
+        x2 = x1 + width
+    if y2 is None and y1 is not None and height is not None:
+        y2 = y1 + height
+    if None in {x1, y1, x2, y2}:
+        return None
+    return [float(x1), float(y1), float(x2), float(y2)]
+
+
+def normalize_detection_response(data: dict[str, Any], text: str) -> list[dict[str, Any]]:
+    parsed = data.get("detections") or data.get("objects")
+    if not isinstance(parsed, list):
+        parsed_text = extract_json_object_from_text(text)
+        if isinstance(parsed_text, dict):
+            parsed = parsed_text.get("detections") or parsed_text.get("objects") or parsed_text.get("items")
+        elif isinstance(parsed_text, list):
+            parsed = parsed_text
+    if not isinstance(parsed, list):
+        return []
+
+    detections: list[dict[str, Any]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("class") or item.get("name") or item.get("object") or "object")
+        confidence = float_or_none(item.get("confidence") or item.get("score") or item.get("probability"))
+        bbox = detection_bbox(item)
+        normalized = {
+            "label": label,
+            "confidence": confidence,
+            "bbox": bbox,
+        }
+        detections.append(normalized)
+    return detections
+
+
+def run_object_detection(config: dict[str, Any], images: list[dict[str, Any]], prompt: str) -> dict[str, Any]:
+    if not config.get("server_base_url"):
+        raise ValueError("Gemma model URL is required.")
+    if not images:
+        raise ValueError("At least one image is required.")
+    clean_images = [clean_image_item(item) for item in images]
+    effective_prompt = str(prompt or config["detection_prompt"]).strip()
+    if not effective_prompt:
+        raise ValueError("Object detection prompt is required.")
+    generate_url = join_url(config["server_base_url"], config["generate_path"])
+    started = time.perf_counter()
+    try:
+        data = request_json(
+            generate_url,
+            build_generate_payload(config, effective_prompt, clean_images),
+            int(config["request_timeout_seconds"]),
+            basic_auth_header(config),
+        )
+    except urllib.error.HTTPError as exc:
+        if exc.code == HTTPStatus.UNAUTHORIZED:
+            raise ValueError(
+                f"Gemma generate endpoint rejected authentication: {generate_url}. "
+                "Check User ID/Password in the left panel, then save settings and retry."
+            ) from exc
+        raise ValueError(f"Gemma generate endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}") from exc
+    except urllib.error.URLError as exc:
+        raise ValueError(f"Could not connect to Gemma generate endpoint: {generate_url} | {exc}") from exc
+    except TimeoutError as exc:
+        raise ValueError(str(exc)) from exc
+
+    elapsed = time.perf_counter() - started
+    text = extract_response_text(data).strip()
+    detections = normalize_detection_response(data, text)
+    summary_lines = []
+    for index, detection in enumerate(detections, start=1):
+        confidence = detection.get("confidence")
+        confidence_text = "unknown" if confidence is None else f"{float(confidence) * 100:.1f}%"
+        summary_lines.append(f"{index}. {detection.get('label', 'object')} - {confidence_text}")
+    if not summary_lines:
+        summary_lines.append(text or "No detections were parsed.")
+    entry = {
+        "id": f"detect-{int(time.time() * 1000)}",
+        "task": "object_detection",
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "server_base_url": config["server_base_url"],
+        "generate_url": generate_url,
+        "model": str(data.get("model") or config.get("model") or ""),
+        "image_names": [image["name"] for image in clean_images],
+        "images": [
+            {
+                "name": image["name"],
+                "mime_type": image["mime_type"],
+                "source": image.get("source", ""),
+                "url": image.get("url", ""),
+            }
+            for image in clean_images
+        ],
+        "webdav_urls": [image["url"] for image in clean_images if image.get("source") == "webdav" and image.get("url")],
+        "image_count": len(clean_images),
+        "server_response_keys": sorted(str(key) for key in data.keys()),
+        "elapsed_seconds": elapsed,
+        "detections": detections,
+        "text": "\n".join(summary_lines),
+        "raw_text": text,
+    }
+    return {"result": entry, "raw": data, "history": append_history(entry)}
+
+
 def save_ocr_result_to_webdav(config: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     entry = result_webdav_history_entry(config, incoming)
     base_url = entry["url"]
@@ -1116,6 +1269,12 @@ class ClientHandler(BaseHTTPRequestHandler):
             if request_path == "/api/ocr":
                 config = runtime_config(incoming.get("config"))
                 self.send_json(run_ocr(config, incoming.get("images") or [], str(incoming.get("prompt") or "")))
+                return
+            if request_path == "/api/detect":
+                config = runtime_config(incoming.get("config"))
+                self.send_json(
+                    run_object_detection(config, incoming.get("images") or [], str(incoming.get("prompt") or ""))
+                )
                 return
             if request_path == "/api/history/clear":
                 self.send_json({"history": clear_history()})

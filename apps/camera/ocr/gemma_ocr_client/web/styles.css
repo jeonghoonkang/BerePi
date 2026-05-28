@@ -207,6 +207,34 @@ h2 {
   margin-top: 0.75rem;
 }
 
+.task-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.task-tab {
+  min-height: 2.35rem;
+  border-color: var(--line);
+  background: white;
+  color: var(--ink);
+}
+
+.task-tab.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.task-panel {
+  display: none;
+}
+
+.task-panel.active {
+  display: block;
+}
+
 .button-row.compact {
   margin-top: 0;
 }
@@ -395,6 +423,40 @@ h2 {
 
 .result-panel .status-line {
   margin-top: 0.8rem;
+}
+
+.detection-plot {
+  position: relative;
+  display: grid;
+  margin-top: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f9fa;
+  overflow: hidden;
+}
+
+.detection-plot canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.detection-plot span {
+  display: none;
+}
+
+.detection-plot.empty {
+  min-height: 9rem;
+  place-items: center;
+}
+
+.detection-plot.empty canvas {
+  display: none;
+}
+
+.detection-plot.empty span {
+  display: block;
+  color: var(--muted);
 }
 
 .history-list {

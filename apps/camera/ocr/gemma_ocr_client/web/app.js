@@ -9,6 +9,8 @@ const state = {
   ocrTimerId: null,
   ocrStartedAt: 0,
   ocrRunning: false,
+  lastDetectionImage: null,
+  lastDetectionResult: null,
 };
 
 const elements = {
@@ -23,6 +25,9 @@ const elements = {
   keepAlive: document.getElementById("keepAlive"),
   numCtx: document.getElementById("numCtx"),
   ocrPrompt: document.getElementById("ocrPrompt"),
+  detectionPrompt: document.getElementById("detectionPrompt"),
+  taskTabs: [...document.querySelectorAll("[data-task-tab]")],
+  taskPanels: [...document.querySelectorAll("[data-task-panel]")],
   webdavStatus: document.getElementById("webdavStatus"),
   webdavTabs: [...document.querySelectorAll("[data-webdav-tab]")],
   webdavPanels: [...document.querySelectorAll("[data-webdav-panel]")],
@@ -62,9 +67,12 @@ const elements = {
   imageList: document.getElementById("imageList"),
   runStatus: document.getElementById("runStatus"),
   runOcr: document.getElementById("runOcr"),
+  runDetection: document.getElementById("runDetection"),
   testImageTransfer: document.getElementById("testImageTransfer"),
   saveResultWebdav: document.getElementById("saveResultWebdav"),
   resultText: document.getElementById("resultText"),
+  detectionPlot: document.getElementById("detectionPlot"),
+  detectionCanvas: document.getElementById("detectionCanvas"),
   historyList: document.getElementById("historyList"),
 };
 
@@ -79,6 +87,7 @@ const configFields = {
   keep_alive: elements.keepAlive,
   num_ctx: elements.numCtx,
   ocr_prompt: elements.ocrPrompt,
+  detection_prompt: elements.detectionPrompt,
   result_webdav_url: elements.resultWebdavUrl,
   result_webdav_sub_path: elements.resultWebdavSubPath,
   result_webdav_user: elements.resultWebdavUser,
@@ -120,6 +129,7 @@ function readConfigFromForm() {
     keep_alive: elements.keepAlive.value.trim(),
     num_ctx: Number(elements.numCtx.value || 0),
     ocr_prompt: elements.ocrPrompt.value,
+    detection_prompt: elements.detectionPrompt.value,
     webdav_url: elements.webdavUrl[1].value.trim(),
     webdav_user: elements.webdavUser[1].value.trim(),
     webdav_password: elements.webdavPassword[1].value,
@@ -160,6 +170,16 @@ function activateWebdavTab(slot) {
   });
 }
 
+function activateTaskTab(task) {
+  const activeTask = task === "detect" ? "detect" : "ocr";
+  elements.taskTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.taskTab === activeTask);
+  });
+  elements.taskPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.taskPanel === activeTask);
+  });
+}
+
 function formatElapsedSeconds(startedAt) {
   const elapsedMs = Math.max(0, Date.now() - startedAt);
   return Math.floor(elapsedMs / 1000);
@@ -190,8 +210,21 @@ function stopOcrTimer() {
 }
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
-  const data = await response.json();
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    throw new Error(
+      `로컬 OCR 클라이언트 서비스에 연결할 수 없습니다: ${url}. ` +
+      `client_service.py가 실행 중인지 확인한 뒤 브라우저를 새로고침해 주세요. (${error})`
+    );
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw new Error(`로컬 OCR 클라이언트 서비스 응답을 JSON으로 읽을 수 없습니다: ${url}. (${error})`);
+  }
   if (!response.ok) {
     throw new Error(data.error || `Request failed: ${response.status}`);
   }
@@ -368,7 +401,9 @@ function renderHistory() {
     button.addEventListener("click", () => {
       const entry = state.history.find((candidate) => candidate.id === button.dataset.historyId);
       if (!entry) return;
-      elements.resultText.textContent = formatOcrResultSection(entry, 0);
+      elements.resultText.textContent = entry.task === "object_detection"
+        ? formatDetectionResultSection(entry, 0)
+        : formatOcrResultSection(entry, 0);
       elements.runStatus.textContent = `불러옴: ${entry.created_at || entry.id}`;
     });
   });
@@ -396,6 +431,100 @@ function formatOcrResultSection(result, index) {
   }
   lines.push("", String(result?.text || ""));
   return lines.join("\n");
+}
+
+function formatDetectionResultSection(result, index) {
+  const meta = imageMetaFromResult(result || {});
+  const names = meta.names.length ? meta.names.join(", ") : `image ${index + 1}`;
+  const detections = Array.isArray(result?.detections) ? result.detections : [];
+  const lines = [`## ${index + 1}. ${names}`, `File: ${names}`];
+  if (meta.urls.length) {
+    lines.push(`WebDAV: ${meta.urls.join(", ")}`);
+  }
+  lines.push("", "Detected objects:");
+  if (!detections.length) {
+    lines.push(String(result?.raw_text || result?.text || "No detections parsed."));
+    return lines.join("\n");
+  }
+  detections.forEach((detection, detectionIndex) => {
+    const confidence = detection.confidence === null || detection.confidence === undefined
+      ? "unknown"
+      : `${(Number(detection.confidence) * 100).toFixed(1)}%`;
+    const bbox = Array.isArray(detection.bbox) ? ` [${detection.bbox.map((value) => Number(value).toFixed(3)).join(", ")}]` : "";
+    lines.push(`${detectionIndex + 1}. ${detection.label || "object"} - ${confidence}${bbox}`);
+  });
+  return lines.join("\n");
+}
+
+function colorForIndex(index) {
+  const colors = ["#e11d48", "#2563eb", "#16a34a", "#ca8a04", "#9333ea", "#0891b2", "#ea580c"];
+  return colors[index % colors.length];
+}
+
+function normalizeBox(box, width, height) {
+  if (!Array.isArray(box) || box.length < 4) return null;
+  let [x1, y1, x2, y2] = box.map(Number);
+  if ([x1, y1, x2, y2].some((value) => Number.isNaN(value))) return null;
+  if (Math.max(x1, y1, x2, y2) <= 1.5) {
+    x1 *= width;
+    x2 *= width;
+    y1 *= height;
+    y2 *= height;
+  } else if (Math.max(x1, y1, x2, y2) <= 100) {
+    x1 = (x1 / 100) * width;
+    x2 = (x2 / 100) * width;
+    y1 = (y1 / 100) * height;
+    y2 = (y2 / 100) * height;
+  }
+  const left = Math.max(0, Math.min(x1, x2));
+  const top = Math.max(0, Math.min(y1, y2));
+  const right = Math.min(width, Math.max(x1, x2));
+  const bottom = Math.min(height, Math.max(y1, y2));
+  if (right <= left || bottom <= top) return null;
+  return {left, top, width: right - left, height: bottom - top};
+}
+
+function drawDetectionPlot(imageItem, result) {
+  const detections = Array.isArray(result?.detections) ? result.detections : [];
+  if (!imageItem || !detections.length) {
+    elements.detectionPlot.classList.add("empty");
+    return;
+  }
+  const canvas = elements.detectionCanvas;
+  const context = canvas.getContext("2d");
+  const image = new Image();
+  image.onload = () => {
+    const maxWidth = Math.min(900, elements.detectionPlot.clientWidth || 900);
+    const scale = Math.min(1, maxWidth / image.naturalWidth);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.width = width;
+    canvas.height = height;
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    context.lineWidth = Math.max(2, Math.round(width / 320));
+    context.font = `${Math.max(13, Math.round(width / 48))}px Malgun Gothic, sans-serif`;
+    detections.forEach((detection, index) => {
+      const box = normalizeBox(detection.bbox, width, height);
+      if (!box) return;
+      const color = colorForIndex(index);
+      const confidence = detection.confidence === null || detection.confidence === undefined
+        ? ""
+        : ` ${(Number(detection.confidence) * 100).toFixed(1)}%`;
+      const label = `${detection.label || "object"}${confidence}`;
+      context.strokeStyle = color;
+      context.fillStyle = color;
+      context.strokeRect(box.left, box.top, box.width, box.height);
+      const metrics = context.measureText(label);
+      const labelHeight = Math.max(18, Math.round(width / 36));
+      const labelTop = Math.max(0, box.top - labelHeight);
+      context.fillRect(box.left, labelTop, Math.min(metrics.width + 10, width - box.left), labelHeight);
+      context.fillStyle = "#ffffff";
+      context.fillText(label, box.left + 5, labelTop + labelHeight - 5);
+    });
+    elements.detectionPlot.classList.remove("empty");
+  };
+  image.src = imageItem.previewUrl;
 }
 
 function renderWebdavHistory() {
@@ -873,6 +1002,96 @@ async function runOcr() {
   }
 }
 
+async function runDetection() {
+  if (state.ocrRunning) {
+    return;
+  }
+  const selectedRemoteCount = state.webdavFiles.filter((file) => file.selected).length;
+  if (!state.images.length && !selectedRemoteCount) {
+    elements.runStatus.textContent = "이미지를 먼저 추가하거나 WebDAV 원격 파일을 선택해 주세요.";
+    return;
+  }
+  let selectedImages = state.images.filter((image) => image.selected);
+  if (!selectedImages.length && !selectedRemoteCount) {
+    elements.runStatus.textContent = "탐지할 이미지를 선택해 주세요.";
+    return;
+  }
+  activateTaskTab("detect");
+  startOcrTimer();
+  try {
+    const addedRemoteCount = await downloadSelectedWebdavFilesForOcr();
+    selectedImages = state.images.filter((image) => image.selected);
+    if (!selectedImages.length) {
+      elements.runStatus.textContent = "탐지로 전송할 이미지가 없습니다.";
+      return;
+    }
+    const results = [];
+    let lastHistory = state.history;
+    let failedCount = 0;
+    for (let index = 0; index < selectedImages.length; index += 1) {
+      const image = selectedImages[index];
+      elements.runStatus.textContent = `YOLO Detection 실행 중: ${index + 1}/${selectedImages.length} · ${image.name || "image"} · ${formatElapsedSeconds(state.ocrStartedAt)}초 경과`;
+      const payloadImage = {
+        name: image.name,
+        mime_type: image.mime_type,
+        source: image.source,
+        url: image.url,
+        content_base64: image.content_base64,
+      };
+      try {
+        const data = await requestJson("/api/detect", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            config: readConfigFromForm(),
+            prompt: elements.detectionPrompt.value,
+            images: [payloadImage],
+          }),
+        });
+        const result = data.result || {};
+        results.push(result);
+        lastHistory = data.history || lastHistory;
+        state.lastDetectionImage = image;
+        state.lastDetectionResult = result;
+        drawDetectionPlot(image, result);
+      } catch (error) {
+        failedCount += 1;
+        results.push({
+          task: "object_detection",
+          image_names: [image.name || `image ${index + 1}`],
+          images: [{
+            name: image.name || `image ${index + 1}`,
+            mime_type: image.mime_type || "",
+            source: image.source || "",
+            url: image.url || "",
+          }],
+          webdav_urls: image.url ? [image.url] : [],
+          detections: [],
+          text: `[Detection 실패]\n${String(error)}`,
+          raw_text: String(error),
+          elapsed_seconds: 0,
+          image_count: 1,
+          error: true,
+        });
+      }
+      elements.resultText.textContent = results
+        .map((item, resultIndex) => formatDetectionResultSection(item, resultIndex))
+        .join("\n\n");
+    }
+    state.history = lastHistory;
+    const totalElapsed = results.reduce((sum, item) => sum + Number(item.elapsed_seconds || 0), 0);
+    const totalDetections = results.reduce((sum, item) => sum + (Array.isArray(item.detections) ? item.detections.length : 0), 0);
+    const remoteText = addedRemoteCount ? ` · WebDAV ${addedRemoteCount}개 포함` : "";
+    const failText = failedCount ? ` · 실패 ${failedCount}개` : "";
+    elements.runStatus.textContent = `완료: ${totalElapsed.toFixed(2)}초 · 이미지 ${selectedImages.length}개 순차 탐지 · 객체 ${totalDetections}개${remoteText}${failText}`;
+    renderHistory();
+  } catch (error) {
+    elements.runStatus.textContent = `YOLO Detection 실패: ${error}`;
+  } finally {
+    stopOcrTimer();
+  }
+}
+
 function selectedImagePayloads() {
   return state.images
     .filter((image) => image.selected)
@@ -966,6 +1185,9 @@ elements.webdavTabs.forEach((button) => {
 document.getElementById("runOcr").addEventListener("click", () => runOcr().catch((error) => {
   elements.runStatus.textContent = `OCR 실패: ${error}`;
 }));
+document.getElementById("runDetection").addEventListener("click", () => runDetection().catch((error) => {
+  elements.runStatus.textContent = `YOLO Detection 실패: ${error}`;
+}));
 document.getElementById("testImageTransfer").addEventListener("click", () => testImageTransfer().catch((error) => {
   elements.runStatus.textContent = `이미지 전송 테스트 실패: ${error}`;
   elements.testImageTransfer.disabled = false;
@@ -978,6 +1200,9 @@ document.getElementById("saveResultWebdav").addEventListener("click", () => save
   elements.saveResultWebdav.disabled = false;
 }));
 document.getElementById("clearResult").addEventListener("click", clearResult);
+elements.taskTabs.forEach((button) => {
+  button.addEventListener("click", () => activateTaskTab(button.dataset.taskTab));
+});
 document.getElementById("clearHistory").addEventListener("click", async () => {
   const data = await requestJson("/api/history/clear", {method: "POST"});
   state.history = data.history || [];

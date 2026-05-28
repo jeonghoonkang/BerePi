@@ -6,7 +6,7 @@
 
 - `client_service.py`: 로컬 웹 서버, 설정 저장, 원격 모델 API 프록시, WebDAV 이미지 다운로드 프록시
 - `web/index.html`: OCR 클라이언트 화면
-- `web/app.js`: 이미지 업로드, 클립보드 처리, WebDAV 이미지 연동, OCR 요청, 결과 표시
+- `web/app.js`: 이미지 업로드, 클립보드 처리, WebDAV 이미지 연동, OCR/YOLO Detection 요청, 결과 및 박스 플롯 표시
 - `web/styles.css`: UI 스타일
 - `config/client_config.sample.json`: 기본 설정 샘플
 - `data/client_config.json`: 실행 시 자동 생성되는 실제 설정 파일
@@ -45,6 +45,14 @@ python ./client_service.py
 7. **이미지 전송 확인**으로 선택 이미지가 서버까지 정상 도착하는지 테스트합니다. (모델 추론은 실행하지 않고 전송 테스트만 진행)
 8. 필요한 경우 **OCR 프롬프트**를 수정합니다.
 9. **OCR 실행**을 눌러 텍스트 추출 결과를 확인합니다.
+
+## YOLO Detection
+
+좌측 **모델 프롬프트** 패널에는 `OCR` 탭과 `YOLO Detection` 탭이 있습니다. `YOLO Detection` 탭의 기본 프롬프트는 Gemma4가 객체 목록을 JSON으로 반환하도록 요청합니다.
+
+이미지를 선택한 뒤 상단 **YOLO Detection** 버튼을 누르면 `/api/detect`를 통해 Gemma4 모델에 이미지를 전송합니다. 응답에서 `detections` 또는 텍스트 안의 JSON을 파싱하여 인식 물체 이름, confidence 정확도, bounding box 좌표를 문자로 출력합니다.
+
+결과창 아래에는 선택 이미지 위에 bounding box를 그린 박스 플롯이 표시됩니다. 박스 좌표는 `[x1, y1, x2, y2]` 형식을 사용하며, 0~1 정규화 좌표, 0~100 퍼센트 좌표, 픽셀 좌표를 최대한 자동으로 처리합니다.
 
 선택된 이미지가 여러 개이면 한 번에 묶어서 전송하지 않고, 첫 번째 이미지 OCR 응답을 받은 뒤 다음 이미지를 전송하는 순서로 처리합니다. 결과 창에는 파일별 OCR 결과가 순서대로 누적 표시됩니다.
 
@@ -106,6 +114,20 @@ OCR 결과 표시창은 각 결과 블록 상단에 `File:` 파일 이름을 표
   "options": {
     "num_ctx": 8192
   }
+}
+```
+
+YOLO Detection도 같은 `/api/generate` 경로와 이미지 배열을 사용하되, 프롬프트가 객체 탐지 JSON 출력을 요청합니다. 권장 응답 형식은 다음과 같습니다.
+
+```json
+{
+  "detections": [
+    {
+      "label": "person",
+      "confidence": 0.91,
+      "bbox": [0.12, 0.18, 0.48, 0.92]
+    }
+  ]
 }
 ```
 
