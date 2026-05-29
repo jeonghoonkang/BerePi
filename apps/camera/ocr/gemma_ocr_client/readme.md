@@ -1,4 +1,4 @@
-# Gemma OCR Client
+# Gemma OCR, Detection Client
 
 클립보드 이미지 또는 업로드한 이미지 파일을 Gemma/Ollama 호환 파운데이션 모델에 전송하여 OCR을 수행하는 웹 클라이언트
 
