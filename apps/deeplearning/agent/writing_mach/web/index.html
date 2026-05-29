@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writing Mach</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="settings-panel">
+      <div class="brand-block">
+        <p class="eyebrow">multi-agent book writing</p>
+        <h1>Writing Mach</h1>
+      </div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>생성형 AI 연결</h2>
+          <span id="connectionStatus">설정 대기</span>
+        </div>
+        <div class="form-stack">
+          <label>Model URL<input id="serverBaseUrl" placeholder="http://127.0.0.1:8082"></label>
+          <label>Generate Path<input id="generatePath" placeholder="/api/generate"></label>
+          <label>Status Path<input id="statusPath" placeholder="/api/status"></label>
+          <label>User ID<input id="userId" autocomplete="username"></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+          <label>Model Override<input id="model" placeholder="optional"></label>
+          <div class="inline-fields">
+            <label>Timeout<input id="requestTimeout" type="number" min="5" step="1"></label>
+            <label>num_ctx<input id="numCtx" type="number" min="0" step="1"></label>
+          </div>
+          <div class="inline-fields">
+            <label>Chapter Words<input id="targetWords" type="number" min="300" step="100"></label>
+            <label>Keep Alive<input id="keepAlive" placeholder="60m"></label>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="saveConfig" type="button">설정 저장</button>
+          <button id="testConnection" class="secondary" type="button">연결 확인</button>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <header class="workspace-header">
+        <div>
+          <h2>책 작성 에이전트</h2>
+          <p>story_backbone.md를 기준으로 챕터 에이전트 초안, 메인 작가 조율, 초반부 재작성까지 실행합니다.</p>
+        </div>
+        <button id="runAgents" type="button">에이전트 실행</button>
+      </header>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Story Backbone</h2>
+          <span id="backboneStatus">로드 대기</span>
+        </div>
+        <textarea id="backboneText" spellcheck="false"></textarea>
+      </section>
+
+      <section class="result-grid">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>진행 상태</h2>
+            <button id="copyBook" class="secondary compact-button" type="button">최종 원고 복사</button>
+          </div>
+          <div id="runStatus" class="status-line">실행 대기</div>
+          <pre id="agentLog" class="log-text">아직 실행 결과가 없습니다.</pre>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>최종 원고</h2>
+            <span id="outputPath">저장 전</span>
+          </div>
+          <pre id="bookOutput" class="book-output">에이전트 실행 후 최종 원고가 표시됩니다.</pre>
+        </article>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
