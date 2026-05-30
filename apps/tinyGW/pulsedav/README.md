@@ -77,6 +77,7 @@ python3 sender.py --iptime-list --config /path/to/custom-settings.json
 - `--print-crontab` 은 현재 설정 기준으로 `@reboot` 와 주기 실행 cron 라인을 출력합니다.
 - `--config` 와 함께 쓰면 해당 설정 파일 경로가 포함된 cron 라인을 출력합니다.
 - cron 예시의 실행 시각은 `pulsedav.log` 첫 줄에 기록됩니다.
+- `@reboot` 실행은 `pulsedav.log` 와 전송 Markdown 상태 메시지에 `reboot 시점` 문구를 남깁니다.
 - cron 예시의 로그 리다이렉션은 `>` 를 사용하므로, `pulsedav.log` 가 매 실행마다 새로 써져서 무한정 커지지 않습니다.
 - ipTIME 설정은 기본적으로 `../list_ip/setting.conf` 를 읽습니다. JSON 설정의 `iptime.config_path`, `iptime.router_ip`, `iptime.user_id`, `iptime.user_pw`, `iptime.timeout_seconds` 값으로 직접 지정할 수도 있습니다.
 - `iptime.user_id` 또는 `iptime.user_pw` 가 비어 있으면 ipTIME ping/API 호출을 실행하지 않습니다.
@@ -84,6 +85,6 @@ python3 sender.py --iptime-list --config /path/to/custom-settings.json
 ## 부팅 자동 전송 예시
 
 ```cron
-@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
+@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { echo 'reboot 시점'; /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once --reboot; } > pulsedav.log 2>&1
 */30 * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
 ```

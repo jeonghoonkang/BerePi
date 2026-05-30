@@ -371,6 +371,13 @@ def delete_remote_path(config: WebDAVConfig, remote_path: str) -> None:
     response.raise_for_status()
 
 
+def print_webdav_wait_warning() -> None:
+    print(
+        f"WebDAV hostname 주소가 잘못되어 있으면 최대 {REQUEST_TIMEOUT}초 동안 반응이 없을 수 있습니다.",
+        flush=True,
+    )
+
+
 def prune_old_remote_files(config: WebDAVConfig, host_dir: str, retention_months: int = RETENTION_MONTHS) -> list[str]:
     cutoff = datetime.now(UTC) - timedelta(days=retention_months * 30)
     deleted: list[str] = []
@@ -824,7 +831,7 @@ def get_iptime_report(settings: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first_boot_message: bool) -> str:
+def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first_boot_message: bool, reboot_run: bool = False) -> str:
     now = snapshot["collected_at"]
     lines = [
         f"# PulseDAV Report - {snapshot['hostname']}",
@@ -836,7 +843,9 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
         f"- 운영체제: {snapshot['os']}",
     ]
 
-    if is_first_boot_message:
+    if reboot_run:
+        lines.append(f"- 상태 메세지: reboot 시점 전송, up 이후 {snapshot['uptime_minutes']}분")
+    elif is_first_boot_message:
         lines.append(f"- 상태 메세지: 부팅한 직후 전송, up 이후 {snapshot['uptime_minutes']}분")
     else:
         lines.append(f"- 상태 메세지: up 이후 {snapshot['uptime_minutes']}분")
@@ -1001,6 +1010,7 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     remote_path = posixpath.join(host_dir, file_name).strip("/")
     destination_url = compose_webdav_url(webdav_config, remote_path)
     try:
+        print_webdav_wait_warning()
         upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
         deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
     except REQUEST_ERRORS as exc:
@@ -1021,7 +1031,11 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     }
 
 
-def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:
+def send_once(
+    settings: dict[str, Any] | None = None,
+    settings_path: str | Path | None = None,
+    reboot_run: bool = False,
+) -> dict[str, Any]:
     settings = settings or load_settings(settings_path)
     errors = validate_settings(settings)
     if errors:
@@ -1031,7 +1045,7 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
     current_boot_marker = boot_marker()
     first_boot = state.get("last_boot_marker") != current_boot_marker
     snapshot = collect_snapshot(settings)
-    markdown = format_markdown(settings, snapshot, first_boot)
+    markdown = format_markdown(settings, snapshot, first_boot, reboot_run=reboot_run)
 
     webdav_config = build_webdav_config(settings)
     host_dir = build_host_remote_dir(webdav_config)
@@ -1040,6 +1054,7 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
     remote_directory = host_dir
     destination_url = compose_webdav_url(webdav_config, remote_path)
     try:
+        print_webdav_wait_warning()
         upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
         deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
     except REQUEST_ERRORS as exc:
@@ -1065,6 +1080,7 @@ def send_once(settings: dict[str, Any] | None = None, settings_path: str | Path 
         "host_name": hostname(),
         "deleted_paths": deleted,
         "first_boot_message": first_boot,
+        "reboot_run": reboot_run,
         "uptime_minutes": snapshot["uptime_minutes"],
         "preview": markdown,
     }
