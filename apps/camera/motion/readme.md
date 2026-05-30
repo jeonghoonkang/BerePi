@@ -35,7 +35,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 `detection_5min.py` 는 `/var/lib/motion_recent` 에 저장된 최근 24시간 인덱스 중 최근 5분 이미지 파일을 원격 Gemma4 31B 모델에 보내 사람 존재 여부와 인원수를 확인합니다. 사람이 감지되면 해당 사진, 인원수, 사람이 찍힌 시각을 Telegram 으로 전송하고 `person_detected_events.jsonl` 에도 저장합니다.
 
 ```bash
-cd /Users/tinyos/devel_opment/BerePi/apps/camera/motion
+cd /****tinyos/devel_opment/BerePi/apps/camera/motion
 python3 detection_5min.py
 python3 detection_5min.py --dry-run
 python3 detection_5min.py --dir /var/lib/motion_recent --minutes 5
@@ -56,20 +56,20 @@ sudo install -d -o motion -g motion /var/lib/motion_recent
 `/etc/motion/motion.conf` 에 사진 저장 hook 을 추가합니다. 경로는 설치된 BerePi 위치에 맞게 바꿉니다.
 
 ```conf
-on_picture_save /Users/tinyos/devel_opment/BerePi/apps/camera/motion/motion_recent_add.sh "%f"
+on_picture_save /****/devel_opment/BerePi/apps/camera/motion/motion_recent_add.sh "%f"
 ```
 
 처음 전환할 때는 최근 24시간 파일을 한 번 채웁니다.
 
 ```bash
 find /var/lib/motion -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) -mmin -1440 \
-  -exec /Users/tinyos/devel_opment/BerePi/apps/camera/motion/motion_recent_add.sh {} \;
+  -exec /****/devel_opment/BerePi/apps/camera/motion/motion_recent_add.sh {} \;
 ```
 
 24시간이 지난 인덱스는 crontab 으로 정리합니다.
 
 ```cron
-*/10 * * * * /Users/tinyos/devel_opment/BerePi/apps/camera/motion/motion_recent_cleanup.sh /var/lib/motion_recent 1440
+*/10 * * * * /****tinyos/devel_opment/BerePi/apps/camera/motion/motion_recent_cleanup.sh /var/lib/motion_recent 1440
 ```
 
 이 방식은 원본 파일을 복사하지 않고 같은 파일 데이터에 이름만 하나 더 붙이는 hardlink 를 사용하므로 디스크 사용량이 거의 늘지 않습니다. `/var/lib/motion_recent` 에서 항목을 지워도 `/var/lib/motion` 원본은 유지됩니다.
