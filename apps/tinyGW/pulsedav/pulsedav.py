@@ -739,11 +739,14 @@ def get_iptime_report(settings: dict[str, Any]) -> str:
     if not as_bool(iptime_settings.get("enabled"), True):
         return "ipTIME 장치 목록 수집이 비활성화되어 있습니다."
 
+    user_id = str(iptime_settings.get("user_id") or "").strip()
+    user_pw = str(iptime_settings.get("user_pw") or "").strip()
+    if not user_id or not user_pw:
+        return "ipTIME 로그인 설정이 없어 장치 목록 수집을 건너뜁니다. iptime.user_id/user_pw를 설정해 주세요."
+
     config_path_value = str(iptime_settings.get("config_path", "../list_ip/setting.conf")).strip()
     file_config = load_key_value_config(resolve_app_relative_path(config_path_value)) if config_path_value else {}
     router_ip = str(iptime_settings.get("router_ip") or file_config.get("ROUTER_IP") or "10.0.0.1").strip()
-    user_id = str(iptime_settings.get("user_id") or file_config.get("USER_ID") or "").strip()
-    user_pw = str(iptime_settings.get("user_pw") or file_config.get("USER_PW") or "")
     ping_count = int(iptime_settings.get("ping_count") or 3)
     timeout_seconds = int(iptime_settings.get("timeout_seconds") or 10)
 
@@ -761,9 +764,6 @@ def get_iptime_report(settings: dict[str, Any]) -> str:
         lines.append(f"Ping status: unreachable ({ping_host})")
     lines.append("")
 
-    if not user_id or not user_pw:
-        lines.append("ipTIME 로그인 설정이 없습니다. USER_ID/USER_PW 또는 iptime.user_id/user_pw를 설정해 주세요.")
-        return "\n".join(lines)
     if requests is None:
         lines.append("requests 모듈이 없어 ipTIME API를 호출할 수 없습니다.")
         return "\n".join(lines)
