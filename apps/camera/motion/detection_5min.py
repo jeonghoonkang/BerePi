@@ -10,8 +10,11 @@ import configparser
 import json
 import os
 import re
-import sys
 import shlex
+import sys
+import time
+import warnings
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -149,7 +152,9 @@ def encode_image_base64(image_path: Path) -> str:
 
 
 def get_requests_module() -> Any:
-    import requests
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        import requests
 
     return requests
 
@@ -190,12 +195,29 @@ def detect_person_via_model(image_path: Path, config: ModelConfig) -> str:
         "stream": False,
     }
 
-    response = requests_module.post(
-        config.endpoint_url,
-        json=payload,
-        headers=build_model_headers(config),
-        timeout=max(1, config.timeout_seconds),
-    )
+    timeout_seconds = max(1, config.timeout_seconds)
+    print("3. AI 모델 접속 완료", flush=True)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(
+            requests_module.post,
+            config.endpoint_url,
+            json=payload,
+            headers=build_model_headers(config),
+            timeout=timeout_seconds,
+        )
+        started_at = time.monotonic()
+        while not future.done():
+            elapsed_seconds = int(time.monotonic() - started_at)
+            print(f"4. 회신 대기중 (time out : {timeout_seconds}초 / 현재 {elapsed_seconds}초)", flush=True)
+            try:
+                response = future.result(timeout=1)
+                break
+            except TimeoutError:
+                continue
+        else:
+            response = future.result()
+
     response.raise_for_status()
     try:
         return extract_model_text(response.json())
@@ -287,15 +309,20 @@ def send_telegram_photo(config: TelegramConfig, event: dict[str, Any]) -> None:
 
 
 def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
-    requests_module = get_requests_module()
     recent_images = get_recent_images(config.motion_dir, config.lookback_minutes, config.recursive)
+    print(f"1. {config.motion_dir} 에서 파일 가져오기 완료", flush=True)
     print(f"motion_dir={config.motion_dir}")
     print(f"lookback_minutes={config.lookback_minutes}")
     print(f"recent_images={len(recent_images)}")
 
     alerts_sent = 0
+    if not recent_images:
+        return alerts_sent
+
+    requests_module = get_requests_module()
     for image_path in recent_images:
         print(f"detecting: {image_path}")
+        print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
         try:
             model_response = detect_person_via_model(image_path, config.model)
         except requests_module.RequestException as exc:
@@ -306,6 +333,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             continue
 
         detected, person_count = parse_model_response(model_response)
+        print("5. 회신 완료, 결과 전송", flush=True)
         print(f"model_response={model_response.strip()}")
         print(f"detected={detected} person_count={person_count}")
         if not detected:
