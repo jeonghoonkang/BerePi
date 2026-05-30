@@ -124,6 +124,11 @@ def image_modified_at(path: Path) -> datetime:
     return datetime.fromtimestamp(path.stat().st_mtime)
 
 
+def image_history_key(path: Path) -> str:
+    stat = path.stat()
+    return f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+
+
 def iter_image_files(motion_dir: Path, recursive: bool) -> list[Path]:
     if not motion_dir.exists():
         return []
@@ -308,6 +313,7 @@ def build_detection_event(image_path: Path, person_count: int, model_response: s
         "person_detected_at": format_time(detected_at),
         "image_captured_at": format_time(captured_at),
         "image_mtime_epoch": image_path.stat().st_mtime,
+        "image_history_key": image_history_key(image_path),
         "image_path": str(image_path),
         "image_name": image_path.name,
         "model_response": model_response.strip(),
@@ -323,11 +329,44 @@ def build_reference_event(image_path: Path, reference_label: str) -> dict[str, A
         "person_detected_at": format_time(reported_at),
         "image_captured_at": format_time(captured_at),
         "image_mtime_epoch": image_path.stat().st_mtime,
+        "image_history_key": image_history_key(image_path),
         "image_path": str(image_path),
         "image_name": image_path.name,
         "model_response": "No person detected in scanned images.",
         "reference_label": reference_label,
+        "event_type": "reference_image",
     }
+
+
+def load_sent_reference_history(event_log_path: Path) -> set[str]:
+    sent_keys: set[str] = set()
+    if not event_log_path.exists():
+        return sent_keys
+
+    try:
+        with event_log_path.open("r", encoding="utf-8") as log_file:
+            for line in log_file:
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("event_type") != "reference_image" or not event.get("telegram_sent"):
+                    continue
+                key = event.get("image_history_key")
+                if isinstance(key, str) and key:
+                    sent_keys.add(key)
+    except OSError as exc:
+        print(f"event history read failed: {event_log_path}: {exc}", file=sys.stderr)
+    return sent_keys
+
+
+def reference_was_sent(event_log_path: Path, image_path: Path) -> bool:
+    try:
+        key = image_history_key(image_path)
+    except OSError as exc:
+        print(f"reference history key failed: {image_path.name}: {exc}", file=sys.stderr)
+        return False
+    return key in load_sent_reference_history(event_log_path)
 
 
 def save_detection_event(event_log_path: Path, event: dict[str, Any]) -> None:
@@ -385,6 +424,9 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         print(f"no recent images in lookback; latest_image={latest_image}")
         if latest_image is None:
             return alerts_sent
+        if reference_was_sent(config.event_log_path, latest_image):
+            print(f"latest fallback already sent; skip duplicate: {latest_image.name}")
+            return alerts_sent
         event = build_reference_event(latest_image, "latest_no_recent")
         if dry_run:
             print(f"dry-run: latest fallback send skipped: {latest_image.name}")
@@ -395,6 +437,11 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         except (requests_module.RequestException, OSError, ValueError) as exc:
             print(f"latest fallback telegram send failed: {latest_image.name}: {exc}", file=sys.stderr)
             return alerts_sent
+        event["telegram_sent"] = True
+        try:
+            save_detection_event(config.event_log_path, event)
+        except OSError as exc:
+            print(f"reference history save failed: {latest_image.name}: {exc}", file=sys.stderr)
         print(f"latest fallback telegram sent: {latest_image.name}")
         return alerts_sent + 1
 
@@ -447,8 +494,12 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             return alerts_sent
         if requests_module is None and not dry_run:
             requests_module = get_requests_module()
+        sent_reference_keys = load_sent_reference_history(config.event_log_path)
         for reference_label, image_path in reference_images:
             event = build_reference_event(image_path, reference_label)
+            if event["image_history_key"] in sent_reference_keys:
+                print(f"reference already sent; skip duplicate: {reference_label}: {image_path.name}")
+                continue
             if dry_run:
                 print(f"dry-run: no-detection reference send skipped for {reference_label}: {image_path.name}")
                 alerts_sent += 1
@@ -458,6 +509,12 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             except (requests_module.RequestException, OSError, ValueError) as exc:
                 print(f"reference telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
                 continue
+            event["telegram_sent"] = True
+            try:
+                save_detection_event(config.event_log_path, event)
+            except OSError as exc:
+                print(f"reference history save failed: {image_path.name}: {exc}", file=sys.stderr)
+            sent_reference_keys.add(str(event["image_history_key"]))
             alerts_sent += 1
             print(f"reference telegram sent: {reference_label}: {image_path.name}")
 
