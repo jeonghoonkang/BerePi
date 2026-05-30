@@ -30,6 +30,19 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 
 - ls /var/lib/motion/ | wc -l | telegram-send --stdin 
 
+## 최근 5분 사람 감지 후 Telegram 전송
+
+`detection_5min.py` 는 `/var/lib/motion` 에 저장된 최근 5분 이미지 파일을 원격 Gemma4 31B 모델에 보내 사람 존재 여부와 인원수를 확인합니다. 사람이 감지되면 해당 사진, 인원수, 사람이 찍힌 시각을 Telegram 으로 전송하고 `person_detected_events.jsonl` 에도 저장합니다.
+
+```bash
+cd /Users/tinyos/devel_opment/BerePi/apps/camera/motion
+python3 detection_5min.py
+python3 detection_5min.py --dry-run
+python3 detection_5min.py --dir /var/lib/motion --minutes 5
+```
+
+모델 접속 주소, prompt, Telegram bot token/chat id, 감지 이벤트 로그 경로는 `conf_connect_model.conf` 에서 설정합니다.
+
 ## run / start / stop / daemon
 - sudo systemctl status ( start / stop ) motion
   - /var/lib/motion
