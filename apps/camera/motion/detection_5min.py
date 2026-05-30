@@ -147,6 +147,45 @@ def get_recent_images(motion_dir: Path, minutes: int, recursive: bool = False) -
     return recent_images
 
 
+def get_reference_images(motion_dir: Path, recursive: bool = False) -> list[tuple[str, Path]]:
+    image_mtimes: list[tuple[Path, datetime]] = []
+    for path in iter_image_files(motion_dir, recursive):
+        try:
+            image_mtimes.append((path, image_modified_at(path)))
+        except OSError as exc:
+            print(f"skip unreadable file: {path} ({exc})", file=sys.stderr)
+    if not image_mtimes:
+        return []
+
+    now = datetime.now()
+    targets = [
+        ("latest", None),
+        ("2min_ago", now - timedelta(minutes=2)),
+        ("5min_ago", now - timedelta(minutes=5)),
+    ]
+    selected: list[tuple[str, Path]] = []
+    used_paths: set[Path] = set()
+    for label, target_time in targets:
+        if target_time is None:
+            candidates = sorted(image_mtimes, key=lambda item: item[1], reverse=True)
+        else:
+            candidates = sorted(image_mtimes, key=lambda item: abs((item[1] - target_time).total_seconds()))
+        for candidate, _mtime in candidates:
+            if candidate not in used_paths:
+                selected.append((label, candidate))
+                used_paths.add(candidate)
+                break
+    return selected
+
+
+def get_latest_image(motion_dir: Path, recursive: bool = False) -> Path | None:
+    reference_images = get_reference_images(motion_dir, recursive)
+    for label, image_path in reference_images:
+        if label == "latest":
+            return image_path
+    return None
+
+
 def encode_image_base64(image_path: Path) -> str:
     return base64.b64encode(image_path.read_bytes()).decode("ascii")
 
@@ -275,6 +314,22 @@ def build_detection_event(image_path: Path, person_count: int, model_response: s
     }
 
 
+def build_reference_event(image_path: Path, reference_label: str) -> dict[str, Any]:
+    captured_at = image_modified_at(image_path).astimezone()
+    reported_at = datetime.now().astimezone()
+    return {
+        "person_detected": False,
+        "person_count": 0,
+        "person_detected_at": format_time(reported_at),
+        "image_captured_at": format_time(captured_at),
+        "image_mtime_epoch": image_path.stat().st_mtime,
+        "image_path": str(image_path),
+        "image_name": image_path.name,
+        "model_response": "No person detected in scanned images.",
+        "reference_label": reference_label,
+    }
+
+
 def save_detection_event(event_log_path: Path, event: dict[str, Any]) -> None:
     event_log_path.parent.mkdir(parents=True, exist_ok=True)
     with event_log_path.open("a", encoding="utf-8") as log_file:
@@ -287,11 +342,19 @@ def send_telegram_photo(config: TelegramConfig, event: dict[str, Any]) -> None:
         raise ValueError("telegram bot_token/chat_id is empty")
 
     image_path = Path(str(event["image_path"]))
+    if event.get("person_detected"):
+        title = "Motion person detection"
+        people_line = f"people: {event['person_count']}"
+    else:
+        title = "Motion no person detected reference"
+        people_line = "people: 0"
+
     caption = "\n".join(
         [
-            "Motion person detection",
+            title,
             f"file: {event['image_name']}",
-            f"people: {event['person_count']}",
+            people_line,
+            f"reference: {event.get('reference_label', 'detected')}",
             f"person_detected_at: {event['person_detected_at']}",
             f"image_captured_at: {event['image_captured_at']}",
             f"model: {str(event['model_response'])[:300]}",
@@ -316,8 +379,24 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     print(f"recent_images={len(recent_images)}")
 
     alerts_sent = 0
+    detected_events = 0
     if not recent_images:
-        return alerts_sent
+        latest_image = get_latest_image(config.motion_dir, config.recursive)
+        print(f"no recent images in lookback; latest_image={latest_image}")
+        if latest_image is None:
+            return alerts_sent
+        event = build_reference_event(latest_image, "latest_no_recent")
+        if dry_run:
+            print(f"dry-run: latest fallback send skipped: {latest_image.name}")
+            return alerts_sent + 1
+        requests_module = get_requests_module()
+        try:
+            send_telegram_photo(config.telegram, event)
+        except (requests_module.RequestException, OSError, ValueError) as exc:
+            print(f"latest fallback telegram send failed: {latest_image.name}: {exc}", file=sys.stderr)
+            return alerts_sent
+        print(f"latest fallback telegram sent: {latest_image.name}")
+        return alerts_sent + 1
 
     requests_module = get_requests_module()
     for image_path in recent_images:
@@ -339,6 +418,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         if not detected:
             continue
 
+        detected_events += 1
         event = build_detection_event(image_path, person_count, model_response)
         try:
             save_detection_event(config.event_log_path, event)
@@ -359,6 +439,27 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             continue
         alerts_sent += 1
         print(f"telegram sent: {image_path.name}")
+
+    if detected_events == 0:
+        reference_images = get_reference_images(config.motion_dir, config.recursive)
+        print(f"no person detected; reference_images={len(reference_images)}")
+        if not reference_images:
+            return alerts_sent
+        if requests_module is None and not dry_run:
+            requests_module = get_requests_module()
+        for reference_label, image_path in reference_images:
+            event = build_reference_event(image_path, reference_label)
+            if dry_run:
+                print(f"dry-run: no-detection reference send skipped for {reference_label}: {image_path.name}")
+                alerts_sent += 1
+                continue
+            try:
+                send_telegram_photo(config.telegram, event)
+            except (requests_module.RequestException, OSError, ValueError) as exc:
+                print(f"reference telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
+                continue
+            alerts_sent += 1
+            print(f"reference telegram sent: {reference_label}: {image_path.name}")
 
     return alerts_sent
 
