@@ -88,3 +88,17 @@ python3 sender.py --iptime-list --config /path/to/custom-settings.json
 @reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { echo 'reboot 시점'; /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once --reboot; } > pulsedav.log 2>&1
 */30 * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
 ```
+
+## 로그인 시 crontab 확인
+
+`check_login_pulsedav.sh` 는 사용자 crontab 또는 비밀번호 없이 확인 가능한 root crontab 에 PulseDAV 실행 라인이 있으면 아무 것도 출력하지 않습니다. 실행 라인이 없으면 로그인 시 확인할 수 있도록 `Missing PulseDAV` 를 출력합니다.
+
+```bash
+/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/check_login_pulsedav.sh
+```
+
+로그인할 때마다 확인하려면 `~/.bashrc`, `~/.bash_profile`, `~/.profile`, `~/.zshrc` 중 실제 로그인 셸이 읽는 파일에 아래 라인을 추가합니다.
+
+```bash
+[ -x /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/check_login_pulsedav.sh ] && /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/check_login_pulsedav.sh
+```
