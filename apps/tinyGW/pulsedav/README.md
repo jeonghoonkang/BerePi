@@ -31,12 +31,10 @@
 ```bash
 cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav
 streamlit run app.py
-```
 
 수동 1회 전송:
-
-```bash
 python3 sender.py --once
+python3 sender.py --once --print-crontab --config this_config.conf
 ```
 
 설정 파일 경로를 직접 지정하려면:
