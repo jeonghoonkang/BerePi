@@ -11,18 +11,18 @@ import json
 import os
 import re
 import sys
+import shlex
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-
-import requests
 
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = APP_DIR / "conf_connect_model.conf"
 DEFAULT_MOTION_DIR = Path("/var/lib/motion")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+DEFAULT_CRON_LOG_PATH = APP_DIR / "logs" / "detection_5min.log"
 
 
 @dataclass
@@ -148,6 +148,12 @@ def encode_image_base64(image_path: Path) -> str:
     return base64.b64encode(image_path.read_bytes()).decode("ascii")
 
 
+def get_requests_module() -> Any:
+    import requests
+
+    return requests
+
+
 def build_model_headers(config: ModelConfig) -> dict[str, str]:
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     if config.user_id and config.user_pw:
@@ -175,6 +181,7 @@ def extract_model_text(payload: Any) -> str:
 
 
 def detect_person_via_model(image_path: Path, config: ModelConfig) -> str:
+    requests_module = get_requests_module()
     image_base64 = encode_image_base64(image_path)
     payload = {
         "model": config.model_name,
@@ -183,7 +190,7 @@ def detect_person_via_model(image_path: Path, config: ModelConfig) -> str:
         "stream": False,
     }
 
-    response = requests.post(
+    response = requests_module.post(
         config.endpoint_url,
         json=payload,
         headers=build_model_headers(config),
@@ -253,6 +260,7 @@ def save_detection_event(event_log_path: Path, event: dict[str, Any]) -> None:
 
 
 def send_telegram_photo(config: TelegramConfig, event: dict[str, Any]) -> None:
+    requests_module = get_requests_module()
     if not config.token or not config.chat_id:
         raise ValueError("telegram bot_token/chat_id is empty")
 
@@ -269,7 +277,7 @@ def send_telegram_photo(config: TelegramConfig, event: dict[str, Any]) -> None:
     )
     url = f"https://api.telegram.org/bot{config.token}/sendPhoto"
     with image_path.open("rb") as photo:
-        response = requests.post(
+        response = requests_module.post(
             url,
             data={"chat_id": config.chat_id, "caption": caption},
             files={"photo": photo},
@@ -279,6 +287,7 @@ def send_telegram_photo(config: TelegramConfig, event: dict[str, Any]) -> None:
 
 
 def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
+    requests_module = get_requests_module()
     recent_images = get_recent_images(config.motion_dir, config.lookback_minutes, config.recursive)
     print(f"motion_dir={config.motion_dir}")
     print(f"lookback_minutes={config.lookback_minutes}")
@@ -289,7 +298,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         print(f"detecting: {image_path}")
         try:
             model_response = detect_person_via_model(image_path, config.model)
-        except requests.RequestException as exc:
+        except requests_module.RequestException as exc:
             print(f"model request failed: {image_path.name}: {exc}", file=sys.stderr)
             continue
         except OSError as exc:
@@ -317,13 +326,38 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
 
         try:
             send_telegram_photo(config.telegram, event)
-        except (requests.RequestException, OSError, ValueError) as exc:
+        except (requests_module.RequestException, OSError, ValueError) as exc:
             print(f"telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
             continue
         alerts_sent += 1
         print(f"telegram sent: {image_path.name}")
 
     return alerts_sent
+
+
+def build_crontab_line(args: argparse.Namespace) -> str:
+    python_bin = Path(sys.executable or "/usr/bin/python3").resolve()
+    script_path = Path(__file__).resolve()
+    config_path = args.config.expanduser()
+    log_path = args.cron_log.expanduser()
+
+    command_parts = [
+        shlex.quote(str(python_bin)),
+        shlex.quote(str(script_path)),
+        "--config",
+        shlex.quote(str(config_path)),
+    ]
+    if args.dir is not None:
+        command_parts.extend(["--dir", shlex.quote(str(args.dir.expanduser()))])
+    if args.minutes is not None:
+        command_parts.extend(["--minutes", str(args.minutes)])
+    if args.recursive:
+        command_parts.append("--recursive")
+    if args.dry_run:
+        command_parts.append("--dry-run")
+
+    command = " ".join(command_parts)
+    return f"*/5 * * * * cd {shlex.quote(str(APP_DIR))} && {command} >> {shlex.quote(str(log_path))} 2>&1"
 
 
 def parse_args() -> argparse.Namespace:
@@ -333,11 +367,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--minutes", type=int, help="override lookback minutes")
     parser.add_argument("--recursive", action="store_true", help="scan motion directory recursively")
     parser.add_argument("--dry-run", action="store_true", help="detect only; do not send Telegram messages")
+    parser.add_argument("--print-crontab", action="store_true", help="print a crontab line that runs this script every 5 minutes")
+    parser.add_argument(
+        "--cron-log",
+        type=Path,
+        default=DEFAULT_CRON_LOG_PATH,
+        help=f"log path for --print-crontab output (default: {DEFAULT_CRON_LOG_PATH})",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if args.print_crontab:
+        print(build_crontab_line(args))
+        return 0
+
     try:
         config = load_config(args.config)
     except (OSError, configparser.Error) as exc:
