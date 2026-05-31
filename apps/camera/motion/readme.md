@@ -2,6 +2,8 @@
 
 ## 설치 command 
 - sudo apt-get installl motion
+- `ffmpeg -version`이 정상 출력되기 전까지는 Motion도 정상 동작하기 어렵습니다.
+- bus 오류 확인 방법: `dmesg -T | grep -Ei "ext4|mmc|i/o error|buffer error|corrupt|segfault|bus"`
 
 ## requirements
 ```
