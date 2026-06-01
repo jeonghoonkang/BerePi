@@ -7,6 +7,7 @@ import binascii
 import hmac
 import os
 import re
+import secrets
 import signal
 import socket
 import subprocess
@@ -33,6 +34,9 @@ OLLAMA_PID_FILE = Path(os.getenv("OLLAMA_PID_FILE", Path(__file__).resolve().wit
 GPU_SELECTION_FILE = Path(os.getenv("GPU_SELECTION_FILE", Path(__file__).resolve().with_name("gpu-selection")))
 MODEL_SELECTION_FILE = Path(os.getenv("MODEL_SELECTION_FILE", Path(__file__).resolve().with_name("model-selection")))
 PROMPT_HISTORY_FILE = Path(os.getenv("PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("prompt_history.txt")))
+USER_PROMPT_HISTORY_FILE = Path(
+  os.getenv("USER_PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("history_user_prompt.txt"))
+)
 API_KEY_CONF_FILE = Path(os.getenv("API_KEY_CONF_FILE", Path(__file__).resolve().with_name("api_key.conf")))
 LOG_DIR = Path(__file__).resolve().with_name("logs")
 WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
@@ -43,11 +47,17 @@ PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"
 PUBLIC_IP_CACHE: dict[str, Any] = {"value": "", "checked_at": 0.0}
 PROMPT_HISTORY_LIMIT = 100
 PROMPT_HISTORY_LOCK = threading.RLock()
+USER_PROMPT_HISTORY_LIMIT = 2000
+USER_PROMPT_HISTORY_LOCK = threading.RLock()
 PROMPT_QUEUE_MAX_SIZE = int(os.getenv("PROMPT_QUEUE_MAX_SIZE", "10"))
 PROMPT_QUEUE_CONDITION = threading.Condition()
 PROMPT_QUEUE: list["PromptJob"] = []
 PROMPT_QUEUE_ACTIVE = False
 PROMPT_QUEUE_NEXT_ID = 1
+SESSION_COOKIE_NAME = "gemma4_session"
+SESSION_TTL_SECONDS = int(os.getenv("GEMMA4_SESSION_TTL_SECONDS", "28800"))
+SESSION_LOCK = threading.RLock()
+AUTH_SESSIONS: dict[str, dict[str, Any]] = {}
 
 
 @dataclass
@@ -205,6 +215,32 @@ INDEX_HTML = """<!doctype html>
     }
     .auth-box input {
       width: 100%;
+    }
+    .session-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+    .admin-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .check-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .check-label input {
+      min-height: auto;
+      width: 18px;
+      height: 18px;
+      margin: 0;
     }
     .prompt-box textarea {
       min-height: 150px;
@@ -378,6 +414,34 @@ INDEX_HTML = """<!doctype html>
     </section>
 
     <section>
+      <h2>User Account Management</h2>
+      <p>Start a login session with an existing account. Saving a new User ID and Password is allowed only for that authenticated session.</p>
+      <div class="session-row">
+        <button id="loginSession">Login Session</button>
+        <button id="logoutSession">Logout Session</button>
+        <span id="sessionStatus">Session not started.</span>
+      </div>
+      <div class="admin-grid">
+        <div>
+          <label for="newUserId">New User ID</label>
+          <input id="newUserId" autocomplete="off">
+        </div>
+        <div>
+          <label for="newUserPassword">New Password</label>
+          <input id="newUserPassword" type="password" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="row">
+        <label class="check-label" for="newUserEnabled">
+          <input id="newUserEnabled" type="checkbox" checked>
+          Enabled
+        </label>
+        <button class="primary" id="saveUser">Save User ID / Password</button>
+        <span id="saveUserStatus"></span>
+      </div>
+    </section>
+
+    <section>
       <h2>Python Client Code</h2>
       <pre id="pythonCode"></pre>
     </section>
@@ -401,6 +465,14 @@ INDEX_HTML = """<!doctype html>
     const prompt1 = document.getElementById("prompt1");
     const prompt2 = document.getElementById("prompt2");
     const promptHistory = document.getElementById("promptHistory");
+    const loginSessionButton = document.getElementById("loginSession");
+    const logoutSessionButton = document.getElementById("logoutSession");
+    const sessionStatus = document.getElementById("sessionStatus");
+    const newUserId = document.getElementById("newUserId");
+    const newUserPassword = document.getElementById("newUserPassword");
+    const newUserEnabled = document.getElementById("newUserEnabled");
+    const saveUserButton = document.getElementById("saveUser");
+    const saveUserStatus = document.getElementById("saveUserStatus");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -796,6 +868,91 @@ if __name__ == "__main__":
       }
     }
 
+    function setSessionState(data) {
+      const loggedIn = Boolean(data && data.logged_in);
+      saveUserButton.disabled = !loggedIn;
+      logoutSessionButton.disabled = !loggedIn;
+      loginSessionButton.disabled = false;
+      sessionStatus.textContent = loggedIn
+        ? `Logged in as ${data.user_id || "unknown"}`
+        : "Session not started.";
+    }
+
+    async function refreshSessionStatus() {
+      try {
+        const res = await fetch("/api/session-status");
+        const data = await res.json();
+        setSessionState(data);
+      } catch (err) {
+        saveUserButton.disabled = true;
+        logoutSessionButton.disabled = true;
+        sessionStatus.textContent = `Session status unavailable: ${err}`;
+      }
+    }
+
+    async function loginSession() {
+      sessionStatus.textContent = "Starting session...";
+      try {
+        const auth = authPayload();
+        if (!auth.user_id || !auth.password) {
+          throw new Error("User ID and password are required.");
+        }
+        const res = await fetch("/api/session-login", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(auth)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Login failed");
+        setSessionState(data);
+      } catch (err) {
+        saveUserButton.disabled = true;
+        logoutSessionButton.disabled = true;
+        sessionStatus.textContent = String(err);
+      }
+    }
+
+    async function logoutSession() {
+      sessionStatus.textContent = "Ending session...";
+      try {
+        const res = await fetch("/api/session-logout", {method: "POST"});
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Logout failed");
+      } catch (err) {
+        sessionStatus.textContent = String(err);
+        return;
+      }
+      newUserPassword.value = "";
+      saveUserStatus.textContent = "";
+      refreshSessionStatus();
+    }
+
+    async function saveUser() {
+      saveUserStatus.textContent = "Saving...";
+      try {
+        const nextUserId = newUserId.value.trim();
+        const nextPassword = newUserPassword.value;
+        if (!nextUserId || !nextPassword) {
+          throw new Error("New User ID and Password are required.");
+        }
+        const res = await fetch("/api/save-user", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            new_user_id: nextUserId,
+            new_password: nextPassword,
+            enabled: Boolean(newUserEnabled.checked)
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Save failed");
+        saveUserStatus.textContent = data.message || "User saved";
+        newUserPassword.value = "";
+      } catch (err) {
+        saveUserStatus.textContent = String(err);
+      }
+    }
+
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     sendButton.addEventListener("click", sendPrompt);
     copyAnswerButton.addEventListener("click", copyAnswer);
@@ -807,9 +964,13 @@ if __name__ == "__main__":
     document.getElementById("cancelPendingPrompts").addEventListener("click", cancelPendingPrompts);
     document.getElementById("saveGpu").addEventListener("click", saveGpuSelection);
     document.getElementById("saveModel").addEventListener("click", saveModelSelection);
+    loginSessionButton.addEventListener("click", loginSession);
+    logoutSessionButton.addEventListener("click", logoutSession);
+    saveUserButton.addEventListener("click", saveUser);
     renderPythonCode();
     refreshPromptHistory();
     refreshStatus();
+    refreshSessionStatus();
   </script>
 </body>
 </html>
@@ -848,16 +1009,21 @@ def read_api_key_conf() -> dict[str, Any]:
     return data if isinstance(data, dict) else {"enabled": True, "users": []}
 
 
+def write_api_key_conf(conf: dict[str, Any]) -> None:
+  API_KEY_CONF_FILE.write_text(json.dumps(conf, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+  try:
+    API_KEY_CONF_FILE.chmod(0o600)
+  except OSError:
+    pass
+
+
 def valid_user_records(conf: dict[str, Any]) -> list[dict[str, Any]]:
     users = conf.get("users")
     return [user for user in users if isinstance(user, dict)] if isinstance(users, list) else []
 
 
-def is_authorized_user(user_id: str, password: str) -> bool:
+def matched_authorized_user_id(user_id: str, password: str) -> str:
     conf = read_api_key_conf()
-    if conf.get("enabled") is False:
-        return True
-
     allow_only_user = str(conf.get("allow_only_user") or "").strip()
     for user in valid_user_records(conf):
         configured_id = str(user.get("id") or "")
@@ -867,8 +1033,15 @@ def is_authorized_user(user_id: str, password: str) -> bool:
         if allow_only_user and configured_id != allow_only_user:
             continue
         if hmac.compare_digest(configured_id, user_id) and hmac.compare_digest(configured_password, password):
-            return True
-    return False
+            return configured_id
+    return ""
+
+
+def is_authorized_user(user_id: str, password: str) -> bool:
+  conf = read_api_key_conf()
+  if conf.get("enabled") is False:
+    return True
+  return bool(matched_authorized_user_id(user_id, password))
 
 
 def parse_basic_auth(header_value: str) -> tuple[str, str]:
@@ -890,6 +1063,104 @@ def credentials_from_request(headers: Any, incoming: dict[str, Any]) -> tuple[st
     if user_id or password:
         return user_id, password
     return str(incoming.get("user_id") or incoming.get("username") or ""), str(incoming.get("password") or "")
+
+
+def sanitize_user_id(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._@-]+", "", str(value or "").strip())[:64]
+
+
+def sanitize_password(value: str) -> str:
+    return str(value or "").strip()[:256]
+
+
+def upsert_api_user(user_id: str, password: str, enabled: bool = True) -> dict[str, Any]:
+    normalized_user_id = sanitize_user_id(user_id)
+    normalized_password = sanitize_password(password)
+    if not normalized_user_id:
+        raise ValueError("new_user_id is required")
+    if not normalized_password:
+        raise ValueError("new_password is required")
+
+    conf = read_api_key_conf()
+    users = valid_user_records(conf)
+    updated = False
+    next_users: list[dict[str, Any]] = []
+    for user in users:
+        configured_id = str(user.get("id") or "")
+        if configured_id == normalized_user_id:
+            next_users.append({"id": normalized_user_id, "password": normalized_password, "enabled": enabled})
+            updated = True
+            continue
+        next_users.append(
+            {
+                "id": configured_id,
+                "password": str(user.get("password") or ""),
+                "enabled": bool(user.get("enabled", True)),
+            }
+        )
+
+    if not updated:
+        next_users.append({"id": normalized_user_id, "password": normalized_password, "enabled": enabled})
+
+    conf["users"] = next_users
+    write_api_key_conf(conf)
+    return {"id": normalized_user_id, "enabled": enabled, "updated": updated}
+
+
+def cleanup_expired_sessions() -> None:
+    now = time.time()
+    expired = [token for token, session in AUTH_SESSIONS.items() if float(session.get("expires_at") or 0) <= now]
+    for token in expired:
+        AUTH_SESSIONS.pop(token, None)
+
+
+def create_auth_session(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    with SESSION_LOCK:
+        cleanup_expired_sessions()
+        AUTH_SESSIONS[token] = {
+            "user_id": user_id,
+            "expires_at": time.time() + SESSION_TTL_SECONDS,
+        }
+    return token
+
+
+def parse_cookie_header(header_value: str) -> dict[str, str]:
+    cookies: dict[str, str] = {}
+    for part in str(header_value or "").split(";"):
+        name, separator, value = part.strip().partition("=")
+        if separator and name:
+            cookies[name] = value
+    return cookies
+
+
+def session_cookie_value(token: str, *, expired: bool = False) -> str:
+    if expired:
+        return f"{SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+    return f"{SESSION_COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL_SECONDS}"
+
+
+def authenticated_session_user(headers: Any) -> str:
+    cookies = parse_cookie_header(str(headers.get("Cookie", "")))
+    token = cookies.get(SESSION_COOKIE_NAME, "")
+    if not token:
+        return ""
+    with SESSION_LOCK:
+        cleanup_expired_sessions()
+        session = AUTH_SESSIONS.get(token)
+        if not session:
+            return ""
+        session["expires_at"] = time.time() + SESSION_TTL_SECONDS
+        return str(session.get("user_id") or "")
+
+
+def clear_auth_session(headers: Any) -> None:
+    cookies = parse_cookie_header(str(headers.get("Cookie", "")))
+    token = cookies.get(SESSION_COOKIE_NAME, "")
+    if not token:
+        return
+    with SESSION_LOCK:
+        AUTH_SESSIONS.pop(token, None)
 
 
 def read_prompt_history() -> list[str]:
@@ -941,6 +1212,66 @@ def remember_prompts(prompts: list[str]) -> None:
     with PROMPT_HISTORY_LOCK:
         existing = read_prompt_history()
         save_prompt_history(cleaned + existing)
+
+
+def read_user_prompt_history() -> list[dict[str, str]]:
+  with USER_PROMPT_HISTORY_LOCK:
+    try:
+      lines = USER_PROMPT_HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+      USER_PROMPT_HISTORY_FILE.touch()
+      return []
+    except OSError:
+      return []
+
+  entries: list[dict[str, str]] = []
+  for line in lines:
+    line = line.strip()
+    if not line:
+      continue
+    try:
+      value = json.loads(line)
+    except json.JSONDecodeError:
+      continue
+    if not isinstance(value, dict):
+      continue
+    requested_at = str(value.get("requested_at") or "").strip()
+    user_id = str(value.get("user_id") or "").strip()
+    prompt = str(value.get("prompt") or "").strip()
+    if not requested_at or not user_id or not prompt:
+      continue
+    entries.append(
+      {
+        "requested_at": requested_at,
+        "user_id": user_id,
+        "prompt": prompt,
+      }
+    )
+  return entries[-USER_PROMPT_HISTORY_LIMIT:]
+
+
+def save_user_prompt_history(entries: list[dict[str, str]]) -> None:
+  trimmed = entries[-USER_PROMPT_HISTORY_LIMIT:]
+  body = "".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in trimmed)
+  with USER_PROMPT_HISTORY_LOCK:
+    USER_PROMPT_HISTORY_FILE.write_text(body, encoding="utf-8")
+
+
+def remember_user_prompt(user_id: str, prompt: str, requested_at: float | None = None) -> None:
+  cleaned_user_id = str(user_id or "").strip()
+  cleaned_prompt = str(prompt or "").strip()
+  if not cleaned_user_id or not cleaned_prompt:
+    return
+
+  timestamp = time.time() if requested_at is None else requested_at
+  entry = {
+    "requested_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp)),
+    "user_id": cleaned_user_id,
+    "prompt": cleaned_prompt,
+  }
+  with USER_PROMPT_HISTORY_LOCK:
+    existing = read_user_prompt_history()
+    save_user_prompt_history(existing + [entry])
 
 
 def ensure_workspace_dir() -> Path:
@@ -1486,10 +1817,18 @@ class Gemma4Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         print(f"{self.address_string()} - {format % args}")
 
-    def send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
+    def send_json(
+        self,
+        payload: dict[str, Any],
+        status: HTTPStatus = HTTPStatus.OK,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        if extra_headers:
+            for name, value in extra_headers.items():
+                self.send_header(name, value)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1521,6 +1860,10 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/prompt-history":
             self.send_json({"history": read_prompt_history()})
             return
+        if self.path == "/api/session-status":
+          user_id = authenticated_session_user(self.headers)
+          self.send_json({"logged_in": bool(user_id), "user_id": user_id})
+          return
         if self.path == "/api/workspace/files":
             self.send_json({"workspace_dir": str(ensure_workspace_dir()), "files": list_workspace_files()})
             return
@@ -1594,6 +1937,61 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             )
             return
 
+        if self.path == "/api/session-login":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                user_id, password = credentials_from_request(self.headers, incoming)
+                matched_user_id = matched_authorized_user_id(user_id, password)
+                if not matched_user_id:
+                    self.send_auth_error("invalid user id or password")
+                    return
+                token = create_auth_session(matched_user_id)
+                self.send_json(
+                    {
+                        "logged_in": True,
+                        "user_id": matched_user_id,
+                        "message": f"Session started for {matched_user_id}",
+                    },
+                    extra_headers={"Set-Cookie": session_cookie_value(token)},
+                )
+            except json.JSONDecodeError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if self.path == "/api/session-logout":
+            clear_auth_session(self.headers)
+            self.send_json(
+                {"logged_in": False, "message": "Session ended"},
+                extra_headers={"Set-Cookie": session_cookie_value("", expired=True)},
+            )
+            return
+
+        if self.path == "/api/save-user":
+            try:
+                session_user = authenticated_session_user(self.headers)
+                if not session_user:
+                    self.send_auth_error("authenticated session required")
+                    return
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                saved = upsert_api_user(
+                    str(incoming.get("new_user_id") or incoming.get("user_id") or ""),
+                    str(incoming.get("new_password") or incoming.get("password") or ""),
+                    bool(incoming.get("enabled", True)),
+                )
+                action = "updated" if saved.get("updated") else "created"
+                self.send_json(
+                    {
+                        "message": f"User {saved['id']} {action} by {session_user}",
+                        "saved_user": {"id": saved["id"], "enabled": saved["enabled"]},
+                        "saved_by": session_user,
+                    }
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
         if self.path == "/api/cancel-pending-prompts":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -1663,6 +2061,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "prompt is required"}, HTTPStatus.BAD_REQUEST)
                 return
             remember_prompts(prompts)
+            remember_user_prompt(user_id, prompt)
             payload = {
                 "model": str(incoming.get("model") or read_selected_model()),
                 "prompt": prompt,
