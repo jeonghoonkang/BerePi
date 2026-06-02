@@ -125,3 +125,28 @@ find /var/lib/motion -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.p
   - https://www.baeldung.com/linux/sudo-non-interactive-mode
 - find mtime
   - https://inpa.tistory.com/entry/LINUX-%F0%9F%93%9A-find-%EB%AA%85%EB%A0%B9-mtime-ctime-atime-%EC%98%B5%EC%85%98-n-n-%EA%B0%9C%EB%85%90-%EC%A0%95%EB%A6%AC#find_-mtime_n_%EA%B0%9C%EB%85%90_%EC%9D%B5%ED%9E%88%EA%B8%B0 
+
+
+# tinyos 홈 디렉토리 자체에 외부 계정 접근 허용
+sudo chmod o+x /home/tinyos
+### 하위 구조 경로들 접근 허용
+sudo chmod o+x /home/tinyos/devel_opment
+sudo chmod o+x /home/tinyos/devel_opment/BerePi
+sudo chmod o+x /home/tinyos/devel_opment/BerePi/apps
+sudo chmod o+x /home/tinyos/devel_opment/BerePi/apps/camera
+sudo chmod o+x /home/tinyos/devel_opment/BerePi/apps/camera/motion
+sudo chmod 755 /home/tinyos/devel_opment/BerePi/apps/camera/motion/motion_recent_add.sh
+### motion 그룹에 tinyos 유저 추가
+sudo usermod -aG motion tinyos
+### tinyos 그룹에 motion 유저 추가
+sudo usermod -aG tinyos motion
+### 서비스 재시작
+sudo systemctl restart motion
+### 실시간 로그 모니터링
+sudo journalctl -u motion -f
+### motion 프로세스를 강제로 완전히 종료 (systemd가 자동으로 다시 깨웁니다)
+sudo killall motion
+### 또는 서비스를 아예 중지했다가 켜기
+sudo systemctl stop motion
+sudo systemctl start motion
+sudo journalctl -u motion -f
