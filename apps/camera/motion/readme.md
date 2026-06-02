@@ -144,3 +144,12 @@ sudo systemctl stop motion ### 또는 서비스를 아예 중지했다가 켜기
 sudo systemctl start motion
 sudo journalctl -u motion -f
 ```
+
+## 시스템 동작 흐름
+
+![Telegram Bot & Motion Detection 시스템 흐름도](telegram_bot_flow_diagram.png)
+
+| 흐름 | 방향 | 설명 |
+|------|------|------|
+| **흐름 A** | 카메라 → 봇 | 움직임 감지 시 자동으로 Telegram 알림 전송 (`detection_5min.py` cron) |
+| **흐름 B** | 봇 → 카메라 | 사용자가 `/photo` 명령 시 최신 이미지 즉시 회신 (`telegram_bot.py` 데몬) |
