@@ -338,6 +338,24 @@ def build_reference_event(image_path: Path, reference_label: str) -> dict[str, A
     }
 
 
+def build_forced_send_event(image_path: Path) -> dict[str, Any]:
+    captured_at = image_modified_at(image_path).astimezone()
+    reported_at = datetime.now().astimezone()
+    return {
+        "person_detected": False,
+        "person_count": 0,
+        "person_detected_at": format_time(reported_at),
+        "image_captured_at": format_time(captured_at),
+        "image_mtime_epoch": image_path.stat().st_mtime,
+        "image_history_key": image_history_key(image_path),
+        "image_path": str(image_path),
+        "image_name": image_path.name,
+        "model_response": "Forced single file send; model detection was not run.",
+        "reference_label": "forced_send_one",
+        "event_type": "forced_send_one",
+    }
+
+
 def load_sent_reference_history(event_log_path: Path) -> set[str]:
     sent_keys: set[str] = set()
     if not event_log_path.exists():
@@ -521,6 +539,50 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     return alerts_sent
 
 
+def resolve_force_send_image(config: AppConfig, force_send_one: str) -> Path | None:
+    if force_send_one == "latest":
+        return get_latest_image(config.motion_dir, config.recursive)
+
+    image_path = Path(force_send_one).expanduser()
+    if not image_path.is_absolute():
+        image_path = (config.motion_dir / image_path).resolve()
+    return image_path
+
+
+def send_one_image(config: AppConfig, force_send_one: str, dry_run: bool = False) -> int:
+    image_path = resolve_force_send_image(config, force_send_one)
+    if image_path is None:
+        print(f"force-send-one failed: no image files found in {config.motion_dir}", file=sys.stderr)
+        return 0
+    if not image_path.exists() or not image_path.is_file():
+        print(f"force-send-one failed: file not found: {image_path}", file=sys.stderr)
+        return 0
+    if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
+        print(f"force-send-one failed: unsupported image extension: {image_path}", file=sys.stderr)
+        return 0
+
+    event = build_forced_send_event(image_path)
+    print(f"force-send-one target: {image_path}")
+    if dry_run:
+        print(f"dry-run: force-send-one telegram send skipped: {image_path.name}")
+        return 1
+
+    requests_module = get_requests_module()
+    try:
+        send_telegram_photo(config.telegram, event)
+    except (requests_module.RequestException, OSError, ValueError) as exc:
+        print(f"force-send-one telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
+        return 0
+
+    event["telegram_sent"] = True
+    try:
+        save_detection_event(config.event_log_path, event)
+    except OSError as exc:
+        print(f"force-send-one history save failed: {image_path.name}: {exc}", file=sys.stderr)
+    print(f"force-send-one telegram sent: {image_path.name}")
+    return 1
+
+
 def build_crontab_line(args: argparse.Namespace) -> str:
     python_bin = Path(sys.executable or "/usr/bin/python3").resolve()
     script_path = Path(__file__).resolve()
@@ -541,6 +603,10 @@ def build_crontab_line(args: argparse.Namespace) -> str:
         command_parts.append("--recursive")
     if args.dry_run:
         command_parts.append("--dry-run")
+    if args.send_one is not None:
+        command_parts.append("--send-one")
+        if args.send_one != "latest":
+            command_parts.append(shlex.quote(str(args.send_one)))
 
     command = " ".join(command_parts)
     return f"*/5 * * * * cd {shlex.quote(str(APP_DIR))} && {command} >> {shlex.quote(str(log_path))} 2>&1"
@@ -553,6 +619,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--minutes", type=int, help="override lookback minutes")
     parser.add_argument("--recursive", action="store_true", help="scan motion directory recursively")
     parser.add_argument("--dry-run", action="store_true", help="detect only; do not send Telegram messages")
+    parser.add_argument(
+        "--send-one",
+        nargs="?",
+        const="latest",
+        metavar="IMAGE_PATH",
+        help=(
+            "force-send exactly one image via Telegram without model detection. "
+            "When IMAGE_PATH is omitted, send the latest image from the motion directory."
+        ),
+    )
     parser.add_argument("--print-crontab", action="store_true", help="print a crontab line that runs this script every 5 minutes")
     parser.add_argument(
         "--cron-log",
@@ -582,7 +658,10 @@ def main() -> int:
     if args.recursive:
         config.recursive = True
 
-    alerts_sent = process_recent_images(config, dry_run=args.dry_run)
+    if args.send_one is not None:
+        alerts_sent = send_one_image(config, args.send_one, dry_run=args.dry_run)
+    else:
+        alerts_sent = process_recent_images(config, dry_run=args.dry_run)
     print(f"alerts_sent={alerts_sent}")
     return 0
 
