@@ -1,0 +1,27 @@
+[Unit]
+Description=BerePi Telegram Bot — Motion Camera Photo Request Daemon
+Documentation=file:///Users/tinyos/devel_opment/BerePi/apps/camera/motion/readme.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# ── 아래 두 줄을 실제 환경에 맞게 수정하세요 ──────────────────────────────
+# User=pi
+# WorkingDirectory=/home/pi/BerePi/apps/camera/motion
+# ─────────────────────────────────────────────────────────────────────────
+WorkingDirectory=/Users/tinyos/devel_opment/BerePi/apps/camera/motion
+ExecStart=/usr/bin/python3 /Users/tinyos/devel_opment/BerePi/apps/camera/motion/telegram_bot.py \
+    --config /Users/tinyos/devel_opment/BerePi/apps/camera/motion/conf_connect_model.conf
+
+# 환경 변수로 토큰을 전달하는 경우 아래 주석 해제
+# EnvironmentFile=/etc/berepi/telegram.env
+
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=berepi-telegram-bot
+
+[Install]
+WantedBy=multi-user.target
