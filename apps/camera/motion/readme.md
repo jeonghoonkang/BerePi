@@ -161,6 +161,17 @@ chat_id    = 987654321              # 알림을 받을 기본 chat ID
 bot_allowed_chat_ids =
 ```
 
+`지금사진` 명령으로 실시간 촬영을 사용하려면 `[camera]` 섹션을 확인합니다. `capture_command` 가 비어 있으면 `rpicam-still`, `libcamera-still`, `fswebcam`, `imagesnap` 순서로 자동 감지합니다.
+
+```ini
+[camera]
+capture_dir = /tmp/berepi_telegram_bot
+# 필요 시 장비에 맞는 촬영 명령을 지정합니다. {output} 은 생성할 JPG 경로로 치환됩니다.
+# capture_command = rpicam-still -n --timeout 1000 -o {output}
+capture_command =
+capture_timeout_seconds = 20
+```
+
 환경변수로도 설정 가능합니다.
 
 ```bash
@@ -204,14 +215,15 @@ sudo journalctl -u berepi-telegram-bot -f
 
 ### 5. Bot 명령어
 
-Telegram 에서 Bot 에게 아래 키워드 중 하나를 포함한 메시지를 보내면 최신 이미지가 회신됩니다.
+Telegram 에서 Bot 에게 아래 키워드 중 하나를 포함한 메시지를 보내면 이미지가 회신됩니다.
 
-| 명령어 | 언어 |
+| 명령어 | 동작 |
 |--------|------|
-| `/photo`, `/snap`, `/latest` | 슬래시 명령 |
-| `사진`, `사진 찍어줘`, `사진 보내줘` | 한국어 |
-| `찍어줘`, `캡처`, `명령 찍어`, `명령 촬영` | 한국어 |
-| `photo`, `snap`, `camera` | 영어 |
+| `/photo`, `/snap`, `/latest` | 저장된 최신 이미지 전송 |
+| `사진`, `사진 찍어줘`, `사진 보내줘` | 저장된 최신 이미지 전송 |
+| `찍어줘`, `캡처`, `명령 찍어`, `명령 촬영` | 저장된 최신 이미지 전송 |
+| `photo`, `snap`, `camera` | 저장된 최신 이미지 전송 |
+| `지금사진`, `지금 사진`, `현재사진`, `/nowphoto`, `/capture` | 카메라로 실시간 촬영 후 JPG 전송 |
 
 ## 시스템 동작 흐름
 <img src="telegram_bot_flow_diagram.png" width="500" alt="Telegram Bot & Motion Detection 시스템 흐름도">
@@ -219,4 +231,4 @@ Telegram 에서 Bot 에게 아래 키워드 중 하나를 포함한 메시지를
 | 흐름 | 방향 | 설명 |
 |------|------|------|
 | **흐름 A** | 카메라 → 봇 | 움직임 감지 시 자동으로 Telegram 알림 전송 (`detection_5min.py` cron) |
-| **흐름 B** | 봇 → 카메라 | 사용자가 `/photo` 명령 시 최신 이미지 즉시 회신 (`telegram_bot.py` 데몬) |
+| **흐름 B** | 봇 → 카메라 | 사용자가 `/photo` 명령 시 최신 이미지 즉시 회신, `지금사진` 명령 시 실시간 촬영 후 회신 (`telegram_bot.py` 데몬) |

@@ -25,6 +25,9 @@ import configparser
 import json
 import logging
 import os
+import shlex
+import shutil
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -39,6 +42,7 @@ from typing import Any
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = APP_DIR / "conf_connect_model.conf"
 DEFAULT_MOTION_DIR = Path("/var/lib/motion")
+DEFAULT_CAPTURE_DIR = Path("/tmp/berepi_telegram_bot")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 # Telegram long-polling timeout (seconds) — must be > 0
@@ -66,6 +70,21 @@ PHOTO_KEYWORDS: list[str] = [
     "camera",
     "명령 찍어",
     "명령 촬영",
+]
+
+# Keywords that trigger a live camera capture before replying.
+CURRENT_PHOTO_KEYWORDS: list[str] = [
+    "/nowphoto",
+    "/capture",
+    "/livephoto",
+    "지금사진",
+    "지금 사진",
+    "현재사진",
+    "현재 사진",
+    "실시간사진",
+    "실시간 사진",
+    "nowphoto",
+    "livephoto",
 ]
 
 # ---------------------------------------------------------------------------
@@ -100,9 +119,17 @@ class MotionConfig:
 
 
 @dataclass
+class CameraCaptureConfig:
+    capture_dir: Path
+    capture_command: str = ""
+    capture_timeout_seconds: int = 20
+
+
+@dataclass
 class BotAppConfig:
     telegram: TelegramBotConfig
     motion: MotionConfig
+    camera: CameraCaptureConfig
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +165,7 @@ def load_config(config_path: Path) -> BotAppConfig:
 
     tg = parser["telegram"] if parser.has_section("telegram") else parser["DEFAULT"]
     mo = parser["motion"] if parser.has_section("motion") else parser["DEFAULT"]
+    ca = parser["camera"] if parser.has_section("camera") else None
 
     token = _get_str(tg, "bot_token") or _get_str(tg, "token")
     token = token or os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -156,6 +184,14 @@ def load_config(config_path: Path) -> BotAppConfig:
     motion_dir = Path(_get_str(mo, "motion_dir", str(DEFAULT_MOTION_DIR))).expanduser()
     recursive = _get_bool(mo, "recursive", False)
 
+    capture_dir = DEFAULT_CAPTURE_DIR
+    capture_command = ""
+    capture_timeout_seconds = 20
+    if ca is not None:
+        capture_dir = Path(_get_str(ca, "capture_dir", str(DEFAULT_CAPTURE_DIR))).expanduser()
+        capture_command = _get_str(ca, "capture_command", "")
+        capture_timeout_seconds = _get_int(ca, "capture_timeout_seconds", 20)
+
     return BotAppConfig(
         telegram=TelegramBotConfig(
             token=token,
@@ -166,6 +202,11 @@ def load_config(config_path: Path) -> BotAppConfig:
         motion=MotionConfig(
             motion_dir=motion_dir,
             recursive=recursive,
+        ),
+        camera=CameraCaptureConfig(
+            capture_dir=capture_dir,
+            capture_command=capture_command,
+            capture_timeout_seconds=capture_timeout_seconds,
         ),
     )
 
@@ -198,6 +239,66 @@ def get_latest_image(motion_dir: Path, recursive: bool = False) -> Path | None:
         return None
     images.sort(key=lambda item: item[1], reverse=True)
     return images[0][0]
+
+
+# ---------------------------------------------------------------------------
+# Live camera capture helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_auto_capture_command(output_path: Path) -> list[str] | None:
+    """Return a camera capture command for the current host, if one is available."""
+    output = str(output_path)
+    if shutil.which("rpicam-still"):
+        return ["rpicam-still", "-n", "--timeout", "1000", "-o", output]
+    if shutil.which("libcamera-still"):
+        return ["libcamera-still", "-n", "--timeout", "1000", "-o", output]
+    if shutil.which("fswebcam"):
+        return ["fswebcam", "-r", "1280x720", "--no-banner", output]
+    if shutil.which("imagesnap"):
+        return ["imagesnap", output]
+    return None
+
+
+def _build_configured_capture_command(command_template: str, output_path: Path) -> list[str]:
+    """Build a configured capture command, replacing {output} with the JPG path."""
+    output = str(output_path)
+    if "{output}" in command_template:
+        command = command_template.format(output=output)
+        return shlex.split(command)
+    return [*shlex.split(command_template), output]
+
+
+def capture_current_image(config: CameraCaptureConfig) -> Path:
+    """Capture a live camera image and return the written JPG path."""
+    config.capture_dir.mkdir(parents=True, exist_ok=True)
+    output_path = config.capture_dir / f"telegram_live_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+
+    command = (
+        _build_configured_capture_command(config.capture_command, output_path)
+        if config.capture_command
+        else _build_auto_capture_command(output_path)
+    )
+    if command is None:
+        raise RuntimeError(
+            "camera capture command not found. Install rpicam-still/libcamera-still/fswebcam "
+            "or set [camera] capture_command in conf_connect_model.conf"
+        )
+
+    log.info("capturing live camera image: %s", " ".join(shlex.quote(part) for part in command))
+    result = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=config.capture_timeout_seconds,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"camera capture failed with exit code {result.returncode}: {detail}")
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        raise RuntimeError(f"camera capture did not create a valid image: {output_path}")
+    return output_path
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +367,15 @@ def is_photo_request(text: str) -> bool:
     """Return True if the message text contains a photo-request keyword."""
     lower = text.strip().lower()
     for kw in PHOTO_KEYWORDS:
+        if kw.lower() in lower:
+            return True
+    return False
+
+
+def is_current_photo_request(text: str) -> bool:
+    """Return True if the message text asks for a live camera capture."""
+    lower = text.strip().lower()
+    for kw in CURRENT_PHOTO_KEYWORDS:
         if kw.lower() in lower:
             return True
     return False
@@ -355,6 +465,79 @@ def handle_photo_request(update: dict[str, Any], config: BotAppConfig) -> None:
             pass
 
 
+def handle_current_photo_request(update: dict[str, Any], config: BotAppConfig) -> None:
+    """Capture a live camera image and send it to the requester."""
+    message = update.get("message", {})
+    chat_id = message.get("chat", {}).get("id")
+    from_user = message.get("from", {})
+    username = from_user.get("username") or from_user.get("first_name") or str(chat_id)
+
+    if chat_id is None:
+        log.warning("update has no chat.id; skipping")
+        return
+
+    if not is_allowed(chat_id, config.telegram.allowed_chat_ids):
+        log.info("chat_id %s not in whitelist; ignoring live capture request from %s", chat_id, username)
+        try:
+            tg_send_message(
+                config.telegram.token,
+                chat_id,
+                "접근이 허용되지 않은 사용자입니다. (Access denied)",
+                config.telegram.timeout_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("send access-denied message failed: %s", exc)
+        return
+
+    log.info("live capture request from %s (chat_id=%s)", username, chat_id)
+
+    try:
+        image_path = capture_current_image(config.camera)
+    except Exception as exc:  # noqa: BLE001
+        log.error("live capture failed: %s", exc)
+        try:
+            tg_send_message(
+                config.telegram.token,
+                chat_id,
+                f"현재 카메라 촬영 중 오류가 발생했습니다: {exc}",
+                config.telegram.timeout_seconds,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        return
+
+    captured_at = _image_mtime(image_path).strftime("%Y-%m-%d %H:%M:%S")
+    caption = "\n".join(
+        [
+            "📷 실시간 카메라 이미지 (요청 응답)",
+            f"파일: {image_path.name}",
+            f"촬영: {captured_at}",
+            f"요청자: {username}",
+        ]
+    )
+
+    try:
+        tg_send_photo(
+            config.telegram.token,
+            chat_id,
+            image_path,
+            caption,
+            config.telegram.timeout_seconds,
+        )
+        log.info("live photo sent to chat_id=%s: %s", chat_id, image_path.name)
+    except Exception as exc:  # noqa: BLE001
+        log.error("send live photo failed: %s", exc)
+        try:
+            tg_send_message(
+                config.telegram.token,
+                chat_id,
+                f"실시간 사진 전송 중 오류가 발생했습니다: {exc}",
+                config.telegram.timeout_seconds,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def process_update(update: dict[str, Any], config: BotAppConfig) -> None:
     """Route a single Telegram update to the appropriate handler."""
     message = update.get("message", {})
@@ -363,7 +546,9 @@ def process_update(update: dict[str, Any], config: BotAppConfig) -> None:
     if not text:
         return  # ignore non-text updates (stickers, etc.)
 
-    if is_photo_request(text):
+    if is_current_photo_request(text):
+        handle_current_photo_request(update, config)
+    elif is_photo_request(text):
         handle_photo_request(update, config)
     else:
         # Unknown command — silently ignore or log
@@ -436,6 +621,9 @@ def test_config(config_path: Path) -> int:
     print(f"  timeout      : {config.telegram.timeout_seconds}s")
     print(f"  motion_dir   : {config.motion.motion_dir}")
     print(f"  recursive    : {config.motion.recursive}")
+    print(f"  capture_dir  : {config.camera.capture_dir}")
+    print(f"  capture_cmd  : {config.camera.capture_command or '(auto detect)'}")
+    print(f"  capture_timeout: {config.camera.capture_timeout_seconds}s")
 
     if not token:
         print("ERROR: bot_token is empty", file=sys.stderr)
