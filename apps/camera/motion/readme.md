@@ -146,8 +146,7 @@ sudo journalctl -u motion -f
 ```
 
 ## 시스템 동작 흐름
-
-![Telegram Bot & Motion Detection 시스템 흐름도](telegram_bot_flow_diagram.png)
+<img src="telegram_bot_flow_diagram.png" width="500" alt="Telegram Bot & Motion Detection 시스템 흐름도">
 
 | 흐름 | 방향 | 설명 |
 |------|------|------|
