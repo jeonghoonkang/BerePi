@@ -145,6 +145,74 @@ sudo systemctl start motion
 sudo journalctl -u motion -f
 ```
 
+## Telegram Bot 사용자 요청 응답 (`telegram_bot.py`)
+
+`telegram_bot.py` 는 Telegram Long Polling 데몬으로, 사용자가 Bot 에게 사진을 요청하면 `motion_recent` 에서 가장 최신 이미지를 즉시 회신합니다. `detection_5min.py` cron 과 독립적으로 병렬 동작합니다.
+
+### 1. 설정
+
+`conf_connect_model.conf` 의 `[telegram]` 섹션에 아래 항목을 입력합니다.
+
+```ini
+[telegram]
+bot_token  = 1234567890:AAABBB...   # BotFather 에서 발급받은 토큰
+chat_id    = 987654321              # 알림을 받을 기본 chat ID
+# 빈칸이면 모든 사용자 허용. 특정 사용자만 허용할 경우 쉼표로 구분
+bot_allowed_chat_ids =
+```
+
+환경변수로도 설정 가능합니다.
+
+```bash
+export TELEGRAM_BOT_TOKEN="1234567890:AAABBB..."
+export TELEGRAM_CHAT_ID="987654321"
+```
+
+### 2. 설정 검증 및 Bot 연결 테스트
+
+```bash
+cd /home/tinyos/devel_opment/BerePi/apps/camera/motion
+python3 telegram_bot.py --test-config
+```
+
+정상이면 Bot 이름과 최신 이미지 경로가 출력됩니다.
+
+### 3. 직접 실행 (포그라운드)
+
+```bash
+python3 telegram_bot.py
+python3 telegram_bot.py --verbose          # DEBUG 로그 포함
+python3 telegram_bot.py --config /path/to/conf_connect_model.conf
+```
+
+### 4. systemd 서비스로 등록 (자동 시작)
+
+```bash
+# 서비스 파일 복사 — 경로를 실제 설치 위치에 맞게 수정하세요
+sudo cp telegram_bot.service /etc/systemd/system/berepi-telegram-bot.service
+sudo nano /etc/systemd/system/berepi-telegram-bot.service   # User / WorkingDirectory / ExecStart 경로 확인
+
+# 등록 및 시작
+sudo systemctl daemon-reload
+sudo systemctl enable berepi-telegram-bot   # 부팅 시 자동 시작
+sudo systemctl start  berepi-telegram-bot
+
+# 상태 확인 / 실시간 로그
+sudo systemctl status berepi-telegram-bot
+sudo journalctl -u berepi-telegram-bot -f
+```
+
+### 5. Bot 명령어
+
+Telegram 에서 Bot 에게 아래 키워드 중 하나를 포함한 메시지를 보내면 최신 이미지가 회신됩니다.
+
+| 명령어 | 언어 |
+|--------|------|
+| `/photo`, `/snap`, `/latest` | 슬래시 명령 |
+| `사진`, `사진 찍어줘`, `사진 보내줘` | 한국어 |
+| `찍어줘`, `캡처`, `명령 찍어`, `명령 촬영` | 한국어 |
+| `photo`, `snap`, `camera` | 영어 |
+
 ## 시스템 동작 흐름
 <img src="telegram_bot_flow_diagram.png" width="500" alt="Telegram Bot & Motion Detection 시스템 흐름도">
 
