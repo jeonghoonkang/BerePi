@@ -167,7 +167,7 @@ bot_allowed_chat_ids =
 [camera]
 capture_dir = /tmp/berepi_telegram_bot
 # 필요 시 장비에 맞는 촬영 명령을 지정합니다. {output} 은 생성할 JPG 경로로 치환됩니다.
-# capture_command = rpicam-still -n --timeout 1000 -o {output}
+# capture_command = rpicam-still -n --timeout 1000 -o {output}, capture_command = fswebcam -D 1 --no-banner {output}
 capture_command =
 capture_timeout_seconds = 20
 ```
