@@ -274,14 +274,17 @@ INDEX_HTML = """<!doctype html>
       min-height: 96px;
       line-height: 1.5;
     }
-    .answer-box p {
+    .answer-box p,
+    .vision-output p {
       color: var(--ink);
       margin: 0 0 12px;
     }
-    .answer-box p:last-child {
+    .answer-box p:last-child,
+    .vision-output p:last-child {
       margin-bottom: 0;
     }
-    .answer-box table {
+    .answer-box table,
+    .vision-output table {
       width: 100%;
       border-collapse: collapse;
       margin: 10px 0 14px;
@@ -289,17 +292,21 @@ INDEX_HTML = """<!doctype html>
       table-layout: auto;
     }
     .answer-box th,
-    .answer-box td {
+    .answer-box td,
+    .vision-output th,
+    .vision-output td {
       border: 1px solid #cfd6dc;
       padding: 8px 10px;
       text-align: left;
       vertical-align: top;
     }
-    .answer-box th {
+    .answer-box th,
+    .vision-output th {
       background: #e5e9ed;
       font-weight: 700;
     }
-    .answer-box code {
+    .answer-box code,
+    .vision-output code {
       background: #e2e6ea;
       border-radius: 4px;
       padding: 1px 4px;
@@ -800,6 +807,10 @@ if __name__ == "__main__":
       answer.innerHTML = renderMarkdown(value);
     }
 
+    function setPanelMarkdown(panel, value) {
+      panel.innerHTML = renderMarkdown(value);
+    }
+
     async function copyText(value) {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(value);
@@ -998,14 +1009,14 @@ if __name__ == "__main__":
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
         const responseText = data.response || JSON.stringify(data, null, 2);
-        output.textContent = `${responseText}\n\n${resultLine(data, elapsedSeconds)}`;
+        setPanelMarkdown(output, `${responseText}\n\n${resultLine(data, elapsedSeconds)}`);
         status.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
         if (afterResult) {
           await afterResult(file, responseText);
         }
       } catch (err) {
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
-        output.textContent = String(err);
+        setPanelMarkdown(output, String(err));
         status.textContent = `Failed after ${elapsedSeconds.toFixed(2)}s`;
       } finally {
         refreshStatus();
