@@ -383,6 +383,22 @@ INDEX_HTML = """<!doctype html>
       padding: 14px;
       line-height: 1.5;
     }
+    .detection-plot {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      min-height: 260px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .detection-plot canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
     @media (max-width: 760px) {
       header { display: block; }
       header button { margin-top: 14px; }
@@ -553,12 +569,13 @@ INDEX_HTML = """<!doctype html>
           </div>
         </div>
         <div>
-          <textarea id="yoloPrompt">Analyze this image like an object detector. List visible objects, approximate counts, confidence level, and notable locations in the frame. Return concise JSON with keys: objects, summary.</textarea>
+          <textarea id="yoloPrompt">Analyze this image like an object detector. Return only concise JSON. Use this schema: {"objects":[{"label":"object name","count":1,"confidence":0.0,"bbox":{"x":0.0,"y":0.0,"width":0.0,"height":0.0},"location":"short phrase"}],"summary":"short summary"}. bbox values must be normalized 0.0 to 1.0 relative to image width and height.</textarea>
           <div class="answer-actions">
             <button id="copyYolo">Copy Detection Result</button>
             <span id="copyYoloStatus"></span>
           </div>
           <div class="vision-output" id="yoloOutput">Waiting for detection.</div>
+          <div class="detection-plot" id="yoloPlot">Detection box plot will appear here.</div>
         </div>
       </div>
     </section>
@@ -604,6 +621,7 @@ INDEX_HTML = """<!doctype html>
     const yoloOutput = document.getElementById("yoloOutput");
     const yoloStatus = document.getElementById("yoloStatus");
     const copyYoloStatus = document.getElementById("copyYoloStatus");
+    const yoloPlot = document.getElementById("yoloPlot");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -852,7 +870,106 @@ if __name__ == "__main__":
       }
     }
 
-    async function runVisionTask({input, promptInput, output, status, label}) {
+    function extractJsonObject(value) {
+      const text = String(value || "").trim();
+      if (!text) return null;
+      const fenced = text.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);
+      const candidate = fenced ? fenced[1].trim() : text;
+      try {
+        return JSON.parse(candidate);
+      } catch (_) {
+        const start = candidate.indexOf("{");
+        const end = candidate.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+          try {
+            return JSON.parse(candidate.slice(start, end + 1));
+          } catch (_) {
+            return null;
+          }
+        }
+      }
+      return null;
+    }
+
+    function normalizedBox(box) {
+      if (!box || typeof box !== "object") return null;
+      const x = Number(box.x);
+      const y = Number(box.y);
+      const width = Number(box.width ?? box.w);
+      const height = Number(box.height ?? box.h);
+      if (![x, y, width, height].every(Number.isFinite)) return null;
+      return {
+        x: Math.max(0, Math.min(1, x)),
+        y: Math.max(0, Math.min(1, y)),
+        width: Math.max(0, Math.min(1, width)),
+        height: Math.max(0, Math.min(1, height))
+      };
+    }
+
+    function collectDetectionObjects(data) {
+      const rawObjects = Array.isArray(data?.objects) ? data.objects : [];
+      return rawObjects
+        .map((item) => ({...item, bbox: normalizedBox(item.bbox || item.box)}))
+        .filter((item) => item.bbox);
+    }
+
+    async function drawDetectionPlot(file, responseText) {
+      const parsed = extractJsonObject(responseText);
+      const objects = collectDetectionObjects(parsed);
+      if (!file) {
+        yoloPlot.textContent = "Select an image before drawing detection boxes.";
+        return;
+      }
+      if (!objects.length) {
+        yoloPlot.textContent = "No normalized bbox values were found in the JSON response.";
+        return;
+      }
+
+      const {dataUrl} = await imagePayloadFromFile(file);
+      const image = new Image();
+      image.onload = () => {
+        const maxWidth = 1000;
+        const scale = Math.min(1, maxWidth / image.naturalWidth);
+        const width = Math.max(1, Math.round(image.naturalWidth * scale));
+        const height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, width, height);
+        context.lineWidth = Math.max(2, Math.round(width / 320));
+        context.font = `${Math.max(13, Math.round(width / 52))}px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif`;
+        context.textBaseline = "top";
+
+        objects.forEach((object, index) => {
+          const color = ["#137c5b", "#a62f2f", "#255f99", "#9b5a00", "#6d4ca3"][index % 5];
+          const box = object.bbox;
+          const x = box.x * width;
+          const y = box.y * height;
+          const boxWidth = box.width * width;
+          const boxHeight = box.height * height;
+          const label = `${object.label || "object"}${object.confidence ? ` ${Number(object.confidence).toFixed(2)}` : ""}`;
+          const textWidth = context.measureText(label).width + 10;
+          const textHeight = Math.max(20, Math.round(width / 36));
+
+          context.strokeStyle = color;
+          context.fillStyle = color;
+          context.strokeRect(x, y, boxWidth, boxHeight);
+          context.fillRect(x, Math.max(0, y - textHeight), Math.min(textWidth, width - x), textHeight);
+          context.fillStyle = "#fff";
+          context.fillText(label, x + 5, Math.max(0, y - textHeight + 3));
+        });
+
+        yoloPlot.innerHTML = "";
+        yoloPlot.appendChild(canvas);
+      };
+      image.onerror = () => {
+        yoloPlot.textContent = "Image preview failed; cannot draw boxes.";
+      };
+      image.src = dataUrl;
+    }
+
+    async function runVisionTask({input, promptInput, output, status, label, afterResult}) {
       const startedAt = performance.now();
       status.textContent = `${label} running...`;
       output.textContent = `${label} running...`;
@@ -883,6 +1000,9 @@ if __name__ == "__main__":
         const responseText = data.response || JSON.stringify(data, null, 2);
         output.textContent = `${responseText}\n\n${resultLine(data, elapsedSeconds)}`;
         status.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
+        if (afterResult) {
+          await afterResult(file, responseText);
+        }
       } catch (err) {
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
         output.textContent = String(err);
@@ -1196,7 +1316,8 @@ if __name__ == "__main__":
       promptInput: yoloPrompt,
       output: yoloOutput,
       status: yoloStatus,
-      label: "Detection"
+      label: "Detection",
+      afterResult: drawDetectionPlot
     }));
     document.getElementById("copyOcr").addEventListener("click", () => copyPanelText(ocrOutput, copyOcrStatus));
     document.getElementById("copyYolo").addEventListener("click", () => copyPanelText(yoloOutput, copyYoloStatus));
