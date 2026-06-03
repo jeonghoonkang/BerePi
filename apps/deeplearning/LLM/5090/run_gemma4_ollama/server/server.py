@@ -663,7 +663,7 @@ INDEX_HTML = """<!doctype html>
         <div>
           <textarea id="ocrPrompt">Extract all readable text from this image. Preserve line breaks where useful. If the image contains Korean text, return Korean text as accurately as possible.</textarea>
           <div class="clipboard-box">
-            <label for="ocrClipboardText">Clipboard Text</label>
+            <label for="ocrClipboardText">Clipboard Text / Captured Image</label>
             <textarea id="ocrClipboardText"></textarea>
             <div class="row">
               <button id="pasteOcrClipboard" type="button">Paste Clipboard</button>
@@ -695,7 +695,7 @@ INDEX_HTML = """<!doctype html>
         <div>
           <textarea id="yoloPrompt">Analyze this image like an object detector. Return only concise JSON. Use this schema: {"objects":[{"label":"object name","count":1,"confidence":0.0,"bbox":{"x":0.0,"y":0.0,"width":0.0,"height":0.0},"location":"short phrase"}],"summary":"short summary"}. bbox values must be normalized 0.0 to 1.0 relative to image width and height.</textarea>
           <div class="clipboard-box">
-            <label for="yoloClipboardText">Clipboard Text</label>
+            <label for="yoloClipboardText">Clipboard Text / Captured Image</label>
             <textarea id="yoloClipboardText"></textarea>
             <div class="row">
               <button id="pasteYoloClipboard" type="button">Paste Clipboard</button>
@@ -1027,6 +1027,49 @@ if __name__ == "__main__":
       textarea.remove();
     }
 
+    function extensionForImageType(type) {
+      const subtype = String(type || "").split("/", 2)[1] || "png";
+      return subtype.replace(/[^a-z0-9]+/gi, "").toLowerCase() || "png";
+    }
+
+    async function clipboardImageFileFromRead() {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        return null;
+      }
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((type) => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        return new File(
+          [blob],
+          `clipboard_capture_${Date.now()}.${extensionForImageType(imageType)}`,
+          {type: imageType}
+        );
+      }
+      return null;
+    }
+
+    function clipboardImageFileFromPaste(event) {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageItem = items.find((item) => item.type && item.type.startsWith("image/"));
+      if (!imageItem) return null;
+      const file = imageItem.getAsFile();
+      if (!file) return null;
+      return new File(
+        [file],
+        file.name || `clipboard_capture_${Date.now()}.${extensionForImageType(file.type)}`,
+        {type: file.type || "image/png"}
+      );
+    }
+
+    async function useClipboardImage(file, input, preview, status) {
+      assignImageFile(input, file);
+      const {dataUrl} = await imagePayloadFromFile(file);
+      preview.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(file.name)}">`;
+      status.textContent = "Captured image pasted.";
+    }
+
     async function pasteClipboardText(target, status) {
       status.textContent = "Reading clipboard...";
       try {
@@ -1038,6 +1081,27 @@ if __name__ == "__main__":
       } catch (err) {
         status.textContent = String(err);
       }
+    }
+
+    async function pasteClipboardContent(input, preview, textTarget, status) {
+      status.textContent = "Reading clipboard...";
+      try {
+        const imageFile = await clipboardImageFileFromRead();
+        if (imageFile) {
+          await useClipboardImage(imageFile, input, preview, status);
+          return;
+        }
+      } catch (_) {
+        // Fall through to text clipboard access when image read is unavailable or denied.
+      }
+      await pasteClipboardText(textTarget, status);
+    }
+
+    async function handleClipboardPaste(event, input, preview, status) {
+      const imageFile = clipboardImageFileFromPaste(event);
+      if (!imageFile) return;
+      event.preventDefault();
+      await useClipboardImage(imageFile, input, preview, status);
     }
 
     async function copyAnswer() {
@@ -1708,8 +1772,30 @@ if __name__ == "__main__":
     }));
     document.getElementById("copyOcr").addEventListener("click", () => copyPanelText(ocrOutput, copyOcrStatus));
     document.getElementById("copyYolo").addEventListener("click", () => copyPanelText(yoloOutput, copyYoloStatus));
-    document.getElementById("pasteOcrClipboard").addEventListener("click", () => pasteClipboardText(ocrClipboardText, ocrClipboardStatus));
-    document.getElementById("pasteYoloClipboard").addEventListener("click", () => pasteClipboardText(yoloClipboardText, yoloClipboardStatus));
+    document.getElementById("pasteOcrClipboard").addEventListener("click", () => pasteClipboardContent(
+      ocrImage,
+      ocrPreview,
+      ocrClipboardText,
+      ocrClipboardStatus
+    ));
+    document.getElementById("pasteYoloClipboard").addEventListener("click", () => pasteClipboardContent(
+      yoloImage,
+      yoloPreview,
+      yoloClipboardText,
+      yoloClipboardStatus
+    ));
+    ocrClipboardText.addEventListener("paste", (event) => handleClipboardPaste(
+      event,
+      ocrImage,
+      ocrPreview,
+      ocrClipboardStatus
+    ));
+    yoloClipboardText.addEventListener("paste", (event) => handleClipboardPaste(
+      event,
+      yoloImage,
+      yoloPreview,
+      yoloClipboardStatus
+    ));
     document.getElementById("runOcrDemo").addEventListener("click", runOcrDemo);
     document.getElementById("runYoloDemo").addEventListener("click", runYoloDemo);
     document.getElementById("loadHistoryPrompt1").addEventListener("click", () => loadHistory(prompt1));
