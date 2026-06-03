@@ -232,3 +232,36 @@ Telegram 에서 Bot 에게 아래 키워드 중 하나를 포함한 메시지를
 |------|------|------|
 | **흐름 A** | 카메라 → 봇 | 움직임 감지 시 자동으로 Telegram 알림 전송 (`detection_5min.py` cron) |
 | **흐름 B** | 봇 → 카메라 | 사용자가 `/photo` 명령 시 최신 이미지 즉시 회신, `지금사진` 명령 시 실시간 촬영 후 회신 (`telegram_bot.py` 데몬) |
+
+
+### conf_connect_model.conf 설정 방법
+- 텔레그램으로 '명령 지금사진' 입력하였을때, 스냅샷 촬영하여 전송하는 동작시, motion 서비스에서 USB캠을 사용중이기 때문에, motion에서 제공하는 웹 인터페이스로 해당 동작 실행
+```
+[camera]
+# telegram_bot.py uses this for live capture requests such as "지금사진".
+# If capture_command is empty, it auto-detects rpicam-still, libcamera-still,
+# fswebcam, or imagesnap.
+capture_dir = /tmp/berepi_telegram_bot
+# Example:
+# capture_command = rpicam-still -n --timeout 1000 -o {output}
+capture_command = sh -c 'curl -fsS http://localhost:8080/0/action/snapshot >/dev/null && sleep 1 && cp /var/lib/motion/lastsnap.jpg "$1"' sh {output}
+capture_timeout_seconds = 20
+```
+
+#### motion이 제공하는 웹 스냅샷(Snapshot) 기능 활용
+- motion은 이미 카메라를 붙잡고 계속 구동 중이므로, 직접 카메라에 접근하는 대신 "motion아, 지금 찍고 있는 화면 한 장만 구워줘"라고 네트워크(HTTP API)로 요청하는 방식입니다. 이 방식을 쓰면 충돌이 전혀 발생하지 않습니다.
+- motion.conf 설정 확인 및 변경
+- motion 설정 파일에서 웹 제어 및 스냅샷 기능을 활성화해야 합니다.
+```
+sudo nano /etc/motion/motion.conf
+아래 항목들을 찾아 기본값(정지 또는 로컬 전용)을 활성화해 줍니다.
+
+# 웹 제어 포트 지정 (기본값 8080)
+webcontrol_port 8080
+
+# 로컬 외에 텔레그램 봇 등 내부 프로세스 접근을 위해 제한 해제 (기본값 on을 off로 변경)
+webcontrol_localhost off
+
+서비스 재시작
+sudo systemctl restart motion
+```
