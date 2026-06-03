@@ -1126,16 +1126,22 @@ if __name__ == "__main__":
       status.textContent = "Captured image pasted.";
     }
 
+    function promptManualPaste(target, status) {
+      target.focus();
+      status.textContent = "Clipboard auto-read is blocked. Press Ctrl+V or Cmd+V in this field.";
+    }
+
     async function pasteClipboardText(target, status) {
       status.textContent = "Reading clipboard...";
       try {
         if (!navigator.clipboard || !navigator.clipboard.readText) {
-          throw new Error("Clipboard read is unavailable in this browser context.");
+          promptManualPaste(target, status);
+          return;
         }
         target.value = await navigator.clipboard.readText();
         status.textContent = target.value.trim() ? "Pasted." : "Clipboard is empty.";
       } catch (err) {
-        status.textContent = String(err);
+        promptManualPaste(target, status);
       }
     }
 
