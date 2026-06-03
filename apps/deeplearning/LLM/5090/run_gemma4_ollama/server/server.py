@@ -39,6 +39,7 @@ USER_PROMPT_HISTORY_FILE = Path(
 )
 API_KEY_CONF_FILE = Path(os.getenv("API_KEY_CONF_FILE", Path(__file__).resolve().with_name("api_key.conf")))
 LOG_DIR = Path(__file__).resolve().with_name("logs")
+ACCESS_LOG_FILE = Path(os.getenv("GEMMA4_ACCESS_LOG_FILE", LOG_DIR / "access.jsonl"))
 WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
@@ -49,6 +50,8 @@ PROMPT_HISTORY_LIMIT = 100
 PROMPT_HISTORY_LOCK = threading.RLock()
 USER_PROMPT_HISTORY_LIMIT = 2000
 USER_PROMPT_HISTORY_LOCK = threading.RLock()
+ACCESS_LOG_LIMIT = 1000
+ACCESS_LOG_LOCK = threading.RLock()
 PROMPT_QUEUE_MAX_SIZE = int(os.getenv("PROMPT_QUEUE_MAX_SIZE", "10"))
 PROMPT_QUEUE_CONDITION = threading.Condition()
 PROMPT_QUEUE: list["PromptJob"] = []
@@ -311,6 +314,27 @@ INDEX_HTML = """<!doctype html>
       border-radius: 4px;
       padding: 1px 4px;
     }
+    .answer-box pre,
+    .vision-output pre {
+      margin: 10px 0 14px;
+      padding: 12px;
+      border: 1px solid #cfd6dc;
+      border-radius: 8px;
+      background: #101820;
+      color: #edf7f2;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      overflow-x: auto;
+      line-height: 1.45;
+    }
+    .answer-box pre code,
+    .vision-output pre code {
+      display: block;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+    }
     .answer-actions {
       display: flex;
       align-items: center;
@@ -406,6 +430,65 @@ INDEX_HTML = """<!doctype html>
       height: auto;
       display: block;
     }
+    .access-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .access-log {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .access-log-head,
+    .access-log-row {
+      display: grid;
+      grid-template-columns: minmax(150px, 1.1fr) minmax(90px, 0.7fr) minmax(86px, 0.5fr) minmax(78px, 0.45fr) minmax(0, 2fr) minmax(120px, 0.8fr);
+      gap: 10px;
+      align-items: center;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .access-log-head {
+      background: #e5e9ed;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .access-log-row {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+    }
+    .access-log-row:last-child {
+      border-bottom: 0;
+    }
+    .access-user {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      width: fit-content;
+      max-width: 100%;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: #fff;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .access-path {
+      overflow-wrap: anywhere;
+    }
+    .user-prompt-head,
+    .user-prompt-row {
+      grid-template-columns: minmax(150px, 1fr) minmax(90px, 0.7fr) minmax(0, 3fr);
+    }
+    .user-prompt-text {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
     @media (max-width: 760px) {
       header { display: block; }
       header button { margin-top: 14px; }
@@ -414,6 +497,11 @@ INDEX_HTML = """<!doctype html>
       .auth-box { grid-template-columns: 1fr; }
       .history-row { grid-template-columns: 1fr; }
       .vision-grid { grid-template-columns: 1fr; }
+      .access-log-head { display: none; }
+      .access-log-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
     }
     @media (max-width: 460px) {
       .grid { grid-template-columns: 1fr; }
@@ -434,6 +522,7 @@ INDEX_HTML = """<!doctype html>
       <button class="page-tab active" data-tab="serverPanel" type="button">Server</button>
       <button class="page-tab" data-tab="ocrPanel" type="button">OCR</button>
       <button class="page-tab" data-tab="yoloPanel" type="button">YOLO Detection</button>
+      <button class="page-tab" data-tab="accessLogPanel" type="button">Access Log</button>
     </nav>
 
     <div class="tab-panel active" id="serverPanel">
@@ -586,6 +675,42 @@ INDEX_HTML = """<!doctype html>
         </div>
       </div>
     </section>
+
+    <section class="tab-panel" id="accessLogPanel">
+      <h2>Recent Access Log</h2>
+      <p>Shows the latest 1000 requests handled by this server. User colors are stable per user ID.</p>
+      <div class="access-toolbar">
+        <button class="primary" id="refreshAccessLog">Refresh Access Log</button>
+        <span id="accessLogStatus"></span>
+      </div>
+      <div class="access-log" id="accessLog">
+        <div class="access-log-head">
+          <div>Time</div>
+          <div>User</div>
+          <div>Method</div>
+          <div>Status</div>
+          <div>Path</div>
+          <div>Client</div>
+        </div>
+        <div id="accessLogRows"></div>
+      </div>
+      <section>
+        <h2>User Prompt History</h2>
+        <p>Shows the latest 1000 prompt records from history_user_prompt.txt with user IDs.</p>
+        <div class="access-toolbar">
+          <button class="primary" id="refreshUserPromptHistory">Refresh Prompt History</button>
+          <span id="userPromptHistoryStatus"></span>
+        </div>
+        <div class="access-log">
+          <div class="access-log-head user-prompt-head">
+            <div>Time</div>
+            <div>User</div>
+            <div>Prompt</div>
+          </div>
+          <div id="userPromptHistoryRows"></div>
+        </div>
+      </section>
+    </section>
   </main>
 
   <script>
@@ -629,6 +754,10 @@ INDEX_HTML = """<!doctype html>
     const yoloStatus = document.getElementById("yoloStatus");
     const copyYoloStatus = document.getElementById("copyYoloStatus");
     const yoloPlot = document.getElementById("yoloPlot");
+    const accessLogRows = document.getElementById("accessLogRows");
+    const accessLogStatus = document.getElementById("accessLogStatus");
+    const userPromptHistoryRows = document.getElementById("userPromptHistoryRows");
+    const userPromptHistoryStatus = document.getElementById("userPromptHistoryStatus");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -768,6 +897,27 @@ if __name__ == "__main__":
       return {html: `<table>${thead}${tbody}</table>`, nextIndex: index};
     }
 
+    function renderCodeBlock(lines, startIndex) {
+      const opener = lines[startIndex].trim();
+      if (!opener.startsWith("```")) {
+        return null;
+      }
+
+      const language = opener.slice(3).trim().replace(/[^a-z0-9_-]/gi, "");
+      const codeLines = [];
+      let index = startIndex + 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      const nextIndex = index < lines.length ? index + 1 : index;
+      const className = language ? ` class="language-${escapeHtml(language)}"` : "";
+      return {
+        html: `<pre><code${className}>${escapeHtml(codeLines.join("\\n"))}</code></pre>`,
+        nextIndex
+      };
+    }
+
     function renderMarkdown(value) {
       const lines = value.split(/\\r?\\n/);
       const blocks = [];
@@ -781,6 +931,14 @@ if __name__ == "__main__":
 
       for (let index = 0; index < lines.length;) {
         const line = lines[index];
+        const codeBlock = renderCodeBlock(lines, index);
+        if (codeBlock) {
+          flushParagraph();
+          blocks.push(codeBlock.html);
+          index = codeBlock.nextIndex;
+          continue;
+        }
+
         const table = renderMarkdownTable(lines, index);
         if (table) {
           flushParagraph();
@@ -847,6 +1005,82 @@ if __name__ == "__main__":
       }
       for (const panel of tabPanels) {
         panel.classList.toggle("active", panel.id === panelId);
+      }
+      if (panelId === "accessLogPanel") {
+        refreshAccessLog();
+        refreshUserPromptHistory();
+      }
+    }
+
+    function colorForUser(user) {
+      const colors = ["#137c5b", "#255f99", "#9b5a00", "#6d4ca3", "#a62f2f", "#177e89", "#8a4f14", "#5f6b2a"];
+      let hash = 0;
+      for (const char of String(user || "anonymous")) {
+        hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+      }
+      return colors[Math.abs(hash) % colors.length];
+    }
+
+    function renderAccessLog(entries) {
+      if (!entries.length) {
+        accessLogRows.innerHTML = `<div class="access-log-row"><div>No access records yet.</div></div>`;
+        return;
+      }
+      accessLogRows.innerHTML = entries.map((entry) => {
+        const user = entry.user_id || "anonymous";
+        const status = Number(entry.status || 0);
+        const statusClass = status >= 500 ? "bad" : status >= 400 ? "warn" : "ok";
+        return `<div class="access-log-row">
+          <div>${escapeHtml(entry.requested_at || "")}</div>
+          <div><span class="access-user" style="background:${colorForUser(user)}">${escapeHtml(user)}</span></div>
+          <div>${escapeHtml(entry.method || "")}</div>
+          <div class="${statusClass}">${escapeHtml(String(entry.status || ""))}</div>
+          <div class="access-path">${escapeHtml(entry.path || "")}</div>
+          <div>${escapeHtml(entry.client_ip || "")}</div>
+        </div>`;
+      }).join("");
+    }
+
+    async function refreshAccessLog() {
+      accessLogStatus.textContent = "Loading...";
+      try {
+        const res = await fetch("/api/access-log");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Access log unavailable");
+        renderAccessLog(data.entries || []);
+        accessLogStatus.textContent = `${data.entries?.length || 0} records`;
+      } catch (err) {
+        accessLogRows.innerHTML = "";
+        accessLogStatus.textContent = String(err);
+      }
+    }
+
+    function renderUserPromptHistory(entries) {
+      if (!entries.length) {
+        userPromptHistoryRows.innerHTML = `<div class="access-log-row user-prompt-row"><div>No prompt records yet.</div></div>`;
+        return;
+      }
+      userPromptHistoryRows.innerHTML = entries.map((entry) => {
+        const user = entry.user_id || "anonymous";
+        return `<div class="access-log-row user-prompt-row">
+          <div>${escapeHtml(entry.requested_at || "")}</div>
+          <div><span class="access-user" style="background:${colorForUser(user)}">${escapeHtml(user)}</span></div>
+          <div class="user-prompt-text">${escapeHtml(entry.prompt || "")}</div>
+        </div>`;
+      }).join("");
+    }
+
+    async function refreshUserPromptHistory() {
+      userPromptHistoryStatus.textContent = "Loading...";
+      try {
+        const res = await fetch("/api/user-prompt-history");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Prompt history unavailable");
+        renderUserPromptHistory(data.entries || []);
+        userPromptHistoryStatus.textContent = `${data.entries?.length || 0} records`;
+      } catch (err) {
+        userPromptHistoryRows.innerHTML = "";
+        userPromptHistoryStatus.textContent = String(err);
       }
     }
 
@@ -982,8 +1216,10 @@ if __name__ == "__main__":
 
     async function runVisionTask({input, promptInput, output, status, label, afterResult}) {
       const startedAt = performance.now();
-      status.textContent = `${label} running...`;
-      output.textContent = `${label} running...`;
+      let requestStartedAt = 0;
+      let requestTimer = null;
+      status.textContent = `${label} preparing...`;
+      output.textContent = `${label} preparing...`;
       try {
         const auth = authPayload();
         if (!auth.user_id || !auth.password) {
@@ -995,6 +1231,15 @@ if __name__ == "__main__":
         if (!prompt) {
           throw new Error("Prompt is required.");
         }
+        requestStartedAt = performance.now();
+        function updateRequestTimer() {
+          const elapsedSeconds = Math.floor((performance.now() - requestStartedAt) / 1000);
+          const message = `${label} running... elapsed ${elapsedSeconds}s`;
+          status.textContent = message;
+          setPanelMarkdown(output, message);
+        }
+        updateRequestTimer();
+        requestTimer = window.setInterval(updateRequestTimer, 1000);
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
@@ -1006,7 +1251,7 @@ if __name__ == "__main__":
           })
         });
         const data = await res.json();
-        const elapsedSeconds = (performance.now() - startedAt) / 1000;
+        const elapsedSeconds = (performance.now() - (requestStartedAt || startedAt)) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
         const responseText = data.response || JSON.stringify(data, null, 2);
         setPanelMarkdown(output, `${responseText}\n\n${resultLine(data, elapsedSeconds)}`);
@@ -1015,10 +1260,11 @@ if __name__ == "__main__":
           await afterResult(file, responseText);
         }
       } catch (err) {
-        const elapsedSeconds = (performance.now() - startedAt) / 1000;
+        const elapsedSeconds = (performance.now() - (requestStartedAt || startedAt)) / 1000;
         setPanelMarkdown(output, String(err));
         status.textContent = `Failed after ${elapsedSeconds.toFixed(2)}s`;
       } finally {
+        if (requestTimer) window.clearInterval(requestTimer);
         refreshStatus();
       }
     }
@@ -1340,6 +1586,8 @@ if __name__ == "__main__":
     document.getElementById("cancelPendingPrompts").addEventListener("click", cancelPendingPrompts);
     document.getElementById("saveGpu").addEventListener("click", saveGpuSelection);
     document.getElementById("saveModel").addEventListener("click", saveModelSelection);
+    document.getElementById("refreshAccessLog").addEventListener("click", refreshAccessLog);
+    document.getElementById("refreshUserPromptHistory").addEventListener("click", refreshUserPromptHistory);
     loginSessionButton.addEventListener("click", loginSession);
     logoutSessionButton.addEventListener("click", logoutSession);
     saveUserButton.addEventListener("click", saveUser);
@@ -1648,6 +1896,47 @@ def remember_user_prompt(user_id: str, prompt: str, requested_at: float | None =
   with USER_PROMPT_HISTORY_LOCK:
     existing = read_user_prompt_history()
     save_user_prompt_history(existing + [entry])
+
+
+def access_log_timestamp(timestamp: float | None = None) -> str:
+    value = time.time() if timestamp is None else timestamp
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
+
+
+def read_access_log(limit: int = ACCESS_LOG_LIMIT) -> list[dict[str, Any]]:
+    with ACCESS_LOG_LOCK:
+        try:
+            lines = ACCESS_LOG_FILE.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            return []
+        except OSError:
+            return []
+
+    entries: list[dict[str, Any]] = []
+    for line in lines[-limit:]:
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            entries.append(value)
+    return entries
+
+
+def append_access_log(entry: dict[str, Any]) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    cleaned = {
+        "requested_at": str(entry.get("requested_at") or access_log_timestamp()),
+        "user_id": str(entry.get("user_id") or "anonymous").strip() or "anonymous",
+        "method": str(entry.get("method") or ""),
+        "path": str(entry.get("path") or ""),
+        "status": int(entry.get("status") or 0),
+        "client_ip": str(entry.get("client_ip") or ""),
+    }
+    with ACCESS_LOG_LOCK:
+        existing = read_access_log(ACCESS_LOG_LIMIT - 1)
+        body = "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in [*existing, cleaned])
+        ACCESS_LOG_FILE.write_text(body, encoding="utf-8")
 
 
 def ensure_workspace_dir() -> Path:
@@ -2193,6 +2482,46 @@ class Gemma4Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         print(f"{self.address_string()} - {format % args}")
 
+    def send_response(self, code: int, message: str | None = None) -> None:
+        self.response_status = int(code)
+        super().send_response(code, message)
+
+    def finish(self) -> None:
+        try:
+            super().finish()
+        finally:
+            self.remember_access()
+
+    def remember_access(self) -> None:
+        if getattr(self, "access_recorded", False):
+            return
+        if not getattr(self, "command", ""):
+            return
+        self.access_recorded = True
+        user_id = str(getattr(self, "access_user_id", "") or "").strip()
+        headers = getattr(self, "headers", {})
+        if not user_id and headers:
+            user_id = authenticated_session_user(headers)
+        try:
+            append_access_log(
+                {
+                    "requested_at": access_log_timestamp(),
+                    "user_id": user_id or "anonymous",
+                    "method": self.command,
+                    "path": self.path,
+                    "status": int(getattr(self, "response_status", 0) or 0),
+                    "client_ip": self.client_address[0] if self.client_address else "",
+                }
+            )
+        except OSError:
+            pass
+
+    def request_credentials(self, incoming: dict[str, Any]) -> tuple[str, str]:
+        user_id, password = credentials_from_request(self.headers, incoming)
+        if user_id:
+            self.access_user_id = user_id
+        return user_id, password
+
     def send_json(
         self,
         payload: dict[str, Any],
@@ -2236,8 +2565,17 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/prompt-history":
             self.send_json({"history": read_prompt_history()})
             return
+        if self.path == "/api/access-log":
+            self.send_json({"limit": ACCESS_LOG_LIMIT, "entries": list(reversed(read_access_log(ACCESS_LOG_LIMIT)))})
+            return
+        if self.path == "/api/user-prompt-history":
+            entries = read_user_prompt_history()[-ACCESS_LOG_LIMIT:]
+            self.send_json({"limit": ACCESS_LOG_LIMIT, "entries": list(reversed(entries))})
+            return
         if self.path == "/api/session-status":
           user_id = authenticated_session_user(self.headers)
+          if user_id:
+            self.access_user_id = user_id
           self.send_json({"logged_in": bool(user_id), "user_id": user_id})
           return
         if self.path == "/api/workspace/files":
@@ -2317,11 +2655,12 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                user_id, password = credentials_from_request(self.headers, incoming)
+                user_id, password = self.request_credentials(incoming)
                 matched_user_id = matched_authorized_user_id(user_id, password)
                 if not matched_user_id:
                     self.send_auth_error("invalid user id or password")
                     return
+                self.access_user_id = matched_user_id
                 token = create_auth_session(matched_user_id)
                 self.send_json(
                     {
@@ -2336,6 +2675,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/session-logout":
+            session_user = authenticated_session_user(self.headers)
+            if session_user:
+                self.access_user_id = session_user
             clear_auth_session(self.headers)
             self.send_json(
                 {"logged_in": False, "message": "Session ended"},
@@ -2349,6 +2691,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 if not session_user:
                     self.send_auth_error("authenticated session required")
                     return
+                self.access_user_id = session_user
                 length = int(self.headers.get("Content-Length", "0"))
                 incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
                 saved = upsert_api_user(
@@ -2372,7 +2715,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                user_id, password = credentials_from_request(self.headers, incoming)
+                user_id, password = self.request_credentials(incoming)
                 if not is_authorized_user(user_id, password):
                     self.send_auth_error("invalid user id or password")
                     return
@@ -2385,7 +2728,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                user_id, password = credentials_from_request(self.headers, incoming)
+                user_id, password = self.request_credentials(incoming)
                 if not is_authorized_user(user_id, password):
                     self.send_auth_error("invalid user id or password")
                     return
@@ -2405,7 +2748,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                user_id, password = credentials_from_request(self.headers, incoming)
+                user_id, password = self.request_credentials(incoming)
                 if not is_authorized_user(user_id, password):
                     self.send_auth_error("invalid user id or password")
                     return
@@ -2428,7 +2771,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-            user_id, password = credentials_from_request(self.headers, incoming)
+            user_id, password = self.request_credentials(incoming)
             if not is_authorized_user(user_id, password):
                 self.send_auth_error("invalid user id or password")
                 return
@@ -2459,7 +2802,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     PROMPT_HISTORY_FILE.touch(exist_ok=True)
+    ACCESS_LOG_FILE.touch(exist_ok=True)
     ensure_api_key_conf()
     httpd = ThreadingHTTPServer((HOST, PORT), Gemma4Handler)
     print(f"Gemma4 service page: http://{HOST}:{PORT}")

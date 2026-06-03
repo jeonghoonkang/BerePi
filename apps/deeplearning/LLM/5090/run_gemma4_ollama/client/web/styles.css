@@ -331,6 +331,50 @@ textarea::placeholder {
   font-size: 0.86rem;
 }
 
+.vision-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.vision-card {
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  border-radius: 1.25rem;
+  padding: 0.9rem;
+}
+
+.vision-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.vision-card textarea {
+  margin-top: 0.7rem;
+  min-height: 8.5rem;
+}
+
+.vision-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+  color: var(--muted);
+}
+
+.vision-output {
+  min-height: 10rem;
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 0.85rem;
+  color: var(--ink);
+}
+
 .summary-card {
   border: 1px solid var(--line);
   background: var(--panel-strong);
@@ -606,7 +650,8 @@ textarea::placeholder {
   }
 
   .form-grid,
-  .prompt-grid {
+  .prompt-grid,
+  .vision-grid {
     grid-template-columns: 1fr;
   }
 

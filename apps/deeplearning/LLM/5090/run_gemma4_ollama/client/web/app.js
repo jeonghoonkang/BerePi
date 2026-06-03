@@ -46,6 +46,14 @@ const elements = {
   thinkingTabPanel: document.getElementById("thinkingTabPanel"),
   configFileInput: document.getElementById("configFileInput"),
   chainFileName: document.getElementById("chainFileName"),
+  ocrImage: document.getElementById("ocrImage"),
+  ocrPrompt: document.getElementById("ocrPrompt"),
+  ocrStatus: document.getElementById("ocrStatus"),
+  ocrOutput: document.getElementById("ocrOutput"),
+  yoloImage: document.getElementById("yoloImage"),
+  yoloPrompt: document.getElementById("yoloPrompt"),
+  yoloStatus: document.getElementById("yoloStatus"),
+  yoloOutput: document.getElementById("yoloOutput"),
 };
 
 const fieldMap = {
@@ -406,6 +414,22 @@ async function requestJson(url, options = {}) {
     throw new Error(data.error || `Request failed: ${response.status}`);
   }
   return data;
+}
+
+function imagePayloadFromFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("이미지 파일을 먼저 선택하세요."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      resolve(value.includes(",") ? value.split(",", 2)[1] : value);
+    };
+    reader.onerror = () => reject(reader.error || new Error("이미지 파일을 읽지 못했습니다."));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function loadInitialState() {
@@ -905,6 +929,55 @@ async function runChain() {
   await refreshHistory();
 }
 
+async function runVision(kind) {
+  const isOcr = kind === "ocr";
+  const input = isOcr ? elements.ocrImage : elements.yoloImage;
+  const promptInput = isOcr ? elements.ocrPrompt : elements.yoloPrompt;
+  const status = isOcr ? elements.ocrStatus : elements.yoloStatus;
+  const output = isOcr ? elements.ocrOutput : elements.yoloOutput;
+  const label = isOcr ? "OCR" : "YOLO";
+  const config = readConfigFromForm();
+  let requestTimer = null;
+
+  status.textContent = `${label} 준비 중`;
+  output.textContent = `${label} 요청 준비 중`;
+
+  try {
+    const file = input.files && input.files[0];
+    const prompt = promptInput.value.trim();
+    if (!prompt) {
+      throw new Error("프롬프트를 입력하세요.");
+    }
+    const image = await imagePayloadFromFile(file);
+    const requestStartedAt = performance.now();
+    function updateTimer() {
+      const elapsedSeconds = Math.floor((performance.now() - requestStartedAt) / 1000);
+      const message = `${label} 실행 중... 요청 후 ${elapsedSeconds}s`;
+      status.textContent = message;
+      output.textContent = message;
+    }
+    updateTimer();
+    requestTimer = window.setInterval(updateTimer, 1000);
+
+    const data = await requestJson("/api/run-vision", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({config, prompt, images: [image]}),
+    });
+    const elapsedSeconds = (performance.now() - requestStartedAt) / 1000;
+    const responseText = data.response || JSON.stringify(data, null, 2);
+    output.textContent = `${responseText}\n\n${data.elapsed_line || `Elapsed time: ${elapsedSeconds.toFixed(2)}s`}`;
+    status.textContent = `${label} 완료: ${elapsedSeconds.toFixed(2)}s`;
+    setHeaderRuntimeStatus({runState: "정지 중", connectionState: "연결됨", detail: data.generate_url || activeServerBaseUrl()});
+  } catch (error) {
+    status.textContent = `${label} 실패: ${error}`;
+    output.textContent = String(error);
+    setHeaderRuntimeStatus({runState: "정지 중", connectionState: "연결 실패", detail: activeServerBaseUrl()});
+  } finally {
+    if (requestTimer) window.clearInterval(requestTimer);
+  }
+}
+
 function clearResults() {
   state.lastResult = null;
   elements.resultSummary.textContent = "아직 실행 기록이 없습니다.";
@@ -985,6 +1058,8 @@ document.getElementById("runChain").addEventListener("click", async () => {
     setHeaderRuntimeStatus({runState: "정지 중", connectionState: "연결 실패", detail: activeServerBaseUrl()});
   }
 });
+document.getElementById("runOcr").addEventListener("click", () => runVision("ocr"));
+document.getElementById("runYolo").addEventListener("click", () => runVision("yolo"));
 
 document.getElementById("clearResults").addEventListener("click", clearResults);
 elements.resultTabButton.addEventListener("click", () => activateTab("result"));

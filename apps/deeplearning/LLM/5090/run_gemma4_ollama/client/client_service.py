@@ -791,6 +791,36 @@ def build_generate_payload(config: dict[str, Any], prompt: str) -> dict[str, Any
     return payload
 
 
+def run_vision(config: dict[str, Any], prompt: str, images: list[str]) -> dict[str, Any]:
+    prompt = str(prompt or "").strip()
+    if not prompt:
+        raise ValueError("Prompt is required.")
+    if not images:
+        raise ValueError("At least one image is required.")
+    if not config.get("server_base_url"):
+        raise ValueError("Server Base URL is required.")
+    if not config.get("user_id") or not config.get("password"):
+        raise ValueError("User ID and Password are required.")
+
+    timeout = int(config["request_timeout_seconds"])
+    generate_url = join_url(config["server_base_url"], config["generate_path"])
+    payload = build_generate_payload(config, prompt)
+    payload["images"] = images
+    started = time.perf_counter()
+    response_data = request_json(generate_url, payload, timeout)
+    elapsed_seconds = time.perf_counter() - started
+    return {
+        "response": str(response_data.get("response") or ""),
+        "model": str(response_data.get("model") or config.get("model") or ""),
+        "server_ip": str(response_data.get("server_ip") or ""),
+        "server_port": str(response_data.get("server_port") or ""),
+        "elapsed_seconds": float(response_data.get("elapsed_seconds") or elapsed_seconds),
+        "elapsed_line": str(response_data.get("elapsed_line") or f"Elapsed time: {elapsed_seconds:.2f}s"),
+        "image_count": len(images),
+        "generate_url": generate_url,
+    }
+
+
 def run_chain(config: dict[str, Any]) -> dict[str, Any]:
     selected = collect_selected_prompts(config)
     if not selected:
@@ -962,6 +992,11 @@ class ClientHandler(BaseHTTPRequestHandler):
                 result = run_chain(config)
                 self.send_json(result)
                 return
+            if self.path == "/api/run-vision":
+                config = runtime_config(incoming.get("config"))
+                result = run_vision(config, str(incoming.get("prompt") or ""), incoming.get("images") or [])
+                self.send_json(result)
+                return
             if self.path == "/api/save-chain-file":
                 config = runtime_config((incoming.get("config") or {}) if isinstance(incoming, dict) else {})
                 result = save_chain_file(config, str(incoming.get("name") or ""))
@@ -1007,7 +1042,7 @@ class ClientHandler(BaseHTTPRequestHandler):
             if self.path == "/api/test-connection":
                 config = runtime_config(incoming.get("config") if isinstance(incoming, dict) else None)
                 target_url = join_url(config["server_base_url"], config["status_path"])
-            elif self.path == "/api/run-chain":
+            elif self.path in {"/api/run-chain", "/api/run-vision"}:
                 config = runtime_config(incoming.get("config") if isinstance(incoming, dict) else None)
                 target_url = join_url(config["server_base_url"], config["generate_path"])
             message = str(exc)

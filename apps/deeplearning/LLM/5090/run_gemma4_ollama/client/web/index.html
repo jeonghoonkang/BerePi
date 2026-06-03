@@ -90,6 +90,37 @@
         <section class="panel">
           <div class="panel-header">
             <div>
+              <h2>OCR / YOLO</h2>
+              <p>서버 설정과 인증 정보를 사용해 이미지 프롬프트를 실행합니다. 요청 후부터 소요 시간을 표시합니다.</p>
+            </div>
+          </div>
+          <div class="vision-grid">
+            <article class="vision-card">
+              <h3>OCR</h3>
+              <input id="ocrImage" type="file" accept="image/*">
+              <textarea id="ocrPrompt">Extract all readable text from this image. Preserve line breaks where useful. If the image contains Korean text, return Korean text as accurately as possible.</textarea>
+              <div class="vision-actions">
+                <button id="runOcr" class="primary" type="button">OCR 실행</button>
+                <span id="ocrStatus">대기 중</span>
+              </div>
+              <pre id="ocrOutput" class="vision-output">OCR 결과 대기 중</pre>
+            </article>
+            <article class="vision-card">
+              <h3>YOLO Detection</h3>
+              <input id="yoloImage" type="file" accept="image/*">
+              <textarea id="yoloPrompt">Analyze this image like an object detector. Return concise JSON with keys: objects, summary. Include normalized bbox values when possible.</textarea>
+              <div class="vision-actions">
+                <button id="runYolo" class="primary" type="button">YOLO 실행</button>
+                <span id="yoloStatus">대기 중</span>
+              </div>
+              <pre id="yoloOutput" class="vision-output">YOLO 결과 대기 중</pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
               <h2>실행 결과</h2>
               <p>각 그룹별 요청 본문과 모델 응답을 순서대로 표시합니다.</p>
             </div>
