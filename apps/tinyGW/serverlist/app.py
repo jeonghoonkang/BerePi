@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import uuid4
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -555,7 +556,7 @@ def main() -> None:
 
     selected_zone = get_query_zone(data)
     selected = data["zones"][selected_zone]
-    map_html, _map_height = build_hex_map(data, selected_zone)
+    map_html, map_height = build_hex_map(data, selected_zone)
 
     st.title("tinyGW Server List")
     st.caption("Hexagon 조각으로 위치를 나누고, 조각별 서버 목록을 관리합니다.")
@@ -569,7 +570,7 @@ def main() -> None:
     map_col, detail_col = st.columns([1.35, 1])
     with map_col:
         st.subheader("Hexagon 위치")
-        st.html(map_html)
+        components.html(map_html, height=map_height, scrolling=False)
         st.caption("hexagon 조각을 클릭하면 해당 위치의 서버 세부 리스트가 열립니다.")
 
     with detail_col:

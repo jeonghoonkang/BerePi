@@ -16,7 +16,19 @@ hexagon 조각으로 위치를 나누고, 각 조각을 클릭해 서버 세부 
 ```bash
 cd BerePi/apps/tinyGW/serverlist
 pip install -r requirements.txt
+./run.sh
+```
+
+또는 직접 실행할 수 있습니다.
+
+```bash
 streamlit run app.py --server.address 0.0.0.0 --server.port 2298
+```
+
+포트나 바인딩 주소를 바꾸려면 환경변수를 사용합니다.
+
+```bash
+SERVERLIST_PORT=2300 SERVERLIST_HOST=127.0.0.1 ./run.sh
 ```
 
 Windows에서 `streamlit` 명령이 PATH에 없으면 아래처럼 실행할 수 있습니다.
