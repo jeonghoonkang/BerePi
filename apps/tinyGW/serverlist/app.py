@@ -10,7 +10,6 @@ from typing import Optional
 from uuid import uuid4
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -20,6 +19,9 @@ DEFAULT_HEX_COUNT = 24
 MAX_HEX_COUNT = 200
 HEX_RADIUS = 52
 HEX_GAP = 10
+MAP_MAX_WIDTH = 980
+MAP_MAX_HEIGHT = 640
+MAP_MIN_RADIUS = 20
 
 
 def now_text() -> str:
@@ -212,6 +214,17 @@ def resize_grid(data: dict, hex_count: int, columns: int) -> dict:
     return normalize_data(data)
 
 
+def fit_hex_radius(hex_count: int, columns: int) -> int:
+    rows = grid_rows(hex_count, columns)
+    width_units = 1.75 * max(columns - 1, 0) + 3 + (0.875 if rows > 1 else 0)
+    height_units = 1.52 * max(rows - 1, 0) + 2.8
+    gap_width = HEX_GAP * max(columns - 1, 0) + 36
+    gap_height = HEX_GAP * max(rows - 1, 0) + 36
+    radius_by_width = (MAP_MAX_WIDTH - gap_width) / max(width_units, 1)
+    radius_by_height = (MAP_MAX_HEIGHT - gap_height) / max(height_units, 1)
+    return int(max(MAP_MIN_RADIUS, min(HEX_RADIUS, radius_by_width, radius_by_height)))
+
+
 def hex_points(cx: float, cy: float, radius: float) -> str:
     points = []
     for index in range(6):
@@ -227,8 +240,9 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
     zones = data["zones"]
     grid = data["grid"]
     columns = int(grid["columns"])
-    rows = grid_rows(int(grid["hex_count"]), columns)
-    radius = HEX_RADIUS
+    hex_count = int(grid["hex_count"])
+    rows = grid_rows(hex_count, columns)
+    radius = fit_hex_radius(hex_count, columns)
     step_x = radius * 1.75 + HEX_GAP
     step_y = radius * 1.52 + HEX_GAP
     margin = radius + 18
@@ -263,18 +277,17 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
 
     map_html = f"""
     <style>
-      body {{
-        margin: 0;
-        background: transparent;
-        font-family: Arial, sans-serif;
-      }}
       .server-map-wrap {{
         width: 100%;
-        overflow-x: auto;
+        overflow: hidden;
         padding: 6px 0 12px;
+        font-family: Arial, sans-serif;
       }}
       .server-map {{
-        min-width: {width}px;
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: {MAP_MAX_HEIGHT}px;
         background: #f7f9fb;
         border: 1px solid #d8e0ea;
         border-radius: 8px;
@@ -320,7 +333,7 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
       </svg>
     </div>
     """
-    return map_html, min(max(height + 24, 260), 900)
+    return map_html, min(max(height + 28, 260), MAP_MAX_HEIGHT + 42)
 
 
 def render_initial_setup() -> None:
@@ -355,9 +368,32 @@ def render_initial_setup() -> None:
 
 def render_grid_settings(data: dict) -> None:
     grid = data["grid"]
-    with st.expander("Hexagon 구성 변경", expanded=False):
-        st.caption("개수를 줄이면 사라지는 조각의 서버는 마지막 조각으로 이동합니다.")
-        with st.form("grid_settings"):
+    st.subheader("Hexagon 구성")
+    st.caption("개수를 줄이면 사라지는 조각의 서버는 마지막 조각으로 이동합니다.")
+
+    action_col1, action_col2, action_col3 = st.columns([1, 1, 2])
+    with action_col1:
+        if st.button("Hexagon 1개 추가", use_container_width=True, disabled=int(grid["hex_count"]) >= MAX_HEX_COUNT):
+            next_count = int(grid["hex_count"]) + 1
+            resize_grid(data, next_count, min(int(grid["columns"]), next_count))
+            save_data(data)
+            set_query_zone(current_zone_ids(data)[-1])
+            st.success("Hexagon을 추가했습니다.")
+            st.rerun()
+    with action_col2:
+        if st.button("마지막 Hexagon 삭제", use_container_width=True, disabled=int(grid["hex_count"]) <= 1):
+            next_count = int(grid["hex_count"]) - 1
+            resize_grid(data, next_count, min(int(grid["columns"]), next_count))
+            save_data(data)
+            set_query_zone(current_zone_ids(data)[-1])
+            st.success("마지막 Hexagon을 삭제했습니다.")
+            st.rerun()
+    with action_col3:
+        st.caption(f"현재 한 줄당 {int(grid['columns'])}개, 최대 {MAX_HEX_COUNT}개까지 관리할 수 있습니다.")
+
+    with st.form("grid_settings"):
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
             hex_count = st.number_input(
                 "Hexagon 개수",
                 min_value=1,
@@ -365,6 +401,7 @@ def render_grid_settings(data: dict) -> None:
                 value=int(grid["hex_count"]),
                 step=1,
             )
+        with col2:
             columns = st.number_input(
                 "한 줄당 hexagon 개수",
                 min_value=1,
@@ -372,27 +409,35 @@ def render_grid_settings(data: dict) -> None:
                 value=min(int(grid["columns"]), int(hex_count)),
                 step=1,
             )
-            if st.form_submit_button("구성 저장", use_container_width=True):
-                resize_grid(data, int(hex_count), int(columns))
-                save_data(data)
-                first_zone = current_zone_ids(data)[0]
-                set_query_zone(first_zone)
-                st.success("Hexagon 구성을 저장했습니다.")
-                st.rerun()
+        with col3:
+            st.write("")
+            st.write("")
+            submitted = st.form_submit_button("구성 저장", use_container_width=True)
+
+        if submitted:
+            resize_grid(data, int(hex_count), int(columns))
+            save_data(data)
+            first_zone = current_zone_ids(data)[0]
+            set_query_zone(first_zone)
+            st.success("Hexagon 구성을 저장했습니다.")
+            st.rerun()
 
 
 def render_zone_settings(data: dict, zone_id: str) -> None:
     zone = data["zones"][zone_id]
-    with st.expander("선택한 hexagon 이름/설명", expanded=False):
-        with st.form("zone_settings"):
+    with st.form("zone_settings"):
+        st.subheader("선택 Hexagon 편집")
+        col1, col2 = st.columns([1, 2])
+        with col1:
             zone_name = st.text_input("조각 이름", value=zone.get("name", f"Zone {zone_id}"))
-            description = st.text_area("설명", value=zone.get("description", ""), height=90)
-            if st.form_submit_button("조각 정보 저장", use_container_width=True):
-                zone["name"] = zone_name.strip() or f"Zone {zone_id}"
-                zone["description"] = description.strip()
-                save_data(data)
-                st.success("조각 정보를 저장했습니다.")
-                st.rerun()
+        with col2:
+            description = st.text_area("설명", value=zone.get("description", ""), height=72)
+        if st.form_submit_button("조각 정보 저장", use_container_width=True):
+            zone["name"] = zone_name.strip() or f"Zone {zone_id}"
+            zone["description"] = description.strip()
+            save_data(data)
+            st.success("조각 정보를 저장했습니다.")
+            st.rerun()
 
 
 def render_add_form(data: dict, zone_id: str) -> None:
@@ -510,7 +555,7 @@ def main() -> None:
 
     selected_zone = get_query_zone(data)
     selected = data["zones"][selected_zone]
-    map_html, map_height = build_hex_map(data, selected_zone)
+    map_html, _map_height = build_hex_map(data, selected_zone)
 
     st.title("tinyGW Server List")
     st.caption("Hexagon 조각으로 위치를 나누고, 조각별 서버 목록을 관리합니다.")
@@ -524,7 +569,7 @@ def main() -> None:
     map_col, detail_col = st.columns([1.35, 1])
     with map_col:
         st.subheader("Hexagon 위치")
-        components.html(map_html, height=map_height, scrolling=True)
+        st.html(map_html)
         st.caption("hexagon 조각을 클릭하면 해당 위치의 서버 세부 리스트가 열립니다.")
 
     with detail_col:
