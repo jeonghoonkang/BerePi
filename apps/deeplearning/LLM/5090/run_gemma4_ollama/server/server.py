@@ -73,7 +73,7 @@ INDEX_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ollama Service by Local Download Model</title>
+  <title>Ollama Service - run_gemma4_ollama/server</title>
   <style>
     :root {
       color-scheme: light;
@@ -110,6 +110,13 @@ INDEX_HTML = """<!doctype html>
       font-size: 28px;
       line-height: 1.15;
       letter-spacing: 0;
+    }
+    .title-path {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
     }
     p { margin: 0; color: var(--muted); }
     button {
@@ -321,6 +328,61 @@ INDEX_HTML = """<!doctype html>
       flex-wrap: wrap;
       margin-top: 10px;
     }
+    .page-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .page-tab {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      border-bottom-color: transparent;
+      min-width: 120px;
+    }
+    .page-tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .vision-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .vision-preview {
+      width: 100%;
+      min-height: 240px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .vision-preview img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .vision-output {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #f1f3f5;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-height: 180px;
+      padding: 14px;
+      line-height: 1.5;
+    }
     @media (max-width: 760px) {
       header { display: block; }
       header button { margin-top: 14px; }
@@ -328,6 +390,7 @@ INDEX_HTML = """<!doctype html>
       .prompt-grid { grid-template-columns: 1fr; }
       .auth-box { grid-template-columns: 1fr; }
       .history-row { grid-template-columns: 1fr; }
+      .vision-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 460px) {
       .grid { grid-template-columns: 1fr; }
@@ -338,41 +401,48 @@ INDEX_HTML = """<!doctype html>
   <main>
     <header>
       <div>
-        <h1>Ollama Service by Local Download Model</h1>
+        <h1>Ollama Service by Local Download Model <span class="title-path">run_gemma4_ollama/server</span></h1>
         <p>Port 8082 service page for checking Ollama and sending a quick Gemma4 prompt.</p>
       </div>
       <button id="refresh">Refresh</button>
     </header>
 
-    <section class="grid" id="metrics"></section>
+    <nav class="page-tabs" aria-label="Service feature tabs">
+      <button class="page-tab active" data-tab="serverPanel" type="button">Server</button>
+      <button class="page-tab" data-tab="ocrPanel" type="button">OCR</button>
+      <button class="page-tab" data-tab="yoloPanel" type="button">YOLO Detection</button>
+    </nav>
 
-    <section>
-      <h2>Service Controls</h2>
-      <div class="row">
-        <button class="primary" id="startOllama">Start Ollama Server</button>
-        <button id="unload">Stop Model</button>
-        <button class="danger" id="stopOllama">Stop Ollama Server</button>
-        <span id="controlStatus"></span>
-      </div>
-    </section>
+    <div class="tab-panel active" id="serverPanel">
+      <section class="grid" id="metrics"></section>
 
-    <section>
-      <h2>GPU Selection</h2>
-      <div class="row">
-        <select id="gpuSelect"></select>
-        <button id="saveGpu">Save GPU Selection</button>
-        <span id="gpuStatus"></span>
-      </div>
-    </section>
+      <section>
+        <h2>Service Controls</h2>
+        <div class="row">
+          <button class="primary" id="startOllama">Start Ollama Server</button>
+          <button id="unload">Stop Model</button>
+          <button class="danger" id="stopOllama">Stop Ollama Server</button>
+          <span id="controlStatus"></span>
+        </div>
+      </section>
 
-    <section>
-      <h2>Model Selection</h2>
-      <div class="row">
-        <select id="modelSelect"></select>
-        <button id="saveModel">Save Model Selection</button>
-        <span id="modelStatus"></span>
-      </div>
-    </section>
+      <section>
+        <h2>GPU Selection</h2>
+        <div class="row">
+          <select id="gpuSelect"></select>
+          <button id="saveGpu">Save GPU Selection</button>
+          <span id="gpuStatus"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Model Selection</h2>
+        <div class="row">
+          <select id="modelSelect"></select>
+          <button id="saveModel">Save Model Selection</button>
+          <span id="modelStatus"></span>
+        </div>
+      </section>
 
     <section>
       <h2>Prompt Test</h2>
@@ -445,6 +515,53 @@ INDEX_HTML = """<!doctype html>
       <h2>Python Client Code</h2>
       <pre id="pythonCode"></pre>
     </section>
+    </div>
+
+    <section class="tab-panel" id="ocrPanel">
+      <h2>OCR</h2>
+      <p>../client OCR workflow: upload an image and extract readable text through the current Gemma4 vision model.</p>
+      <div class="vision-grid">
+        <div>
+          <input id="ocrImage" type="file" accept="image/*">
+          <div class="vision-preview" id="ocrPreview">No image selected.</div>
+          <div class="row">
+            <button class="primary" id="runOcr">Run OCR</button>
+            <span id="ocrStatus"></span>
+          </div>
+        </div>
+        <div>
+          <textarea id="ocrPrompt">Extract all readable text from this image. Preserve line breaks where useful. If the image contains Korean text, return Korean text as accurately as possible.</textarea>
+          <div class="answer-actions">
+            <button id="copyOcr">Copy OCR Result</button>
+            <span id="copyOcrStatus"></span>
+          </div>
+          <div class="vision-output" id="ocrOutput">Waiting for OCR.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="yoloPanel">
+      <h2>YOLO Detection</h2>
+      <p>../client YOLO detection workflow: upload an image and ask the current model for object-detection style results.</p>
+      <div class="vision-grid">
+        <div>
+          <input id="yoloImage" type="file" accept="image/*">
+          <div class="vision-preview" id="yoloPreview">No image selected.</div>
+          <div class="row">
+            <button class="primary" id="runYolo">Run Detection</button>
+            <span id="yoloStatus"></span>
+          </div>
+        </div>
+        <div>
+          <textarea id="yoloPrompt">Analyze this image like an object detector. List visible objects, approximate counts, confidence level, and notable locations in the frame. Return concise JSON with keys: objects, summary.</textarea>
+          <div class="answer-actions">
+            <button id="copyYolo">Copy Detection Result</button>
+            <span id="copyYoloStatus"></span>
+          </div>
+          <div class="vision-output" id="yoloOutput">Waiting for detection.</div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -473,6 +590,20 @@ INDEX_HTML = """<!doctype html>
     const newUserEnabled = document.getElementById("newUserEnabled");
     const saveUserButton = document.getElementById("saveUser");
     const saveUserStatus = document.getElementById("saveUserStatus");
+    const pageTabs = Array.from(document.querySelectorAll(".page-tab"));
+    const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
+    const ocrImage = document.getElementById("ocrImage");
+    const ocrPreview = document.getElementById("ocrPreview");
+    const ocrPrompt = document.getElementById("ocrPrompt");
+    const ocrOutput = document.getElementById("ocrOutput");
+    const ocrStatus = document.getElementById("ocrStatus");
+    const copyOcrStatus = document.getElementById("copyOcrStatus");
+    const yoloImage = document.getElementById("yoloImage");
+    const yoloPreview = document.getElementById("yoloPreview");
+    const yoloPrompt = document.getElementById("yoloPrompt");
+    const yoloOutput = document.getElementById("yoloOutput");
+    const yoloStatus = document.getElementById("yoloStatus");
+    const copyYoloStatus = document.getElementById("copyYoloStatus");
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -678,6 +809,100 @@ if __name__ == "__main__":
         copyStatus.textContent = "Copied.";
       } catch (err) {
         copyStatus.textContent = `Copy failed: ${err}`;
+      }
+    }
+
+    function showTab(panelId) {
+      for (const tab of pageTabs) {
+        tab.classList.toggle("active", tab.dataset.tab === panelId);
+      }
+      for (const panel of tabPanels) {
+        panel.classList.toggle("active", panel.id === panelId);
+      }
+    }
+
+    function imagePayloadFromFile(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          reject(new Error("Image file is required."));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || "");
+          const base64Image = dataUrl.includes(",") ? dataUrl.split(",", 2)[1] : dataUrl;
+          resolve({dataUrl, base64Image});
+        };
+        reader.onerror = () => reject(reader.error || new Error("Image read failed."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function previewImage(input, preview) {
+      try {
+        const file = input.files && input.files[0];
+        if (!file) {
+          preview.textContent = "No image selected.";
+          return;
+        }
+        const {dataUrl} = await imagePayloadFromFile(file);
+        preview.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(file.name)}">`;
+      } catch (err) {
+        preview.textContent = String(err);
+      }
+    }
+
+    async function runVisionTask({input, promptInput, output, status, label}) {
+      const startedAt = performance.now();
+      status.textContent = `${label} running...`;
+      output.textContent = `${label} running...`;
+      try {
+        const auth = authPayload();
+        if (!auth.user_id || !auth.password) {
+          throw new Error("User ID and password are required in the Server tab.");
+        }
+        const file = input.files && input.files[0];
+        const {base64Image} = await imagePayloadFromFile(file);
+        const prompt = promptInput.value.trim();
+        if (!prompt) {
+          throw new Error("Prompt is required.");
+        }
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            prompt,
+            images: [base64Image],
+            model: modelSelect.value,
+            ...auth
+          })
+        });
+        const data = await res.json();
+        const elapsedSeconds = (performance.now() - startedAt) / 1000;
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        const responseText = data.response || JSON.stringify(data, null, 2);
+        output.textContent = `${responseText}\n\n${resultLine(data, elapsedSeconds)}`;
+        status.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
+      } catch (err) {
+        const elapsedSeconds = (performance.now() - startedAt) / 1000;
+        output.textContent = String(err);
+        status.textContent = `Failed after ${elapsedSeconds.toFixed(2)}s`;
+      } finally {
+        refreshStatus();
+      }
+    }
+
+    async function copyPanelText(output, status) {
+      const value = output.innerText.trim();
+      if (!value || value.startsWith("Waiting for")) {
+        status.textContent = "No result to copy.";
+        return;
+      }
+      try {
+        await copyText(value);
+        status.textContent = "Copied.";
+      } catch (err) {
+        status.textContent = `Copy failed: ${err}`;
       }
     }
 
@@ -954,8 +1179,27 @@ if __name__ == "__main__":
     }
 
     document.getElementById("refresh").addEventListener("click", refreshStatus);
+    pageTabs.forEach((tab) => tab.addEventListener("click", () => showTab(tab.dataset.tab)));
     sendButton.addEventListener("click", sendPrompt);
     copyAnswerButton.addEventListener("click", copyAnswer);
+    ocrImage.addEventListener("change", () => previewImage(ocrImage, ocrPreview));
+    yoloImage.addEventListener("change", () => previewImage(yoloImage, yoloPreview));
+    document.getElementById("runOcr").addEventListener("click", () => runVisionTask({
+      input: ocrImage,
+      promptInput: ocrPrompt,
+      output: ocrOutput,
+      status: ocrStatus,
+      label: "OCR"
+    }));
+    document.getElementById("runYolo").addEventListener("click", () => runVisionTask({
+      input: yoloImage,
+      promptInput: yoloPrompt,
+      output: yoloOutput,
+      status: yoloStatus,
+      label: "Detection"
+    }));
+    document.getElementById("copyOcr").addEventListener("click", () => copyPanelText(ocrOutput, copyOcrStatus));
+    document.getElementById("copyYolo").addEventListener("click", () => copyPanelText(yoloOutput, copyYoloStatus));
     document.getElementById("loadHistoryPrompt1").addEventListener("click", () => loadHistory(prompt1));
     document.getElementById("loadHistoryPrompt2").addEventListener("click", () => loadHistory(prompt2));
     document.getElementById("startOllama").addEventListener("click", () => postControl("/api/start-ollama", "Starting Ollama"));
