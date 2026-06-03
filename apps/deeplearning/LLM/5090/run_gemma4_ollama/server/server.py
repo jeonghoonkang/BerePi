@@ -40,6 +40,7 @@ USER_PROMPT_HISTORY_FILE = Path(
 API_KEY_CONF_FILE = Path(os.getenv("API_KEY_CONF_FILE", Path(__file__).resolve().with_name("api_key.conf")))
 LOG_DIR = Path(__file__).resolve().with_name("logs")
 ACCESS_LOG_FILE = Path(os.getenv("GEMMA4_ACCESS_LOG_FILE", LOG_DIR / "access.jsonl"))
+SAMPLE_DIR = Path(os.getenv("GEMMA4_SAMPLE_DIR", Path(__file__).resolve().with_name("sample")))
 WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
@@ -430,6 +431,10 @@ INDEX_HTML = """<!doctype html>
       height: auto;
       display: block;
     }
+    .demo-button {
+      border-color: #255f99;
+      color: #255f99;
+    }
     .access-toolbar {
       display: flex;
       align-items: center;
@@ -638,6 +643,7 @@ INDEX_HTML = """<!doctype html>
           <div class="vision-preview" id="ocrPreview">No image selected.</div>
           <div class="row">
             <button class="primary" id="runOcr">Run OCR</button>
+            <button class="demo-button" id="runOcrDemo" type="button">Run Demo OCR</button>
             <span id="ocrStatus"></span>
           </div>
         </div>
@@ -661,6 +667,7 @@ INDEX_HTML = """<!doctype html>
           <div class="vision-preview" id="yoloPreview">No image selected.</div>
           <div class="row">
             <button class="primary" id="runYolo">Run Detection</button>
+            <button class="demo-button" id="runYoloDemo" type="button">Run Demo Detection</button>
             <span id="yoloStatus"></span>
           </div>
         </div>
@@ -758,6 +765,8 @@ INDEX_HTML = """<!doctype html>
     const accessLogStatus = document.getElementById("accessLogStatus");
     const userPromptHistoryRows = document.getElementById("userPromptHistoryRows");
     const userPromptHistoryStatus = document.getElementById("userPromptHistoryStatus");
+    const demoImageUrl = "/sample/beatles_single_abbey.png";
+    const demoImageName = "beatles_single_abbey.png";
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -1101,9 +1110,38 @@ if __name__ == "__main__":
       });
     }
 
+    function selectedImageFile(input) {
+      return (input.files && input.files[0]) || input.demoFile || null;
+    }
+
+    function assignImageFile(input, file) {
+      input.demoFile = file;
+      if (typeof DataTransfer === "undefined") {
+        return;
+      }
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+    }
+
+    async function loadDemoImage(input, preview, status) {
+      status.textContent = "Loading demo image...";
+      const res = await fetch(demoImageUrl);
+      if (!res.ok) {
+        throw new Error(`Demo image unavailable: ${res.status}`);
+      }
+      const blob = await res.blob();
+      const file = new File([blob], demoImageName, {type: blob.type || "image/png"});
+      assignImageFile(input, file);
+      const {dataUrl} = await imagePayloadFromFile(file);
+      preview.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(file.name)}">`;
+      status.textContent = "Demo image loaded.";
+      return file;
+    }
+
     async function previewImage(input, preview) {
       try {
-        const file = input.files && input.files[0];
+        const file = selectedImageFile(input);
         if (!file) {
           preview.textContent = "No image selected.";
           return;
@@ -1225,7 +1263,7 @@ if __name__ == "__main__":
         if (!auth.user_id || !auth.password) {
           throw new Error("User ID and password are required in the Server tab.");
         }
-        const file = input.files && input.files[0];
+        const file = selectedImageFile(input);
         const {base64Image} = await imagePayloadFromFile(file);
         const prompt = promptInput.value.trim();
         if (!prompt) {
@@ -1280,6 +1318,39 @@ if __name__ == "__main__":
         status.textContent = "Copied.";
       } catch (err) {
         status.textContent = `Copy failed: ${err}`;
+      }
+    }
+
+    async function runOcrDemo() {
+      try {
+        await loadDemoImage(ocrImage, ocrPreview, ocrStatus);
+        await runVisionTask({
+          input: ocrImage,
+          promptInput: ocrPrompt,
+          output: ocrOutput,
+          status: ocrStatus,
+          label: "OCR"
+        });
+      } catch (err) {
+        ocrStatus.textContent = String(err);
+        setPanelMarkdown(ocrOutput, String(err));
+      }
+    }
+
+    async function runYoloDemo() {
+      try {
+        await loadDemoImage(yoloImage, yoloPreview, yoloStatus);
+        await runVisionTask({
+          input: yoloImage,
+          promptInput: yoloPrompt,
+          output: yoloOutput,
+          status: yoloStatus,
+          label: "Detection",
+          afterResult: drawDetectionPlot
+        });
+      } catch (err) {
+        yoloStatus.textContent = String(err);
+        setPanelMarkdown(yoloOutput, String(err));
       }
     }
 
@@ -1578,6 +1649,8 @@ if __name__ == "__main__":
     }));
     document.getElementById("copyOcr").addEventListener("click", () => copyPanelText(ocrOutput, copyOcrStatus));
     document.getElementById("copyYolo").addEventListener("click", () => copyPanelText(yoloOutput, copyYoloStatus));
+    document.getElementById("runOcrDemo").addEventListener("click", runOcrDemo);
+    document.getElementById("runYoloDemo").addEventListener("click", runYoloDemo);
     document.getElementById("loadHistoryPrompt1").addEventListener("click", () => loadHistory(prompt1));
     document.getElementById("loadHistoryPrompt2").addEventListener("click", () => loadHistory(prompt2));
     document.getElementById("startOllama").addEventListener("click", () => postControl("/api/start-ollama", "Starting Ollama"));
@@ -2556,6 +2629,19 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if self.path == "/sample/beatles_single_abbey.png":
+            sample_path = SAMPLE_DIR / "beatles_single_abbey.png"
+            try:
+                body = sample_path.read_bytes()
+            except OSError:
+                self.send_json({"error": "sample image not found"}, HTTPStatus.NOT_FOUND)
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path == "/health":
             self.send_json({"ok": True, **status_payload()})
             return
@@ -2803,6 +2889,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
     PROMPT_HISTORY_FILE.touch(exist_ok=True)
     ACCESS_LOG_FILE.touch(exist_ok=True)
     ensure_api_key_conf()
