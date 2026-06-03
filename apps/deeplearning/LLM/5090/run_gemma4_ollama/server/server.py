@@ -431,6 +431,19 @@ INDEX_HTML = """<!doctype html>
       height: auto;
       display: block;
     }
+    .clipboard-box {
+      margin-top: 10px;
+    }
+    .clipboard-box label {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .clipboard-box textarea {
+      min-height: 92px;
+    }
     .demo-button {
       border-color: #255f99;
       color: #255f99;
@@ -649,6 +662,14 @@ INDEX_HTML = """<!doctype html>
         </div>
         <div>
           <textarea id="ocrPrompt">Extract all readable text from this image. Preserve line breaks where useful. If the image contains Korean text, return Korean text as accurately as possible.</textarea>
+          <div class="clipboard-box">
+            <label for="ocrClipboardText">Clipboard Text</label>
+            <textarea id="ocrClipboardText"></textarea>
+            <div class="row">
+              <button id="pasteOcrClipboard" type="button">Paste Clipboard</button>
+              <span id="ocrClipboardStatus"></span>
+            </div>
+          </div>
           <div class="answer-actions">
             <button id="copyOcr">Copy OCR Result</button>
             <span id="copyOcrStatus"></span>
@@ -673,6 +694,14 @@ INDEX_HTML = """<!doctype html>
         </div>
         <div>
           <textarea id="yoloPrompt">Analyze this image like an object detector. Return only concise JSON. Use this schema: {"objects":[{"label":"object name","count":1,"confidence":0.0,"bbox":{"x":0.0,"y":0.0,"width":0.0,"height":0.0},"location":"short phrase"}],"summary":"short summary"}. bbox values must be normalized 0.0 to 1.0 relative to image width and height.</textarea>
+          <div class="clipboard-box">
+            <label for="yoloClipboardText">Clipboard Text</label>
+            <textarea id="yoloClipboardText"></textarea>
+            <div class="row">
+              <button id="pasteYoloClipboard" type="button">Paste Clipboard</button>
+              <span id="yoloClipboardStatus"></span>
+            </div>
+          </div>
           <div class="answer-actions">
             <button id="copyYolo">Copy Detection Result</button>
             <span id="copyYoloStatus"></span>
@@ -751,12 +780,16 @@ INDEX_HTML = """<!doctype html>
     const ocrImage = document.getElementById("ocrImage");
     const ocrPreview = document.getElementById("ocrPreview");
     const ocrPrompt = document.getElementById("ocrPrompt");
+    const ocrClipboardText = document.getElementById("ocrClipboardText");
+    const ocrClipboardStatus = document.getElementById("ocrClipboardStatus");
     const ocrOutput = document.getElementById("ocrOutput");
     const ocrStatus = document.getElementById("ocrStatus");
     const copyOcrStatus = document.getElementById("copyOcrStatus");
     const yoloImage = document.getElementById("yoloImage");
     const yoloPreview = document.getElementById("yoloPreview");
     const yoloPrompt = document.getElementById("yoloPrompt");
+    const yoloClipboardText = document.getElementById("yoloClipboardText");
+    const yoloClipboardStatus = document.getElementById("yoloClipboardStatus");
     const yoloOutput = document.getElementById("yoloOutput");
     const yoloStatus = document.getElementById("yoloStatus");
     const copyYoloStatus = document.getElementById("copyYoloStatus");
@@ -992,6 +1025,19 @@ if __name__ == "__main__":
       textarea.select();
       document.execCommand("copy");
       textarea.remove();
+    }
+
+    async function pasteClipboardText(target, status) {
+      status.textContent = "Reading clipboard...";
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.readText) {
+          throw new Error("Clipboard read is unavailable in this browser context.");
+        }
+        target.value = await navigator.clipboard.readText();
+        status.textContent = target.value.trim() ? "Pasted." : "Clipboard is empty.";
+      } catch (err) {
+        status.textContent = String(err);
+      }
     }
 
     async function copyAnswer() {
@@ -1252,7 +1298,16 @@ if __name__ == "__main__":
       image.src = dataUrl;
     }
 
-    async function runVisionTask({input, promptInput, output, status, label, afterResult}) {
+    function visionPrompt(promptInput, clipboardInput) {
+      const prompt = promptInput.value.trim();
+      const clipboardText = clipboardInput ? clipboardInput.value.trim() : "";
+      if (!clipboardText) {
+        return prompt;
+      }
+      return `${prompt}\n\nClipboard text:\n${clipboardText}`;
+    }
+
+    async function runVisionTask({input, promptInput, clipboardInput, output, status, label, afterResult}) {
       const startedAt = performance.now();
       let requestStartedAt = 0;
       let requestTimer = null;
@@ -1265,7 +1320,7 @@ if __name__ == "__main__":
         }
         const file = selectedImageFile(input);
         const {base64Image} = await imagePayloadFromFile(file);
-        const prompt = promptInput.value.trim();
+        const prompt = visionPrompt(promptInput, clipboardInput);
         if (!prompt) {
           throw new Error("Prompt is required.");
         }
@@ -1327,6 +1382,7 @@ if __name__ == "__main__":
         await runVisionTask({
           input: ocrImage,
           promptInput: ocrPrompt,
+          clipboardInput: ocrClipboardText,
           output: ocrOutput,
           status: ocrStatus,
           label: "OCR"
@@ -1343,6 +1399,7 @@ if __name__ == "__main__":
         await runVisionTask({
           input: yoloImage,
           promptInput: yoloPrompt,
+          clipboardInput: yoloClipboardText,
           output: yoloOutput,
           status: yoloStatus,
           label: "Detection",
@@ -1635,6 +1692,7 @@ if __name__ == "__main__":
     document.getElementById("runOcr").addEventListener("click", () => runVisionTask({
       input: ocrImage,
       promptInput: ocrPrompt,
+      clipboardInput: ocrClipboardText,
       output: ocrOutput,
       status: ocrStatus,
       label: "OCR"
@@ -1642,6 +1700,7 @@ if __name__ == "__main__":
     document.getElementById("runYolo").addEventListener("click", () => runVisionTask({
       input: yoloImage,
       promptInput: yoloPrompt,
+      clipboardInput: yoloClipboardText,
       output: yoloOutput,
       status: yoloStatus,
       label: "Detection",
@@ -1649,6 +1708,8 @@ if __name__ == "__main__":
     }));
     document.getElementById("copyOcr").addEventListener("click", () => copyPanelText(ocrOutput, copyOcrStatus));
     document.getElementById("copyYolo").addEventListener("click", () => copyPanelText(yoloOutput, copyYoloStatus));
+    document.getElementById("pasteOcrClipboard").addEventListener("click", () => pasteClipboardText(ocrClipboardText, ocrClipboardStatus));
+    document.getElementById("pasteYoloClipboard").addEventListener("click", () => pasteClipboardText(yoloClipboardText, yoloClipboardStatus));
     document.getElementById("runOcrDemo").addEventListener("click", runOcrDemo);
     document.getElementById("runYoloDemo").addEventListener("click", runYoloDemo);
     document.getElementById("loadHistoryPrompt1").addEventListener("click", () => loadHistory(prompt1));
