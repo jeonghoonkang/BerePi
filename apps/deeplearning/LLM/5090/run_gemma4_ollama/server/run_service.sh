@@ -20,6 +20,57 @@ export MODEL_SELECTION_FILE
 
 OLLAMA_PID=""
 
+port_is_open() {
+  python3 - "$1" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.settimeout(1)
+    raise SystemExit(0 if sock.connect_ex(("127.0.0.1", port)) == 0 else 1)
+PY
+}
+
+port_owner() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "sport = :${port}" 2>/dev/null || true
+    return 0
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -ltnp 2>/dev/null | awk -v port=":${port}" '$4 ~ port "$"'
+  fi
+}
+
+server_is_healthy() {
+  curl -fsS --max-time 2 "http://127.0.0.1:${GEMMA4_SERVER_PORT}/health" >/dev/null 2>&1
+}
+
+ensure_server_port_available() {
+  if ! port_is_open "${GEMMA4_SERVER_PORT}"; then
+    return 0
+  fi
+
+  if server_is_healthy; then
+    echo "Gemma4 service is already running at http://127.0.0.1:${GEMMA4_SERVER_PORT}"
+    echo "To restart it, stop the existing service first:"
+    echo "  ${APP_DIR}/stop.sh"
+    exit 0
+  fi
+
+  echo "Port ${GEMMA4_SERVER_PORT} is already in use, so Gemma4 service cannot start." >&2
+  echo "Process using the port:" >&2
+  port_owner "${GEMMA4_SERVER_PORT}" >&2
+  echo "Use another port, for example:" >&2
+  echo "  GEMMA4_SERVER_PORT=8083 bash ${APP_DIR}/run_service.sh" >&2
+  exit 1
+}
+
 find_ollama_bin() {
   if [[ -n "${OLLAMA_BIN:-}" ]] && [[ -x "${OLLAMA_BIN}" ]]; then
     printf '%s\n' "${OLLAMA_BIN}"
@@ -256,4 +307,5 @@ if [[ "${AUTO_PULL:-1}" == "1" ]]; then
   ensure_ollama_model
 fi
 
+ensure_server_port_available
 exec python3 "${APP_DIR}/server.py"
