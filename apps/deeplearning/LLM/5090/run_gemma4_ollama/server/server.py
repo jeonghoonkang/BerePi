@@ -652,6 +652,16 @@ INDEX_HTML = """<!doctype html>
       <p>../client OCR workflow: upload an image and extract readable text through the current Gemma4 vision model.</p>
       <div class="vision-grid">
         <div>
+          <div class="auth-box">
+            <div>
+              <label for="ocrUserId">User ID</label>
+              <input id="ocrUserId" autocomplete="username">
+            </div>
+            <div>
+              <label for="ocrPassword">Password</label>
+              <input id="ocrPassword" type="password" autocomplete="current-password">
+            </div>
+          </div>
           <input id="ocrImage" type="file" accept="image/*">
           <div class="vision-preview" id="ocrPreview">No image selected.</div>
           <div class="row">
@@ -684,6 +694,16 @@ INDEX_HTML = """<!doctype html>
       <p>../client YOLO detection workflow: upload an image and ask the current model for object-detection style results.</p>
       <div class="vision-grid">
         <div>
+          <div class="auth-box">
+            <div>
+              <label for="yoloUserId">User ID</label>
+              <input id="yoloUserId" autocomplete="username">
+            </div>
+            <div>
+              <label for="yoloPassword">Password</label>
+              <input id="yoloPassword" type="password" autocomplete="current-password">
+            </div>
+          </div>
           <input id="yoloImage" type="file" accept="image/*">
           <div class="vision-preview" id="yoloPreview">No image selected.</div>
           <div class="row">
@@ -764,6 +784,10 @@ INDEX_HTML = """<!doctype html>
     const pythonCode = document.getElementById("pythonCode");
     const userId = document.getElementById("userId");
     const password = document.getElementById("password");
+    const ocrUserId = document.getElementById("ocrUserId");
+    const ocrPassword = document.getElementById("ocrPassword");
+    const yoloUserId = document.getElementById("yoloUserId");
+    const yoloPassword = document.getElementById("yoloPassword");
     const prompt1 = document.getElementById("prompt1");
     const prompt2 = document.getElementById("prompt2");
     const promptHistory = document.getElementById("promptHistory");
@@ -1009,6 +1033,38 @@ if __name__ == "__main__":
 
     function setPanelMarkdown(panel, value) {
       panel.innerHTML = renderMarkdown(value);
+    }
+
+    const authFields = {
+      userId: [userId, ocrUserId, yoloUserId],
+      password: [password, ocrPassword, yoloPassword]
+    };
+
+    function syncAuthFields(source, fields) {
+      for (const field of fields) {
+        if (field !== source) {
+          field.value = source.value;
+        }
+      }
+    }
+
+    function bindAuthSync() {
+      for (const field of authFields.userId) {
+        field.addEventListener("input", () => syncAuthFields(field, authFields.userId));
+      }
+      for (const field of authFields.password) {
+        field.addEventListener("input", () => syncAuthFields(field, authFields.password));
+      }
+    }
+
+    function firstAuthValue(fields) {
+      const filled = fields.find((field) => field.value.trim());
+      return filled ? filled.value.trim() : "";
+    }
+
+    function firstPasswordValue(fields) {
+      const filled = fields.find((field) => field.value);
+      return filled ? filled.value : "";
     }
 
     async function copyText(value) {
@@ -1380,7 +1436,7 @@ if __name__ == "__main__":
       try {
         const auth = authPayload();
         if (!auth.user_id || !auth.password) {
-          throw new Error("User ID and password are required in the Server tab.");
+          throw new Error("User ID and password are required.");
         }
         const file = selectedImageFile(input);
         const {base64Image} = await imagePayloadFromFile(file);
@@ -1477,8 +1533,8 @@ if __name__ == "__main__":
 
     function authPayload() {
       return {
-        user_id: userId.value.trim(),
-        password: password.value
+        user_id: firstAuthValue(authFields.userId),
+        password: firstPasswordValue(authFields.password)
       };
     }
 
@@ -1811,6 +1867,7 @@ if __name__ == "__main__":
     loginSessionButton.addEventListener("click", loginSession);
     logoutSessionButton.addEventListener("click", logoutSession);
     saveUserButton.addEventListener("click", saveUser);
+    bindAuthSync();
     renderPythonCode();
     refreshPromptHistory();
     refreshStatus();
