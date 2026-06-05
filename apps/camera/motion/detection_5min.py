@@ -26,6 +26,7 @@ DEFAULT_CONFIG_PATH = APP_DIR / "conf_connect_model.conf"
 DEFAULT_MOTION_DIR = Path("/var/lib/motion")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 DEFAULT_CRON_LOG_PATH = APP_DIR / "logs" / "detection_5min.log"
+MODEL_FAILURE_ALERT_INTERVAL_SECONDS = 60 * 60
 
 
 @dataclass
@@ -53,6 +54,7 @@ class AppConfig:
     lookback_minutes: int
     recursive: bool
     event_log_path: Path
+    model_failure_alert_state_path: Path
 
 
 def get_config_value(section: configparser.SectionProxy, key: str, default: str = "") -> str:
@@ -98,6 +100,7 @@ def load_config(config_path: Path) -> AppConfig:
     event_log_path = Path(get_config_value(motion_section, "event_log_path", str(APP_DIR / "person_detected_events.jsonl")))
     if not event_log_path.is_absolute():
         event_log_path = (config_path.parent / event_log_path).resolve()
+    model_failure_alert_state_path = event_log_path.with_name("model_failure_alert_state.json")
 
     return AppConfig(
         model=ModelConfig(
@@ -117,6 +120,7 @@ def load_config(config_path: Path) -> AppConfig:
         lookback_minutes=get_config_int(motion_section, "lookback_minutes", 5),
         recursive=get_config_bool(motion_section, "recursive", False),
         event_log_path=event_log_path.expanduser(),
+        model_failure_alert_state_path=model_failure_alert_state_path.expanduser(),
     )
 
 
@@ -428,6 +432,82 @@ def send_telegram_photo(config: TelegramConfig, event: dict[str, Any]) -> None:
     response.raise_for_status()
 
 
+def send_telegram_message(config: TelegramConfig, text: str) -> None:
+    requests_module = get_requests_module()
+    if not config.token or not config.chat_id:
+        raise ValueError("telegram bot_token/chat_id is empty")
+
+    url = f"https://api.telegram.org/bot{config.token}/sendMessage"
+    response = requests_module.post(
+        url,
+        data={"chat_id": config.chat_id, "text": text},
+        timeout=max(1, config.timeout_seconds),
+    )
+    response.raise_for_status()
+
+
+def load_last_model_failure_alert_epoch(state_path: Path) -> float:
+    if not state_path.exists():
+        return 0.0
+    try:
+        with state_path.open("r", encoding="utf-8") as state_file:
+            data = json.load(state_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"model failure alert state read failed: {state_path}: {exc}", file=sys.stderr)
+        return 0.0
+
+    try:
+        return float(data.get("last_sent_epoch", 0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def save_model_failure_alert_epoch(state_path: Path, sent_epoch: float) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "last_sent_epoch": sent_epoch,
+        "last_sent_at": format_time(datetime.fromtimestamp(sent_epoch).astimezone()),
+    }
+    with state_path.open("w", encoding="utf-8") as state_file:
+        json.dump(payload, state_file, ensure_ascii=False, sort_keys=True)
+        state_file.write("\n")
+
+
+def notify_model_failure(config: AppConfig, image_path: Path, exc: Exception, dry_run: bool = False) -> bool:
+    now_epoch = time.time()
+    last_sent_epoch = load_last_model_failure_alert_epoch(config.model_failure_alert_state_path)
+    if now_epoch - last_sent_epoch < MODEL_FAILURE_ALERT_INTERVAL_SECONDS:
+        print("model failure telegram alert skipped: already sent within 1 hour")
+        return False
+
+    text = "\n".join(
+        [
+            "Motion model run failed",
+            f"model: {config.model.model_name}",
+            f"endpoint: {config.model.endpoint_url}",
+            f"file: {image_path.name}",
+            f"time: {format_time(datetime.now().astimezone())}",
+            f"error: {str(exc)[:500]}",
+        ]
+    )
+    if dry_run:
+        print("dry-run: model failure telegram alert skipped")
+        return True
+
+    try:
+        send_telegram_message(config.telegram, text)
+    except Exception as alert_exc:
+        print(f"model failure telegram alert failed: {alert_exc}", file=sys.stderr)
+        return False
+
+    try:
+        save_model_failure_alert_epoch(config.model_failure_alert_state_path, now_epoch)
+    except OSError as state_exc:
+        print(f"model failure alert state save failed: {state_exc}", file=sys.stderr)
+    print("model failure telegram alert sent")
+    return True
+
+
 def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     recent_images = get_recent_images(config.motion_dir, config.lookback_minutes, config.recursive)
     print(f"1. {config.motion_dir} 에서 파일 가져오기 완료", flush=True)
@@ -471,6 +551,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             model_response = detect_person_via_model(image_path, config.model)
         except requests_module.RequestException as exc:
             print(f"model request failed: {image_path.name}: {exc}", file=sys.stderr)
+            notify_model_failure(config, image_path, exc, dry_run=dry_run)
             continue
         except OSError as exc:
             print(f"image read failed: {image_path.name}: {exc}", file=sys.stderr)
