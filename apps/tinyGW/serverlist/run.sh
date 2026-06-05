@@ -9,11 +9,11 @@ PORT="${SERVERLIST_PORT:-2298}"
 PYTHON_BIN="${PYTHON:-python3}"
 
 if command -v streamlit >/dev/null 2>&1; then
-  exec streamlit run app.py --server.address "$HOST" --server.port "$PORT"
+  exec streamlit run app.py --server.address "$HOST" --server.port "$PORT" "$@"
 fi
 
 if "$PYTHON_BIN" -m streamlit --version >/dev/null 2>&1; then
-  exec "$PYTHON_BIN" -m streamlit run app.py --server.address "$HOST" --server.port "$PORT"
+  exec "$PYTHON_BIN" -m streamlit run app.py --server.address "$HOST" --server.port "$PORT" "$@"
 fi
 
 echo "Streamlit is not installed or not available in PATH." >&2

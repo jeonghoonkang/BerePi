@@ -10,7 +10,6 @@ from typing import Optional
 from uuid import uuid4
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -18,11 +17,12 @@ DATA_FILE = APP_DIR / "servers.json"
 
 DEFAULT_HEX_COUNT = 24
 MAX_HEX_COUNT = 200
-HEX_RADIUS = 52
+HEX_RADIUS = 35
 HEX_GAP = 10
 MAP_MAX_WIDTH = 980
 MAP_MAX_HEIGHT = 640
-MAP_MIN_RADIUS = 20
+MAP_MIN_RADIUS = 13
+SERVER_ITEM_OPTIONS = ["GPU 5090", "camera", "nextcloud", "raspberrypi", "GPU 4090", "GPU spark"]
 
 
 def now_text() -> str:
@@ -114,6 +114,7 @@ def normalize_data(data: dict) -> dict:
         data["zones"][zone_id].setdefault("servers", [])
         for server in data["zones"][zone_id]["servers"]:
             server.setdefault("id", uuid4().hex)
+            server.setdefault("item", "")
             server.setdefault("status", "active")
             server.setdefault("memo", "")
             server.setdefault("created_at", now_text())
@@ -174,6 +175,7 @@ def server_rows(servers: list[dict]) -> list[dict]:
     return [
         {
             "서버명": server.get("name", ""),
+            "항목": server.get("item", ""),
             "IP주소": server.get("private_ip", ""),
             "Public IP": server.get("public_ip", ""),
             "포트": server.get("port", ""),
@@ -186,6 +188,28 @@ def server_rows(servers: list[dict]) -> list[dict]:
 
 def all_server_count(data: dict) -> int:
     return sum(len(zone.get("servers", [])) for zone in data["zones"].values())
+
+
+def item_server_rows(data: dict, selected_item: str) -> list[dict]:
+    rows: list[dict] = []
+    for zone_id in current_zone_ids(data):
+        zone = data["zones"][zone_id]
+        for server in zone.get("servers", []):
+            if server.get("item", "") != selected_item:
+                continue
+            rows.append(
+                {
+                    "서버그룹": zone_id,
+                    "서버그룹 이름": zone.get("name", f"Zone {zone_id}"),
+                    "서버명": server.get("name", ""),
+                    "IP주소": server.get("private_ip", ""),
+                    "Public IP": server.get("public_ip", ""),
+                    "포트": server.get("port", ""),
+                    "상태": server.get("status", "unknown"),
+                    "메모": server.get("memo", ""),
+                }
+            )
+    return rows
 
 
 def move_removed_zone_servers(data: dict, next_zone_ids: list[str]) -> None:
@@ -237,7 +261,7 @@ def hex_points(cx: float, cy: float, radius: float) -> str:
     return " ".join(points)
 
 
-def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
+def build_hex_map(data: dict, selected_zone: str) -> str:
     zones = data["zones"]
     grid = data["grid"]
     columns = int(grid["columns"])
@@ -259,14 +283,15 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
         server_count = len(zones[zone_id]["servers"])
         zone_name = zones[zone_id].get("name", f"Zone {zone_id}")
         selected_class = " selected" if zone_id == selected_zone else ""
-        href = f"?zone={html.escape(zone_id)}"
+        zone_attr = html.escape(zone_id, quote=True)
+        href = f"?zone={zone_attr}"
         title = html.escape(f"{zone_name} / {server_count} servers")
         label = html.escape(zone_id)
         count = html.escape(str(server_count))
         points = hex_points(cx, cy, radius)
         hexes.append(
             f"""
-            <a href="{href}" target="_parent" class="hex-link" aria-label="{title}">
+            <a href="{href}" class="hex-link" aria-label="{title}">
               <polygon class="hex-cell{selected_class}" points="{points}">
                 <title>{title}</title>
               </polygon>
@@ -286,7 +311,8 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
       }}
       .server-map {{
         display: block;
-        width: 100%;
+        width: {width}px;
+        max-width: 100%;
         height: auto;
         max-height: {MAP_MAX_HEIGHT}px;
         background: #f7f9fb;
@@ -301,6 +327,9 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
         transform-box: fill-box;
         transform-origin: center;
       }}
+      .hex-link {{
+        cursor: pointer;
+      }}
       .hex-link:hover .hex-cell {{
         fill: #d6e8f8;
         stroke: #2f73b8;
@@ -313,13 +342,11 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
       .hex-label {{
         fill: #16202a;
         font: 700 18px sans-serif;
-        pointer-events: none;
         text-anchor: middle;
       }}
       .hex-count {{
         fill: #445568;
         font: 600 14px sans-serif;
-        pointer-events: none;
         text-anchor: middle;
       }}
       .selected ~ .hex-label,
@@ -334,7 +361,70 @@ def build_hex_map(data: dict, selected_zone: str) -> tuple[str, int]:
       </svg>
     </div>
     """
-    return map_html, min(max(height + 28, 260), MAP_MAX_HEIGHT + 42)
+    return map_html
+
+
+def render_hex_map(data: dict, selected_zone: str) -> None:
+    zones = data["zones"]
+    grid = data["grid"]
+    columns = int(grid["columns"])
+    zone_ids = current_zone_ids(data)
+    rows = grid_rows(int(grid["hex_count"]), columns)
+
+    st.markdown(
+        """
+        <style>
+          .st-key-hex_map {
+            background: #f7f9fb;
+            border: 1px solid #d8e0ea;
+            border-radius: 8px;
+            padding: 12px 14px 18px;
+            width: fit-content;
+            max-width: 100%;
+          }
+          .st-key-hex_map [data-testid="stHorizontalBlock"] {
+            gap: 0.35rem;
+            margin-bottom: -0.35rem;
+          }
+          .st-key-hex_map button {
+            width: 70px;
+            min-width: 70px;
+            height: 62px;
+            min-height: 62px;
+            padding: 0;
+            border-radius: 0;
+            clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+            font-weight: 700;
+            line-height: 1.15;
+            white-space: pre-line;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="hex_map"):
+        for row in range(rows):
+            start = row * columns
+            row_zone_ids = zone_ids[start : start + columns]
+            if not row_zone_ids:
+                continue
+
+            layout = [0.45] + [1] * len(row_zone_ids) if row % 2 else [1] * len(row_zone_ids)
+            row_columns = st.columns(layout, gap="small")
+            button_columns = row_columns[1:] if row % 2 else row_columns
+
+            for zone_id, column in zip(row_zone_ids, button_columns):
+                server_count = len(zones[zone_id]["servers"])
+                button_type = "primary" if zone_id == selected_zone else "secondary"
+                if column.button(
+                    f"{zone_id}\n{server_count}",
+                    key=f"hex_zone_{zone_id}",
+                    type=button_type,
+                    use_container_width=False,
+                ):
+                    set_query_zone(zone_id)
+                    st.rerun()
 
 
 def render_initial_setup() -> None:
@@ -369,7 +459,7 @@ def render_initial_setup() -> None:
 
 def render_grid_settings(data: dict) -> None:
     grid = data["grid"]
-    st.subheader("Hexagon 구성")
+    st.subheader("서버그룹(Hexagon) 구성")
     st.caption("개수를 줄이면 사라지는 조각의 서버는 마지막 조각으로 이동합니다.")
 
     action_col1, action_col2, action_col3 = st.columns([1, 1, 2])
@@ -427,7 +517,7 @@ def render_grid_settings(data: dict) -> None:
 def render_zone_settings(data: dict, zone_id: str) -> None:
     zone = data["zones"][zone_id]
     with st.form("zone_settings"):
-        st.subheader("선택 Hexagon 편집")
+        st.subheader("서버그룹 편집")
         col1, col2 = st.columns([1, 2])
         with col1:
             zone_name = st.text_input("조각 이름", value=zone.get("name", f"Zone {zone_id}"))
@@ -450,6 +540,7 @@ def render_add_form(data: dict, zone_id: str) -> None:
             name = st.text_input("서버명")
             private_ip = st.text_input("IP주소", placeholder="192.168.0.10")
             status = st.selectbox("상태", ["active", "standby", "maintenance", "offline"], index=0)
+            item = st.selectbox("항목", SERVER_ITEM_OPTIONS, index=0)
         with col2:
             public_ip = st.text_input("Public IP", placeholder="203.0.113.10")
             port = st.number_input("포트번호", min_value=1, max_value=65535, value=22, step=1)
@@ -470,6 +561,7 @@ def render_add_form(data: dict, zone_id: str) -> None:
                     "private_ip": private_ip.strip(),
                     "public_ip": public_ip.strip(),
                     "port": int(port),
+                    "item": item,
                     "status": status,
                     "memo": memo.strip(),
                     "created_at": now_text(),
@@ -503,6 +595,9 @@ def render_edit_form(data: dict, zone_id: str) -> None:
             current_status = server.get("status", "active")
             status_index = status_values.index(current_status) if current_status in status_values else 0
             status = st.selectbox("상태", status_values, index=status_index)
+            current_item = server.get("item", "")
+            item_index = SERVER_ITEM_OPTIONS.index(current_item) if current_item in SERVER_ITEM_OPTIONS else 0
+            item = st.selectbox("항목", SERVER_ITEM_OPTIONS, index=item_index)
         with col2:
             public_ip = st.text_input("Public IP", value=server.get("public_ip", ""))
             port = st.number_input("포트번호", min_value=1, max_value=65535, value=int(server.get("port", 22)), step=1)
@@ -526,6 +621,7 @@ def render_edit_form(data: dict, zone_id: str) -> None:
                 "private_ip": private_ip.strip(),
                 "public_ip": public_ip.strip(),
                 "port": int(port),
+                "item": item,
                 "status": status,
                 "memo": memo.strip(),
                 "updated_at": now_text(),
@@ -546,6 +642,18 @@ def render_edit_form(data: dict, zone_id: str) -> None:
         st.rerun()
 
 
+def render_item_server_list(data: dict) -> None:
+    st.subheader("항목별 서버 리스트")
+    selected_item = st.selectbox("항목 선택", SERVER_ITEM_OPTIONS, key="item_server_filter")
+    rows = item_server_rows(data, selected_item)
+
+    if not rows:
+        st.info(f"{selected_item} 항목에 등록된 서버가 없습니다.")
+        return
+
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
 def main() -> None:
     st.set_page_config(page_title="tinyGW Server List", page_icon=":globe_with_meridians:", layout="wide")
     data = load_data()
@@ -556,7 +664,6 @@ def main() -> None:
 
     selected_zone = get_query_zone(data)
     selected = data["zones"][selected_zone]
-    map_html, map_height = build_hex_map(data, selected_zone)
 
     st.title("tinyGW Server List")
     st.caption("Hexagon 조각으로 위치를 나누고, 조각별 서버 목록을 관리합니다.")
@@ -569,8 +676,8 @@ def main() -> None:
 
     map_col, detail_col = st.columns([1.35, 1])
     with map_col:
-        st.subheader("Hexagon 위치")
-        components.html(map_html, height=map_height, scrolling=False)
+        st.subheader("서버그룹")
+        render_hex_map(data, selected_zone)
         st.caption("hexagon 조각을 클릭하면 해당 위치의 서버 세부 리스트가 열립니다.")
 
     with detail_col:
@@ -600,6 +707,9 @@ def main() -> None:
             mime="application/json",
             use_container_width=True,
         )
+
+    st.divider()
+    render_item_server_list(data)
 
 
 if __name__ == "__main__":
