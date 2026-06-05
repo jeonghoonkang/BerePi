@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--iptime-list",
         action="store_true",
-        help="Send ipTIME ping status and device list to WebDAV, then exit.",
+        help="Send ipTIME ping status and device list to WebDAV before the normal PulseDAV report.",
     )
     return parser.parse_args()
 
@@ -77,13 +77,14 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -
 
 def main() -> int:
     args = parse_args()
+    settings = load_settings(args.config)
     if args.print_crontab:
         print("\n".join(build_crontab_lines(args.config, args.interval_minutes)))
         return 0
 
     if args.iptime_list:
         try:
-            result = send_iptime_list(load_settings(args.config), settings_path=args.config)
+            result = send_iptime_list(settings, settings_path=args.config)
         except WebDAVConnectionError as exc:
             print(str(exc))
             return 1
@@ -98,7 +99,7 @@ def main() -> int:
         print(f"- 저장 디렉토리: {result['remote_directory']}")
         print(f"- 저장 경로: {result['remote_path']}")
         print(f"- 전체 URL: {result['destination_url']}")
-        return 0
+        print()
 
     if args.loop:
         run_loop(args.interval_minutes, settings_path=args.config)
@@ -108,7 +109,7 @@ def main() -> int:
         print(f"reboot 시점: {current_time_text()}")
 
     try:
-        result = send_once(load_settings(args.config), settings_path=args.config, reboot_run=args.reboot)
+        result = send_once(settings, settings_path=args.config, reboot_run=args.reboot)
     except WebDAVConnectionError as exc:
         print(str(exc))
         return 1

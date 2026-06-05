@@ -62,7 +62,7 @@ python3 sender.py --print-crontab
 python3 sender.py --print-crontab --config /path/to/custom-settings.json
 ```
 
-ipTIME ping 상태와 LAN 장치 목록을 WebDAV로 전송하려면:
+ipTIME ping 상태와 LAN 장치 목록을 WebDAV로 먼저 전송한 뒤 일반 PulseDAV 정보도 이어서 전송하려면:
 
 ```bash
 python3 sender.py --iptime-list
