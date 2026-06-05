@@ -2,7 +2,7 @@
 
 `story_backbone.md`를 기준으로 책 초안을 생성하는 로컬 웹 에이전트입니다.
 
-<img width="1408" height="768" alt="image" src="https://github.com/user-attachments/assets/1e8821b5-b663-42b8-8264-fbebab3b71e8" />
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/1e8821b5-b663-42b8-8264-fbebab3b71e8" />
 
 
 ## 흐름
