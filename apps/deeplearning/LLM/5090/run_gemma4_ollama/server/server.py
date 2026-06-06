@@ -1439,6 +1439,7 @@ if __name__ == "__main__":
     async function runVisionTask({input, promptInput, clipboardInput, output, status, label, afterResult}) {
       const startedAt = performance.now();
       let requestStartedAt = 0;
+      let queueSnapshot = {text: "대기중인 답변: 확인 중"};
       let requestTimer = null;
       status.textContent = `${label} preparing...`;
       output.textContent = `${label} preparing...`;
@@ -1453,10 +1454,11 @@ if __name__ == "__main__":
         if (!prompt) {
           throw new Error("Prompt is required.");
         }
+        queueSnapshot = await promptQueueSnapshot();
         requestStartedAt = performance.now();
         function updateRequestTimer() {
           const elapsedSeconds = Math.floor((performance.now() - requestStartedAt) / 1000);
-          const message = `${label} running... elapsed ${elapsedSeconds}s`;
+          const message = `${label} thinking... ${queueSnapshot.text} | elapsed ${elapsedSeconds}s`;
           status.textContent = message;
           setPanelMarkdown(output, message);
         }
@@ -1577,6 +1579,28 @@ if __name__ == "__main__":
       return date.toLocaleTimeString([], {hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"});
     }
 
+    async function promptQueueSnapshot() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        const queue = data.prompt_queue || {};
+        const pendingCount = Number(queue.pending_count || 0);
+        const waitingAnswers = pendingCount;
+        const estimatedWait = Number(queue.estimated_wait_seconds || 0);
+        return {
+          waitingAnswers,
+          estimatedWait,
+          text: `대기중인 답변: ${waitingAnswers}개${estimatedWait > 0 ? ` | 예상 대기: ${estimatedWait.toFixed(2)}s` : ""}`,
+        };
+      } catch (err) {
+        return {
+          waitingAnswers: 0,
+          estimatedWait: 0,
+          text: "대기중인 답변: 확인 불가",
+        };
+      }
+    }
+
     async function refreshPromptHistory() {
       try {
         const res = await fetch("/api/prompt-history");
@@ -1631,12 +1655,13 @@ if __name__ == "__main__":
       const startedAt = performance.now();
       const startedDate = new Date();
       const sendButtonLabel = sendButton.textContent;
+      let queueSnapshot = {text: "대기중인 답변: 확인 중"};
       let busyTimer = null;
       function updateBusy() {
         const elapsedSeconds = Math.floor((performance.now() - startedAt) / 1000);
-        const message = `Running... started ${formatRunStartedAt(startedDate)} | elapsed ${elapsedSeconds}s`;
+        const message = `Thinking... ${queueSnapshot.text} | started ${formatRunStartedAt(startedDate)} | elapsed ${elapsedSeconds}s`;
         busy.textContent = message;
-        sendButton.textContent = "Running...";
+        sendButton.textContent = "Thinking...";
         answer.textContent = message;
       }
       const prompts = [prompt1.value, prompt2.value].map((value) => value.trim()).filter(Boolean);
@@ -1649,6 +1674,8 @@ if __name__ == "__main__":
         if (!auth.user_id || !auth.password) {
           throw new Error("User ID and password are required.");
         }
+        queueSnapshot = await promptQueueSnapshot();
+        updateBusy();
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
