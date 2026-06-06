@@ -902,14 +902,17 @@ if __name__ == "__main__":
         {value: "cpu", label: "CPU only"}
       ];
       for (const gpu of data.gpus || []) {
-        if (gpu.selectable) options.push({value: String(gpu.index), label: gpuLabel(gpu)});
+        options.push({value: String(gpu.index), label: gpuLabel(gpu), selectable: Boolean(gpu.selectable)});
       }
       gpuSelect.innerHTML = options
-        .map((option) => `<option value="${option.value}">${option.label}</option>`)
+        .map((option) => `<option value="${option.value}"${option.selectable === false ? " disabled" : ""}>${option.label}</option>`)
         .join("");
       gpuSelect.value = options.some((option) => option.value === selected) ? selected : "auto";
       if (gpuStatus) {
-        gpuStatus.textContent = data.gpu_detection_error ? `GPU detection warning: ${data.gpu_detection_error}` : "";
+        const gpuCount = Array.isArray(data.gpus) ? data.gpus.length : 0;
+        gpuStatus.textContent = data.gpu_detection_error
+          ? `GPU detection warning: ${data.gpu_detection_error}`
+          : `${gpuCount} GPU device(s) detected.`;
       }
     }
 
@@ -1735,6 +1738,11 @@ if __name__ == "__main__":
         answer.textContent = message;
       }
       const prompts = [prompt1.value, prompt2.value].map((value) => value.trim()).filter(Boolean);
+      if (!prompts.length) {
+        setAnswerMarkdown("Prompt is required.");
+        busy.textContent = "Prompt is required.";
+        return;
+      }
       sendButton.disabled = true;
       copyStatus.textContent = "";
       updateBusy();
@@ -1744,13 +1752,21 @@ if __name__ == "__main__":
         if (!auth.user_id || !auth.password) {
           throw new Error("User ID and password are required.");
         }
-        queueSnapshot = await promptQueueSnapshot();
-        updateBusy();
-        const res = await fetch("/api/generate", {
+        const payload = {
+          prompt: prompts.join("\n\n"),
+          prompts,
+          ...auth,
+        };
+        const generatePromise = fetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({prompts, ...auth})
+          body: JSON.stringify(payload)
         });
+        promptQueueSnapshot().then((snapshot) => {
+          queueSnapshot = snapshot;
+          updateBusy();
+        }).catch(() => {});
+        const res = await generatePromise;
         const data = await res.json();
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
@@ -2777,7 +2793,9 @@ def list_gpus() -> tuple[list[dict[str, Any]], str]:
             timeout=5,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-        fallback_gpus = list_pci_gpus()
+        fallback_gpus = list_nvidia_smi_l_gpus()
+        if not fallback_gpus:
+            fallback_gpus = list_pci_gpus()
         error = str(exc)
         if isinstance(exc, subprocess.CalledProcessError):
             error = exc.output.strip() or error
@@ -2806,6 +2824,31 @@ def list_gpus() -> tuple[list[dict[str, Any]], str]:
     return gpus, ""
 
 
+def list_nvidia_smi_l_gpus() -> list[dict[str, Any]]:
+    try:
+        output = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.STDOUT, text=True, timeout=5)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return []
+
+    gpus: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        match = re.match(r"GPU\s+(\d+):\s+(.+?)(?:\s+\(UUID:\s*([^)]+)\))?$", line.strip())
+        if not match:
+            continue
+        index, name, uuid = match.groups()
+        gpus.append(
+            {
+                "index": index,
+                "name": name.strip(),
+                "memory_total_mb": 0,
+                "uuid": uuid or "",
+                "source": "nvidia-smi -L",
+                "selectable": True,
+            }
+        )
+    return gpus
+
+
 def list_pci_gpus() -> list[dict[str, Any]]:
     try:
         output = subprocess.check_output(["lspci", "-D"], stderr=subprocess.DEVNULL, text=True, timeout=5)
@@ -2821,7 +2864,7 @@ def list_pci_gpus() -> list[dict[str, Any]]:
         gpus.append(
             {
                 "index": str(len(gpus)),
-                "name": description.strip(),
+                "name": description.strip() or address,
                 "bus_address": address,
                 "memory_total_mb": 0,
                 "uuid": "",
