@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import base64
 import binascii
+import datetime as dt
 import hmac
 import os
 import re
@@ -42,6 +43,7 @@ LOG_DIR = Path(__file__).resolve().with_name("logs")
 ACCESS_LOG_FILE = Path(os.getenv("GEMMA4_ACCESS_LOG_FILE", LOG_DIR / "access.jsonl"))
 SAMPLE_DIR = Path(os.getenv("GEMMA4_SAMPLE_DIR", Path(__file__).resolve().with_name("sample")))
 WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
+MACH_STATS_DIR = Path(os.getenv("GEMMA4_MACH_STATS_DIR", Path(__file__).resolve().with_name("mach_stats")))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
@@ -58,6 +60,7 @@ PROMPT_QUEUE_CONDITION = threading.Condition()
 PROMPT_QUEUE: list["PromptJob"] = []
 PROMPT_QUEUE_ACTIVE = False
 PROMPT_QUEUE_NEXT_ID = 1
+PROMPT_SPEED_STATS_LOCK = threading.RLock()
 SESSION_COOKIE_NAME = "gemma4_session"
 SESSION_TTL_SECONDS = int(os.getenv("GEMMA4_SESSION_TTL_SECONDS", "28800"))
 SESSION_LOCK = threading.RLock()
@@ -1472,11 +1475,12 @@ if __name__ == "__main__":
         const data = await res.json();
         const elapsedSeconds = (performance.now() - (requestStartedAt || startedAt)) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
-        const responseText = data.response || JSON.stringify(data, null, 2);
+        const rawResponseText = data.visible_response || data.response || JSON.stringify(data, null, 2);
+        const responseText = formatGenerateResponse(data);
         setPanelMarkdown(output, `${responseText}\n\n${resultLine(data, elapsedSeconds)}`);
         status.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
         if (afterResult) {
-          await afterResult(file, responseText);
+          await afterResult(file, rawResponseText);
         }
       } catch (err) {
         const elapsedSeconds = (performance.now() - (requestStartedAt || startedAt)) / 1000;
@@ -1549,6 +1553,24 @@ if __name__ == "__main__":
       const ip = data.server_ip || window.location.hostname || "unknown";
       const port = data.server_port || window.location.port || "unknown";
       return `Elapsed time: ${elapsedSeconds.toFixed(2)}s | Model: ${model} | IP: ${ip} | Port: ${port}`;
+    }
+
+    function formatGenerateResponse(data) {
+      const response = data.visible_response || data.response || JSON.stringify(data, null, 2);
+      const thinking = (data.thinking || "").trim();
+      const queueParts = [];
+      if (Number.isFinite(Number(data.prompts_ahead_on_enqueue))) {
+        queueParts.push(`Prompts ahead: ${data.prompts_ahead_on_enqueue}`);
+      }
+      if (Number.isFinite(Number(data.estimated_wait_seconds_on_enqueue))) {
+        queueParts.push(`Estimated wait: ${Number(data.estimated_wait_seconds_on_enqueue).toFixed(2)}s`);
+      }
+      const queueText = queueParts.length ? `Queue: ${queueParts.join(" | ")}` : "";
+      return [
+        thinking ? `## Thinking\n\n${thinking}` : "",
+        thinking ? `## Response\n\n${response}` : response,
+        queueText,
+      ].filter(Boolean).join("\n\n");
     }
 
     function formatRunStartedAt(date) {
@@ -1635,7 +1657,7 @@ if __name__ == "__main__":
         const data = await res.json();
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
-        const responseText = data.response || JSON.stringify(data, null, 2);
+        const responseText = formatGenerateResponse(data);
         setAnswerMarkdown(`${responseText}\n\n${resultLine(data, elapsedSeconds)}`);
         busy.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
       } catch (err) {
@@ -2360,13 +2382,149 @@ def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int 
         return json.loads(response.read().decode("utf-8"))
 
 
+def prompt_processing_week_start(today: dt.date | None = None) -> dt.date:
+    current = today or dt.date.today()
+    return current - dt.timedelta(days=current.weekday())
+
+
+def prompt_processing_stats_path(today: dt.date | None = None) -> Path:
+    week_start = prompt_processing_week_start(today)
+    return MACH_STATS_DIR / f"check_speed_prompt_processing_{week_start.isoformat()}.json"
+
+
+def empty_prompt_processing_stats(today: dt.date | None = None) -> dict[str, Any]:
+    week_start = prompt_processing_week_start(today)
+    week_end = week_start + dt.timedelta(days=6)
+    return {
+        "week_start_date": week_start.isoformat(),
+        "week_end_date": week_end.isoformat(),
+        "updated_at": "",
+        "sample_count": 0,
+        "total_processing_seconds": 0.0,
+        "average_processing_seconds": 0.0,
+        "min_processing_seconds": 0.0,
+        "max_processing_seconds": 0.0,
+        "last_processing_seconds": 0.0,
+        "model_counts": {},
+        "latest_samples": [],
+    }
+
+
+def read_prompt_processing_stats() -> dict[str, Any]:
+    path = prompt_processing_stats_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return empty_prompt_processing_stats()
+    if not isinstance(data, dict):
+        return empty_prompt_processing_stats()
+    stats = empty_prompt_processing_stats()
+    stats.update(data)
+    return stats
+
+
+def average_prompt_processing_seconds() -> float:
+    with PROMPT_SPEED_STATS_LOCK:
+        try:
+            return max(0.0, float(read_prompt_processing_stats().get("average_processing_seconds") or 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+
+def record_prompt_processing_time(elapsed_seconds: float, model: str) -> dict[str, Any]:
+    with PROMPT_SPEED_STATS_LOCK:
+        MACH_STATS_DIR.mkdir(parents=True, exist_ok=True)
+        stats = read_prompt_processing_stats()
+        elapsed = max(0.0, float(elapsed_seconds))
+        sample_count = int(stats.get("sample_count") or 0) + 1
+        total = float(stats.get("total_processing_seconds") or 0.0) + elapsed
+        model_counts = dict(stats.get("model_counts") or {})
+        model_key = str(model or "unknown")
+        model_counts[model_key] = int(model_counts.get(model_key) or 0) + 1
+        latest_samples = list(stats.get("latest_samples") or [])
+        latest_samples.append(
+            {
+                "processed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "elapsed_seconds": round(elapsed, 3),
+                "model": model_key,
+            }
+        )
+        stats.update(
+            {
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "sample_count": sample_count,
+                "total_processing_seconds": round(total, 3),
+                "average_processing_seconds": round(total / sample_count, 3),
+                "min_processing_seconds": round(
+                    elapsed if sample_count == 1 else min(float(stats.get("min_processing_seconds") or elapsed), elapsed),
+                    3,
+                ),
+                "max_processing_seconds": round(max(float(stats.get("max_processing_seconds") or 0.0), elapsed), 3),
+                "last_processing_seconds": round(elapsed, 3),
+                "model_counts": model_counts,
+                "latest_samples": latest_samples[-100:],
+            }
+        )
+        path = prompt_processing_stats_path()
+        temp_path = path.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_path.replace(path)
+        stats["stats_path"] = str(path)
+        return stats
+
+
+def estimated_prompt_wait_seconds(prompts_ahead: int) -> float:
+    average = average_prompt_processing_seconds()
+    if average <= 0:
+        return 0.0
+    return round(max(0, prompts_ahead) * average, 3)
+
+
+def extract_thinking_blocks(text: str) -> tuple[str, str]:
+    value = str(text or "")
+    matches = list(re.finditer(r"<think>([\s\S]*?)</think>", value, flags=re.IGNORECASE))
+    if not matches:
+        return "", value.strip()
+    thinking = "\n\n".join(str(match.group(1) or "").strip() for match in matches if str(match.group(1) or "").strip())
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", value, flags=re.IGNORECASE).strip()
+    return thinking, cleaned
+
+
+def extract_structured_thinking(data: dict[str, Any]) -> str:
+    for key in ("thinking", "thoughts", "reasoning", "reasoning_content", "thinking_text"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    message = data.get("message")
+    if isinstance(message, dict):
+        for key in ("thinking", "thoughts", "reasoning", "reasoning_content"):
+            value = message.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+
+def attach_thinking_fields(result: dict[str, Any]) -> dict[str, Any]:
+    response_text = str(result.get("response") or "")
+    structured_thinking = extract_structured_thinking(result)
+    block_thinking, visible_response = extract_thinking_blocks(response_text)
+    thinking = structured_thinking or block_thinking
+    result["thinking"] = thinking
+    result["visible_response"] = visible_response or response_text
+    result["has_thinking"] = bool(thinking)
+    return result
+
+
 def prompt_queue_status() -> dict[str, Any]:
     with PROMPT_QUEUE_CONDITION:
+        average_seconds = average_prompt_processing_seconds()
         return {
             "active": PROMPT_QUEUE_ACTIVE,
             "pending_count": len(PROMPT_QUEUE),
             "max_pending_count": PROMPT_QUEUE_MAX_SIZE,
             "pending_prompt_ids": [job.id for job in PROMPT_QUEUE],
+            "average_prompt_processing_seconds": average_seconds,
+            "estimated_wait_seconds": estimated_prompt_wait_seconds(len(PROMPT_QUEUE) + (1 if PROMPT_QUEUE_ACTIVE else 0)),
         }
 
 
@@ -2388,13 +2546,17 @@ def cancel_pending_prompts() -> dict[str, Any]:
 
 
 def queue_full_response() -> dict[str, Any]:
+    queue = prompt_queue_status()
     return {
         "response": (
             f"대기 중인 프롬프트가 {PROMPT_QUEUE_MAX_SIZE}개라 더 이상 처리하기 어렵습니다. "
             "잠시 기다린 뒤 다시 요청해 주세요."
         ),
         "queue_full": True,
-        "queue": prompt_queue_status(),
+        "pending_prompt_count": queue["pending_count"],
+        "prompts_ahead": queue["pending_count"] + (1 if queue["active"] else 0),
+        "estimated_wait_seconds": queue["estimated_wait_seconds"],
+        "queue": queue,
     }
 
 
@@ -2418,7 +2580,7 @@ def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
         f"Elapsed time: {result['elapsed_seconds']:.2f}s | "
         f"Model: {result['model']} | IP: {result['server_ip']} | Port: {result['server_port']}"
     )
-    return result
+    return attach_thinking_fields(result)
 
 
 def run_queued_prompt(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2431,6 +2593,15 @@ def run_queued_prompt(payload: dict[str, Any]) -> dict[str, Any]:
         job = PromptJob(id=PROMPT_QUEUE_NEXT_ID, payload=payload)
         PROMPT_QUEUE_NEXT_ID += 1
         PROMPT_QUEUE.append(job)
+        prompts_ahead = max(0, len(PROMPT_QUEUE) - 1) + (1 if PROMPT_QUEUE_ACTIVE else 0)
+        enqueue_queue = {
+            "active": PROMPT_QUEUE_ACTIVE,
+            "pending_count": len(PROMPT_QUEUE),
+            "max_pending_count": PROMPT_QUEUE_MAX_SIZE,
+            "pending_prompt_ids": [queued_job.id for queued_job in PROMPT_QUEUE],
+            "average_prompt_processing_seconds": average_prompt_processing_seconds(),
+            "estimated_wait_seconds": estimated_prompt_wait_seconds(prompts_ahead),
+        }
         PROMPT_QUEUE_CONDITION.notify_all()
 
         while True:
@@ -2444,10 +2615,23 @@ def run_queued_prompt(payload: dict[str, Any]) -> dict[str, Any]:
             PROMPT_QUEUE_CONDITION.wait()
 
     try:
+        processing_started_at = time.time()
         result = run_ollama_generate(payload)
+        stats = record_prompt_processing_time(float(result.get("elapsed_seconds") or 0.0), str(result.get("model") or payload["model"]))
         result["prompt_queue_id"] = job.id
-        result["queue_wait_seconds"] = round(time.time() - job.enqueued_at - result["elapsed_seconds"], 3)
+        result["pending_prompt_count_on_enqueue"] = enqueue_queue["pending_count"]
+        result["prompts_ahead_on_enqueue"] = prompts_ahead
+        result["estimated_wait_seconds_on_enqueue"] = enqueue_queue["estimated_wait_seconds"]
+        result["average_prompt_processing_seconds_on_enqueue"] = enqueue_queue["average_prompt_processing_seconds"]
+        result["queue_wait_seconds"] = round(processing_started_at - job.enqueued_at, 3)
         result["queue"] = prompt_queue_status()
+        result["prompt_processing_stats"] = {
+            "stats_path": stats.get("stats_path"),
+            "week_start_date": stats.get("week_start_date"),
+            "sample_count": stats.get("sample_count"),
+            "average_processing_seconds": stats.get("average_processing_seconds"),
+            "last_processing_seconds": stats.get("last_processing_seconds"),
+        }
         return result
     finally:
         with PROMPT_QUEUE_CONDITION:
