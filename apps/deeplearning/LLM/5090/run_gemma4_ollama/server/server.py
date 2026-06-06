@@ -606,7 +606,7 @@ INDEX_HTML = """<!doctype html>
         </div>
       </div>
       <div class="row">
-        <button class="primary" id="send" type="button" onclick="sendPrompt()">Send Prompt</button>
+        <button class="primary" id="send" type="button" onclick="window.sendPrompt(event)">Send Prompt</button>
         <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
         <span id="busy"></span>
       </div>
@@ -827,6 +827,67 @@ if __name__ == "__main__":
     </section>
   </main>
 
+  <script>
+    window.sendPrompt = async function(event) {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
+      const button = document.getElementById("send");
+      if (button && button.disabled) return;
+      const busy = document.getElementById("busy");
+      const answer = document.getElementById("answer");
+      const prompt1 = document.getElementById("prompt1");
+      const prompt2 = document.getElementById("prompt2");
+      const userId = document.getElementById("userId");
+      const password = document.getElementById("password");
+      const prompts = [prompt1 && prompt1.value, prompt2 && prompt2.value]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      if (!prompts.length) {
+        if (busy) busy.textContent = "Prompt is required.";
+        if (answer) answer.textContent = "Prompt is required.";
+        return;
+      }
+      const auth = {
+        user_id: userId ? userId.value.trim() : "",
+        password: password ? password.value : "",
+      };
+      if (!auth.user_id || !auth.password) {
+        if (busy) busy.textContent = "User ID and password are required.";
+        if (answer) answer.textContent = "User ID and password are required.";
+        return;
+      }
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Thinking...";
+      }
+      if (busy) busy.textContent = "Thinking... sending prompt";
+      if (answer) answer.textContent = "Thinking... sending prompt";
+      try {
+        const startedAt = performance.now();
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            prompt: prompts.join("\n\n"),
+            prompts,
+            ...auth,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        const text = data.visible_response || data.response || JSON.stringify(data, null, 2);
+        if (answer) answer.textContent = text;
+        if (busy) busy.textContent = `Done in ${((performance.now() - startedAt) / 1000).toFixed(2)}s`;
+      } catch (err) {
+        if (answer) answer.textContent = String(err);
+        if (busy) busy.textContent = String(err);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Send Prompt";
+        }
+      }
+    };
+  </script>
   <script>
     const metrics = document.getElementById("metrics");
     const answer = document.getElementById("answer");
@@ -1723,7 +1784,8 @@ if __name__ == "__main__":
       }
     }
 
-    async function sendPrompt() {
+    async function sendPrompt(event) {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
       if (sendButton.disabled) return;
       const startedAt = performance.now();
       const startedDate = new Date();
