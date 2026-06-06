@@ -12,6 +12,7 @@ import secrets
 import signal
 import socket
 import subprocess
+import sys
 import threading
 import time
 import unicodedata
@@ -55,7 +56,7 @@ USER_PROMPT_HISTORY_LIMIT = 2000
 USER_PROMPT_HISTORY_LOCK = threading.RLock()
 ACCESS_LOG_LIMIT = 1000
 ACCESS_LOG_LOCK = threading.RLock()
-PROMPT_QUEUE_MAX_SIZE = int(os.getenv("PROMPT_QUEUE_MAX_SIZE", "10"))
+PROMPT_QUEUE_MAX_SIZE = int(os.getenv("PROMPT_QUEUE_MAX_SIZE", "30"))
 PROMPT_QUEUE_CONDITION = threading.Condition()
 PROMPT_QUEUE: list["PromptJob"] = []
 PROMPT_QUEUE_ACTIVE = False
@@ -3308,13 +3309,21 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
 
 
+class Gemma4ThreadingHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
     PROMPT_HISTORY_FILE.touch(exist_ok=True)
     ACCESS_LOG_FILE.touch(exist_ok=True)
     ensure_api_key_conf()
-    httpd = ThreadingHTTPServer((HOST, PORT), Gemma4Handler)
+    httpd = Gemma4ThreadingHTTPServer((HOST, PORT), Gemma4Handler)
     print(f"Gemma4 service page: http://{HOST}:{PORT}")
     print(f"Ollama backend: {OLLAMA_BASE_URL}, model={OLLAMA_MODEL}")
     httpd.serve_forever()
