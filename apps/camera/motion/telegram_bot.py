@@ -15,7 +15,7 @@ Usage:
   python3 telegram_bot.py [--config PATH] [--test-config]
 
 Systemd:
-  See telegram_bot.service for automatic startup configuration.
+  See logs/telegram_bot.service for automatic startup configuration.
 """
 
 from __future__ import annotations

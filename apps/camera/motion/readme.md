@@ -34,7 +34,7 @@ sudo apt-get install autoconf automake build-essential pkgconf libtool git libzi
 
 ## 최근 5분 사람 감지 후 Telegram 전송
 
-`detection_5min.py` 는 `/var/lib/motion_recent` 에 저장된 최근 24시간 인덱스 중 최근 5분 이미지 파일을 원격 Gemma4 31B 모델에 보내 사람 존재 여부와 인원수를 확인합니다. 사람이 감지되면 해당 사진, 인원수, 사람이 찍힌 시각을 Telegram 으로 전송하고 `person_detected_events.jsonl` 에도 저장합니다.
+`detection_5min.py` 는 `/var/lib/motion_recent` 에 저장된 최근 24시간 인덱스 중 최근 5분 이미지 파일을 원격 Gemma4 31B 모델에 보내 사람 존재 여부와 인원수를 확인합니다. 사람이 감지되면 해당 사진, 인원수, 사람이 찍힌 시각을 Telegram 으로 전송하고 `logs/person_detected_events.jsonl` 에도 저장합니다.
 
 ```bash
 cd /****tinyos/devel_opment/BerePi/apps/camera/motion
@@ -200,7 +200,7 @@ python3 telegram_bot.py --config /path/to/conf_connect_model.conf
 
 ```bash
 # 서비스 파일 복사 — 경로를 실제 설치 위치에 맞게 수정하세요
-sudo cp telegram_bot.service /etc/systemd/system/berepi-telegram-bot.service
+sudo cp logs/telegram_bot.service /etc/systemd/system/berepi-telegram-bot.service
 sudo nano /etc/systemd/system/berepi-telegram-bot.service   # User / WorkingDirectory / ExecStart 경로 확인
 
 # 등록 및 시작

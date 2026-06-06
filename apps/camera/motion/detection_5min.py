@@ -110,7 +110,9 @@ def load_config(config_path: Path) -> AppConfig:
     telegram_token = telegram_token or os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     telegram_chat_id = telegram_chat_id or os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
-    event_log_path = Path(get_config_value(motion_section, "event_log_path", str(APP_DIR / "person_detected_events.jsonl")))
+    event_log_path = Path(
+        get_config_value(motion_section, "event_log_path", str(APP_DIR / "logs" / "person_detected_events.jsonl"))
+    )
     if not event_log_path.is_absolute():
         event_log_path = (config_path.parent / event_log_path).resolve()
     recent_count_log_path = Path(
