@@ -563,7 +563,10 @@ INDEX_HTML = """<!doctype html>
       <section>
         <h2>GPU Selection</h2>
         <div class="row">
-          <select id="gpuSelect"></select>
+          <select id="gpuSelect">
+            <option value="auto">Auto (all available GPUs)</option>
+            <option value="cpu">CPU only</option>
+          </select>
           <button id="saveGpu">Save GPU Selection</button>
           <span id="gpuStatus"></span>
         </div>
@@ -572,7 +575,9 @@ INDEX_HTML = """<!doctype html>
       <section>
         <h2>Model Selection</h2>
         <div class="row">
-          <select id="modelSelect"></select>
+          <select id="modelSelect">
+            <option value="gemma4:31b">gemma4:31b</option>
+          </select>
           <button id="saveModel">Save Model Selection</button>
           <span id="modelStatus"></span>
         </div>
@@ -890,6 +895,7 @@ if __name__ == "__main__":
     }
 
     function renderGpuOptions(data) {
+      if (!gpuSelect) return;
       const selected = data.selected_gpu || "auto";
       const options = [
         {value: "auto", label: "Auto (all available GPUs)"},
@@ -902,10 +908,13 @@ if __name__ == "__main__":
         .map((option) => `<option value="${option.value}">${option.label}</option>`)
         .join("");
       gpuSelect.value = options.some((option) => option.value === selected) ? selected : "auto";
-      gpuStatus.textContent = data.gpu_detection_error ? `GPU detection warning: ${data.gpu_detection_error}` : "";
+      if (gpuStatus) {
+        gpuStatus.textContent = data.gpu_detection_error ? `GPU detection warning: ${data.gpu_detection_error}` : "";
+      }
     }
 
     function renderModelOptions(data) {
+      if (!modelSelect) return;
       const selected = data.model || "gemma4:31b";
       const models = data.models && data.models.length ? data.models : [selected];
       modelSelect.innerHTML = models
@@ -915,7 +924,9 @@ if __name__ == "__main__":
         modelSelect.insertAdjacentHTML("afterbegin", `<option value="${selected}">${selected} (missing)</option>`);
       }
       modelSelect.value = selected;
-      modelStatus.textContent = data.model_available ? "" : "Selected model is not installed.";
+      if (modelStatus) {
+        modelStatus.textContent = data.model_available ? "" : "Selected model is not installed.";
+      }
     }
 
     function renderPythonCode() {
