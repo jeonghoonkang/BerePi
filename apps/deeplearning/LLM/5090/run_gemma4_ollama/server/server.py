@@ -647,7 +647,56 @@ INDEX_HTML = """<!doctype html>
 
     <section>
       <h2>Python Client Code</h2>
-      <pre id="pythonCode"></pre>
+      <pre id="pythonCode">#!/usr/bin/env python3
+import json
+import urllib.request
+import base64
+from time import perf_counter
+
+
+SERVER_URL = "http://127.0.0.1:8082"
+USER_ID = "admin"
+PASSWORD = "change-me-now"
+PROMPT = "Reply with one short sentence that the Gemma4 Ollama service is running."
+
+
+def send_prompt(prompt: str) -> tuple[dict, float]:
+    payload = json.dumps({"prompt": prompt}).encode("utf-8")
+    token = base64.b64encode(f"{USER_ID}:{PASSWORD}".encode("utf-8")).decode("ascii")
+    request = urllib.request.Request(
+        f"{SERVER_URL}/api/generate",
+        data=payload,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Basic {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    started_at = perf_counter()
+    with urllib.request.urlopen(request, timeout=120) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    elapsed_seconds = perf_counter() - started_at
+    return data, elapsed_seconds
+
+
+if __name__ == "__main__":
+    data, elapsed_seconds = send_prompt(PROMPT)
+    thinking = data.get("thinking", "")
+    visible_response = data.get("visible_response") or data.get("response", "")
+    if thinking:
+        print("[Thinking]")
+        print(thinking)
+        print()
+    print("[Response]")
+    print(visible_response or json.dumps(data, ensure_ascii=False, indent=2))
+    print(
+        f"Elapsed time: {elapsed_seconds:.2f}s | "
+        f"Model: {data.get('model', 'unknown')} | "
+        f"IP: {data.get('server_ip', 'unknown')} | "
+        f"Port: {data.get('server_port', 'unknown')}"
+    )
+</pre>
     </section>
     </div>
 
@@ -870,6 +919,7 @@ INDEX_HTML = """<!doctype html>
     }
 
     function renderPythonCode() {
+      if (!pythonCode) return;
       const serverUrl = window.location.origin;
       pythonCode.textContent = `#!/usr/bin/env python3
 import json
@@ -906,7 +956,14 @@ def send_prompt(prompt: str) -> tuple[dict, float]:
 
 if __name__ == "__main__":
     data, elapsed_seconds = send_prompt(PROMPT)
-    print(data.get("response", json.dumps(data, ensure_ascii=False, indent=2)))
+    thinking = data.get("thinking", "")
+    visible_response = data.get("visible_response") or data.get("response", "")
+    if thinking:
+        print("[Thinking]")
+        print(thinking)
+        print()
+    print("[Response]")
+    print(visible_response or json.dumps(data, ensure_ascii=False, indent=2))
     print(
         f"Elapsed time: {elapsed_seconds:.2f}s | "
         f"Model: {data.get('model', 'unknown')} | "
@@ -2974,8 +3031,18 @@ def stop_ollama_server() -> dict[str, Any]:
 class Gemma4Handler(BaseHTTPRequestHandler):
     server_version = "Gemma4OllamaServer/1.0"
 
+    def is_noisy_bad_request_log(self, message: str) -> bool:
+        if "Bad HTTP/0.9 request type" in message:
+            return True
+        if "Bad request syntax" in message:
+            return True
+        return any(ord(char) < 32 and char not in "\t\r\n" for char in message)
+
     def log_message(self, format: str, *args: Any) -> None:
-        print(f"{self.address_string()} - {format % args}")
+        message = format % args
+        if self.is_noisy_bad_request_log(message):
+            return
+        print(f"{self.address_string()} - {message}")
 
     def send_response(self, code: int, message: str | None = None) -> None:
         self.response_status = int(code)
