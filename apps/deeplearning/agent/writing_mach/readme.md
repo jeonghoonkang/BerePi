@@ -34,6 +34,120 @@ $env:WRITING_MACH_PORT="8790"
 py -3 .\client_service.py
 ```
 
+## 시작 전 작성 파일
+
+작업을 시작하려면 아래 파일을 준비합니다.
+
+| 파일 | 필수 | 용도 |
+| --- | --- | --- |
+| `story_backbone.md` | 예 | 책 제목, 챕터 구성, 작성 방향을 적는 원본 기획서 |
+| `data/client_config.json` | 예 | 모델 서버 연결, 병렬 실행, 리뷰 에이전트 제어 설정 |
+| `config/client_config.sample.json` | 아니오 | 새 설정 파일을 만들 때 참고하는 샘플 |
+
+`data/client_config.json`이 없으면 서비스 시작 시 `config/client_config.sample.json`을 기준으로 자동 생성됩니다. 생성 후 웹 화면에서 수정하거나 파일을 직접 편집하면 됩니다.
+
+`story_backbone.md` 작성 예:
+
+```markdown
+- 제목은 Rock 음악의 역사와 주목할만한 앨범
+
+  - 1 챕터
+    - 1960년대, 1970년대 대중음악의 발전 변화
+    - 주요 음악가 및 레코딩 리스트
+    - 블루스, 포크, 사이키델릭 록이 대중음악에 준 영향
+
+  - 2 챕터
+    - 70년대 이후 Rock 음악의 장르별 주요 뮤지션
+    - 국가별 진지한 대중음악 작업 리스트
+    - 대표 음악, 영향력이 큰 앨범과 공연
+
+  - 3 챕터
+    - 대중음악의 흐름을 바꾼 레코드와 뮤지션
+    - 프로듀싱, 녹음 기술, 앨범 단위 감상의 변화
+
+- 작성방법
+  - 각 챕터는 독립적인 글이면서 전체 책의 흐름에 연결되도록 작성
+  - 독자 대상은 음악사를 처음 공부하는 일반 독자
+  - main writer agent는 챕터 간 반복, 용어 통일, 시대 흐름을 중점 검토
+```
+
+`data/client_config.json` 단일 서버 작성 예:
+
+```json
+{
+  "server_base_url": "http://127.0.0.1:8082",
+  "generate_path": "/api/generate",
+  "status_path": "/api/status",
+  "request_timeout_seconds": 600,
+  "user_id": "admin",
+  "password": "aimodel",
+  "model": "",
+  "keep_alive": "60m",
+  "num_ctx": 8192,
+  "target_words_per_chapter": 1800,
+  "language": "ko",
+  "chapter_parallelism": 1,
+  "chapter_retry": 2,
+  "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
+  "agent_workers": [],
+  "global_review_enabled": true,
+  "global_review_mode": "strict",
+  "global_review_focus": [
+    "전체 논지 일관성",
+    "챕터 간 반복 제거",
+    "용어 통일",
+    "시대 흐름 점검",
+    "도입부와 결론의 연결"
+  ],
+  "allow_global_rewrite": false
+}
+```
+
+분산 worker를 사용할 때의 `data/client_config.json` 작성 예:
+
+```json
+{
+  "server_base_url": "http://127.0.0.1:8082",
+  "generate_path": "/api/generate",
+  "status_path": "/api/status",
+  "request_timeout_seconds": 900,
+  "user_id": "admin",
+  "password": "aimodel",
+  "model": "",
+  "keep_alive": "60m",
+  "num_ctx": 8192,
+  "target_words_per_chapter": 1800,
+  "language": "ko",
+  "chapter_parallelism": 4,
+  "chapter_retry": 2,
+  "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
+  "agent_workers": [
+    {
+      "name": "gpu-1",
+      "server_base_url": "http://10.0.0.11:8082",
+      "max_parallel": 2
+    },
+    {
+      "name": "gpu-2",
+      "server_base_url": "http://10.0.0.12:8082",
+      "max_parallel": 2
+    }
+  ],
+  "global_review_enabled": true,
+  "global_review_mode": "strict",
+  "global_review_focus": [
+    "전체 논지 일관성",
+    "챕터 간 반복 제거",
+    "용어 통일",
+    "시대 흐름 점검",
+    "도입부와 결론의 연결"
+  ],
+  "allow_global_rewrite": false
+}
+```
+
+`chapter_parallelism`은 동시에 실행할 챕터 수입니다. `agent_workers[].max_parallel`의 합보다 크게 설정해도 실제 병렬 실행 수는 worker slot 수를 넘지 않습니다.
+
 ## 모델 연결
 
 좌측 **생성형 AI 연결** 패널에서 모델 서버 주소를 입력합니다.
