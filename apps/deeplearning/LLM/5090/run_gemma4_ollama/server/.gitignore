@@ -1,6 +1,7 @@
 logs/
 *.pid
 __pycache__/
+prompt_history.txt
 api_key.conf
 telegram/install/
 telegram/logs/
