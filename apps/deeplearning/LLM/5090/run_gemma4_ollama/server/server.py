@@ -5,6 +5,7 @@ import json
 import base64
 import binascii
 import datetime as dt
+import html
 import hmac
 import os
 import re
@@ -952,7 +953,7 @@ if __name__ == "__main__":
     function gpuLabel(gpu) {
       const memory = gpu.memory_total_mb ? `, ${gpu.memory_total_mb} MB` : "";
       const bus = gpu.bus_address ? `, ${gpu.bus_address}` : "";
-      const source = gpu.source === "lspci" ? "detected by lspci" : "CUDA";
+      const source = gpu.source === "lspci" ? "detected by lspci" : (gpu.source || "CUDA");
       return `${gpu.index}: ${gpu.name}${memory}${bus} (${source})`;
     }
 
@@ -2974,6 +2975,47 @@ def selected_gpu_label(selected: str, gpus: list[dict[str, Any]]) -> str:
     return f"GPU {selected}"
 
 
+def gpu_option_label(gpu: dict[str, Any]) -> str:
+    memory = f", {gpu.get('memory_total_mb')} MB" if gpu.get("memory_total_mb") else ""
+    bus = f", {gpu.get('bus_address')}" if gpu.get("bus_address") else ""
+    source = gpu.get("source") or "detected"
+    return f"{gpu.get('index')}: {gpu.get('name')}{memory}{bus} ({source})"
+
+
+def gpu_options_html(gpus: list[dict[str, Any]], selected: str) -> str:
+    options = [
+        {"value": "auto", "label": "Auto (all available GPUs)", "selectable": True},
+        {"value": "cpu", "label": "CPU only", "selectable": True},
+    ]
+    for gpu in gpus:
+        options.append(
+            {
+                "value": str(gpu.get("index")),
+                "label": gpu_option_label(gpu),
+                "selectable": bool(gpu.get("selectable")),
+            }
+        )
+
+    lines: list[str] = []
+    for option in options:
+        value = html.escape(str(option["value"]), quote=True)
+        label = html.escape(str(option["label"]))
+        selected_attr = " selected" if str(option["value"]) == selected else ""
+        disabled_attr = "" if option["selectable"] else " disabled"
+        lines.append(f'            <option value="{value}"{selected_attr}{disabled_attr}>{label}</option>')
+    return "\n".join(lines)
+
+
+def render_index_html() -> str:
+    gpus, _ = list_gpus()
+    selected = read_selected_gpu()
+    default_gpu_options = (
+        '            <option value="auto">Auto (all available GPUs)</option>\n'
+        '            <option value="cpu">CPU only</option>'
+    )
+    return INDEX_HTML.replace(default_gpu_options, gpu_options_html(gpus, selected), 1)
+
+
 def selected_gpu_record(selected: str, gpus: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
     if selected in {"auto", "cpu"}:
         return None
@@ -3272,7 +3314,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path in {"/", "/index.html"}:
-            body = INDEX_HTML.encode("utf-8")
+            body = render_index_html().encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
