@@ -2974,12 +2974,30 @@ def selected_gpu_label(selected: str, gpus: list[dict[str, Any]]) -> str:
     return f"GPU {selected}"
 
 
+def selected_gpu_record(selected: str, gpus: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    if selected in {"auto", "cpu"}:
+        return None
+    records = gpus if gpus is not None else list_gpus()[0]
+    for gpu in records:
+        if str(gpu.get("index")) == selected:
+            return gpu
+    return None
+
+
 def cuda_device_for_gpu_selection(selected: str) -> str:
-    gpus, _ = list_gpus()
-    for gpu in gpus:
-        if str(gpu.get("index")) == selected and gpu.get("uuid"):
+    if os.getenv("GEMMA4_CUDA_VISIBLE_USE_UUID", "").strip().lower() in {"1", "true", "yes", "on"}:
+        gpu = selected_gpu_record(selected)
+        if gpu and gpu.get("uuid"):
             return str(gpu["uuid"])
     return selected
+
+
+def cuda_visible_devices_for_selection(selected: str) -> str:
+    if selected == "auto":
+        return "(unset)"
+    if selected == "cpu":
+        return "-1"
+    return cuda_device_for_gpu_selection(selected)
 
 
 def ollama_environment() -> dict[str, str]:
@@ -2994,6 +3012,30 @@ def ollama_environment() -> dict[str, str]:
     else:
         env["CUDA_VISIBLE_DEVICES"] = cuda_device_for_gpu_selection(selected)
     return env
+
+
+def print_gpu_configuration() -> None:
+    gpus, detection_error = list_gpus()
+    selected = read_selected_gpu()
+    cuda_visible = cuda_visible_devices_for_selection(selected)
+    print("GPU selection:")
+    print(f"  selected={selected} ({selected_gpu_label(selected, gpus)})")
+    print(f"  CUDA_VISIBLE_DEVICES={cuda_visible}")
+    if detection_error:
+        print(f"  detection_warning={detection_error}")
+    if not gpus:
+        print("  available GPUs: none detected")
+        return
+    print("  available GPUs:")
+    for gpu in gpus:
+        memory = f", memory={gpu.get('memory_total_mb')}MB" if gpu.get("memory_total_mb") else ""
+        uuid = f", uuid={gpu.get('uuid')}" if gpu.get("uuid") else ""
+        bus = f", bus={gpu.get('bus_address')}" if gpu.get("bus_address") else ""
+        selectable = "selectable" if gpu.get("selectable") else "not selectable"
+        print(
+            f"    [{gpu.get('index')}] {gpu.get('name')} "
+            f"({selectable}, source={gpu.get('source')}{memory}{uuid}{bus})"
+        )
 
 
 def public_ip() -> str:
@@ -3080,6 +3122,7 @@ def start_ollama_server() -> dict[str, Any]:
     if ollama_is_reachable():
         return {"ok": True, "message": "Ollama server is already running", "already_running": True}
 
+    print_gpu_configuration()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_file = (LOG_DIR / "ollama.log").open("ab")
     process = subprocess.Popen(
@@ -3322,8 +3365,13 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 return
             self.send_json(
                 {
-                    "message": "GPU selection saved. Restart Ollama to apply it.",
+                    "message": (
+                        "GPU selection saved. Restart Ollama to apply it. "
+                        f"CUDA_VISIBLE_DEVICES will be {cuda_visible_devices_for_selection(selected)}."
+                    ),
                     "selected_gpu": selected,
+                    "selected_gpu_label": selected_gpu_label(selected, list_gpus()[0]),
+                    "cuda_visible_devices": cuda_visible_devices_for_selection(selected),
                 }
             )
             return
@@ -3511,6 +3559,7 @@ def main() -> int:
     httpd = Gemma4ThreadingHTTPServer((HOST, PORT), Gemma4Handler)
     print(f"Gemma4 service page: http://{HOST}:{PORT}")
     print(f"Ollama backend: {OLLAMA_BASE_URL}, model={OLLAMA_MODEL}")
+    print_gpu_configuration()
     httpd.serve_forever()
     return 0
 
