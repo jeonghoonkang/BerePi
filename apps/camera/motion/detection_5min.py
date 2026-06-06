@@ -56,6 +56,7 @@ class AppConfig:
     lookback_minutes: int
     recursive: bool
     event_log_path: Path
+    recent_count_log_path: Path
     model_failure_alert_state_path: Path
 
 
@@ -112,6 +113,11 @@ def load_config(config_path: Path) -> AppConfig:
     event_log_path = Path(get_config_value(motion_section, "event_log_path", str(APP_DIR / "person_detected_events.jsonl")))
     if not event_log_path.is_absolute():
         event_log_path = (config_path.parent / event_log_path).resolve()
+    recent_count_log_path = Path(
+        get_config_value(motion_section, "recent_count_log_path", str(APP_DIR / "logs" / "motion_recent_file_counts.jsonl"))
+    )
+    if not recent_count_log_path.is_absolute():
+        recent_count_log_path = (config_path.parent / recent_count_log_path).resolve()
     model_failure_alert_state_path = event_log_path.with_name("model_failure_alert_state.json")
 
     return AppConfig(
@@ -134,6 +140,7 @@ def load_config(config_path: Path) -> AppConfig:
         lookback_minutes=get_config_int(motion_section, "lookback_minutes", 5),
         recursive=get_config_bool(motion_section, "recursive", False),
         event_log_path=event_log_path.expanduser(),
+        recent_count_log_path=recent_count_log_path.expanduser(),
         model_failure_alert_state_path=model_failure_alert_state_path.expanduser(),
     )
 
@@ -147,14 +154,18 @@ def image_history_key(path: Path) -> str:
     return f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
 
 
-def iter_image_files(motion_dir: Path, recursive: bool) -> list[Path]:
+def iter_motion_files(motion_dir: Path, recursive: bool) -> list[Path]:
     if not motion_dir.exists():
         return []
     if recursive:
         candidates = motion_dir.rglob("*")
     else:
         candidates = motion_dir.iterdir()
-    return [path for path in candidates if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS]
+    return [path for path in candidates if path.is_file()]
+
+
+def iter_image_files(motion_dir: Path, recursive: bool) -> list[Path]:
+    return [path for path in iter_motion_files(motion_dir, recursive) if path.suffix.lower() in IMAGE_EXTENSIONS]
 
 
 def get_recent_images(motion_dir: Path, minutes: int, recursive: bool = False) -> list[Path]:
@@ -168,6 +179,26 @@ def get_recent_images(motion_dir: Path, minutes: int, recursive: bool = False) -
             print(f"skip unreadable file: {path} ({exc})", file=sys.stderr)
     recent_images.sort(key=image_modified_at)
     return recent_images
+
+
+def write_recent_count_log(config: AppConfig, recent_images: list[Path]) -> None:
+    motion_files = iter_motion_files(config.motion_dir, config.recursive)
+    image_file_count = sum(1 for path in motion_files if path.suffix.lower() in IMAGE_EXTENSIONS)
+    payload = {
+        "created_at": format_time(datetime.now().astimezone()),
+        "motion_dir": str(config.motion_dir),
+        "motion_dir_exists": config.motion_dir.exists(),
+        "recursive": config.recursive,
+        "lookback_minutes": config.lookback_minutes,
+        "file_count": len(motion_files),
+        "image_file_count": image_file_count,
+        "recent_image_count": len(recent_images),
+    }
+    line = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    print(f"motion_recent_count={line}", flush=True)
+    config.recent_count_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with config.recent_count_log_path.open("a", encoding="utf-8") as log_file:
+        log_file.write(line + "\n")
 
 
 def get_reference_images(motion_dir: Path, recursive: bool = False) -> list[tuple[str, Path]]:
@@ -556,6 +587,10 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     print(f"motion_dir={config.motion_dir}")
     print(f"lookback_minutes={config.lookback_minutes}")
     print(f"recent_images={len(recent_images)}")
+    try:
+        write_recent_count_log(config, recent_images)
+    except OSError as exc:
+        print(f"motion recent count log failed: {exc}", file=sys.stderr)
 
     alerts_sent = 0
     detected_events = 0
