@@ -9,5 +9,25 @@
   "keep_alive": "60m",
   "num_ctx": 8192,
   "target_words_per_chapter": 1800,
-  "language": "ko"
+  "language": "ko",
+  "chapter_parallelism": 1,
+  "chapter_retry": 2,
+  "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
+  "agent_workers": [
+    {
+      "name": "default",
+      "server_base_url": "http://127.0.0.1:8082",
+      "max_parallel": 1
+    }
+  ],
+  "global_review_enabled": true,
+  "global_review_mode": "strict",
+  "global_review_focus": [
+    "전체 논지 일관성",
+    "챕터 간 반복 제거",
+    "용어 통일",
+    "시대 흐름 점검",
+    "도입부와 결론의 연결"
+  ],
+  "allow_global_rewrite": false
 }

@@ -76,6 +76,12 @@ textarea {
   line-height: 1.55;
 }
 
+textarea.small-textarea {
+  min-height: 7rem;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82rem;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
@@ -153,6 +159,17 @@ h2 {
   gap: 0.35rem;
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.form-stack label.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+.checkbox-label input {
+  width: auto;
 }
 
 .inline-fields {

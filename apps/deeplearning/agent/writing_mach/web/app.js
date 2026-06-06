@@ -16,6 +16,14 @@ const elements = {
   numCtx: document.getElementById("numCtx"),
   targetWords: document.getElementById("targetWords"),
   keepAlive: document.getElementById("keepAlive"),
+  chapterParallelism: document.getElementById("chapterParallelism"),
+  chapterRetry: document.getElementById("chapterRetry"),
+  pipelineAgents: document.getElementById("pipelineAgents"),
+  globalReviewEnabled: document.getElementById("globalReviewEnabled"),
+  allowGlobalRewrite: document.getElementById("allowGlobalRewrite"),
+  globalReviewMode: document.getElementById("globalReviewMode"),
+  globalReviewFocus: document.getElementById("globalReviewFocus"),
+  agentWorkers: document.getElementById("agentWorkers"),
   saveConfig: document.getElementById("saveConfig"),
   testConnection: document.getElementById("testConnection"),
   runAgents: document.getElementById("runAgents"),
@@ -39,9 +47,31 @@ function applyConfig(config) {
   elements.numCtx.value = config?.num_ctx || 8192;
   elements.targetWords.value = config?.target_words_per_chapter || 1800;
   elements.keepAlive.value = config?.keep_alive || "60m";
+  elements.chapterParallelism.value = config?.chapter_parallelism || 1;
+  elements.chapterRetry.value = config?.chapter_retry || 2;
+  elements.pipelineAgents.value = (config?.pipeline_agents || ["outline", "writer", "reviewer", "finalizer"]).join(",");
+  elements.globalReviewEnabled.checked = config?.global_review_enabled !== false;
+  elements.allowGlobalRewrite.checked = Boolean(config?.allow_global_rewrite);
+  elements.globalReviewMode.value = config?.global_review_mode || "strict";
+  elements.globalReviewFocus.value = (config?.global_review_focus || []).join("\n");
+  elements.agentWorkers.value = JSON.stringify(config?.agent_workers || [], null, 2);
+}
+
+function readJsonField(element, fallback) {
+  const text = element.value.trim();
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${element.id} JSON 형식이 올바르지 않습니다: ${error.message}`);
+  }
 }
 
 function readConfig() {
+  const focus = elements.globalReviewFocus.value
+    .split(/\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
   return {
     server_base_url: elements.serverBaseUrl.value.trim(),
     generate_path: elements.generatePath.value.trim(),
@@ -53,6 +83,14 @@ function readConfig() {
     num_ctx: Number(elements.numCtx.value || 8192),
     target_words_per_chapter: Number(elements.targetWords.value || 1800),
     keep_alive: elements.keepAlive.value.trim(),
+    chapter_parallelism: Number(elements.chapterParallelism.value || 1),
+    chapter_retry: Number(elements.chapterRetry.value || 2),
+    pipeline_agents: elements.pipelineAgents.value.split(",").map((item) => item.trim()).filter(Boolean),
+    agent_workers: readJsonField(elements.agentWorkers, []),
+    global_review_enabled: elements.globalReviewEnabled.checked,
+    global_review_mode: elements.globalReviewMode.value.trim() || "strict",
+    global_review_focus: focus,
+    allow_global_rewrite: elements.allowGlobalRewrite.checked,
   };
 }
 
@@ -123,8 +161,9 @@ function formatAgentLog(result) {
   ];
   (result.chapters || []).forEach((item, index) => {
     const title = item.chapter?.title || `${index + 1} 챕터`;
-    const preview = String(item.draft || "").slice(0, 1000);
-    lines.push(`\n### ${title}\n${preview}${String(item.draft || "").length > 1000 ? "\n..." : ""}`);
+    const finalText = String(item.final || item.draft || "");
+    const preview = finalText.slice(0, 1000);
+    lines.push(`\n### ${title} (${item.worker || "worker"})\n${preview}${finalText.length > 1000 ? "\n..." : ""}`);
   });
   return lines.join("\n");
 }

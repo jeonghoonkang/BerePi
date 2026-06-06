@@ -34,6 +34,18 @@
             <label>Chapter Words<input id="targetWords" type="number" min="300" step="100"></label>
             <label>Keep Alive<input id="keepAlive" placeholder="60m"></label>
           </div>
+          <div class="inline-fields">
+            <label>Parallel Chapters<input id="chapterParallelism" type="number" min="1" step="1"></label>
+            <label>Chapter Retry<input id="chapterRetry" type="number" min="1" step="1"></label>
+          </div>
+          <label>Pipeline Agents<input id="pipelineAgents" placeholder="outline,writer,reviewer,finalizer"></label>
+          <div class="inline-fields">
+            <label class="checkbox-label"><input id="globalReviewEnabled" type="checkbox"> Global Review</label>
+            <label class="checkbox-label"><input id="allowGlobalRewrite" type="checkbox"> Allow Rewrite</label>
+          </div>
+          <label>Global Review Mode<input id="globalReviewMode" placeholder="strict"></label>
+          <label>Global Review Focus<textarea id="globalReviewFocus" class="small-textarea" spellcheck="false"></textarea></label>
+          <label>Agent Workers JSON<textarea id="agentWorkers" class="small-textarea" spellcheck="false"></textarea></label>
         </div>
         <div class="button-row">
           <button id="saveConfig" type="button">설정 저장</button>

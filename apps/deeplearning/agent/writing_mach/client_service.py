@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -50,6 +51,20 @@ DEFAULT_CONFIG = {
     "num_ctx": 8192,
     "target_words_per_chapter": 1800,
     "language": "ko",
+    "chapter_parallelism": 1,
+    "chapter_retry": 2,
+    "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
+    "agent_workers": [],
+    "global_review_enabled": True,
+    "global_review_mode": "strict",
+    "global_review_focus": [
+        "전체 논지 일관성",
+        "챕터 간 반복 제거",
+        "용어 통일",
+        "시대 흐름 점검",
+        "도입부와 결론의 연결",
+    ],
+    "allow_global_rewrite": False,
 }
 
 
@@ -72,6 +87,24 @@ def word_count(text: str) -> int:
     return len(re.findall(r"\S+", text or ""))
 
 
+def bool_value(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def public_config(config: dict[str, Any]) -> dict[str, Any]:
+    redacted = dict(config)
+    redacted.pop("password", None)
+    redacted["agent_workers"] = [
+        {key: value for key, value in worker.items() if key not in {"password", "agent_workers"}}
+        for worker in config.get("agent_workers", [])
+    ]
+    return redacted
+
+
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -90,7 +123,17 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     timeout = int(incoming.get("request_timeout_seconds") or DEFAULT_CONFIG["request_timeout_seconds"])
     num_ctx = int(incoming.get("num_ctx") or DEFAULT_CONFIG["num_ctx"])
     target_words = int(incoming.get("target_words_per_chapter") or DEFAULT_CONFIG["target_words_per_chapter"])
-    return {
+    chapter_parallelism = int(incoming.get("chapter_parallelism") or DEFAULT_CONFIG["chapter_parallelism"])
+    chapter_retry = int(incoming.get("chapter_retry") or DEFAULT_CONFIG["chapter_retry"])
+    pipeline_agents = incoming.get("pipeline_agents") or DEFAULT_CONFIG["pipeline_agents"]
+    if isinstance(pipeline_agents, str):
+        pipeline_agents = [item.strip() for item in pipeline_agents.split(",") if item.strip()]
+    pipeline_agents = [agent for agent in pipeline_agents if agent in {"outline", "writer", "reviewer", "finalizer"}]
+    focus = incoming.get("global_review_focus") or DEFAULT_CONFIG["global_review_focus"]
+    if isinstance(focus, str):
+        focus = [item.strip() for item in re.split(r"[,;\n]", focus) if item.strip()]
+
+    normalized = {
         "server_base_url": str(incoming.get("server_base_url") or DEFAULT_CONFIG["server_base_url"]).rstrip("/"),
         "generate_path": str(incoming.get("generate_path") or DEFAULT_CONFIG["generate_path"]),
         "status_path": str(incoming.get("status_path") or DEFAULT_CONFIG["status_path"]),
@@ -102,7 +145,67 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "num_ctx": max(0, num_ctx),
         "target_words_per_chapter": max(300, target_words),
         "language": str(incoming.get("language") or DEFAULT_CONFIG["language"]),
+        "chapter_parallelism": max(1, chapter_parallelism),
+        "chapter_retry": max(1, chapter_retry),
+        "pipeline_agents": pipeline_agents or list(DEFAULT_CONFIG["pipeline_agents"]),
+        "agent_workers": incoming.get("agent_workers") if isinstance(incoming.get("agent_workers"), list) else [],
+        "global_review_enabled": bool_value(
+            incoming.get("global_review_enabled"),
+            bool(DEFAULT_CONFIG["global_review_enabled"]),
+        ),
+        "global_review_mode": str(incoming.get("global_review_mode") or DEFAULT_CONFIG["global_review_mode"]),
+        "global_review_focus": focus if isinstance(focus, list) else list(DEFAULT_CONFIG["global_review_focus"]),
+        "allow_global_rewrite": bool_value(
+            incoming.get("allow_global_rewrite"),
+            bool(DEFAULT_CONFIG["allow_global_rewrite"]),
+        ),
     }
+    normalized["agent_workers"] = normalize_agent_workers(normalized)
+    return normalized
+
+
+def normalize_agent_workers(config: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_workers = config.get("agent_workers") or []
+    workers: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_workers):
+        if not isinstance(raw, dict):
+            continue
+        server_base_url = str(raw.get("server_base_url") or "").strip().rstrip("/")
+        if not server_base_url:
+            continue
+        worker = {
+            "name": str(raw.get("name") or f"worker-{index + 1}"),
+            "server_base_url": server_base_url,
+            "generate_path": str(raw.get("generate_path") or config["generate_path"]),
+            "status_path": str(raw.get("status_path") or config["status_path"]),
+            "request_timeout_seconds": int(raw.get("request_timeout_seconds") or config["request_timeout_seconds"]),
+            "user_id": str(raw.get("user_id") if raw.get("user_id") is not None else config["user_id"]),
+            "password": str(raw.get("password") if raw.get("password") is not None else config["password"]),
+            "model": str(raw.get("model") if raw.get("model") is not None else config["model"]),
+            "keep_alive": str(raw.get("keep_alive") or config["keep_alive"]),
+            "num_ctx": int(raw.get("num_ctx") or config["num_ctx"]),
+            "max_parallel": max(1, int(raw.get("max_parallel") or 1)),
+        }
+        workers.append(worker)
+
+    if workers:
+        return workers
+
+    return [
+        {
+            "name": "default",
+            "server_base_url": config["server_base_url"],
+            "generate_path": config["generate_path"],
+            "status_path": config["status_path"],
+            "request_timeout_seconds": config["request_timeout_seconds"],
+            "user_id": config["user_id"],
+            "password": config["password"],
+            "model": config["model"],
+            "keep_alive": config["keep_alive"],
+            "num_ctx": config["num_ctx"],
+            "max_parallel": max(1, int(config.get("chapter_parallelism") or 1)),
+        }
+    ]
 
 
 def read_config() -> dict[str, Any]:
@@ -259,45 +362,134 @@ def title_from_backbone(backbone: str) -> str:
     return "untitled-book"
 
 
-def chapter_prompt(backbone: str, chapter: dict[str, Any], config: dict[str, Any]) -> str:
+def chapter_context(backbone: str, chapter: dict[str, Any], config: dict[str, Any]) -> str:
     bullets = "\n".join(f"- {item}" for item in chapter["bullets"])
-    return f"""당신은 책의 한 챕터를 담당하는 전문 작가 에이전트입니다.
-
-책 전체 기획:
+    return f"""책 전체 기획:
 {backbone}
 
 담당 챕터:
 {chapter['title']}
 {bullets}
 
-작성 지침:
+공통 작성 지침:
 - 한국어로 작성합니다.
 - 목표 분량은 약 {config['target_words_per_chapter']} 단어입니다.
 - 사실 설명, 시대적 맥락, 핵심 앨범/뮤지션 목록, 해설을 균형 있게 넣습니다.
 - 책 전체의 일부가 되도록 독립된 챕터 제목과 절 구성을 포함합니다.
-- 아직 다른 챕터와 조율 전인 1차 초안입니다.
+- 메타 설명 없이 원고 또는 편집 산출물만 출력합니다.
 """
 
 
-def coordinator_prompt(backbone: str, chapter_drafts: list[dict[str, Any]]) -> str:
+def outline_prompt(backbone: str, chapter: dict[str, Any], config: dict[str, Any]) -> str:
+    return f"""당신은 책 챕터의 구조를 설계하는 outline agent입니다.
+
+{chapter_context(backbone, chapter, config)}
+
+작업:
+1. 챕터 도입부의 hook을 제안합니다.
+2. 3~6개의 주요 절을 설계합니다.
+3. 각 절의 핵심 논점, 사례, 연결 문장을 bullet로 정리합니다.
+4. 전체 책의 다른 챕터와 연결될 전환 메모를 포함합니다.
+
+출력 형식:
+# {chapter['title']} Outline
+## 도입
+...
+## 절 구성
+...
+## 전환 메모
+...
+"""
+
+
+def writer_prompt(backbone: str, chapter: dict[str, Any], config: dict[str, Any], chapter_outline: str) -> str:
+    return f"""당신은 책의 한 챕터를 담당하는 writer agent입니다.
+
+{chapter_context(backbone, chapter, config)}
+
+outline agent 산출물:
+{chapter_outline}
+
+작업:
+- outline의 구조를 따라 완성도 있는 챕터 초안을 작성합니다.
+- bullet 위주가 아니라 출판 원고에 가까운 문단 중심 산문으로 작성합니다.
+- 제목은 Markdown heading으로 시작합니다.
+- 아직 reviewer와 finalizer가 보기 전의 초안이므로, 내용 누락 없이 충분히 씁니다.
+"""
+
+
+def reviewer_prompt(
+    backbone: str,
+    chapter: dict[str, Any],
+    config: dict[str, Any],
+    chapter_outline: str,
+    chapter_draft: str,
+) -> str:
+    return f"""당신은 전문 편집자 reviewer agent입니다.
+
+{chapter_context(backbone, chapter, config)}
+
+outline:
+{chapter_outline}
+
+writer agent 초안:
+{chapter_draft}
+
+작업:
+1. 명확성, 흐름, 완성도, 용어 일관성, 흥미도를 기준으로 초안을 개선합니다.
+2. outline에서 빠진 내용을 보강합니다.
+3. 사실관계가 어색하거나 과장된 부분은 보수적으로 정리합니다.
+
+출력:
+- 리뷰 코멘트가 아니라 개선이 반영된 챕터 전체 원고만 출력합니다.
+"""
+
+
+def finalizer_prompt(backbone: str, chapter: dict[str, Any], config: dict[str, Any], chapter_review: str) -> str:
+    return f"""당신은 최종 원고를 정리하는 finalizer agent입니다.
+
+{chapter_context(backbone, chapter, config)}
+
+reviewer agent 개선 원고:
+{chapter_review}
+
+작업:
+- Markdown heading 계층을 정리합니다.
+- 반복, TODO, 메타 코멘트, 불필요한 안내문을 제거합니다.
+- 문단 사이 전환을 부드럽게 다듬습니다.
+- 챕터 제목으로 시작하는 최종 원고만 출력합니다.
+"""
+
+
+def coordinator_prompt(backbone: str, chapter_drafts: list[dict[str, Any]], config: dict[str, Any]) -> str:
     draft_text = "\n\n".join(
-        f"## {item['chapter']['title']} 초안\n{item['draft']}" for item in chapter_drafts
+        f"## {item['chapter']['title']} 최종안\n{item.get('final', item.get('draft', ''))}" for item in chapter_drafts
     )
+    focus = "\n".join(f"- {item}" for item in config.get("global_review_focus", []))
+    rewrite_policy = "필요한 챕터의 재작성 지시까지 작성합니다." if config.get("allow_global_rewrite") else "원고를 직접 재작성하지 말고 수정 지시만 작성합니다."
     return f"""당신은 전체 책을 조율하는 main writer agent입니다.
 
 책 전체 기획:
 {backbone}
 
-아래는 각 챕터 에이전트의 1차 출력입니다.
+리뷰 모드: {config.get('global_review_mode', 'strict')}
+리뷰 초점:
+{focus}
+
+아래는 각 챕터 파이프라인의 최종 출력입니다.
 {draft_text}
 
 작업:
 1. 전체 책의 논지, 시대 흐름, 용어, 반복/누락을 점검합니다.
 2. 1챕터 초반부와 책의 도입부가 뒤 챕터의 방향과 어긋나는 부분을 찾아 수정 방향을 제시합니다.
 3. 최종 원고에서 초반부가 어떤 관점을 깔아야 하는지 구체적인 편집 지시를 작성합니다.
+4. {rewrite_policy}
 
 출력 형식:
 ## 전체 편집 방향
+...
+
+## 챕터별 수정 지시
 ...
 
 ## 초반부 수정 지시
@@ -306,9 +498,9 @@ def coordinator_prompt(backbone: str, chapter_drafts: list[dict[str, Any]]) -> s
 
 
 def revise_opening_prompt(backbone: str, chapter_drafts: list[dict[str, Any]], coordinator_notes: str) -> str:
-    first_chapter = chapter_drafts[0]["draft"] if chapter_drafts else ""
+    first_chapter = chapter_drafts[0].get("final", chapter_drafts[0].get("draft", "")) if chapter_drafts else ""
     other_summaries = "\n\n".join(
-        f"## {item['chapter']['title']}\n{item['draft'][:2500]}" for item in chapter_drafts[1:]
+        f"## {item['chapter']['title']}\n{item.get('final', item.get('draft', ''))[:2500]}" for item in chapter_drafts[1:]
     )
     return f"""당신은 최종 원고를 다듬는 lead writer입니다.
 
@@ -332,7 +524,7 @@ main writer agent의 조율 메모:
 
 
 def compile_book(title: str, revised_opening: str, chapter_drafts: list[dict[str, Any]], coordinator_notes: str) -> str:
-    remaining = "\n\n".join(item["draft"] for item in chapter_drafts[1:])
+    remaining = "\n\n".join(item.get("final", item.get("draft", "")) for item in chapter_drafts[1:])
     return f"""# {title}
 
 > generated by writing_mach on {time.strftime('%Y-%m-%d %H:%M:%S')}
@@ -351,35 +543,143 @@ def compile_book(title: str, revised_opening: str, chapter_drafts: list[dict[str
 """
 
 
+def worker_slots(config: dict[str, Any]) -> list[dict[str, Any]]:
+    slots: list[dict[str, Any]] = []
+    for worker in config["agent_workers"]:
+        slots.extend([worker] * max(1, int(worker.get("max_parallel") or 1)))
+    return slots or config["agent_workers"]
+
+
+def run_chapter_pipeline(
+    config: dict[str, Any],
+    worker: dict[str, Any],
+    backbone: str,
+    chapter: dict[str, Any],
+    index: int,
+    total: int,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    worker_name = worker.get("name", "worker")
+    pipeline_agents = config.get("pipeline_agents") or DEFAULT_CONFIG["pipeline_agents"]
+    progress_log(
+        "chapter",
+        f"{index}/{total} {chapter['title']} pipeline started on {worker_name} ({','.join(pipeline_agents)})",
+        "yellow",
+    )
+
+    outputs: dict[str, str] = {}
+    current_text = ""
+    for agent in pipeline_agents:
+        agent_started = time.perf_counter()
+        progress_log("agent", f"{chapter['title']}:{agent} -> {worker_name}", "blue")
+        if agent == "outline":
+            current_text = call_model(worker, outline_prompt(backbone, chapter, config))
+            outputs["outline"] = current_text
+        elif agent == "writer":
+            current_text = call_model(worker, writer_prompt(backbone, chapter, config, outputs.get("outline", "")))
+            outputs["draft"] = current_text
+        elif agent == "reviewer":
+            current_text = call_model(
+                worker,
+                reviewer_prompt(
+                    backbone,
+                    chapter,
+                    config,
+                    outputs.get("outline", ""),
+                    outputs.get("draft", current_text),
+                ),
+            )
+            outputs["review"] = current_text
+        elif agent == "finalizer":
+            current_text = call_model(worker, finalizer_prompt(backbone, chapter, config, outputs.get("review", current_text)))
+            outputs["final"] = current_text
+        progress_log(
+            "agent",
+            f"{chapter['title']}:{agent} done ({word_count(current_text)} words)",
+            "green",
+            agent_started,
+        )
+
+    final_text = outputs.get("final") or outputs.get("review") or outputs.get("draft") or outputs.get("outline") or current_text
+    progress_log(
+        "chapter",
+        f"{index}/{total} {chapter['title']} pipeline done on {worker_name} ({word_count(final_text)} words)",
+        "green",
+        started,
+    )
+    return {
+        "chapter": chapter,
+        "worker": worker_name,
+        "elapsed_seconds": time.perf_counter() - started,
+        "outline": outputs.get("outline", ""),
+        "draft": outputs.get("draft", ""),
+        "review": outputs.get("review", ""),
+        "final": final_text,
+    }
+
+
+def run_chapter_with_retry(
+    config: dict[str, Any],
+    worker: dict[str, Any],
+    backbone: str,
+    chapter: dict[str, Any],
+    index: int,
+    total: int,
+) -> dict[str, Any]:
+    last_error = ""
+    for attempt in range(1, int(config["chapter_retry"]) + 1):
+        try:
+            if attempt > 1:
+                progress_log("retry", f"{chapter['title']} attempt {attempt}/{config['chapter_retry']}", "yellow")
+            return run_chapter_pipeline(config, worker, backbone, chapter, index, total)
+        except Exception as exc:
+            last_error = str(exc)
+            progress_log("retry", f"{chapter['title']} failed attempt {attempt}: {last_error}", "red")
+    raise ValueError(f"{chapter['title']} failed after {config['chapter_retry']} attempts: {last_error}")
+
+
 def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict[str, Any]:
+    ensure_dirs()
     backbone_text = (backbone or read_story_backbone()).strip()
     chapters = parse_chapters(backbone_text)
     started = time.perf_counter()
     progress_log("start", f"book agent run started: {len(chapters)} chapters", "bold", started)
     progress_log("backbone", f"title='{title_from_backbone(backbone_text)}'", "cyan", started)
 
-    chapter_drafts: list[dict[str, Any]] = []
-    for index, chapter in enumerate(chapters, start=1):
-        chapter_started = time.perf_counter()
-        progress_log(
-            "chapter",
-            f"{index}/{len(chapters)} {chapter['title']} draft started ({len(chapter['bullets'])} bullets)",
-            "yellow",
-            started,
-        )
-        draft = call_model(config, chapter_prompt(backbone_text, chapter, config))
-        chapter_drafts.append({"chapter": chapter, "draft": draft})
-        progress_log(
-            "chapter",
-            f"{index}/{len(chapters)} {chapter['title']} draft done ({word_count(draft)} words)",
-            "green",
-            chapter_started,
-        )
+    slots = worker_slots(config)
+    max_workers = min(len(chapters), int(config["chapter_parallelism"]), len(slots))
+    progress_log(
+        "dispatch",
+        f"chapter parallelism={max_workers}, worker slots={len(slots)}, pipeline={','.join(config['pipeline_agents'])}",
+        "cyan",
+        started,
+    )
 
-    coordinator_started = time.perf_counter()
-    progress_log("main-writer", "reviewing chapter drafts and preparing direction notes", "magenta", started)
-    coordinator_notes = call_model(config, coordinator_prompt(backbone_text, chapter_drafts))
-    progress_log("main-writer", f"direction notes done ({word_count(coordinator_notes)} words)", "green", coordinator_started)
+    chapter_drafts: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {}
+        for index, chapter in enumerate(chapters, start=1):
+            worker = slots[(index - 1) % len(slots)]
+            future = executor.submit(run_chapter_with_retry, config, worker, backbone_text, chapter, index, len(chapters))
+            futures[future] = chapter
+
+        for future in as_completed(futures):
+            chapter_drafts.append(future.result())
+
+    chapter_drafts.sort(key=lambda item: int(item["chapter"]["number"]))
+
+    if config.get("global_review_enabled"):
+        coordinator_started = time.perf_counter()
+        progress_log("main-writer", "reviewing finalized chapter outputs and preparing direction notes", "magenta", started)
+        coordinator_notes = call_model(config, coordinator_prompt(backbone_text, chapter_drafts, config))
+        progress_log(
+            "main-writer",
+            f"direction notes done ({word_count(coordinator_notes)} words)",
+            "green",
+            coordinator_started,
+        )
+    else:
+        coordinator_notes = "Global review disabled by config."
 
     revise_started = time.perf_counter()
     progress_log("lead-writer", "rewriting opening and early chapter from chapter-agent outputs", "cyan", started)
@@ -400,7 +700,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         json.dumps(
             {
                 "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "config": {key: value for key, value in config.items() if key != "password"},
+                "config": public_config(config),
                 "backbone": backbone_text,
                 "chapters": chapter_drafts,
                 "coordinator_notes": coordinator_notes,
