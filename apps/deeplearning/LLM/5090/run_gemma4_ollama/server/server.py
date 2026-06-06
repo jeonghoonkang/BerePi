@@ -606,8 +606,8 @@ INDEX_HTML = """<!doctype html>
         </div>
       </div>
       <div class="row">
-        <button class="primary" id="send">Send Prompt</button>
-        <button id="cancelPendingPrompts">Cancel Pending Prompts</button>
+        <button class="primary" id="send" type="button" onclick="sendPrompt()">Send Prompt</button>
+        <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
         <span id="busy"></span>
       </div>
       <div class="history-row">
@@ -1721,6 +1721,7 @@ if __name__ == "__main__":
     }
 
     async function sendPrompt() {
+      if (sendButton.disabled) return;
       const startedAt = performance.now();
       const startedDate = new Date();
       const sendButtonLabel = sendButton.textContent;
@@ -1769,6 +1770,7 @@ if __name__ == "__main__":
         refreshStatus();
       }
     }
+    window.sendPrompt = sendPrompt;
 
     async function postControl(path, label) {
       controlStatus.textContent = `${label}...`;
