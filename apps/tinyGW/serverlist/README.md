@@ -9,13 +9,15 @@ hexagon 조각으로 위치를 나누고, 각 조각을 클릭해 서버 세부 
 - hexagon 조각 클릭 시 해당 위치의 서버 목록 표시
 - 서버명, IP주소, Public IP, 포트번호, 상태, 메모 입력
 - 서버 수정, 삭제, 다른 hexagon 위치로 이동
-- `servers.json` 파일에 데이터 저장
+- GitHub의 `_server_list.json` 파일에 데이터 저장
 
 ## 실행
 
 ```bash
 cd BerePi/apps/tinyGW/serverlist
 pip install -r requirements.txt
+cp config_key.conf.sample config_key.conf
+vi config_key.conf
 ./run.sh
 ```
 
@@ -41,7 +43,7 @@ py -m streamlit run app.py --server.address 0.0.0.0 --server.port 2298
 
 1. `Hexagon 개수`를 입력합니다.
 2. `한 줄당 hexagon 개수`를 입력합니다.
-3. `서버 리스트 시작`을 누르면 `servers.json`이 생성됩니다.
+3. `서버 리스트 시작`을 누르면 GitHub의 `_server_list.json`이 생성됩니다.
 
 이후부터는 저장된 hexagon 구성을 기준으로 서버 리스트 관리 화면이 열립니다.
 
@@ -53,8 +55,23 @@ py -m streamlit run app.py --server.address 0.0.0.0 --server.port 2298
 
 기본 저장 위치:
 
-```text
-BerePi/apps/tinyGW/serverlist/servers.json
+https://github.com/KETI-IISRC-AX/SW-Platform/blob/main/_server_list.json
+
+GitHub에 저장하려면 `config_key.conf`에 쓰기 권한이 있는 토큰을 설정해야 합니다.
+
+```conf
+SERVERLIST_GITHUB_TOKEN=github_pat_...
 ```
 
-백업이 필요하면 앱 하단의 `servers.json 다운로드` 버튼을 사용하면 됩니다.
+토큰은 `SERVERLIST_GITHUB_TOKEN` 환경변수 또는 Streamlit secret으로도 설정할 수 있습니다.
+
+기본 대상은 아래 환경변수로 변경할 수 있습니다.
+
+```bash
+SERVERLIST_GITHUB_OWNER=KETI-IISRC-AX
+SERVERLIST_GITHUB_REPO=SW-Platform
+SERVERLIST_GITHUB_BRANCH=main
+SERVERLIST_GITHUB_PATH=_server_list.json
+```
+
+백업이 필요하면 앱 하단의 `_server_list.json 다운로드` 버튼을 사용하면 됩니다.

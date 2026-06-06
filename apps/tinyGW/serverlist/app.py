@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import base64
 import html
 import ipaddress
 import json
 import math
+import os
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -13,7 +17,13 @@ import streamlit as st
 
 
 APP_DIR = Path(__file__).resolve().parent
-DATA_FILE = APP_DIR / "servers.json"
+CONFIG_KEY_FILE = Path(os.getenv("SERVERLIST_CONFIG_KEY_FILE", APP_DIR / "config_key.conf"))
+GITHUB_OWNER = os.getenv("SERVERLIST_GITHUB_OWNER", "KETI-IISRC-AX")
+GITHUB_REPO = os.getenv("SERVERLIST_GITHUB_REPO", "SW-Platform")
+GITHUB_BRANCH = os.getenv("SERVERLIST_GITHUB_BRANCH", "main")
+GITHUB_PATH = os.getenv("SERVERLIST_GITHUB_PATH", "_server_list.json")
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
+GITHUB_FILE_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/blob/{GITHUB_BRANCH}/{GITHUB_PATH}"
 
 DEFAULT_HEX_COUNT = 24
 MAX_HEX_COUNT = 200
@@ -23,6 +33,116 @@ MAP_MAX_WIDTH = 980
 MAP_MAX_HEIGHT = 640
 MAP_MIN_RADIUS = 13
 SERVER_ITEM_OPTIONS = ["GPU 5090", "camera", "nextcloud", "raspberrypi", "GPU 4090", "GPU spark"]
+
+
+class GitHubStorageError(RuntimeError):
+    pass
+
+
+def read_config_key_file() -> dict[str, str]:
+    if not CONFIG_KEY_FILE.exists():
+        return {}
+
+    try:
+        text = CONFIG_KEY_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return {}
+
+    if not text:
+        return {}
+
+    try:
+        data = json.loads(text)
+        return {str(key): str(value) for key, value in data.items() if value is not None} if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        pass
+
+    config: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        config[key.strip()] = value.strip().strip("\"'")
+    return config
+
+
+def github_token() -> str:
+    for key in ("SERVERLIST_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"):
+        value = os.getenv(key)
+        if value:
+            return value
+
+    config = read_config_key_file()
+    for key in ("SERVERLIST_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN", "github_token"):
+        value = config.get(key)
+        if value:
+            return value
+
+    try:
+        value = st.secrets.get("SERVERLIST_GITHUB_TOKEN") or st.secrets.get("github_token")
+    except Exception:
+        value = None
+    return str(value or "")
+
+
+def github_headers(require_token: bool = False) -> dict[str, str]:
+    token = github_token()
+    if require_token and not token:
+        raise GitHubStorageError(
+            "GitHub 저장을 위해 SERVERLIST_GITHUB_TOKEN 환경변수, config_key.conf, 또는 Streamlit secret이 필요합니다."
+        )
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "tinygw-serverlist",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def github_request(method: str, url: str, payload: Optional[dict] = None, require_token: bool = False) -> dict:
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+
+    request = urllib.request.Request(url, data=data, method=method, headers=github_headers(require_token))
+    if payload is not None:
+        request.add_header("Content-Type", "application/json")
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise FileNotFoundError(GITHUB_PATH) from error
+        try:
+            body = json.loads(error.read().decode("utf-8"))
+            message = body.get("message", str(error))
+        except Exception:
+            message = str(error)
+        raise GitHubStorageError(f"GitHub API 오류({error.code}): {message}") from error
+    except urllib.error.URLError as error:
+        raise GitHubStorageError(f"GitHub API 연결 실패: {error.reason}") from error
+
+
+def get_github_file() -> Optional[dict]:
+    try:
+        return github_request("GET", f"{GITHUB_API_URL}?ref={GITHUB_BRANCH}")
+    except FileNotFoundError:
+        return None
+
+
+def decode_github_json(file_info: dict) -> dict:
+    content = file_info.get("content", "")
+    encoding = file_info.get("encoding", "")
+    if encoding != "base64":
+        raise GitHubStorageError(f"지원하지 않는 GitHub 파일 인코딩입니다: {encoding}")
+
+    raw = base64.b64decode(content).decode("utf-8")
+    return json.loads(raw)
 
 
 def now_text() -> str:
@@ -124,17 +244,25 @@ def normalize_data(data: dict) -> dict:
 
 
 def load_data() -> Optional[dict]:
-    if not DATA_FILE.exists():
+    file_info = get_github_file()
+    if file_info is None:
         return None
 
-    with DATA_FILE.open("r", encoding="utf-8") as file:
-        return normalize_data(json.load(file))
+    return normalize_data(decode_github_json(file_info))
 
 
 def save_data(data: dict) -> None:
     data["updated_at"] = now_text()
-    with DATA_FILE.open("w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    file_info = get_github_file()
+    payload = {
+        "message": f"Update {GITHUB_PATH} from tinyGW serverlist",
+        "content": base64.b64encode(json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")).decode("ascii"),
+        "branch": GITHUB_BRANCH,
+    }
+    if file_info is not None:
+        payload["sha"] = file_info["sha"]
+
+    github_request("PUT", GITHUB_API_URL, payload=payload, require_token=True)
 
 
 def get_query_zone(data: dict) -> str:
@@ -699,11 +827,11 @@ def main() -> None:
         render_edit_form(data, selected_zone)
 
     with st.expander("JSON 데이터 파일"):
-        st.code(str(DATA_FILE), language="text")
+        st.markdown(f"[{GITHUB_OWNER}/{GITHUB_REPO}/{GITHUB_PATH}]({GITHUB_FILE_URL})")
         st.download_button(
-            "servers.json 다운로드",
+            "_server_list.json 다운로드",
             data=json.dumps(data, ensure_ascii=False, indent=2),
-            file_name="servers.json",
+            file_name="_server_list.json",
             mime="application/json",
             use_container_width=True,
         )
