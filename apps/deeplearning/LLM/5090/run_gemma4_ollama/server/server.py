@@ -606,7 +606,7 @@ INDEX_HTML = """<!doctype html>
         </div>
       </div>
       <div class="row">
-        <button class="primary" id="send" type="button" onclick="window.sendPrompt(event)">Send Prompt</button>
+        <button class="primary" id="send" type="button" onclick="window.submitPromptNow(event)">Send Prompt</button>
         <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
         <span id="busy"></span>
       </div>
@@ -828,7 +828,7 @@ if __name__ == "__main__":
   </main>
 
   <script>
-    window.sendPrompt = async function(event) {
+    window.submitPromptNow = async function(event) {
       if (event && typeof event.preventDefault === "function") event.preventDefault();
       const button = document.getElementById("send");
       if (button && button.disabled) return;
@@ -859,15 +859,16 @@ if __name__ == "__main__":
         button.disabled = true;
         button.textContent = "Thinking...";
       }
-      if (busy) busy.textContent = "Thinking... sending prompt";
-      if (answer) answer.textContent = "Thinking... sending prompt";
+      const requestText = prompts.join("\n\n");
+      if (busy) busy.textContent = "Sending prompt to /api/generate...";
+      if (answer) answer.textContent = `Sending prompt:\n\n${requestText}`;
       try {
         const startedAt = performance.now();
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            prompt: prompts.join("\n\n"),
+            prompt: requestText,
             prompts,
             ...auth,
           }),
@@ -2009,7 +2010,6 @@ if __name__ == "__main__":
 
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     pageTabs.forEach((tab) => tab.addEventListener("click", () => showTab(tab.dataset.tab)));
-    sendButton.addEventListener("click", sendPrompt);
     copyAnswerButton.addEventListener("click", copyAnswer);
     ocrImage.addEventListener("change", () => previewImage(ocrImage, ocrPreview));
     yoloImage.addEventListener("change", () => previewImage(yoloImage, yoloPreview));
