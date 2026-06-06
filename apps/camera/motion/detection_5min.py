@@ -13,8 +13,8 @@ import re
 import shlex
 import sys
 import time
+import urllib.parse
 import warnings
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -32,11 +32,13 @@ MODEL_FAILURE_ALERT_INTERVAL_SECONDS = 60 * 60
 @dataclass
 class ModelConfig:
     endpoint_url: str
+    result_url: str
     model_name: str
     prompt: str
     user_id: str
     user_pw: str
     timeout_seconds: int
+    poll_interval_seconds: float
 
 
 @dataclass
@@ -69,6 +71,13 @@ def get_config_int(section: configparser.SectionProxy, key: str, default: int) -
         return default
 
 
+def get_config_float(section: configparser.SectionProxy, key: str, default: float) -> float:
+    try:
+        return section.getfloat(key, fallback=default)
+    except ValueError:
+        return default
+
+
 def get_config_bool(section: configparser.SectionProxy, key: str, default: bool) -> bool:
     try:
         return section.getboolean(key, fallback=default)
@@ -88,9 +97,12 @@ def load_config(config_path: Path) -> AppConfig:
     motion_section = parser["motion"] if parser.has_section("motion") else parser["DEFAULT"]
 
     endpoint_url = get_config_value(model_section, "endpoint_url", "")
-    server_url = get_config_value(model_section, "server_url", "http://127.0.0.1:11434")
+    result_url = get_config_value(model_section, "result_url", "")
+    server_url = get_config_value(model_section, "server_url", "http://127.0.0.1:8082")
     if not endpoint_url:
-        endpoint_url = f"{server_url.rstrip('/')}/api/generate"
+        endpoint_url = f"{server_url.rstrip('/')}/api/enqueue-generate"
+    if not result_url:
+        result_url = f"{server_url.rstrip('/')}/api/prompt-result"
 
     telegram_token = get_config_value(telegram_section, "bot_token") or get_config_value(telegram_section, "token")
     telegram_chat_id = get_config_value(telegram_section, "chat_id")
@@ -105,11 +117,13 @@ def load_config(config_path: Path) -> AppConfig:
     return AppConfig(
         model=ModelConfig(
             endpoint_url=endpoint_url,
+            result_url=result_url,
             model_name=get_config_value(model_section, "model_name", "gemma4:31b"),
             prompt=get_config_value(model_section, "prompt"),
             user_id=get_config_value(model_section, "user_id"),
             user_pw=get_config_value(model_section, "user_pw") or get_config_value(model_section, "password"),
-            timeout_seconds=get_config_int(model_section, "timeout_seconds", 120),
+            timeout_seconds=get_config_int(model_section, "timeout_seconds", 600),
+            poll_interval_seconds=max(0.2, get_config_float(model_section, "poll_interval_seconds", 1.0)),
         ),
         telegram=TelegramConfig(
             token=telegram_token,
@@ -217,6 +231,8 @@ def build_model_headers(config: ModelConfig) -> dict[str, str]:
 
 def extract_model_text(payload: Any) -> str:
     if isinstance(payload, dict):
+        if isinstance(payload.get("visible_response"), str):
+            return payload["visible_response"]
         if isinstance(payload.get("response"), str):
             return payload["response"]
         choices = payload.get("choices")
@@ -233,6 +249,40 @@ def extract_model_text(payload: Any) -> str:
     return str(payload)
 
 
+def prompt_result_url(config: ModelConfig, job_id: int) -> str:
+    separator = "&" if urllib.parse.urlparse(config.result_url).query else "?"
+    return f"{config.result_url}{separator}{urllib.parse.urlencode({'id': job_id})}"
+
+
+def wait_for_model_result(config: ModelConfig, job_id: int, requests_module: Any) -> dict[str, Any]:
+    timeout_seconds = max(1, config.timeout_seconds)
+    deadline = time.monotonic() + timeout_seconds
+    poll_count = 1
+
+    while True:
+        elapsed_seconds = int(max(0.0, timeout_seconds - (deadline - time.monotonic())))
+        print(
+            f"4. queue 결과 대기중 "
+            f"(job_id: {job_id} / poll: {poll_count} / time out : {timeout_seconds}초 / 현재 {elapsed_seconds}초)",
+            flush=True,
+        )
+        response = requests_module.get(
+            prompt_result_url(config, job_id),
+            headers=build_model_headers(config),
+            timeout=min(30, timeout_seconds),
+        )
+        response.raise_for_status()
+        data = response.json()
+        if data.get("done"):
+            if data.get("error"):
+                raise RuntimeError(str(data.get("error")))
+            return data
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"prompt job {job_id} did not finish within {timeout_seconds}s")
+        poll_count += 1
+        time.sleep(config.poll_interval_seconds)
+
+
 def detect_person_via_model(image_path: Path, config: ModelConfig) -> str:
     requests_module = get_requests_module()
     image_base64 = encode_image_base64(image_path)
@@ -244,33 +294,25 @@ def detect_person_via_model(image_path: Path, config: ModelConfig) -> str:
     }
 
     timeout_seconds = max(1, config.timeout_seconds)
-    print("3. AI 모델 접속 완료", flush=True)
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(
-            requests_module.post,
-            config.endpoint_url,
-            json=payload,
-            headers=build_model_headers(config),
-            timeout=timeout_seconds,
-        )
-        started_at = time.monotonic()
-        while not future.done():
-            elapsed_seconds = int(time.monotonic() - started_at)
-            print(f"4. 회신 대기중 (time out : {timeout_seconds}초 / 현재 {elapsed_seconds}초)", flush=True)
-            try:
-                response = future.result(timeout=1)
-                break
-            except TimeoutError:
-                continue
-        else:
-            response = future.result()
-
+    print("3. AI 모델 queue 접속 완료", flush=True)
+    response = requests_module.post(
+        config.endpoint_url,
+        json=payload,
+        headers=build_model_headers(config),
+        timeout=min(30, timeout_seconds),
+    )
     response.raise_for_status()
+    enqueue_data = response.json()
     try:
-        return extract_model_text(response.json())
+        job_id = int(enqueue_data.get("prompt_queue_id"))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"queue 응답에 prompt_queue_id가 없습니다: {enqueue_data}") from exc
+    print(f"3-1. queue 등록 완료: job_id={job_id}", flush=True)
+    result_data = wait_for_model_result(config, job_id, requests_module)
+    try:
+        return extract_model_text(result_data)
     except ValueError:
-        return response.text
+        return str(result_data)
 
 
 def parse_model_response(response_text: str) -> tuple[bool, int]:
@@ -549,7 +591,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
         try:
             model_response = detect_person_via_model(image_path, config.model)
-        except requests_module.RequestException as exc:
+        except (requests_module.RequestException, RuntimeError, TimeoutError, ValueError) as exc:
             print(f"model request failed: {image_path.name}: {exc}", file=sys.stderr)
             notify_model_failure(config, image_path, exc, dry_run=dry_run)
             continue
