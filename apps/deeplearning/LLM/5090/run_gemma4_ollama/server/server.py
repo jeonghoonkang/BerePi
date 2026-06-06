@@ -18,6 +18,7 @@ import threading
 import time
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -60,8 +61,11 @@ ACCESS_LOG_LOCK = threading.RLock()
 PROMPT_QUEUE_MAX_SIZE = int(os.getenv("PROMPT_QUEUE_MAX_SIZE", "30"))
 PROMPT_QUEUE_CONDITION = threading.Condition()
 PROMPT_QUEUE: list["PromptJob"] = []
+PROMPT_JOBS: dict[int, "PromptJob"] = {}
 PROMPT_QUEUE_ACTIVE = False
 PROMPT_QUEUE_NEXT_ID = 1
+PROMPT_WORKER_STARTED = False
+PROMPT_JOB_HISTORY_LIMIT = int(os.getenv("PROMPT_JOB_HISTORY_LIMIT", "200"))
 PROMPT_SPEED_STATS_LOCK = threading.RLock()
 SESSION_COOKIE_NAME = "gemma4_session"
 SESSION_TTL_SECONDS = int(os.getenv("GEMMA4_SESSION_TTL_SECONDS", "28800"))
@@ -75,6 +79,11 @@ class PromptJob:
     payload: dict[str, Any]
     enqueued_at: float = field(default_factory=time.time)
     cancelled: bool = False
+    done: bool = False
+    result: dict[str, Any] | None = None
+    error: str = ""
+    prompts_ahead_on_enqueue: int = 0
+    enqueue_queue: dict[str, Any] = field(default_factory=dict)
 
 
 INDEX_HTML = """<!doctype html>
@@ -607,7 +616,7 @@ INDEX_HTML = """<!doctype html>
         </div>
       </div>
       <div class="row">
-        <button class="primary" id="send" type="button" onclick="window.submitPromptNow(event)">Send Prompt</button>
+        <button class="primary" id="send" type="button" onclick="window.sendPrompt(event)">Send Prompt</button>
         <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
         <span id="busy"></span>
       </div>
@@ -828,68 +837,6 @@ if __name__ == "__main__":
     </section>
   </main>
 
-  <script>
-    window.submitPromptNow = async function(event) {
-      if (event && typeof event.preventDefault === "function") event.preventDefault();
-      const button = document.getElementById("send");
-      if (button && button.disabled) return;
-      const busy = document.getElementById("busy");
-      const answer = document.getElementById("answer");
-      const prompt1 = document.getElementById("prompt1");
-      const prompt2 = document.getElementById("prompt2");
-      const userId = document.getElementById("userId");
-      const password = document.getElementById("password");
-      const prompts = [prompt1 && prompt1.value, prompt2 && prompt2.value]
-        .map((value) => String(value || "").trim())
-        .filter(Boolean);
-      if (!prompts.length) {
-        if (busy) busy.textContent = "Prompt is required.";
-        if (answer) answer.textContent = "Prompt is required.";
-        return;
-      }
-      const auth = {
-        user_id: userId ? userId.value.trim() : "",
-        password: password ? password.value : "",
-      };
-      if (!auth.user_id || !auth.password) {
-        if (busy) busy.textContent = "User ID and password are required.";
-        if (answer) answer.textContent = "User ID and password are required.";
-        return;
-      }
-      if (button) {
-        button.disabled = true;
-        button.textContent = "Thinking...";
-      }
-      const requestText = prompts.join("\n\n");
-      if (busy) busy.textContent = "Sending prompt to /api/generate...";
-      if (answer) answer.textContent = `Sending prompt:\n\n${requestText}`;
-      try {
-        const startedAt = performance.now();
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            prompt: requestText,
-            prompts,
-            ...auth,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Request failed");
-        const text = data.visible_response || data.response || JSON.stringify(data, null, 2);
-        if (answer) answer.textContent = text;
-        if (busy) busy.textContent = `Done in ${((performance.now() - startedAt) / 1000).toFixed(2)}s`;
-      } catch (err) {
-        if (answer) answer.textContent = String(err);
-        if (busy) busy.textContent = String(err);
-      } finally {
-        if (button) {
-          button.disabled = false;
-          button.textContent = "Send Prompt";
-        }
-      }
-    };
-  </script>
   <script>
     const metrics = document.getElementById("metrics");
     const answer = document.getElementById("answer");
@@ -1568,7 +1515,7 @@ if __name__ == "__main__":
       if (!clipboardText) {
         return prompt;
       }
-      return `${prompt}\n\nClipboard text:\n${clipboardText}`;
+      return `${prompt}\\n\\nClipboard text:\\n${clipboardText}`;
     }
 
     async function runVisionTask({input, promptInput, clipboardInput, output, status, label, afterResult}) {
@@ -1614,7 +1561,7 @@ if __name__ == "__main__":
         if (!res.ok) throw new Error(data.error || "Request failed");
         const rawResponseText = data.visible_response || data.response || JSON.stringify(data, null, 2);
         const responseText = formatGenerateResponse(data);
-        setPanelMarkdown(output, `${responseText}\n\n${resultLine(data, elapsedSeconds)}`);
+        setPanelMarkdown(output, `${responseText}\\n\\n${resultLine(data, elapsedSeconds)}`);
         status.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
         if (afterResult) {
           await afterResult(file, rawResponseText);
@@ -1704,10 +1651,10 @@ if __name__ == "__main__":
       }
       const queueText = queueParts.length ? `Queue: ${queueParts.join(" | ")}` : "";
       return [
-        thinking ? `## Thinking\n\n${thinking}` : "",
-        thinking ? `## Response\n\n${response}` : response,
+        thinking ? `## Thinking\\n\\n${thinking}` : "",
+        thinking ? `## Response\\n\\n${response}` : response,
         queueText,
-      ].filter(Boolean).join("\n\n");
+      ].filter(Boolean).join("\\n\\n");
     }
 
     function formatRunStartedAt(date) {
@@ -1817,7 +1764,7 @@ if __name__ == "__main__":
           throw new Error("User ID and password are required.");
         }
         const payload = {
-          prompt: prompts.join("\n\n"),
+          prompt: prompts.join("\\n\\n"),
           prompts,
           ...auth,
         };
@@ -1835,7 +1782,7 @@ if __name__ == "__main__":
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
         if (!res.ok) throw new Error(data.error || "Request failed");
         const responseText = formatGenerateResponse(data);
-        setAnswerMarkdown(`${responseText}\n\n${resultLine(data, elapsedSeconds)}`);
+        setAnswerMarkdown(`${responseText}\\n\\n${resultLine(data, elapsedSeconds)}`);
         busy.textContent = `Done in ${elapsedSeconds.toFixed(2)}s`;
       } catch (err) {
         const elapsedSeconds = (performance.now() - startedAt) / 1000;
@@ -2710,6 +2657,8 @@ def cancel_pending_prompts() -> dict[str, Any]:
         cancelled_prompt_ids = [job.id for job in PROMPT_QUEUE]
         for job in PROMPT_QUEUE:
             job.cancelled = True
+            job.result = cancelled_prompt_response(job)
+            job.done = True
         PROMPT_QUEUE.clear()
         PROMPT_QUEUE_CONDITION.notify_all()
 
@@ -2793,60 +2742,162 @@ def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
     return attach_thinking_fields(result)
 
 
-def run_queued_prompt(payload: dict[str, Any]) -> dict[str, Any]:
-    global PROMPT_QUEUE_ACTIVE, PROMPT_QUEUE_NEXT_ID
+def trim_prompt_jobs_locked() -> None:
+    if len(PROMPT_JOBS) <= PROMPT_JOB_HISTORY_LIMIT:
+        return
+    removable = sorted(
+        (job for job in PROMPT_JOBS.values() if job.done),
+        key=lambda job: job.enqueued_at,
+    )
+    for job in removable[: max(0, len(PROMPT_JOBS) - PROMPT_JOB_HISTORY_LIMIT)]:
+        PROMPT_JOBS.pop(job.id, None)
+
+
+def enqueue_prompt_job(payload: dict[str, Any]) -> PromptJob | None:
+    global PROMPT_QUEUE_NEXT_ID
 
     with PROMPT_QUEUE_CONDITION:
         if len(PROMPT_QUEUE) >= PROMPT_QUEUE_MAX_SIZE:
-            return queue_full_response()
+            return None
 
         job = PromptJob(id=PROMPT_QUEUE_NEXT_ID, payload=payload)
         PROMPT_QUEUE_NEXT_ID += 1
         PROMPT_QUEUE.append(job)
-        prompts_ahead = max(0, len(PROMPT_QUEUE) - 1) + (1 if PROMPT_QUEUE_ACTIVE else 0)
-        enqueue_queue = {
+        PROMPT_JOBS[job.id] = job
+        job.prompts_ahead_on_enqueue = max(0, len(PROMPT_QUEUE) - 1) + (1 if PROMPT_QUEUE_ACTIVE else 0)
+        job.enqueue_queue = {
             "active": PROMPT_QUEUE_ACTIVE,
             "pending_count": len(PROMPT_QUEUE),
             "max_pending_count": PROMPT_QUEUE_MAX_SIZE,
             "pending_prompt_ids": [queued_job.id for queued_job in PROMPT_QUEUE],
             "average_prompt_processing_seconds": average_prompt_processing_seconds(),
-            "estimated_wait_seconds": estimated_prompt_wait_seconds(prompts_ahead),
+            "estimated_wait_seconds": estimated_prompt_wait_seconds(job.prompts_ahead_on_enqueue),
         }
+        trim_prompt_jobs_locked()
+        ensure_prompt_worker_locked()
         PROMPT_QUEUE_CONDITION.notify_all()
+        return job
 
-        while True:
-            if job.cancelled:
-                return cancelled_prompt_response(job)
-            if PROMPT_QUEUE and PROMPT_QUEUE[0] is job and not PROMPT_QUEUE_ACTIVE:
-                PROMPT_QUEUE_ACTIVE = True
-                PROMPT_QUEUE.pop(0)
-                PROMPT_QUEUE_CONDITION.notify_all()
-                break
-            PROMPT_QUEUE_CONDITION.wait()
 
-    try:
-        processing_started_at = time.time()
-        result = run_ollama_generate(payload)
-        stats = record_prompt_processing_time(float(result.get("elapsed_seconds") or 0.0), str(result.get("model") or payload["model"]))
-        result["prompt_queue_id"] = job.id
-        result["pending_prompt_count_on_enqueue"] = enqueue_queue["pending_count"]
-        result["prompts_ahead_on_enqueue"] = prompts_ahead
-        result["estimated_wait_seconds_on_enqueue"] = enqueue_queue["estimated_wait_seconds"]
-        result["average_prompt_processing_seconds_on_enqueue"] = enqueue_queue["average_prompt_processing_seconds"]
-        result["queue_wait_seconds"] = round(processing_started_at - job.enqueued_at, 3)
-        result["queue"] = prompt_queue_status()
-        result["prompt_processing_stats"] = {
-            "stats_path": stats.get("stats_path"),
-            "week_start_date": stats.get("week_start_date"),
-            "sample_count": stats.get("sample_count"),
-            "average_processing_seconds": stats.get("average_processing_seconds"),
-            "last_processing_seconds": stats.get("last_processing_seconds"),
-        }
-        return result
-    finally:
+def ensure_prompt_worker_locked() -> None:
+    global PROMPT_WORKER_STARTED
+    if PROMPT_WORKER_STARTED:
+        return
+    PROMPT_WORKER_STARTED = True
+    threading.Thread(target=prompt_worker_loop, name="gemma4-prompt-worker", daemon=True).start()
+
+
+def prompt_worker_loop() -> None:
+    global PROMPT_QUEUE_ACTIVE
+
+    while True:
         with PROMPT_QUEUE_CONDITION:
-            PROMPT_QUEUE_ACTIVE = False
+            while not PROMPT_QUEUE:
+                PROMPT_QUEUE_CONDITION.wait()
+            job = PROMPT_QUEUE.pop(0)
+            PROMPT_QUEUE_ACTIVE = True
             PROMPT_QUEUE_CONDITION.notify_all()
+
+        try:
+            if job.cancelled:
+                job.result = cancelled_prompt_response(job)
+            else:
+                processing_started_at = time.time()
+                result = run_ollama_generate(job.payload)
+                stats = record_prompt_processing_time(
+                    float(result.get("elapsed_seconds") or 0.0),
+                    str(result.get("model") or job.payload["model"]),
+                )
+                result["prompt_queue_id"] = job.id
+                result["pending_prompt_count_on_enqueue"] = job.enqueue_queue["pending_count"]
+                result["prompts_ahead_on_enqueue"] = job.prompts_ahead_on_enqueue
+                result["estimated_wait_seconds_on_enqueue"] = job.enqueue_queue["estimated_wait_seconds"]
+                result["average_prompt_processing_seconds_on_enqueue"] = job.enqueue_queue["average_prompt_processing_seconds"]
+                result["queue_wait_seconds"] = round(processing_started_at - job.enqueued_at, 3)
+                result["queue"] = prompt_queue_status()
+                result["prompt_processing_stats"] = {
+                    "stats_path": stats.get("stats_path"),
+                    "week_start_date": stats.get("week_start_date"),
+                    "sample_count": stats.get("sample_count"),
+                    "average_processing_seconds": stats.get("average_processing_seconds"),
+                    "last_processing_seconds": stats.get("last_processing_seconds"),
+                }
+                job.result = result
+        except Exception as exc:
+            job.error = str(exc)
+        finally:
+            with PROMPT_QUEUE_CONDITION:
+                job.done = True
+                PROMPT_QUEUE_ACTIVE = False
+                PROMPT_QUEUE_CONDITION.notify_all()
+
+
+def queued_prompt_ack(job: PromptJob) -> dict[str, Any]:
+    return {
+        "queued": True,
+        "done": False,
+        "prompt_queue_id": job.id,
+        "pending_prompt_count_on_enqueue": job.enqueue_queue["pending_count"],
+        "prompts_ahead_on_enqueue": job.prompts_ahead_on_enqueue,
+        "estimated_wait_seconds_on_enqueue": job.enqueue_queue["estimated_wait_seconds"],
+        "average_prompt_processing_seconds_on_enqueue": job.enqueue_queue["average_prompt_processing_seconds"],
+        "queue_wait_seconds": 0.0,
+        "queue": prompt_queue_status(),
+        "queue_line": queue_line_for_job(job, queue_wait_seconds=0.0),
+    }
+
+
+def queue_line_for_job(job: PromptJob, queue_wait_seconds: float | None = None) -> str:
+    if queue_wait_seconds is None and job.result:
+        queue_wait_seconds = float(job.result.get("queue_wait_seconds") or 0.0)
+    if queue_wait_seconds is None:
+        queue_wait_seconds = 0.0
+    return (
+        f"Queue: Queue ID: {job.id} | "
+        f"Prompts ahead: {job.prompts_ahead_on_enqueue} | "
+        f"Estimated wait: {float(job.enqueue_queue.get('estimated_wait_seconds') or 0.0):.2f}s | "
+        f"Queue wait: {queue_wait_seconds:.2f}s | "
+        f"Pending on enqueue: {job.enqueue_queue.get('pending_count', 0)}"
+    )
+
+
+def prompt_job_snapshot(job_id: int) -> dict[str, Any] | None:
+    with PROMPT_QUEUE_CONDITION:
+        job = PROMPT_JOBS.get(job_id)
+        if not job:
+            return None
+        if job.done and job.result:
+            result = dict(job.result)
+            result["done"] = True
+            result["queued"] = False
+            result["queue_line"] = queue_line_for_job(job)
+            return result
+        if job.done and job.error:
+            return {
+                "done": True,
+                "queued": False,
+                "prompt_queue_id": job.id,
+                "error": job.error,
+                "queue_line": queue_line_for_job(job),
+            }
+        snapshot = queued_prompt_ack(job)
+        snapshot["processing"] = job not in PROMPT_QUEUE
+        return snapshot
+
+
+def run_queued_prompt(payload: dict[str, Any]) -> dict[str, Any]:
+    job = enqueue_prompt_job(payload)
+    if not job:
+        return queue_full_response()
+
+    with PROMPT_QUEUE_CONDITION:
+        while not job.done:
+            PROMPT_QUEUE_CONDITION.wait()
+        if job.result:
+            return job.result
+        if job.error:
+            raise RuntimeError(job.error)
+        return {"error": "prompt job finished without a result", "prompt_queue_id": job.id}
 
 
 def list_ollama_models() -> list[str]:
@@ -3392,6 +3443,20 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/workspace/files":
             self.send_json({"workspace_dir": str(ensure_workspace_dir()), "files": list_workspace_files()})
             return
+        parsed_path = urllib.parse.urlparse(self.path)
+        if parsed_path.path == "/api/prompt-result":
+            params = urllib.parse.parse_qs(parsed_path.query)
+            try:
+                job_id = int((params.get("id") or [""])[0])
+            except ValueError:
+                self.send_json({"error": "valid id query parameter is required"}, HTTPStatus.BAD_REQUEST)
+                return
+            snapshot = prompt_job_snapshot(job_id)
+            if not snapshot:
+                self.send_json({"error": "prompt job not found"}, HTTPStatus.NOT_FOUND)
+                return
+            self.send_json(snapshot)
+            return
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -3581,9 +3646,10 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
-        if self.path != "/api/generate":
+        if self.path not in {"/api/generate", "/api/enqueue-generate"}:
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
+        wait_for_result = self.path == "/api/generate"
         try:
             length = int(self.headers.get("Content-Length", "0"))
             incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
@@ -3616,13 +3682,20 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             }
             if images:
                 payload["images"] = images
-            result = run_queued_prompt(payload)
+            if wait_for_result:
+                result = run_queued_prompt(payload)
+            else:
+                job = enqueue_prompt_job(payload)
+                if not job:
+                    self.send_json(queue_full_response(), HTTPStatus.TOO_MANY_REQUESTS)
+                    return
+                result = queued_prompt_ack(job)
             if images:
                 result["image_count"] = len(images)
             self.send_json(result)
         except ValueError as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-        except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
 
 
