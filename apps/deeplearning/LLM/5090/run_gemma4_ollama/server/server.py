@@ -2746,6 +2746,39 @@ def cancelled_prompt_response(job: PromptJob) -> dict[str, Any]:
     }
 
 
+def prompt_log_preview(prompt: str, limit: int = 160) -> str:
+    preview = re.sub(r"\s+", " ", str(prompt or "")).strip()
+    if len(preview) > limit:
+        return f"{preview[:limit]}..."
+    return preview
+
+
+def print_prompt_request_received(
+    *,
+    user_id: str,
+    client_ip: str,
+    prompt: str,
+    prompts: list[str],
+    model: str,
+    image_count: int,
+) -> None:
+    queue = prompt_queue_status()
+    print(
+        "[Send Prompt] "
+        f"user={user_id or 'unknown'} "
+        f"client={client_ip or 'unknown'} "
+        f"model={model} "
+        f"prompt_count={len(prompts)} "
+        f"prompt_chars={len(prompt)} "
+        f"image_count={image_count} "
+        f"queue_active={queue['active']} "
+        f"pending={queue['pending_count']} "
+        f"estimated_wait={queue['estimated_wait_seconds']:.2f}s "
+        f"preview={prompt_log_preview(prompt)!r}",
+        flush=True,
+    )
+
+
 def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
     started_at = time.perf_counter()
     result = request_json("/api/generate", payload=payload)
@@ -3564,14 +3597,23 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 return
             remember_prompts(prompts)
             remember_user_prompt(user_id, prompt)
+            selected_model = str(incoming.get("model") or read_selected_model())
+            images = images_from_request(incoming)
+            print_prompt_request_received(
+                user_id=user_id,
+                client_ip=self.client_address[0] if self.client_address else "",
+                prompt=prompt,
+                prompts=prompts,
+                model=selected_model,
+                image_count=len(images),
+            )
             payload = {
-                "model": str(incoming.get("model") or read_selected_model()),
+                "model": selected_model,
                 "prompt": prompt,
                 "options": request_options(incoming),
                 "keep_alive": request_keep_alive(incoming),
                 "stream": False,
             }
-            images = images_from_request(incoming)
             if images:
                 payload["images"] = images
             result = run_queued_prompt(payload)
