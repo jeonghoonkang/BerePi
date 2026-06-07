@@ -7,6 +7,39 @@ GPU_SELECTION_FILE="${APP_DIR}/gpu-selection"
 MODEL_SELECTION_FILE="${APP_DIR}/model-selection"
 mkdir -p "${LOG_DIR}"
 
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [port]
+
+Starts the Gemma4 service. If [port] is provided, it overrides
+GEMMA4_SERVER_PORT for this run.
+
+Examples:
+  $(basename "$0")
+  $(basename "$0") 8083
+  GEMMA4_SERVER_PORT=8084 $(basename "$0")
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ $# -gt 1 ]]; then
+  usage >&2
+  exit 2
+fi
+
+if [[ $# -eq 1 ]]; then
+  if [[ ! "$1" =~ ^[0-9]+$ ]] || (( "$1" < 1 || "$1" > 65535 )); then
+    echo "Invalid port: $1" >&2
+    usage >&2
+    exit 2
+  fi
+  export GEMMA4_SERVER_PORT="$1"
+fi
+
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:31b}"
 export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-8192}"
 export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-60m}"
@@ -67,7 +100,7 @@ ensure_server_port_available() {
   echo "Process using the port:" >&2
   port_owner "${GEMMA4_SERVER_PORT}" >&2
   echo "Use another port, for example:" >&2
-  echo "  GEMMA4_SERVER_PORT=8083 bash ${APP_DIR}/run_service.sh" >&2
+  echo "  bash ${APP_DIR}/run_service.sh 8083" >&2
   exit 1
 }
 
