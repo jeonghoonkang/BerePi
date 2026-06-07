@@ -90,6 +90,8 @@ with the same authentication fields and an `images` array. The response includes
 
 ```bash
 ./run_service.sh
+./run_service.sh 8083
+GEMMA4_SERVER_PORT=8084 ./run_service.sh
 ```
 
 By default `run_service.sh` starts Ollama locally on `127.0.0.1:11434`,
