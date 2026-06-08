@@ -344,15 +344,38 @@ def message_text(update: Update) -> str:
 
 
 def message_has_photo(update: Update) -> bool:
-    return bool(update.message and update.message.photo)
+    return photo_sizes_from_update(update) is not None
+
+
+def message_mentions_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    _, mentioned = text_without_bot_mentions(message_text(update), bot_usernames(context))
+    return mentioned
+
+
+def should_use_default_image_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if update.effective_chat.type == ChatType.PRIVATE:
+        return True
+    return message_mentions_bot(update, context)
+
+
+def photo_sizes_from_update(update: Update):
+    if not update.message:
+        return None
+    if update.message.photo:
+        return update.message.photo
+    reply_to = update.message.reply_to_message
+    if reply_to and reply_to.photo:
+        return reply_to.photo
+    return None
 
 
 async def image_base64s_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> list[str]:
     del context
-    if not update.message or not update.message.photo:
+    photo_sizes = photo_sizes_from_update(update)
+    if not photo_sizes:
         return []
 
-    photo = update.message.photo[-1]
+    photo = photo_sizes[-1]
     telegram_file = await photo.get_file()
     suffix = Path(str(telegram_file.file_path or "")).suffix or ".jpg"
     image_path: Optional[Path] = None
@@ -446,7 +469,7 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     prompt = prompt_from_update(update, context)
     has_photo = message_has_photo(update)
-    if not prompt and has_photo and update.effective_chat.type == ChatType.PRIVATE:
+    if not prompt and has_photo and should_use_default_image_prompt(update, context):
         prompt = DEFAULT_IMAGE_PROMPT
     if not prompt:
         if update.effective_chat.type == ChatType.PRIVATE:
