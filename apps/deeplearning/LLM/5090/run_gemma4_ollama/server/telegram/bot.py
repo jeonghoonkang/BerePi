@@ -1,12 +1,15 @@
 import asyncio
+import base64
 import json
 import logging
 import os
 import re
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
@@ -42,6 +45,8 @@ REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "180"))
 PROMPT_RESULT_TIMEOUT_SECONDS = int(os.environ.get("PROMPT_RESULT_TIMEOUT_SECONDS", str(REQUEST_TIMEOUT + 60)))
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 MAX_PENDING_UPDATES_ON_STARTUP = int(os.environ.get("MAX_PENDING_UPDATES_ON_STARTUP", "10"))
+DEFAULT_IMAGE_PROMPT = os.environ.get("DEFAULT_IMAGE_PROMPT", "Describe this image.")
+LLM_MODEL = os.environ.get("LLM_MODEL", os.environ.get("OLLAMA_MODEL", "")).strip()
 ALLOWED_TELEGRAM_USER_IDS_FROM_ENV = {
     user_id.strip()
     for user_id in os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "").split(",")
@@ -58,8 +63,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def prompt_payload(prompt: str) -> dict:
-    payload = {"prompt": prompt, "prompts": [prompt]}
+def encode_image_base64(image_path: Path) -> str:
+    return base64.b64encode(image_path.read_bytes()).decode("ascii")
+
+
+def prompt_payload(prompt: str, images: Optional[list[str]] = None) -> dict:
+    payload = {"prompt": prompt, "prompts": [prompt], "stream": False}
+    if LLM_MODEL:
+        payload["model"] = LLM_MODEL
+    if images:
+        payload["images"] = images
     if GEMMA4_USER_ID or GEMMA4_PASSWORD:
         payload["user_id"] = GEMMA4_USER_ID
         payload["password"] = GEMMA4_PASSWORD
@@ -94,8 +107,8 @@ def get_json(url: str, timeout: int = 30) -> dict:
         raise RuntimeError(f"API 서버에 연결할 수 없습니다: {exc.reason}") from exc
 
 
-def enqueue_llm_prompt(prompt: str) -> dict:
-    return post_json(LLM_ENQUEUE_URL, prompt_payload(prompt))
+def enqueue_llm_prompt(prompt: str, images: Optional[list[str]] = None) -> dict:
+    return post_json(LLM_ENQUEUE_URL, prompt_payload(prompt, images))
 
 
 def prompt_result_url(job_id: int) -> str:
@@ -137,8 +150,8 @@ def queue_line_from_response(data: dict) -> str:
     )
 
 
-def call_llm_api(prompt: str) -> str:
-    return format_llm_response(post_json(LLM_API_URL, prompt_payload(prompt)))
+def call_llm_api(prompt: str, images: Optional[list[str]] = None) -> str:
+    return format_llm_response(post_json(LLM_API_URL, prompt_payload(prompt, images)))
 
 
 def initial_thinking_message() -> str:
@@ -326,8 +339,38 @@ def text_without_bot_mentions(text: str, usernames: set[str]) -> tuple[str, bool
     return prompt.strip(" \t\n\r,:"), mentioned
 
 
+def message_text(update: Update) -> str:
+    return ((update.message.text or update.message.caption or "") if update.message else "").strip()
+
+
+def message_has_photo(update: Update) -> bool:
+    return bool(update.message and update.message.photo)
+
+
+async def image_base64s_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> list[str]:
+    del context
+    if not update.message or not update.message.photo:
+        return []
+
+    photo = update.message.photo[-1]
+    telegram_file = await photo.get_file()
+    suffix = Path(str(telegram_file.file_path or "")).suffix or ".jpg"
+    image_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="telegram_photo_", suffix=suffix, delete=False) as image_file:
+            image_path = Path(image_file.name)
+        await telegram_file.download_to_drive(custom_path=image_path)
+        return [encode_image_base64(image_path)]
+    finally:
+        if image_path is not None:
+            try:
+                image_path.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning("Failed to remove temporary Telegram image %s: %s", image_path, exc)
+
+
 def prompt_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
-    text = (update.message.text or "").strip()
+    text = message_text(update)
     if update.effective_chat.type == ChatType.PRIVATE:
         logger.info("Update prefix check: chat_type=%s prefixes=%s private_chat=True", update.effective_chat.type, mention_prefixes(bot_usernames(context)))
         return text
@@ -402,6 +445,9 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     prompt = prompt_from_update(update, context)
+    has_photo = message_has_photo(update)
+    if not prompt and has_photo and update.effective_chat.type == ChatType.PRIVATE:
+        prompt = DEFAULT_IMAGE_PROMPT
     if not prompt:
         if update.effective_chat.type == ChatType.PRIVATE:
             await update.message.reply_text("프롬프트를 입력해 주세요.")
@@ -409,7 +455,8 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     thinking_message = None
     try:
-        enqueue_response = enqueue_llm_prompt(prompt)
+        images = await image_base64s_from_update(update, context) if has_photo else []
+        enqueue_response = enqueue_llm_prompt(prompt, images)
         thinking_message = await update.message.reply_text(f"thinking...\n{queue_line_from_response(enqueue_response)}")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         job_id = int(enqueue_response.get("prompt_queue_id"))
@@ -437,7 +484,7 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt))
+    application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
     logger.info(
