@@ -344,7 +344,7 @@ def message_text(update: Update) -> str:
 
 
 def message_has_photo(update: Update) -> bool:
-    return photo_sizes_from_update(update) is not None
+    return image_attachment_from_update(update) is not None
 
 
 def message_mentions_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -358,31 +358,51 @@ def should_use_default_image_prompt(update: Update, context: ContextTypes.DEFAUL
     return message_mentions_bot(update, context)
 
 
-def photo_sizes_from_update(update: Update):
+def image_attachment_from_message(message):
+    if not message:
+        return None
+    if message.photo:
+        return message.photo[-1]
+    document = message.document
+    if document and str(document.mime_type or "").startswith("image/"):
+        return document
+    return None
+
+
+def image_attachment_from_update(update: Update):
     if not update.message:
         return None
-    if update.message.photo:
-        return update.message.photo
-    reply_to = update.message.reply_to_message
-    if reply_to and reply_to.photo:
-        return reply_to.photo
-    return None
+    current_image = image_attachment_from_message(update.message)
+    if current_image:
+        return current_image
+    return image_attachment_from_message(update.message.reply_to_message)
+
+
+def image_attachment_source(update: Update) -> str:
+    if not update.message:
+        return "none"
+    if image_attachment_from_message(update.message):
+        return "message"
+    if image_attachment_from_message(update.message.reply_to_message):
+        return "reply_to_message"
+    return "none"
 
 
 async def image_base64s_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> list[str]:
     del context
-    photo_sizes = photo_sizes_from_update(update)
-    if not photo_sizes:
+    image_attachment = image_attachment_from_update(update)
+    if not image_attachment:
+        logger.info("No Telegram image attachment found for model payload")
         return []
 
-    photo = photo_sizes[-1]
-    telegram_file = await photo.get_file()
+    telegram_file = await image_attachment.get_file()
     suffix = Path(str(telegram_file.file_path or "")).suffix or ".jpg"
     image_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(prefix="telegram_photo_", suffix=suffix, delete=False) as image_file:
             image_path = Path(image_file.name)
         await telegram_file.download_to_drive(custom_path=image_path)
+        logger.info("Encoded Telegram image from %s for model payload", image_attachment_source(update))
         return [encode_image_base64(image_path)]
     finally:
         if image_path is not None:
@@ -479,6 +499,8 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     thinking_message = None
     try:
         images = await image_base64s_from_update(update, context) if has_photo else []
+        if has_photo:
+            logger.info("Sending prompt to LLM with image_count=%s", len(images))
         enqueue_response = enqueue_llm_prompt(prompt, images)
         thinking_message = await update.message.reply_text(f"thinking...\n{queue_line_from_response(enqueue_response)}")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
@@ -507,7 +529,7 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, handle_prompt))
+    application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
     logger.info(
