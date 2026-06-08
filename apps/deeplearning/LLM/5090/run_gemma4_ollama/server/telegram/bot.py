@@ -310,6 +310,17 @@ def extract_python_code_blocks(text: str) -> list[str]:
     ]
 
 
+def is_model_plot_code_candidate(code: str) -> bool:
+    lowered = code.lower()
+    if "matplotlib" in lowered or "plt." in lowered:
+        return True
+
+    words = set(re.findall(r"[a-z0-9_]+", lowered))
+    plot_words = {"plot", "plots", "plotting", "boxplot"}
+    yolo_box_words = {"yolo", "box", "boxes", "bbox", "bboxes", "bounding"}
+    return bool(words & plot_words) and bool(words & yolo_box_words)
+
+
 def sanitized_plot_code(code: str) -> str:
     lines: list[str] = []
     for line in code.splitlines():
@@ -469,7 +480,7 @@ def render_model_plot_images(answer: str) -> list[Path]:
 
     plot_paths: list[Path] = []
     for code in extract_python_code_blocks(answer)[: max(0, MAX_MODEL_PLOT_CODE_BLOCKS)]:
-        if "matplotlib" not in code and "plt." not in code:
+        if not is_model_plot_code_candidate(code):
             continue
         try:
             plot_paths.extend(render_plot_code_block(code))
