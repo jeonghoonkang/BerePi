@@ -7,10 +7,13 @@ from __future__ import annotations
 import argparse
 import base64
 import configparser
+import hashlib
 import json
 import os
 import re
+import shutil
 import shlex
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -27,6 +30,11 @@ DEFAULT_MOTION_DIR = Path("/var/lib/motion")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 DEFAULT_CRON_LOG_PATH = APP_DIR / "logs" / "detection_5min.log"
 MODEL_FAILURE_ALERT_INTERVAL_SECONDS = 60 * 60
+DEFAULT_PENDING_DIR = APP_DIR / "pending_model_images"
+DEFAULT_MAX_PENDING_FILES = 200
+DEFAULT_GPU_MAX_UTILIZATION_PERCENT = 5
+DEFAULT_GPU_WAIT_TIMEOUT_SECONDS = 240
+DEFAULT_GPU_POLL_INTERVAL_SECONDS = 5.0
 
 
 @dataclass
@@ -49,12 +57,23 @@ class TelegramConfig:
 
 
 @dataclass
+class GpuConfig:
+    enabled: bool
+    max_utilization_percent: int
+    wait_timeout_seconds: int
+    poll_interval_seconds: float
+
+
+@dataclass
 class AppConfig:
     model: ModelConfig
     telegram: TelegramConfig
+    gpu: GpuConfig
     motion_dir: Path
     lookback_minutes: int
     recursive: bool
+    pending_dir: Path
+    max_pending_files: int
     event_log_path: Path
     recent_count_log_path: Path
     model_failure_alert_state_path: Path
@@ -96,6 +115,7 @@ def load_config(config_path: Path) -> AppConfig:
     model_section = parser["model"] if parser.has_section("model") else parser["DEFAULT"]
     telegram_section = parser["telegram"] if parser.has_section("telegram") else parser["DEFAULT"]
     motion_section = parser["motion"] if parser.has_section("motion") else parser["DEFAULT"]
+    gpu_section = parser["gpu"] if parser.has_section("gpu") else parser["DEFAULT"]
 
     endpoint_url = get_config_value(model_section, "endpoint_url", "")
     result_url = get_config_value(model_section, "result_url", "")
@@ -120,6 +140,9 @@ def load_config(config_path: Path) -> AppConfig:
     )
     if not recent_count_log_path.is_absolute():
         recent_count_log_path = (config_path.parent / recent_count_log_path).resolve()
+    pending_dir = Path(get_config_value(motion_section, "pending_dir", str(DEFAULT_PENDING_DIR)))
+    if not pending_dir.is_absolute():
+        pending_dir = (config_path.parent / pending_dir).resolve()
     model_failure_alert_state_path = event_log_path.with_name("model_failure_alert_state.json")
 
     return AppConfig(
@@ -138,9 +161,26 @@ def load_config(config_path: Path) -> AppConfig:
             chat_id=telegram_chat_id,
             timeout_seconds=get_config_int(telegram_section, "timeout_seconds", 30),
         ),
+        gpu=GpuConfig(
+            enabled=get_config_bool(gpu_section, "enabled", False),
+            max_utilization_percent=max(
+                0,
+                get_config_int(gpu_section, "max_utilization_percent", DEFAULT_GPU_MAX_UTILIZATION_PERCENT),
+            ),
+            wait_timeout_seconds=max(
+                0,
+                get_config_int(gpu_section, "wait_timeout_seconds", DEFAULT_GPU_WAIT_TIMEOUT_SECONDS),
+            ),
+            poll_interval_seconds=max(
+                0.2,
+                get_config_float(gpu_section, "poll_interval_seconds", DEFAULT_GPU_POLL_INTERVAL_SECONDS),
+            ),
+        ),
         motion_dir=Path(get_config_value(motion_section, "motion_dir", str(DEFAULT_MOTION_DIR))).expanduser(),
         lookback_minutes=get_config_int(motion_section, "lookback_minutes", 5),
         recursive=get_config_bool(motion_section, "recursive", False),
+        pending_dir=pending_dir.expanduser(),
+        max_pending_files=max(1, get_config_int(motion_section, "max_pending_files", DEFAULT_MAX_PENDING_FILES)),
         event_log_path=event_log_path.expanduser(),
         recent_count_log_path=recent_count_log_path.expanduser(),
         model_failure_alert_state_path=model_failure_alert_state_path.expanduser(),
@@ -183,9 +223,73 @@ def get_recent_images(motion_dir: Path, minutes: int, recursive: bool = False) -
     return recent_images
 
 
+def pending_image_name(source_path: Path) -> str:
+    stat = source_path.stat()
+    identity = f"{source_path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+    digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:16]
+    return f"{stat.st_mtime_ns}_{stat.st_size}_{digest}{source_path.suffix.lower()}"
+
+
+def list_pending_images(config: AppConfig) -> list[Path]:
+    pending_images = iter_image_files(config.pending_dir, recursive=False)
+    pending_images.sort(key=lambda path: (image_modified_at(path), path.name))
+    return pending_images
+
+
+def enqueue_pending_image(config: AppConfig, source_path: Path) -> Path | None:
+    try:
+        pending_name = pending_image_name(source_path)
+    except OSError as exc:
+        print(f"pending enqueue skipped; source stat failed: {source_path}: {exc}", file=sys.stderr)
+        return None
+
+    config.pending_dir.mkdir(parents=True, exist_ok=True)
+    target_path = config.pending_dir / pending_name
+    if target_path.exists():
+        return target_path
+
+    pending_count = len(list_pending_images(config))
+    if pending_count >= config.max_pending_files:
+        print(
+            f"pending queue full; skip enqueue: {source_path.name} "
+            f"({pending_count}/{config.max_pending_files})",
+            file=sys.stderr,
+        )
+        return None
+
+    try:
+        shutil.copy2(source_path, target_path)
+    except OSError as exc:
+        print(f"pending enqueue failed: {source_path} -> {target_path}: {exc}", file=sys.stderr)
+        return None
+    print(f"pending enqueued: {target_path.name}")
+    return target_path
+
+
+def enqueue_recent_images(config: AppConfig, recent_images: list[Path]) -> int:
+    enqueued_count = 0
+    for image_path in recent_images:
+        if enqueue_pending_image(config, image_path) is not None:
+            enqueued_count += 1
+    return enqueued_count
+
+
+def remove_pending_image(image_path: Path) -> None:
+    try:
+        image_path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        print(f"pending remove failed: {image_path}: {exc}", file=sys.stderr)
+
+
 def write_recent_count_log(config: AppConfig, recent_images: list[Path]) -> None:
     motion_files = iter_motion_files(config.motion_dir, config.recursive)
     image_file_count = sum(1 for path in motion_files if path.suffix.lower() in IMAGE_EXTENSIONS)
+    try:
+        pending_image_count = len(list_pending_images(config))
+    except OSError:
+        pending_image_count = 0
     payload = {
         "created_at": format_time(datetime.now().astimezone()),
         "motion_dir": str(config.motion_dir),
@@ -195,6 +299,9 @@ def write_recent_count_log(config: AppConfig, recent_images: list[Path]) -> None
         "file_count": len(motion_files),
         "image_file_count": image_file_count,
         "recent_image_count": len(recent_images),
+        "pending_dir": str(config.pending_dir),
+        "pending_image_count": pending_image_count,
+        "max_pending_files": config.max_pending_files,
     }
     line = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     print(f"motion_recent_count={line}", flush=True)
@@ -252,6 +359,69 @@ def get_requests_module() -> Any:
         import requests
 
     return requests
+
+
+def query_gpu_utilizations() -> list[int]:
+    command = [
+        "nvidia-smi",
+        "--query-gpu=utilization.gpu",
+        "--format=csv,noheader,nounits",
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=5, check=True)
+    utilizations: list[int] = []
+    for line in completed.stdout.splitlines():
+        value = line.strip()
+        if not value:
+            continue
+        utilizations.append(int(value))
+    if not utilizations:
+        raise RuntimeError("nvidia-smi returned no GPU utilization values")
+    return utilizations
+
+
+def gpu_is_idle(config: GpuConfig) -> bool:
+    if not config.enabled:
+        return True
+    try:
+        utilizations = query_gpu_utilizations()
+    except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as exc:
+        print(f"gpu idle check failed; treat as busy: {exc}", file=sys.stderr)
+        return False
+
+    max_utilization = max(utilizations)
+    idle = max_utilization <= config.max_utilization_percent
+    print(
+        f"gpu_utilization={max_utilization}% "
+        f"idle_threshold={config.max_utilization_percent}% idle={idle}",
+        flush=True,
+    )
+    return idle
+
+
+def wait_for_gpu_idle(config: GpuConfig) -> bool:
+    if not config.enabled:
+        return True
+
+    timeout_seconds = config.wait_timeout_seconds
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds > 0 else None
+    poll_count = 1
+    while True:
+        if gpu_is_idle(config):
+            if poll_count > 1:
+                print("gpu became idle; model request can start", flush=True)
+            return True
+
+        if deadline is not None and time.monotonic() >= deadline:
+            print(f"gpu busy timeout after {timeout_seconds}s; keep pending images for next run", file=sys.stderr)
+            return False
+
+        print(
+            f"gpu busy; waiting {config.poll_interval_seconds}s before model request "
+            f"(poll: {poll_count})",
+            flush=True,
+        )
+        poll_count += 1
+        time.sleep(config.poll_interval_seconds)
 
 
 def build_model_headers(config: ModelConfig) -> dict[str, str]:
@@ -589,6 +759,11 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     print(f"motion_dir={config.motion_dir}")
     print(f"lookback_minutes={config.lookback_minutes}")
     print(f"recent_images={len(recent_images)}")
+    enqueued_count = enqueue_recent_images(config, recent_images)
+    pending_images = list_pending_images(config)
+    print(f"pending_dir={config.pending_dir}")
+    print(f"pending_enqueued={enqueued_count}")
+    print(f"pending_images={len(pending_images)}/{config.max_pending_files}")
     try:
         write_recent_count_log(config, recent_images)
     except OSError as exc:
@@ -596,7 +771,9 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
 
     alerts_sent = 0
     detected_events = 0
-    if not recent_images:
+    processed_pending_images = 0
+    gpu_wait_timed_out = False
+    if not pending_images:
         latest_image = get_latest_image(config.motion_dir, config.recursive)
         print(f"no recent images in lookback; latest_image={latest_image}")
         if latest_image is None:
@@ -623,9 +800,12 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         return alerts_sent + 1
 
     requests_module = get_requests_module()
-    for image_path in recent_images:
+    for image_path in pending_images:
         print(f"detecting: {image_path}")
         print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
+        if not wait_for_gpu_idle(config.gpu):
+            gpu_wait_timed_out = True
+            break
         try:
             model_response = detect_person_via_model(image_path, config.model)
         except (requests_module.RequestException, RuntimeError, TimeoutError, ValueError) as exc:
@@ -634,13 +814,16 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             continue
         except OSError as exc:
             print(f"image read failed: {image_path.name}: {exc}", file=sys.stderr)
+            remove_pending_image(image_path)
             continue
 
         detected, person_count = parse_model_response(model_response)
+        processed_pending_images += 1
         print("5. 회신 완료, 결과 전송", flush=True)
         print(f"model_response={model_response.strip()}")
         print(f"detected={detected} person_count={person_count}")
         if not detected:
+            remove_pending_image(image_path)
             continue
 
         detected_events += 1
@@ -655,17 +838,24 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         if dry_run:
             print(f"dry-run: telegram send skipped for {image_path.name}")
             alerts_sent += 1
+            remove_pending_image(image_path)
             continue
 
         try:
             send_telegram_photo(config.telegram, event)
         except (requests_module.RequestException, OSError, ValueError) as exc:
             print(f"telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
+            remove_pending_image(image_path)
             continue
         alerts_sent += 1
         print(f"telegram sent: {image_path.name}")
+        remove_pending_image(image_path)
 
-    if detected_events == 0:
+    if gpu_wait_timed_out:
+        print("gpu remained busy; no reference image will be sent for this run")
+        return alerts_sent
+
+    if processed_pending_images > 0 and detected_events == 0:
         reference_images = get_reference_images(config.motion_dir, config.recursive)
         print(f"no person detected; reference_images={len(reference_images)}")
         if not reference_images:

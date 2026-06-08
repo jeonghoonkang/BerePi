@@ -73,6 +73,14 @@ SESSION_LOCK = threading.RLock()
 AUTH_SESSIONS: dict[str, dict[str, Any]] = {}
 
 
+def format_uptime_dhm(total_seconds: int | float) -> str:
+    seconds = max(0, int(total_seconds))
+    days, remainder = divmod(seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{days}D {hours}H {minutes}M"
+
+
 @dataclass
 class PromptJob:
     id: int
@@ -1715,13 +1723,17 @@ if __name__ == "__main__":
         const data = await res.json();
         const modelClass = data.model_available ? "ok" : "warn";
         const ollamaClass = data.ollama_reachable ? "ok" : "bad";
+        const uptimeSeconds = Number(data.uptime_seconds || 0);
+        const uptimeText = data.uptime_human
+          ? `${data.uptime_human}<br>${uptimeSeconds}s`
+          : `${uptimeSeconds}s`;
         metrics.innerHTML = [
           metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
           metric("Keep Alive", data.keep_alive || "default"),
           metric("Context", data.context_length || "default"),
-          metric("Uptime", data.uptime_seconds + "s"),
+          metric("Uptime", uptimeText),
           metric("Ollama URL", data.ollama_base_url),
           metric("Selected GPU", data.selected_gpu_label),
           metric("Known Models", data.models.length ? data.models.join(", ") : "None")
@@ -2519,6 +2531,7 @@ def prompt_processing_stats_path(today: dt.date | None = None) -> Path:
 def empty_prompt_processing_stats(today: dt.date | None = None) -> dict[str, Any]:
     week_start = prompt_processing_week_start(today)
     week_end = week_start + dt.timedelta(days=6)
+    uptime_seconds = int(time.time() - STARTED_AT)
     return {
         "week_start_date": week_start.isoformat(),
         "week_end_date": week_end.isoformat(),
@@ -3228,7 +3241,8 @@ def status_payload() -> dict[str, Any]:
         "model_available": any(model_matches(name, selected_model) for name in models),
         "models": models,
         "prompt_queue": prompt_queue_status(),
-        "uptime_seconds": int(time.time() - STARTED_AT),
+        "uptime_seconds": uptime_seconds,
+        "uptime_human": format_uptime_dhm(uptime_seconds),
     }
 
 
