@@ -1,9 +1,13 @@
 import asyncio
+import ast
 import base64
 import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.parse
@@ -47,6 +51,9 @@ MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 MAX_PENDING_UPDATES_ON_STARTUP = int(os.environ.get("MAX_PENDING_UPDATES_ON_STARTUP", "10"))
 DEFAULT_IMAGE_PROMPT = os.environ.get("DEFAULT_IMAGE_PROMPT", "Describe this image.")
 LLM_MODEL = os.environ.get("LLM_MODEL", os.environ.get("OLLAMA_MODEL", "")).strip()
+ENABLE_MODEL_PLOT_CODE_EXECUTION = os.environ.get("ENABLE_MODEL_PLOT_CODE_EXECUTION", "1").strip().lower() not in {"0", "false", "no"}
+MODEL_PLOT_CODE_TIMEOUT_SECONDS = int(os.environ.get("MODEL_PLOT_CODE_TIMEOUT_SECONDS", "15"))
+MAX_MODEL_PLOT_CODE_BLOCKS = int(os.environ.get("MAX_MODEL_PLOT_CODE_BLOCKS", "2"))
 ALLOWED_TELEGRAM_USER_IDS_FROM_ENV = {
     user_id.strip()
     for user_id in os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "").split(",")
@@ -295,6 +302,191 @@ def split_message(text: str) -> list[str]:
     ] or [""]
 
 
+def extract_python_code_blocks(text: str) -> list[str]:
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"```(?:python|py)\s*\n(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+        if match.group(1).strip()
+    ]
+
+
+def sanitized_plot_code(code: str) -> str:
+    lines: list[str] = []
+    for line in code.splitlines():
+        stripped = line.strip()
+        if stripped in {"import matplotlib.pyplot as plt", "from matplotlib import pyplot as plt"}:
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def validate_plot_code(code: str) -> None:
+    allowed_nodes = (
+        ast.Module,
+        ast.Import,
+        ast.ImportFrom,
+        ast.alias,
+        ast.Assign,
+        ast.AnnAssign,
+        ast.Expr,
+        ast.Call,
+        ast.Attribute,
+        ast.Name,
+        ast.Load,
+        ast.Store,
+        ast.Constant,
+        ast.List,
+        ast.Tuple,
+        ast.Dict,
+        ast.keyword,
+        ast.Subscript,
+        ast.Slice,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.Mod,
+        ast.Pow,
+        ast.USub,
+        ast.UAdd,
+    )
+    allowed_builtins = {"dict", "list", "tuple", "range", "len", "min", "max", "sum", "sorted", "abs", "round"}
+    allowed_pyplot_calls = {
+        "figure",
+        "subplot",
+        "subplots",
+        "plot",
+        "scatter",
+        "bar",
+        "barh",
+        "hist",
+        "boxplot",
+        "title",
+        "suptitle",
+        "xlabel",
+        "ylabel",
+        "xticks",
+        "yticks",
+        "xlim",
+        "ylim",
+        "grid",
+        "legend",
+        "tight_layout",
+        "show",
+    }
+
+    tree = ast.parse(code)
+    for node in ast.walk(tree):
+        if not isinstance(node, allowed_nodes):
+            raise ValueError(f"unsupported plot code syntax: {type(node).__name__}")
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name != "matplotlib.pyplot" or alias.asname != "plt":
+                    raise ValueError("only 'import matplotlib.pyplot as plt' is allowed")
+        elif isinstance(node, ast.ImportFrom):
+            if node.module != "matplotlib":
+                raise ValueError("only 'from matplotlib import pyplot as plt' is allowed")
+            if len(node.names) != 1 or node.names[0].name != "pyplot" or node.names[0].asname != "plt":
+                raise ValueError("only 'from matplotlib import pyplot as plt' is allowed")
+        elif isinstance(node, ast.Name) and node.id.startswith("_"):
+            raise ValueError("private names are not allowed in plot code")
+        elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            raise ValueError("private attributes are not allowed in plot code")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name):
+                if func.id not in allowed_builtins:
+                    raise ValueError(f"function is not allowed in plot code: {func.id}")
+            elif isinstance(func, ast.Attribute):
+                if not isinstance(func.value, ast.Name) or func.value.id != "plt" or func.attr not in allowed_pyplot_calls:
+                    raise ValueError("only selected matplotlib.pyplot calls are allowed")
+            else:
+                raise ValueError("unsupported function call in plot code")
+
+
+def render_plot_code_block(code: str) -> list[Path]:
+    safe_code = sanitized_plot_code(code)
+    validate_plot_code(code)
+    validate_plot_code(safe_code)
+
+    work_dir = Path(tempfile.mkdtemp(prefix="telegram_model_plot_"))
+    code_path = work_dir / "plot_code.py"
+    code_path.write_text(safe_code, encoding="utf-8")
+    runner_path = work_dir / "render_plot.py"
+    runner_path.write_text(
+        "\n".join(
+            [
+                "import json",
+                "from pathlib import Path",
+                "import matplotlib",
+                "matplotlib.use('Agg')",
+                "import matplotlib.pyplot as plt",
+                "work_dir = Path(__file__).resolve().parent",
+                "code = (work_dir / 'plot_code.py').read_text(encoding='utf-8')",
+                "safe_builtins = {",
+                "    'dict': dict, 'list': list, 'tuple': tuple, 'range': range, 'len': len,",
+                "    'min': min, 'max': max, 'sum': sum, 'sorted': sorted, 'abs': abs, 'round': round,",
+                "}",
+                "plt.show = lambda *args, **kwargs: None",
+                "exec(compile(code, 'plot_code.py', 'exec'), {'__builtins__': safe_builtins, 'plt': plt}, {})",
+                "paths = []",
+                "for index, fig_num in enumerate(plt.get_fignums(), start=1):",
+                "    out_path = work_dir / f'model_plot_{index}.png'",
+                "    plt.figure(fig_num).savefig(out_path, bbox_inches='tight')",
+                "    paths.append(str(out_path))",
+                "print(json.dumps(paths))",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["MPLBACKEND"] = "Agg"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(runner_path)],
+            cwd=str(work_dir),
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=max(1, MODEL_PLOT_CODE_TIMEOUT_SECONDS),
+            check=True,
+        )
+        paths = [Path(path) for path in json.loads(result.stdout or "[]")]
+        if not paths:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        return paths
+    except Exception:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        raise
+
+
+def render_model_plot_images(answer: str) -> list[Path]:
+    if not ENABLE_MODEL_PLOT_CODE_EXECUTION:
+        return []
+
+    plot_paths: list[Path] = []
+    for code in extract_python_code_blocks(answer)[: max(0, MAX_MODEL_PLOT_CODE_BLOCKS)]:
+        if "matplotlib" not in code and "plt." not in code:
+            continue
+        try:
+            plot_paths.extend(render_plot_code_block(code))
+        except Exception as exc:
+            logger.warning("Failed to render model plot code block: %s", exc)
+    return plot_paths
+
+
+def cleanup_generated_plot_images(paths: list[Path]) -> None:
+    seen_dirs: set[Path] = set()
+    for path in paths:
+        seen_dirs.add(path.parent)
+    for directory in seen_dirs:
+        if directory.name.startswith("telegram_model_plot_"):
+            shutil.rmtree(directory, ignore_errors=True)
+
+
 def keep_recent_pending_updates(limit: int) -> None:
     if limit < 1:
         return
@@ -520,6 +712,14 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await thinking_message.edit_text(chunks[0])
     for chunk in chunks[1:]:
         await update.message.reply_text(chunk)
+
+    plot_paths = await asyncio.to_thread(render_model_plot_images, answer)
+    try:
+        for index, plot_path in enumerate(plot_paths, start=1):
+            with plot_path.open("rb") as photo:
+                await update.message.reply_photo(photo=photo, caption=f"Generated plot {index}")
+    finally:
+        cleanup_generated_plot_images(plot_paths)
 
 
 def main() -> None:
