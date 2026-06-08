@@ -13,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
@@ -325,7 +325,14 @@ def sanitized_plot_code(code: str) -> str:
     lines: list[str] = []
     for line in code.splitlines():
         stripped = line.strip()
-        if stripped in {"import matplotlib.pyplot as plt", "from matplotlib import pyplot as plt"}:
+        if stripped in {
+            "import matplotlib.pyplot as plt",
+            "from matplotlib import pyplot as plt",
+            "import matplotlib.patches as patches",
+            "import matplotlib.patches as mpatches",
+            "from matplotlib.patches import Rectangle",
+            "from matplotlib.patches import Rectangle as Rectangle",
+        }:
             continue
         lines.append(line)
     return "\n".join(lines).strip()
@@ -350,6 +357,7 @@ def validate_plot_code(code: str) -> None:
         ast.Tuple,
         ast.Dict,
         ast.keyword,
+        ast.For,
         ast.Subscript,
         ast.Slice,
         ast.BinOp,
@@ -362,6 +370,8 @@ def validate_plot_code(code: str) -> None:
         ast.Pow,
         ast.USub,
         ast.UAdd,
+        ast.JoinedStr,
+        ast.FormattedValue,
     )
     allowed_builtins = {"dict", "list", "tuple", "range", "len", "min", "max", "sum", "sorted", "abs", "round"}
     allowed_pyplot_calls = {
@@ -383,9 +393,25 @@ def validate_plot_code(code: str) -> None:
         "xlim",
         "ylim",
         "grid",
+        "gca",
+        "imshow",
+        "text",
+        "axis",
         "legend",
         "tight_layout",
         "show",
+    }
+    allowed_axes_calls = {
+        "add_patch",
+        "imshow",
+        "text",
+        "axis",
+        "set_xlim",
+        "set_ylim",
+        "set_title",
+        "set_xlabel",
+        "set_ylabel",
+        "invert_yaxis",
     }
 
     tree = ast.parse(code)
@@ -394,13 +420,25 @@ def validate_plot_code(code: str) -> None:
             raise ValueError(f"unsupported plot code syntax: {type(node).__name__}")
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name != "matplotlib.pyplot" or alias.asname != "plt":
-                    raise ValueError("only 'import matplotlib.pyplot as plt' is allowed")
+                if alias.name == "matplotlib.pyplot" and alias.asname == "plt":
+                    continue
+                if alias.name == "matplotlib.patches" and alias.asname in {"patches", "mpatches"}:
+                    continue
+                raise ValueError(
+                    "only 'import matplotlib.pyplot as plt' or "
+                    "'import matplotlib.patches as patches' is allowed"
+                )
         elif isinstance(node, ast.ImportFrom):
-            if node.module != "matplotlib":
-                raise ValueError("only 'from matplotlib import pyplot as plt' is allowed")
-            if len(node.names) != 1 or node.names[0].name != "pyplot" or node.names[0].asname != "plt":
-                raise ValueError("only 'from matplotlib import pyplot as plt' is allowed")
+            if node.module == "matplotlib":
+                if len(node.names) == 1 and node.names[0].name == "pyplot" and node.names[0].asname == "plt":
+                    continue
+            elif node.module == "matplotlib.patches":
+                if len(node.names) == 1 and node.names[0].name == "Rectangle" and node.names[0].asname in {None, "Rectangle"}:
+                    continue
+            raise ValueError(
+                "only 'from matplotlib import pyplot as plt' or "
+                "'from matplotlib.patches import Rectangle' is allowed"
+            )
         elif isinstance(node, ast.Name) and node.id.startswith("_"):
             raise ValueError("private names are not allowed in plot code")
         elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
@@ -408,11 +446,17 @@ def validate_plot_code(code: str) -> None:
         elif isinstance(node, ast.Call):
             func = node.func
             if isinstance(func, ast.Name):
-                if func.id not in allowed_builtins:
+                if func.id not in allowed_builtins and func.id != "Rectangle":
                     raise ValueError(f"function is not allowed in plot code: {func.id}")
             elif isinstance(func, ast.Attribute):
-                if not isinstance(func.value, ast.Name) or func.value.id != "plt" or func.attr not in allowed_pyplot_calls:
-                    raise ValueError("only selected matplotlib.pyplot calls are allowed")
+                if isinstance(func.value, ast.Name):
+                    if func.value.id == "plt" and func.attr in allowed_pyplot_calls:
+                        continue
+                    if func.value.id in {"patches", "mpatches"} and func.attr == "Rectangle":
+                        continue
+                if func.attr in allowed_axes_calls:
+                    continue
+                raise ValueError("only selected matplotlib plotting calls are allowed")
             else:
                 raise ValueError("unsupported function call in plot code")
 
@@ -434,6 +478,9 @@ def render_plot_code_block(code: str) -> list[Path]:
                 "import matplotlib",
                 "matplotlib.use('Agg')",
                 "import matplotlib.pyplot as plt",
+                "import matplotlib.patches as patches",
+                "mpatches = patches",
+                "from matplotlib.patches import Rectangle",
                 "work_dir = Path(__file__).resolve().parent",
                 "code = (work_dir / 'plot_code.py').read_text(encoding='utf-8')",
                 "safe_builtins = {",
@@ -441,7 +488,11 @@ def render_plot_code_block(code: str) -> list[Path]:
                 "    'min': min, 'max': max, 'sum': sum, 'sorted': sorted, 'abs': abs, 'round': round,",
                 "}",
                 "plt.show = lambda *args, **kwargs: None",
-                "exec(compile(code, 'plot_code.py', 'exec'), {'__builtins__': safe_builtins, 'plt': plt}, {})",
+                "exec_globals = {",
+                "    '__builtins__': safe_builtins, 'plt': plt,",
+                "    'patches': patches, 'mpatches': mpatches, 'Rectangle': Rectangle,",
+                "}",
+                "exec(compile(code, 'plot_code.py', 'exec'), exec_globals, {})",
                 "paths = []",
                 "for index, fig_num in enumerate(plt.get_fignums(), start=1):",
                 "    out_path = work_dir / f'model_plot_{index}.png'",
@@ -489,13 +540,162 @@ def render_model_plot_images(answer: str) -> list[Path]:
     return plot_paths
 
 
+def extract_json_object(text: str) -> dict[str, Any] | None:
+    candidate = text.strip()
+    for pattern in (
+        r"```(?:json)?\s*\n(.*?)```",
+        r"```\s*\n(.*?)```",
+    ):
+        for match in re.finditer(pattern, candidate, flags=re.IGNORECASE | re.DOTALL):
+            parsed = parse_json_object(match.group(1))
+            if parsed is not None:
+                return parsed
+    return parse_json_object(candidate)
+
+
+def parse_json_object(candidate: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(candidate)
+        return parsed if isinstance(parsed, dict) else None
+    except json.JSONDecodeError:
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start < 0 or end <= start:
+            return None
+        try:
+            parsed = json.loads(candidate[start : end + 1])
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            return None
+
+
+# Mirrors server.py's YOLO Detection tab: normalized bbox JSON over the uploaded image.
+def normalized_detection_box(box: object) -> dict[str, float] | None:
+    if not isinstance(box, dict):
+        return None
+    try:
+        x = float(box.get("x"))
+        y = float(box.get("y"))
+        width = float(box.get("width", box.get("w")))
+        height = float(box.get("height", box.get("h")))
+    except (TypeError, ValueError):
+        return None
+    if not all(value == value and value not in {float("inf"), float("-inf")} for value in (x, y, width, height)):
+        return None
+    return {
+        "x": max(0.0, min(1.0, x)),
+        "y": max(0.0, min(1.0, y)),
+        "width": max(0.0, min(1.0, width)),
+        "height": max(0.0, min(1.0, height)),
+    }
+
+
+def collect_detection_objects(data: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return []
+    raw_objects = data.get("objects")
+    if not isinstance(raw_objects, list):
+        raw_objects = data.get("detections")
+    if not isinstance(raw_objects, list):
+        return []
+
+    objects: list[dict[str, Any]] = []
+    for item in raw_objects:
+        if not isinstance(item, dict):
+            continue
+        bbox = normalized_detection_box(item.get("bbox") or item.get("box"))
+        if bbox:
+            objects.append({**item, "bbox": bbox})
+    return objects
+
+
+def detection_label(item: dict[str, Any]) -> str:
+    label = str(item.get("label") or item.get("class") or "object")
+    confidence = item.get("confidence", item.get("score"))
+    try:
+        return f"{label} {float(confidence):.2f}" if confidence is not None else label
+    except (TypeError, ValueError):
+        return label
+
+
+def render_detection_box_image(image_path: Path, response_text: str) -> list[Path]:
+    objects = collect_detection_objects(extract_json_object(response_text))
+    if not objects:
+        return []
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    work_dir = Path(tempfile.mkdtemp(prefix="telegram_yolo_detection_"))
+    try:
+        with Image.open(image_path) as source_image:
+            image = source_image.convert("RGB")
+
+        max_width = 1000
+        scale = min(1.0, max_width / max(1, image.width))
+        width = max(1, round(image.width * scale))
+        height = max(1, round(image.height * scale))
+        if (width, height) != image.size:
+            image = image.resize((width, height))
+
+        draw = ImageDraw.Draw(image)
+        line_width = max(2, round(width / 320))
+        font_size = max(13, round(width / 52))
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+        except OSError:
+            font = ImageFont.load_default()
+
+        colors = ["#137c5b", "#a62f2f", "#255f99", "#9b5a00", "#6d4ca3"]
+        for index, item in enumerate(objects):
+            color = colors[index % len(colors)]
+            box = item["bbox"]
+            x = box["x"] * width
+            y = box["y"] * height
+            box_width = box["width"] * width
+            box_height = box["height"] * height
+            label = detection_label(item)
+
+            draw.rectangle((x, y, x + box_width, y + box_height), outline=color, width=line_width)
+            text_bbox = draw.textbbox((0, 0), label, font=font)
+            text_width = min(text_bbox[2] - text_bbox[0] + 10, max(1, width - round(x)))
+            text_height = max(20, round(width / 36))
+            label_y = max(0, round(y) - text_height)
+            draw.rectangle((x, label_y, x + text_width, label_y + text_height), fill=color)
+            draw.text((x + 5, label_y + 3), label, fill="#ffffff", font=font)
+
+        out_path = work_dir / "yolo_detection_boxes.png"
+        image.save(out_path)
+        return [out_path]
+    except Exception:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        raise
+
+
+def render_detection_box_images(image_paths: list[Path], response_text: str) -> list[Path]:
+    if not image_paths:
+        return []
+    try:
+        return render_detection_box_image(image_paths[0], response_text)
+    except Exception as exc:
+        logger.warning("Failed to render YOLO detection boxes from model response: %s", exc)
+        return []
+
+
 def cleanup_generated_plot_images(paths: list[Path]) -> None:
     seen_dirs: set[Path] = set()
     for path in paths:
         seen_dirs.add(path.parent)
     for directory in seen_dirs:
-        if directory.name.startswith("telegram_model_plot_"):
+        if directory.name.startswith(("telegram_model_plot_", "telegram_yolo_detection_")):
             shutil.rmtree(directory, ignore_errors=True)
+
+
+def cleanup_temp_image_paths(paths: list[Path]) -> None:
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Failed to remove temporary Telegram image %s: %s", path, exc)
 
 
 def keep_recent_pending_updates(limit: int) -> None:
@@ -591,12 +791,12 @@ def image_attachment_source(update: Update) -> str:
     return "none"
 
 
-async def image_base64s_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> list[str]:
+async def image_payloads_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> tuple[list[str], list[Path]]:
     del context
     image_attachment = image_attachment_from_update(update)
     if not image_attachment:
         logger.info("No Telegram image attachment found for model payload")
-        return []
+        return [], []
 
     telegram_file = await image_attachment.get_file()
     suffix = Path(str(telegram_file.file_path or "")).suffix or ".jpg"
@@ -606,13 +806,11 @@ async def image_base64s_from_update(update: Update, context: ContextTypes.DEFAUL
             image_path = Path(image_file.name)
         await telegram_file.download_to_drive(custom_path=image_path)
         logger.info("Encoded Telegram image from %s for model payload", image_attachment_source(update))
-        return [encode_image_base64(image_path)]
-    finally:
+        return [encode_image_base64(image_path)], [image_path]
+    except Exception:
         if image_path is not None:
-            try:
-                image_path.unlink(missing_ok=True)
-            except OSError as exc:
-                logger.warning("Failed to remove temporary Telegram image %s: %s", image_path, exc)
+            cleanup_temp_image_paths([image_path])
+        raise
 
 
 def prompt_from_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
@@ -700,8 +898,10 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     thinking_message = None
+    temp_image_paths: list[Path] = []
+    raw_answer = ""
     try:
-        images = await image_base64s_from_update(update, context) if has_photo else []
+        images, temp_image_paths = await image_payloads_from_update(update, context) if has_photo else ([], [])
         if has_photo:
             logger.info("Sending prompt to LLM with image_count=%s", len(images))
         enqueue_response = enqueue_llm_prompt(prompt, images)
@@ -709,8 +909,10 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         job_id = int(enqueue_response.get("prompt_queue_id"))
         result = await wait_for_prompt_result(job_id)
+        raw_answer = str(result.get("visible_response") or result.get("answer") or result.get("response") or "").strip()
         answer = format_llm_response(result)
     except Exception as exc:
+        cleanup_temp_image_paths(temp_image_paths)
         logger.exception("Failed to handle prompt")
         message = f"오류가 발생했습니다.\n{exc}"
         if thinking_message:
@@ -724,13 +926,18 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     for chunk in chunks[1:]:
         await update.message.reply_text(chunk)
 
-    plot_paths = await asyncio.to_thread(render_model_plot_images, answer)
+    detection_paths = await asyncio.to_thread(render_detection_box_images, temp_image_paths, raw_answer or answer)
+    plot_paths = detection_paths
+    if not detection_paths:
+        plot_paths = await asyncio.to_thread(render_model_plot_images, answer)
     try:
         for index, plot_path in enumerate(plot_paths, start=1):
+            caption = f"YOLO detection boxes {index}" if plot_path.parent.name.startswith("telegram_yolo_detection_") else f"Generated plot {index}"
             with plot_path.open("rb") as photo:
-                await update.message.reply_photo(photo=photo, caption=f"Generated plot {index}")
+                await update.message.reply_photo(photo=photo, caption=caption)
     finally:
         cleanup_generated_plot_images(plot_paths)
+        cleanup_temp_image_paths(temp_image_paths)
 
 
 def main() -> None:

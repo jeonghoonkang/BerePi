@@ -1,2 +1,3 @@
 python-telegram-bot>=21.0
 matplotlib>=3.7
+Pillow>=8
