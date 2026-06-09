@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
 import base64
 import binascii
@@ -54,6 +55,12 @@ STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
 PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"))
 PUBLIC_IP_CACHE: dict[str, Any] = {"value": "", "checked_at": 0.0}
+AI_SERVER_LIST_URL = os.getenv(
+    "AI_SERVER_LIST_URL",
+    "https://github.com/KETI-IISRC-AX/keti-sw-docs/blob/main/devel_info/ai_server_list.md",
+)
+AI_SERVER_LIST_TIMEOUT_SECONDS = float(os.getenv("AI_SERVER_LIST_TIMEOUT_SECONDS", "3"))
+AI_SERVER_LIST_TOKEN = os.getenv("AI_SERVER_LIST_TOKEN", "").strip() or os.getenv("GITHUB_TOKEN", "").strip()
 PROMPT_HISTORY_LIMIT = 100
 PROMPT_HISTORY_LOCK = threading.RLock()
 USER_PROMPT_HISTORY_LIMIT = 2000
@@ -147,6 +154,12 @@ INDEX_HTML = """<!doctype html>
       font-weight: 600;
     }
     p { margin: 0; color: var(--muted); }
+    .ai-server-list {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
     button {
       border: 1px solid var(--line);
       background: #fff;
@@ -555,6 +568,7 @@ INDEX_HTML = """<!doctype html>
     <header>
       <div>
         <h1>Ollama Service by Local Download Model <span class="title-path">run_gemma4_ollama/server</span></h1>
+        <p class="ai-server-list">__AI_SERVER_LIST__</p>
         <p>Port 8082 service page for checking Ollama and sending a quick Gemma4 prompt.</p>
       </div>
       <button id="refresh">Refresh</button>
@@ -3255,6 +3269,66 @@ def gpu_options_html(gpus: list[dict[str, Any]], selected: str) -> str:
     return "\n".join(lines)
 
 
+def github_blob_raw_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.netloc.lower() != "github.com":
+        return url
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 5 or parts[2] != "blob":
+        return url
+
+    owner, repo, _blob, ref = parts[:4]
+    file_path = "/".join(parts[4:])
+    return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{file_path}"
+
+
+def github_blob_api_url(url: str) -> str | None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.netloc.lower() != "github.com":
+        return None
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 5 or parts[2] != "blob":
+        return None
+
+    owner, repo, _blob, ref = parts[:4]
+    file_path = "/".join(parts[4:])
+    quoted_path = urllib.parse.quote(file_path)
+    query = urllib.parse.urlencode({"ref": ref})
+    return f"https://api.github.com/repos/{owner}/{repo}/contents/{quoted_path}?{query}"
+
+
+def read_url_text(url: str, timeout_seconds: float) -> str:
+    token = AI_SERVER_LIST_TOKEN
+    request_url = github_blob_api_url(url) if token else github_blob_raw_url(url)
+    request_url = request_url or url
+    headers = {"Accept": "application/vnd.github.raw"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(request_url, headers=headers)
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        return response.read().decode("utf-8", errors="replace")
+
+
+def ai_server_list_text() -> str:
+    try:
+        raw_text = read_url_text(AI_SERVER_LIST_URL, AI_SERVER_LIST_TIMEOUT_SECONDS)
+    except (OSError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+        return f"AI servers: unavailable ({exc})"
+
+    servers: list[str] = []
+    for line in raw_text.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        text = re.sub(r"^\d+[.)]\s*", "", text).strip()
+        text = text.strip("-* ")
+        if text:
+            servers.append(text)
+    return "AI servers: " + " / ".join(servers) if servers else "AI servers: none listed"
+
+
 def render_index_html() -> str:
     gpus, _ = list_gpus()
     selected = read_selected_gpu()
@@ -3262,7 +3336,9 @@ def render_index_html() -> str:
         '            <option value="auto">Auto (all available GPUs)</option>\n'
         '            <option value="cpu">CPU only</option>'
     )
-    return INDEX_HTML.replace(default_gpu_options, gpu_options_html(gpus, selected), 1)
+    page = INDEX_HTML.replace(default_gpu_options, gpu_options_html(gpus, selected), 1)
+    return page.replace("__AI_SERVER_LIST__", html.escape(ai_server_list_text()), 1)
+
 
 
 def selected_gpu_record(selected: str, gpus: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
@@ -3482,6 +3558,16 @@ def stop_ollama_server() -> dict[str, Any]:
     except OSError:
         pass
     return {"ok": True, "stopped_pids": stopped, "missing_pids": missing}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Gemma4 Ollama web server.")
+    parser.add_argument(
+        "--ai-server-list-token",
+        default="",
+        help="GitHub token used to read the AI server list markdown file.",
+    )
+    return parser.parse_args()
 
 
 class Gemma4Handler(BaseHTTPRequestHandler):
@@ -3877,6 +3963,11 @@ class Gemma4ThreadingHTTPServer(ThreadingHTTPServer):
 
 
 def main() -> int:
+    global AI_SERVER_LIST_TOKEN
+    args = parse_args()
+    if args.ai_server_list_token:
+        AI_SERVER_LIST_TOKEN = args.ai_server_list_token.strip()
+
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
     PROMPT_HISTORY_FILE.touch(exist_ok=True)
