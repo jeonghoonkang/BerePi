@@ -9,7 +9,7 @@ mkdir -p "${LOG_DIR}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [port]
+Usage: $(basename "$0") [port] [--ai-server-list-token TOKEN]
 
 Starts the Gemma4 service. If [port] is provided, it overrides
 GEMMA4_SERVER_PORT for this run.
@@ -17,6 +17,8 @@ GEMMA4_SERVER_PORT for this run.
 Examples:
   $(basename "$0")
   $(basename "$0") 8083
+  $(basename "$0") --ai-server-list-token ghp_xxx
+  $(basename "$0") 8083 --ai-server-list-token ghp_xxx
   GEMMA4_SERVER_PORT=8084 $(basename "$0")
 EOF
 }
@@ -26,18 +28,48 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-if [[ $# -gt 1 ]]; then
-  usage >&2
-  exit 2
-fi
+AI_SERVER_LIST_TOKEN_ARG=""
+PORT_ARG=""
 
-if [[ $# -eq 1 ]]; then
-  if [[ ! "$1" =~ ^[0-9]+$ ]] || (( "$1" < 1 || "$1" > 65535 )); then
-    echo "Invalid port: $1" >&2
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ai-server-list-token)
+      if [[ -z "${2:-}" ]]; then
+        echo "--ai-server-list-token requires a token value" >&2
+        usage >&2
+        exit 2
+      fi
+      AI_SERVER_LIST_TOKEN_ARG="$2"
+      shift 2
+      ;;
+    --ai-server-list-token=*)
+      AI_SERVER_LIST_TOKEN_ARG="${1#*=}"
+      shift
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [[ -n "${PORT_ARG}" ]]; then
+        echo "Unexpected argument: $1" >&2
+        usage >&2
+        exit 2
+      fi
+      PORT_ARG="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "${PORT_ARG}" ]]; then
+  if [[ ! "${PORT_ARG}" =~ ^[0-9]+$ ]] || (( "${PORT_ARG}" < 1 || "${PORT_ARG}" > 65535 )); then
+    echo "Invalid port: ${PORT_ARG}" >&2
     usage >&2
     exit 2
   fi
-  export GEMMA4_SERVER_PORT="$1"
+  export GEMMA4_SERVER_PORT="${PORT_ARG}"
 fi
 
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:31b}"
@@ -341,4 +373,8 @@ if [[ "${AUTO_PULL:-1}" == "1" ]]; then
 fi
 
 ensure_server_port_available
-exec python3 "${APP_DIR}/server.py"
+SERVER_ARGS=()
+if [[ -n "${AI_SERVER_LIST_TOKEN_ARG}" ]]; then
+  SERVER_ARGS+=(--ai-server-list-token "${AI_SERVER_LIST_TOKEN_ARG}")
+fi
+exec python3 "${APP_DIR}/server.py" "${SERVER_ARGS[@]}"
