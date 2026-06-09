@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>To Spark Chat Client</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">OpenAI-compatible chat request</p>
+        <h1>To Spark Client</h1>
+      </div>
+      <div class="top-actions">
+        <button id="copyCurl" type="button" class="secondary">Copy curl</button>
+        <button id="sendRequest" type="button" class="primary">Send</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <form class="panel request-panel" id="requestForm">
+        <div class="panel-head">
+          <h2>Request</h2>
+          <span id="statusText" class="status">Ready</span>
+        </div>
+
+        <div class="field-grid">
+          <label>
+            Endpoint
+            <input id="endpoint" type="url" spellcheck="false" value="http://10.0.0.17:26000/v1/chat/completions">
+          </label>
+          <label>
+            Model
+            <input id="model" spellcheck="false" value="google/gemma-4-31b-it">
+          </label>
+          <label>
+            Temperature
+            <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.5">
+          </label>
+          <label>
+            Timeout seconds
+            <input id="timeoutSeconds" type="number" min="1" max="600" step="1" value="120">
+          </label>
+        </div>
+
+        <label class="check-row">
+          <input id="useProxy" type="checkbox" checked>
+          <span>Use local proxy when served through `serve.py`</span>
+        </label>
+
+        <label class="prompt-field">
+          User message
+          <textarea id="message">Blackwell GB10 환경에서 Gemma 4 서빙에 드디어 성공했습니다. 축하 메시지를 남겨줘!</textarea>
+        </label>
+
+        <details class="advanced">
+          <summary>JSON payload</summary>
+          <textarea id="payloadPreview" spellcheck="false" readonly></textarea>
+        </details>
+      </form>
+
+      <section class="panel response-panel">
+        <div class="panel-head">
+          <h2>Response</h2>
+          <span id="elapsedText" class="status">-</span>
+        </div>
+        <div class="answer" id="answer">Response will appear here.</div>
+        <details class="advanced" open>
+          <summary>Raw JSON</summary>
+          <pre id="rawJson">{}</pre>
+        </details>
+      </section>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
