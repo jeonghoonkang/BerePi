@@ -10,3 +10,5 @@
 - FLUSH PRIVILEGES;
 - EXIT;
 - sudo docker exec -it -u 33 nextcloud_http php occ files:scan --all
+### photo
+- 사진 파일 이동하여, occ 먼저 실행하고, memories 설치해야 함 
