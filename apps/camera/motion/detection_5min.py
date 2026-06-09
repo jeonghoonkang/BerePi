@@ -35,8 +35,9 @@ DEFAULT_MAX_PENDING_FILES = 200
 DEFAULT_GPU_MAX_UTILIZATION_PERCENT = 5
 DEFAULT_GPU_WAIT_TIMEOUT_SECONDS = 240
 DEFAULT_GPU_POLL_INTERVAL_SECONDS = 5.0
-TELEGRAM_PHOTO_LIMIT_PER_RUN = 20
+TELEGRAM_PHOTO_LIMIT_SEQUENCE = (20, 10, 5, 1)
 TELEGRAM_TEXT_BATCH_SIZE = 20
+NO_DETECTION_RESET_RUNS = 6
 
 
 @dataclass
@@ -79,6 +80,7 @@ class AppConfig:
     event_log_path: Path
     recent_count_log_path: Path
     model_failure_alert_state_path: Path
+    telegram_alert_throttle_state_path: Path
 
 
 def get_config_value(section: configparser.SectionProxy, key: str, default: str = "") -> str:
@@ -146,6 +148,7 @@ def load_config(config_path: Path) -> AppConfig:
     if not pending_dir.is_absolute():
         pending_dir = (config_path.parent / pending_dir).resolve()
     model_failure_alert_state_path = event_log_path.with_name("model_failure_alert_state.json")
+    telegram_alert_throttle_state_path = event_log_path.with_name("telegram_alert_throttle_state.json")
 
     return AppConfig(
         model=ModelConfig(
@@ -186,6 +189,7 @@ def load_config(config_path: Path) -> AppConfig:
         event_log_path=event_log_path.expanduser(),
         recent_count_log_path=recent_count_log_path.expanduser(),
         model_failure_alert_state_path=model_failure_alert_state_path.expanduser(),
+        telegram_alert_throttle_state_path=telegram_alert_throttle_state_path.expanduser(),
     )
 
 
@@ -719,6 +723,72 @@ def build_detection_text_batch(events: list[dict[str, Any]], batch_index: int, t
     return "\n".join(lines)
 
 
+def default_telegram_photo_limit() -> int:
+    return TELEGRAM_PHOTO_LIMIT_SEQUENCE[0]
+
+
+def get_next_telegram_photo_limit(current_limit: int) -> int:
+    for limit in TELEGRAM_PHOTO_LIMIT_SEQUENCE:
+        if current_limit == limit:
+            current_index = TELEGRAM_PHOTO_LIMIT_SEQUENCE.index(limit)
+            if current_index + 1 < len(TELEGRAM_PHOTO_LIMIT_SEQUENCE):
+                return TELEGRAM_PHOTO_LIMIT_SEQUENCE[current_index + 1]
+            return TELEGRAM_PHOTO_LIMIT_SEQUENCE[-1]
+    return default_telegram_photo_limit()
+
+
+def load_telegram_alert_throttle_state(state_path: Path) -> tuple[int, int]:
+    if not state_path.exists():
+        return default_telegram_photo_limit(), 0
+
+    try:
+        with state_path.open("r", encoding="utf-8") as state_file:
+            data = json.load(state_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"telegram alert throttle state read failed: {state_path}: {exc}", file=sys.stderr)
+        return default_telegram_photo_limit(), 0
+
+    try:
+        photo_limit = int(data.get("photo_limit", default_telegram_photo_limit()))
+    except (TypeError, ValueError):
+        photo_limit = default_telegram_photo_limit()
+    if photo_limit not in TELEGRAM_PHOTO_LIMIT_SEQUENCE:
+        photo_limit = default_telegram_photo_limit()
+
+    try:
+        no_detection_runs = max(0, int(data.get("consecutive_no_detection_runs", 0)))
+    except (TypeError, ValueError):
+        no_detection_runs = 0
+
+    return photo_limit, no_detection_runs
+
+
+def save_telegram_alert_throttle_state(state_path: Path, photo_limit: int, consecutive_no_detection_runs: int) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "photo_limit": photo_limit,
+        "consecutive_no_detection_runs": consecutive_no_detection_runs,
+        "updated_at": format_time(datetime.now().astimezone()),
+    }
+    with state_path.open("w", encoding="utf-8") as state_file:
+        json.dump(payload, state_file, ensure_ascii=False, sort_keys=True)
+        state_file.write("\n")
+
+
+def compute_next_telegram_alert_throttle_state(
+    photo_limit_for_run: int,
+    consecutive_no_detection_runs: int,
+    detected_in_run: bool,
+) -> tuple[int, int]:
+    if detected_in_run:
+        return get_next_telegram_photo_limit(photo_limit_for_run), 0
+
+    updated_no_detection_runs = consecutive_no_detection_runs + 1
+    if updated_no_detection_runs >= NO_DETECTION_RESET_RUNS:
+        return default_telegram_photo_limit(), NO_DETECTION_RESET_RUNS
+    return photo_limit_for_run, updated_no_detection_runs
+
+
 def load_last_model_failure_alert_epoch(state_path: Path) -> float:
     if not state_path.exists():
         return 0.0
@@ -792,6 +862,11 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     print(f"pending_dir={config.pending_dir}")
     print(f"pending_enqueued={enqueued_count}")
     print(f"pending_images={len(pending_images)}/{config.max_pending_files}")
+    photo_limit_for_run, no_detection_runs_before = load_telegram_alert_throttle_state(
+        config.telegram_alert_throttle_state_path
+    )
+    print(f"telegram_photo_limit_this_run={photo_limit_for_run}")
+    print(f"no_detection_runs_before={no_detection_runs_before}")
     try:
         write_recent_count_log(config, recent_images)
     except OSError as exc:
@@ -803,23 +878,51 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     photo_alerts_sent = 0
     overflow_text_events: list[dict[str, Any]] = []
     gpu_wait_timed_out = False
+
+    def persist_telegram_alert_throttle_state(run_evaluated: bool, detected_in_run: bool) -> None:
+        if not run_evaluated:
+            print("telegram alert throttle state unchanged: run not fully evaluated")
+            return
+        next_limit, next_no_detection_runs = compute_next_telegram_alert_throttle_state(
+            photo_limit_for_run,
+            no_detection_runs_before,
+            detected_in_run,
+        )
+        try:
+            save_telegram_alert_throttle_state(
+                config.telegram_alert_throttle_state_path,
+                next_limit,
+                next_no_detection_runs,
+            )
+        except OSError as exc:
+            print(f"telegram alert throttle state save failed: {exc}", file=sys.stderr)
+            return
+        print(
+            "telegram alert throttle updated: "
+            f"next_photo_limit={next_limit} consecutive_no_detection_runs={next_no_detection_runs}"
+        )
+
     if not pending_images:
         latest_image = get_latest_image(config.motion_dir, config.recursive)
         print(f"no recent images in lookback; latest_image={latest_image}")
         if latest_image is None:
+            persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
             return alerts_sent
         if reference_was_sent(config.event_log_path, latest_image):
             print(f"latest fallback already sent; skip duplicate: {latest_image.name}")
+            persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
             return alerts_sent
         event = build_reference_event(latest_image, "latest_no_recent")
         if dry_run:
             print(f"dry-run: latest fallback send skipped: {latest_image.name}")
+            persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
             return alerts_sent + 1
         requests_module = get_requests_module()
         try:
             send_telegram_photo(config.telegram, event)
         except (requests_module.RequestException, OSError, ValueError) as exc:
             print(f"latest fallback telegram send failed: {latest_image.name}: {exc}", file=sys.stderr)
+            persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
             return alerts_sent
         event["telegram_sent"] = True
         try:
@@ -827,6 +930,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         except OSError as exc:
             print(f"reference history save failed: {latest_image.name}: {exc}", file=sys.stderr)
         print(f"latest fallback telegram sent: {latest_image.name}")
+        persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
         return alerts_sent + 1
 
     requests_module = get_requests_module()
@@ -866,7 +970,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             print(f"event saved: {config.event_log_path}")
 
         if dry_run:
-            if photo_alerts_sent < TELEGRAM_PHOTO_LIMIT_PER_RUN:
+            if photo_alerts_sent < photo_limit_for_run:
                 print(f"dry-run: telegram photo send skipped for {image_path.name}")
                 photo_alerts_sent += 1
                 alerts_sent += 1
@@ -876,7 +980,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             remove_pending_image(image_path)
             continue
 
-        if photo_alerts_sent >= TELEGRAM_PHOTO_LIMIT_PER_RUN:
+        if photo_alerts_sent >= photo_limit_for_run:
             overflow_text_events.append(event)
             print(f"telegram photo limit reached; queued text alert: {image_path.name}")
             remove_pending_image(image_path)
@@ -916,7 +1020,13 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
 
     if gpu_wait_timed_out:
         print("gpu remained busy; no reference image will be sent for this run")
+        persist_telegram_alert_throttle_state(run_evaluated=False, detected_in_run=False)
         return alerts_sent
+
+    persist_telegram_alert_throttle_state(
+        run_evaluated=(not pending_images or processed_pending_images > 0),
+        detected_in_run=(detected_events > 0),
+    )
 
     if processed_pending_images > 0 and detected_events == 0:
         reference_images = get_reference_images(config.motion_dir, config.recursive)
