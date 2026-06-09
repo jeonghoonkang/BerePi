@@ -9,3 +9,4 @@
 - GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'%'; 
 - FLUSH PRIVILEGES;
 - EXIT;
+- sudo docker exec -it -u 33 nextcloud_http php occ files:scan --all
