@@ -16,6 +16,7 @@
       <div class="top-actions">
         <button id="copyCurl" type="button" class="secondary">Copy curl</button>
         <button id="sendRequest" type="button" class="primary">Send</button>
+        <button id="stopRequest" type="button" class="secondary danger" disabled>Stop</button>
       </div>
     </header>
 
@@ -50,6 +51,20 @@
           <span>Use local proxy when served through `serve.py`</span>
         </label>
 
+        <label class="check-row">
+          <input id="streamResponse" type="checkbox" checked>
+          <span>Stream response</span>
+        </label>
+
+        <section class="gpu-panel">
+          <div class="panel-head compact">
+            <h2>GPU Status</h2>
+            <button id="refreshGpu" type="button" class="secondary">Refresh GPU</button>
+          </div>
+          <div id="gpuStatus" class="gpu-status">Set an endpoint to inspect GPU/server status.</div>
+          <pre id="gpuRaw" class="gpu-raw">{}</pre>
+        </section>
+
         <label class="prompt-field">
           User message
           <textarea id="message">Blackwell GB10 환경에서 Gemma 4 서빙에 드디어 성공했습니다. 축하 메시지를 남겨줘!</textarea>
@@ -64,7 +79,10 @@
       <section class="panel response-panel">
         <div class="panel-head">
           <h2>Response</h2>
-          <span id="elapsedText" class="status">-</span>
+          <div class="response-actions">
+            <button id="clearResponse" type="button" class="secondary">Clear</button>
+            <span id="elapsedText" class="status">-</span>
+          </div>
         </div>
         <div class="answer" id="answer">Response will appear here.</div>
         <details class="advanced" open>

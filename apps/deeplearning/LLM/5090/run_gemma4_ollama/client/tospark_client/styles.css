@@ -61,7 +61,8 @@ h2 {
 }
 
 .top-actions,
-.panel-head {
+.panel-head,
+.response-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -98,6 +99,11 @@ button.secondary:hover {
   border-color: var(--accent);
 }
 
+button.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 button:disabled {
   cursor: wait;
   opacity: 0.65;
@@ -121,6 +127,10 @@ button:disabled {
 .panel-head {
   justify-content: space-between;
   margin-bottom: 14px;
+}
+
+.panel-head.compact {
+  margin-bottom: 8px;
 }
 
 .status {
@@ -170,6 +180,32 @@ textarea {
 
 .prompt-field {
   margin-top: 12px;
+}
+
+.gpu-panel {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #f9fafb;
+}
+
+.gpu-panel h2 {
+  font-size: 15px;
+}
+
+.gpu-status {
+  min-height: 44px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gpu-raw {
+  min-height: 96px;
+  max-height: 220px;
 }
 
 .check-row {
