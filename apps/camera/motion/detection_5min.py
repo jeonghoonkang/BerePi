@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import base64
 import configparser
+import fcntl
 import hashlib
 import json
 import os
@@ -29,8 +30,10 @@ DEFAULT_CONFIG_PATH = APP_DIR / "conf_connect_model.conf"
 DEFAULT_MOTION_DIR = Path("/var/lib/motion")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 DEFAULT_CRON_LOG_PATH = APP_DIR / "logs" / "detection_5min.log"
+DEFAULT_PROCESS_LOCK_PATH = APP_DIR / "detection_5min.lock"
 MODEL_FAILURE_ALERT_INTERVAL_SECONDS = 60 * 60
 DEFAULT_PENDING_DIR = APP_DIR / "pending_model_images"
+DEFAULT_SKIPPED_DIR = APP_DIR / "motion_skiped"
 DEFAULT_MAX_PENDING_FILES = 200
 DEFAULT_GPU_MAX_UTILIZATION_PERCENT = 5
 DEFAULT_GPU_WAIT_TIMEOUT_SECONDS = 240
@@ -76,6 +79,7 @@ class AppConfig:
     lookback_minutes: int
     recursive: bool
     pending_dir: Path
+    skipped_dir: Path
     max_pending_files: int
     event_log_path: Path
     recent_count_log_path: Path
@@ -107,6 +111,29 @@ def get_config_bool(section: configparser.SectionProxy, key: str, default: bool)
         return section.getboolean(key, fallback=default)
     except ValueError:
         return default
+
+
+def acquire_process_lock(lock_path: Path) -> Any | None:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = lock_path.open("w", encoding="utf-8")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_file.close()
+        return None
+
+    lock_file.write(f"pid={os.getpid()}\nstarted_at={format_time(datetime.now().astimezone())}\n")
+    lock_file.flush()
+    return lock_file
+
+
+def release_process_lock(lock_file: Any | None) -> None:
+    if lock_file is None:
+        return
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    finally:
+        lock_file.close()
 
 
 def load_config(config_path: Path) -> AppConfig:
@@ -147,6 +174,9 @@ def load_config(config_path: Path) -> AppConfig:
     pending_dir = Path(get_config_value(motion_section, "pending_dir", str(DEFAULT_PENDING_DIR)))
     if not pending_dir.is_absolute():
         pending_dir = (config_path.parent / pending_dir).resolve()
+    skipped_dir = Path(get_config_value(motion_section, "skipped_dir", str(DEFAULT_SKIPPED_DIR)))
+    if not skipped_dir.is_absolute():
+        skipped_dir = (config_path.parent / skipped_dir).resolve()
     model_failure_alert_state_path = event_log_path.with_name("model_failure_alert_state.json")
     telegram_alert_throttle_state_path = event_log_path.with_name("telegram_alert_throttle_state.json")
 
@@ -185,6 +215,7 @@ def load_config(config_path: Path) -> AppConfig:
         lookback_minutes=get_config_int(motion_section, "lookback_minutes", 5),
         recursive=get_config_bool(motion_section, "recursive", False),
         pending_dir=pending_dir.expanduser(),
+        skipped_dir=skipped_dir.expanduser(),
         max_pending_files=max(1, get_config_int(motion_section, "max_pending_files", DEFAULT_MAX_PENDING_FILES)),
         event_log_path=event_log_path.expanduser(),
         recent_count_log_path=recent_count_log_path.expanduser(),
@@ -242,6 +273,27 @@ def list_pending_images(config: AppConfig) -> list[Path]:
     return pending_images
 
 
+def list_skipped_images(config: AppConfig) -> list[Path]:
+    skipped_images = iter_image_files(config.skipped_dir, recursive=False)
+    skipped_images.sort(key=lambda path: (image_modified_at(path), path.name))
+    return skipped_images
+
+
+def unique_destination_path(directory: Path, source_name: str) -> Path:
+    destination = directory / source_name
+    if not destination.exists():
+        return destination
+
+    stem = Path(source_name).stem
+    suffix = Path(source_name).suffix
+    index = 1
+    while True:
+        candidate = directory / f"{stem}_{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
 def enqueue_pending_image(config: AppConfig, source_path: Path) -> Path | None:
     try:
         pending_name = pending_image_name(source_path)
@@ -278,6 +330,74 @@ def enqueue_recent_images(config: AppConfig, recent_images: list[Path]) -> int:
         if enqueue_pending_image(config, image_path) is not None:
             enqueued_count += 1
     return enqueued_count
+
+
+def move_images_to_skipped(config: AppConfig, images: list[Path], reason: str) -> int:
+    moved_count = 0
+    if not images:
+        print(f"skip handling: no images to move for reason={reason}")
+        return moved_count
+
+    config.skipped_dir.mkdir(parents=True, exist_ok=True)
+    for image_path in images:
+        if not image_path.exists():
+            continue
+        destination = unique_destination_path(config.skipped_dir, image_path.name)
+        try:
+            shutil.move(str(image_path), str(destination))
+        except OSError as exc:
+            print(f"skip move failed: {image_path} -> {destination}: {exc}", file=sys.stderr)
+            continue
+        moved_count += 1
+        print(f"skip moved: {image_path.name} -> {destination.name} reason={reason}")
+    return moved_count
+
+
+def enqueue_skipped_images(config: AppConfig, limit: int | None = None) -> int:
+    skipped_images = list_skipped_images(config)
+    if limit is not None:
+        skipped_images = skipped_images[: max(0, limit)]
+
+    enqueued_count = 0
+    for skipped_path in skipped_images:
+        try:
+            pending_name = pending_image_name(skipped_path)
+        except OSError as exc:
+            print(f"skipped enqueue skipped; source stat failed: {skipped_path}: {exc}", file=sys.stderr)
+            continue
+
+        config.pending_dir.mkdir(parents=True, exist_ok=True)
+        target_path = config.pending_dir / pending_name
+        if target_path.exists():
+            remove_pending_image(skipped_path)
+            enqueued_count += 1
+            continue
+
+        pending_count = len(list_pending_images(config))
+        if pending_count >= config.max_pending_files:
+            print(
+                f"skipped queue deferred; pending queue full: {skipped_path.name} "
+                f"({pending_count}/{config.max_pending_files})"
+            )
+            break
+
+        try:
+            shutil.move(str(skipped_path), str(target_path))
+        except OSError as exc:
+            print(f"skipped enqueue failed: {skipped_path} -> {target_path}: {exc}", file=sys.stderr)
+            continue
+        enqueued_count += 1
+        print(f"skipped enqueued: {target_path.name}")
+    return enqueued_count
+
+
+def handle_overlapping_run(config: AppConfig) -> int:
+    recent_images = get_recent_images(config.motion_dir, config.lookback_minutes, config.recursive)
+    moved_count = move_images_to_skipped(config, recent_images, reason="overlapping_run")
+    print(f"another run is active; skip overlapping execution: {DEFAULT_PROCESS_LOCK_PATH}")
+    print(f"skipped_dir={config.skipped_dir}")
+    print(f"skipped_moved={moved_count}")
+    return 0
 
 
 def remove_pending_image(image_path: Path) -> None:
@@ -851,7 +971,13 @@ def notify_model_failure(config: AppConfig, image_path: Path, exc: Exception, dr
     return True
 
 
-def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
+def process_recent_images(
+    config: AppConfig,
+    dry_run: bool = False,
+    max_batch_images: int | None = None,
+    text_only_alerts: bool = False,
+    text_batch_size: int = TELEGRAM_TEXT_BATCH_SIZE,
+) -> int:
     recent_images = get_recent_images(config.motion_dir, config.lookback_minutes, config.recursive)
     print(f"1. {config.motion_dir} 에서 파일 가져오기 완료", flush=True)
     print(f"motion_dir={config.motion_dir}")
@@ -859,14 +985,22 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     print(f"recent_images={len(recent_images)}")
     enqueued_count = enqueue_recent_images(config, recent_images)
     pending_images = list_pending_images(config)
+    skipped_images = list_skipped_images(config)
     print(f"pending_dir={config.pending_dir}")
     print(f"pending_enqueued={enqueued_count}")
     print(f"pending_images={len(pending_images)}/{config.max_pending_files}")
+    print(f"skipped_dir={config.skipped_dir}")
+    print(f"skipped_images={len(skipped_images)}")
     photo_limit_for_run, no_detection_runs_before = load_telegram_alert_throttle_state(
         config.telegram_alert_throttle_state_path
     )
+    if text_only_alerts:
+        photo_limit_for_run = 0
     print(f"telegram_photo_limit_this_run={photo_limit_for_run}")
     print(f"no_detection_runs_before={no_detection_runs_before}")
+    print(f"text_only_alerts={text_only_alerts}")
+    print(f"text_batch_size={text_batch_size}")
+    print(f"max_batch_images={max_batch_images}")
     try:
         write_recent_count_log(config, recent_images)
     except OSError as exc:
@@ -875,9 +1009,94 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     alerts_sent = 0
     detected_events = 0
     processed_pending_images = 0
+    processed_realtime_pending_images = 0
     photo_alerts_sent = 0
     overflow_text_events: list[dict[str, Any]] = []
     gpu_wait_timed_out = False
+    remaining_batch_budget = max_batch_images if max_batch_images is None else max(0, max_batch_images)
+
+    requests_module = get_requests_module()
+
+    def process_pending_batch(batch_images: list[Path], batch_name: str) -> None:
+        nonlocal alerts_sent
+        nonlocal detected_events
+        nonlocal processed_pending_images
+        nonlocal processed_realtime_pending_images
+        nonlocal photo_alerts_sent
+        nonlocal gpu_wait_timed_out
+        nonlocal overflow_text_events
+        nonlocal remaining_batch_budget
+
+        for image_path in batch_images:
+            if remaining_batch_budget is not None and remaining_batch_budget <= 0:
+                print(f"batch image limit reached for run: {max_batch_images}")
+                break
+            print(f"detecting: {image_path}")
+            print(f"processing_batch={batch_name}")
+            print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
+            if not wait_for_gpu_idle(config.gpu):
+                gpu_wait_timed_out = True
+                break
+            try:
+                model_response = detect_person_via_model(image_path, config.model)
+            except (requests_module.RequestException, RuntimeError, TimeoutError, ValueError) as exc:
+                print(f"model request failed: {image_path.name}: {exc}", file=sys.stderr)
+                notify_model_failure(config, image_path, exc, dry_run=dry_run)
+                continue
+            except OSError as exc:
+                print(f"image read failed: {image_path.name}: {exc}", file=sys.stderr)
+                remove_pending_image(image_path)
+                continue
+
+            detected, person_count = parse_model_response(model_response)
+            processed_pending_images += 1
+            if remaining_batch_budget is not None:
+                remaining_batch_budget -= 1
+            if batch_name == "realtime":
+                processed_realtime_pending_images += 1
+            print("5. 회신 완료, 결과 전송", flush=True)
+            print(f"model_response={model_response.strip()}")
+            print(f"detected={detected} person_count={person_count}")
+            if not detected:
+                remove_pending_image(image_path)
+                continue
+
+            detected_events += 1
+            event = build_detection_event(image_path, person_count, model_response)
+            try:
+                save_detection_event(config.event_log_path, event)
+            except OSError as exc:
+                print(f"event log save failed: {image_path.name}: {exc}", file=sys.stderr)
+            else:
+                print(f"event saved: {config.event_log_path}")
+
+            if dry_run:
+                if photo_alerts_sent < photo_limit_for_run:
+                    print(f"dry-run: telegram photo send skipped for {image_path.name}")
+                    photo_alerts_sent += 1
+                    alerts_sent += 1
+                else:
+                    overflow_text_events.append(event)
+                    print(f"dry-run: telegram text batch queued for {image_path.name}")
+                remove_pending_image(image_path)
+                continue
+
+            if photo_alerts_sent >= photo_limit_for_run:
+                overflow_text_events.append(event)
+                print(f"telegram photo limit reached; queued text alert: {image_path.name}")
+                remove_pending_image(image_path)
+                continue
+
+            try:
+                send_telegram_photo(config.telegram, event)
+            except (requests_module.RequestException, OSError, ValueError) as exc:
+                print(f"telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
+                remove_pending_image(image_path)
+                continue
+            photo_alerts_sent += 1
+            alerts_sent += 1
+            print(f"telegram sent: {image_path.name}")
+            remove_pending_image(image_path)
 
     def persist_telegram_alert_throttle_state(run_evaluated: bool, detected_in_run: bool) -> None:
         if not run_evaluated:
@@ -902,6 +1121,15 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             f"next_photo_limit={next_limit} consecutive_no_detection_runs={next_no_detection_runs}"
         )
 
+    if not pending_images and skipped_images and gpu_is_idle(config.gpu):
+        skipped_enqueued = enqueue_skipped_images(config, limit=max(1, config.max_pending_files - len(pending_images)))
+        if skipped_enqueued > 0:
+            pending_images = list_pending_images(config)
+            skipped_images = list_skipped_images(config)
+            print(f"skipped_enqueued_before_realtime={skipped_enqueued}")
+            print(f"pending_images={len(pending_images)}/{config.max_pending_files}")
+            print(f"skipped_images={len(skipped_images)}")
+
     if not pending_images:
         latest_image = get_latest_image(config.motion_dir, config.recursive)
         print(f"no recent images in lookback; latest_image={latest_image}")
@@ -913,6 +1141,10 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
             return alerts_sent
         event = build_reference_event(latest_image, "latest_no_recent")
+        if text_only_alerts:
+            print(f"text-only alerts enabled; latest fallback photo skipped: {latest_image.name}")
+            persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
+            return alerts_sent
         if dry_run:
             print(f"dry-run: latest fallback send skipped: {latest_image.name}")
             persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
@@ -933,72 +1165,19 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         persist_telegram_alert_throttle_state(run_evaluated=True, detected_in_run=False)
         return alerts_sent + 1
 
-    requests_module = get_requests_module()
-    for image_path in pending_images:
-        print(f"detecting: {image_path}")
-        print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
-        if not wait_for_gpu_idle(config.gpu):
-            gpu_wait_timed_out = True
-            break
-        try:
-            model_response = detect_person_via_model(image_path, config.model)
-        except (requests_module.RequestException, RuntimeError, TimeoutError, ValueError) as exc:
-            print(f"model request failed: {image_path.name}: {exc}", file=sys.stderr)
-            notify_model_failure(config, image_path, exc, dry_run=dry_run)
-            continue
-        except OSError as exc:
-            print(f"image read failed: {image_path.name}: {exc}", file=sys.stderr)
-            remove_pending_image(image_path)
-            continue
+    process_pending_batch(pending_images, batch_name="realtime")
 
-        detected, person_count = parse_model_response(model_response)
-        processed_pending_images += 1
-        print("5. 회신 완료, 결과 전송", flush=True)
-        print(f"model_response={model_response.strip()}")
-        print(f"detected={detected} person_count={person_count}")
-        if not detected:
-            remove_pending_image(image_path)
-            continue
-
-        detected_events += 1
-        event = build_detection_event(image_path, person_count, model_response)
-        try:
-            save_detection_event(config.event_log_path, event)
-        except OSError as exc:
-            print(f"event log save failed: {image_path.name}: {exc}", file=sys.stderr)
-        else:
-            print(f"event saved: {config.event_log_path}")
-
-        if dry_run:
-            if photo_alerts_sent < photo_limit_for_run:
-                print(f"dry-run: telegram photo send skipped for {image_path.name}")
-                photo_alerts_sent += 1
-                alerts_sent += 1
-            else:
-                overflow_text_events.append(event)
-                print(f"dry-run: telegram text batch queued for {image_path.name}")
-            remove_pending_image(image_path)
-            continue
-
-        if photo_alerts_sent >= photo_limit_for_run:
-            overflow_text_events.append(event)
-            print(f"telegram photo limit reached; queued text alert: {image_path.name}")
-            remove_pending_image(image_path)
-            continue
-
-        try:
-            send_telegram_photo(config.telegram, event)
-        except (requests_module.RequestException, OSError, ValueError) as exc:
-            print(f"telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
-            remove_pending_image(image_path)
-            continue
-        photo_alerts_sent += 1
-        alerts_sent += 1
-        print(f"telegram sent: {image_path.name}")
-        remove_pending_image(image_path)
+    if not gpu_wait_timed_out:
+        skipped_images = list_skipped_images(config)
+        if skipped_images and gpu_is_idle(config.gpu):
+            pending_capacity = max(0, config.max_pending_files - len(list_pending_images(config)))
+            skipped_enqueued = enqueue_skipped_images(config, limit=pending_capacity or None)
+            if skipped_enqueued > 0:
+                print(f"skipped_enqueued_background={skipped_enqueued}")
+                process_pending_batch(list_pending_images(config), batch_name="background_skipped")
 
     if overflow_text_events:
-        text_batches = chunk_items(overflow_text_events, TELEGRAM_TEXT_BATCH_SIZE)
+        text_batches = chunk_items(overflow_text_events, max(1, text_batch_size))
         total_batches = len(text_batches)
         for batch_index, batch_events in enumerate(text_batches, start=1):
             text = build_detection_text_batch(batch_events, batch_index, total_batches)
@@ -1028,7 +1207,7 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
         detected_in_run=(detected_events > 0),
     )
 
-    if processed_pending_images > 0 and detected_events == 0:
+    if processed_realtime_pending_images > 0 and detected_events == 0:
         reference_images = get_reference_images(config.motion_dir, config.recursive)
         print(f"no person detected; reference_images={len(reference_images)}")
         if not reference_images:
@@ -1044,6 +1223,9 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             if dry_run:
                 print(f"dry-run: no-detection reference send skipped for {reference_label}: {image_path.name}")
                 alerts_sent += 1
+                continue
+            if text_only_alerts:
+                print(f"text-only alerts enabled; reference photo skipped: {reference_label}: {image_path.name}")
                 continue
             try:
                 send_telegram_photo(config.telegram, event)
@@ -1126,6 +1308,12 @@ def build_crontab_line(args: argparse.Namespace) -> str:
         command_parts.append("--recursive")
     if args.dry_run:
         command_parts.append("--dry-run")
+    if args.text_only_alerts:
+        command_parts.append("--text-only-alerts")
+    if args.max_batch_images is not None:
+        command_parts.extend(["--max-batch-images", str(args.max_batch_images)])
+    if args.text_batch_size is not None:
+        command_parts.extend(["--text-batch-size", str(args.text_batch_size)])
     if args.send_one is not None:
         command_parts.append("--send-one")
         if args.send_one != "latest":
@@ -1142,6 +1330,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--minutes", type=int, help="override lookback minutes")
     parser.add_argument("--recursive", action="store_true", help="scan motion directory recursively")
     parser.add_argument("--dry-run", action="store_true", help="detect only; do not send Telegram messages")
+    parser.add_argument(
+        "--text-only-alerts",
+        action="store_true",
+        help="send Telegram text messages only; do not send photos for detections or reference images",
+    )
+    parser.add_argument("--max-batch-images", type=int, help="process at most this many pending images in one run")
+    parser.add_argument(
+        "--text-batch-size",
+        type=int,
+        default=TELEGRAM_TEXT_BATCH_SIZE,
+        help=f"Telegram text alert batch size (default: {TELEGRAM_TEXT_BATCH_SIZE})",
+    )
     parser.add_argument(
         "--send-one",
         nargs="?",
@@ -1164,29 +1364,43 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    process_lock = None
     if args.print_crontab:
         print(build_crontab_line(args))
         return 0
 
     try:
-        config = load_config(args.config)
-    except (OSError, configparser.Error) as exc:
-        print(f"config load failed: {exc}", file=sys.stderr)
-        return 1
+        try:
+            config = load_config(args.config)
+        except (OSError, configparser.Error) as exc:
+            print(f"config load failed: {exc}", file=sys.stderr)
+            return 1
 
-    if args.dir is not None:
-        config.motion_dir = args.dir.expanduser()
-    if args.minutes is not None:
-        config.lookback_minutes = args.minutes
-    if args.recursive:
-        config.recursive = True
+        if args.dir is not None:
+            config.motion_dir = args.dir.expanduser()
+        if args.minutes is not None:
+            config.lookback_minutes = args.minutes
+        if args.recursive:
+            config.recursive = True
 
-    if args.send_one is not None:
-        alerts_sent = send_one_image(config, args.send_one, dry_run=args.dry_run)
-    else:
-        alerts_sent = process_recent_images(config, dry_run=args.dry_run)
-    print(f"alerts_sent={alerts_sent}")
-    return 0
+        process_lock = acquire_process_lock(DEFAULT_PROCESS_LOCK_PATH)
+        if process_lock is None:
+            return handle_overlapping_run(config)
+
+        if args.send_one is not None:
+            alerts_sent = send_one_image(config, args.send_one, dry_run=args.dry_run)
+        else:
+            alerts_sent = process_recent_images(
+                config,
+                dry_run=args.dry_run,
+                max_batch_images=args.max_batch_images,
+                text_only_alerts=args.text_only_alerts,
+                text_batch_size=max(1, args.text_batch_size),
+            )
+        print(f"alerts_sent={alerts_sent}")
+        return 0
+    finally:
+        release_process_lock(process_lock)
 
 
 if __name__ == "__main__":
