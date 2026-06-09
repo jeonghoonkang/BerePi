@@ -35,6 +35,8 @@ DEFAULT_MAX_PENDING_FILES = 200
 DEFAULT_GPU_MAX_UTILIZATION_PERCENT = 5
 DEFAULT_GPU_WAIT_TIMEOUT_SECONDS = 240
 DEFAULT_GPU_POLL_INTERVAL_SECONDS = 5.0
+TELEGRAM_PHOTO_LIMIT_PER_RUN = 20
+TELEGRAM_TEXT_BATCH_SIZE = 20
 
 
 @dataclass
@@ -691,6 +693,32 @@ def send_telegram_message(config: TelegramConfig, text: str) -> None:
     response.raise_for_status()
 
 
+def chunk_items(items: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
+    if size <= 0:
+        raise ValueError("chunk size must be positive")
+    return [items[index : index + size] for index in range(0, len(items), size)]
+
+
+def build_detection_text_batch(events: list[dict[str, Any]], batch_index: int, total_batches: int) -> str:
+    lines = [
+        "Motion person detections",
+        f"batch: {batch_index}/{total_batches}",
+        f"items: {len(events)}",
+    ]
+    for index, event in enumerate(events, start=1):
+        lines.append(
+            " | ".join(
+                [
+                    f"{index}.",
+                    f"file={event['image_name']}",
+                    f"people={event['person_count']}",
+                    f"detected_at={event['person_detected_at']}",
+                ]
+            )
+        )
+    return "\n".join(lines)
+
+
 def load_last_model_failure_alert_epoch(state_path: Path) -> float:
     if not state_path.exists():
         return 0.0
@@ -772,6 +800,8 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
     alerts_sent = 0
     detected_events = 0
     processed_pending_images = 0
+    photo_alerts_sent = 0
+    overflow_text_events: list[dict[str, Any]] = []
     gpu_wait_timed_out = False
     if not pending_images:
         latest_image = get_latest_image(config.motion_dir, config.recursive)
@@ -836,8 +866,19 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             print(f"event saved: {config.event_log_path}")
 
         if dry_run:
-            print(f"dry-run: telegram send skipped for {image_path.name}")
-            alerts_sent += 1
+            if photo_alerts_sent < TELEGRAM_PHOTO_LIMIT_PER_RUN:
+                print(f"dry-run: telegram photo send skipped for {image_path.name}")
+                photo_alerts_sent += 1
+                alerts_sent += 1
+            else:
+                overflow_text_events.append(event)
+                print(f"dry-run: telegram text batch queued for {image_path.name}")
+            remove_pending_image(image_path)
+            continue
+
+        if photo_alerts_sent >= TELEGRAM_PHOTO_LIMIT_PER_RUN:
+            overflow_text_events.append(event)
+            print(f"telegram photo limit reached; queued text alert: {image_path.name}")
             remove_pending_image(image_path)
             continue
 
@@ -847,9 +888,31 @@ def process_recent_images(config: AppConfig, dry_run: bool = False) -> int:
             print(f"telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
             remove_pending_image(image_path)
             continue
+        photo_alerts_sent += 1
         alerts_sent += 1
         print(f"telegram sent: {image_path.name}")
         remove_pending_image(image_path)
+
+    if overflow_text_events:
+        text_batches = chunk_items(overflow_text_events, TELEGRAM_TEXT_BATCH_SIZE)
+        total_batches = len(text_batches)
+        for batch_index, batch_events in enumerate(text_batches, start=1):
+            text = build_detection_text_batch(batch_events, batch_index, total_batches)
+            if dry_run:
+                print(
+                    f"dry-run: telegram text batch send skipped: batch={batch_index}/{total_batches} items={len(batch_events)}"
+                )
+                alerts_sent += 1
+                continue
+
+            try:
+                send_telegram_message(config.telegram, text)
+            except (requests_module.RequestException, ValueError) as exc:
+                batch_names = ", ".join(event["image_name"] for event in batch_events)
+                print(f"telegram text batch send failed: {batch_names}: {exc}", file=sys.stderr)
+                continue
+            alerts_sent += 1
+            print(f"telegram text batch sent: batch={batch_index}/{total_batches} items={len(batch_events)}")
 
     if gpu_wait_timed_out:
         print("gpu remained busy; no reference image will be sent for this run")
