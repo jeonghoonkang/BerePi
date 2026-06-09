@@ -47,6 +47,8 @@ ACCESS_LOG_FILE = Path(os.getenv("GEMMA4_ACCESS_LOG_FILE", LOG_DIR / "access.jso
 SAMPLE_DIR = Path(os.getenv("GEMMA4_SAMPLE_DIR", Path(__file__).resolve().with_name("sample")))
 WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
 MACH_STATS_DIR = Path(os.getenv("GEMMA4_MACH_STATS_DIR", Path(__file__).resolve().with_name("mach_stats")))
+MODEL_LOAD_EVENTS_FILE = Path(os.getenv("GEMMA4_MODEL_LOAD_EVENTS_FILE", MACH_STATS_DIR / "model_load_events.jsonl"))
+MODEL_LOAD_STATE_FILE = Path(os.getenv("GEMMA4_MODEL_LOAD_STATE_FILE", MACH_STATS_DIR / "model_load_state.json"))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
 STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
@@ -1669,6 +1671,14 @@ if __name__ == "__main__":
       return date.toLocaleTimeString([], {hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"});
     }
 
+    function formatLoadMetric(windowData) {
+      if (!windowData) return "0.00%<br>0s / 0s";
+      const percent = Number(windowData.load_percent || 0).toFixed(2);
+      const processing = escapeHtml(windowData.processing_human || `${Number(windowData.processing_seconds || 0).toFixed(1)}s`);
+      const elapsed = escapeHtml(windowData.elapsed_human || `${Number(windowData.elapsed_seconds || 0).toFixed(1)}s`);
+      return `${percent}%<br>${processing} / ${elapsed}`;
+    }
+
     async function promptQueueSnapshot() {
       try {
         const res = await fetch("/api/status");
@@ -1721,6 +1731,8 @@ if __name__ == "__main__":
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
+        const modelLoad = data.model_load || {};
+        const lifetimeLoad = modelLoad.lifetime || {};
         const modelClass = data.model_available ? "ok" : "warn";
         const ollamaClass = data.ollama_reachable ? "ok" : "bad";
         const uptimeSeconds = Number(data.uptime_seconds || 0);
@@ -1731,11 +1743,16 @@ if __name__ == "__main__":
           metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
+          metric("Today Model Load", formatLoadMetric(modelLoad.today), "ok"),
+          metric("Weekly Model Load", formatLoadMetric(modelLoad.week), "ok"),
+          metric("Lifetime Model Load", formatLoadMetric(lifetimeLoad), "ok"),
           metric("Keep Alive", data.keep_alive || "default"),
           metric("Context", data.context_length || "default"),
           metric("Uptime", uptimeText),
+          metric("Model Run Time", `${escapeHtml(lifetimeLoad.processing_human || "0D 0H 0M")}<br>${Number(lifetimeLoad.processing_seconds || 0).toFixed(3)}s`),
           metric("Ollama URL", data.ollama_base_url),
           metric("Selected GPU", data.selected_gpu_label),
+          metric("Tracking Since", `${escapeHtml(modelLoad.tracking_started_at_text || "Unknown")}<br>Last run: ${escapeHtml(modelLoad.latest_processed_at_text || "No samples")}`),
           metric("Known Models", data.models.length ? data.models.join(", ") : "None")
         ].join("");
         renderGpuOptions(data);
@@ -2344,6 +2361,140 @@ def access_log_timestamp(timestamp: float | None = None) -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
 
 
+def ensure_model_load_state() -> dict[str, Any]:
+  MACH_STATS_DIR.mkdir(parents=True, exist_ok=True)
+  now = time.time()
+  default_state = {
+    "tracking_started_at": now,
+    "tracking_started_at_text": access_log_timestamp(now),
+    "last_server_started_at": now,
+    "last_server_started_at_text": access_log_timestamp(now),
+  }
+  try:
+    data = json.loads(MODEL_LOAD_STATE_FILE.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError):
+    data = {}
+  if not isinstance(data, dict):
+    data = {}
+
+  state = dict(default_state)
+  state.update(data)
+  try:
+    state["tracking_started_at"] = float(state.get("tracking_started_at") or now)
+  except (TypeError, ValueError):
+    state["tracking_started_at"] = now
+
+  state["tracking_started_at_text"] = str(
+    state.get("tracking_started_at_text") or access_log_timestamp(state["tracking_started_at"])
+  )
+  state["last_server_started_at"] = now
+  state["last_server_started_at_text"] = access_log_timestamp(now)
+
+  temp_path = MODEL_LOAD_STATE_FILE.with_suffix(".json.tmp")
+  temp_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+  temp_path.replace(MODEL_LOAD_STATE_FILE)
+  return state
+
+
+MODEL_LOAD_STATE = ensure_model_load_state()
+
+
+def append_model_load_event(processed_at: float, elapsed_seconds: float, model: str) -> None:
+  MACH_STATS_DIR.mkdir(parents=True, exist_ok=True)
+  MODEL_LOAD_EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+  event = {
+    "processed_at": round(float(processed_at), 3),
+    "processed_at_text": access_log_timestamp(processed_at),
+    "elapsed_seconds": round(max(0.0, float(elapsed_seconds)), 3),
+    "model": str(model or "unknown"),
+  }
+  with MODEL_LOAD_EVENTS_FILE.open("a", encoding="utf-8") as handle:
+    handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def model_load_ratio(processing_seconds: float, elapsed_seconds: float) -> float:
+  if elapsed_seconds <= 0:
+    return 0.0
+  return round(max(0.0, min(1.0, processing_seconds / elapsed_seconds)), 6)
+
+
+def model_load_window(now: float, start_at: float, processing_seconds: float) -> dict[str, Any]:
+  safe_start_at = min(now, max(0.0, float(start_at)))
+  elapsed_seconds = max(0.0, now - safe_start_at)
+  ratio = model_load_ratio(processing_seconds, elapsed_seconds)
+  return {
+    "window_started_at": round(safe_start_at, 3),
+    "window_started_at_text": access_log_timestamp(safe_start_at),
+    "elapsed_seconds": round(elapsed_seconds, 3),
+    "elapsed_human": format_uptime_dhm(elapsed_seconds),
+    "processing_seconds": round(max(0.0, processing_seconds), 3),
+    "processing_human": format_uptime_dhm(processing_seconds),
+    "load_ratio": ratio,
+    "load_percent": round(ratio * 100, 2),
+  }
+
+
+def read_model_load_summary(now: float | None = None) -> dict[str, Any]:
+  current_time = time.time() if now is None else float(now)
+  tracking_started_at = float(MODEL_LOAD_STATE.get("tracking_started_at") or current_time)
+  today = dt.datetime.fromtimestamp(current_time).date()
+  day_start_at = dt.datetime.combine(today, dt.time.min).timestamp()
+  week_start_date = prompt_processing_week_start(today)
+  week_start_at = dt.datetime.combine(week_start_date, dt.time.min).timestamp()
+
+  daily_processing_seconds = 0.0
+  weekly_processing_seconds = 0.0
+  lifetime_processing_seconds = 0.0
+  latest_processed_at_text = ""
+  sample_count = 0
+
+  try:
+    with MODEL_LOAD_EVENTS_FILE.open("r", encoding="utf-8") as handle:
+      for raw_line in handle:
+        line = raw_line.strip()
+        if not line:
+          continue
+        try:
+          event = json.loads(line)
+        except json.JSONDecodeError:
+          continue
+        if not isinstance(event, dict):
+          continue
+        try:
+          processed_at = float(event.get("processed_at") or 0.0)
+          elapsed_seconds = max(0.0, float(event.get("elapsed_seconds") or 0.0))
+        except (TypeError, ValueError):
+          continue
+
+        sample_count += 1
+        lifetime_processing_seconds += elapsed_seconds
+        latest_processed_at_text = str(event.get("processed_at_text") or latest_processed_at_text)
+        if processed_at >= day_start_at:
+          daily_processing_seconds += elapsed_seconds
+        if processed_at >= week_start_at:
+          weekly_processing_seconds += elapsed_seconds
+  except FileNotFoundError:
+    pass
+  except OSError:
+    pass
+
+  return {
+    "tracking_started_at": round(tracking_started_at, 3),
+    "tracking_started_at_text": str(
+      MODEL_LOAD_STATE.get("tracking_started_at_text") or access_log_timestamp(tracking_started_at)
+    ),
+    "last_server_started_at": round(float(MODEL_LOAD_STATE.get("last_server_started_at") or STARTED_AT), 3),
+    "last_server_started_at_text": str(
+      MODEL_LOAD_STATE.get("last_server_started_at_text") or access_log_timestamp(STARTED_AT)
+    ),
+    "latest_processed_at_text": latest_processed_at_text,
+    "sample_count": sample_count,
+    "today": model_load_window(current_time, max(tracking_started_at, day_start_at), daily_processing_seconds),
+    "week": model_load_window(current_time, max(tracking_started_at, week_start_at), weekly_processing_seconds),
+    "lifetime": model_load_window(current_time, tracking_started_at, lifetime_processing_seconds),
+  }
+
+
 def read_access_log(limit: int = ACCESS_LOG_LIMIT) -> list[dict[str, Any]]:
     with ACCESS_LOG_LOCK:
         try:
@@ -2531,7 +2682,6 @@ def prompt_processing_stats_path(today: dt.date | None = None) -> Path:
 def empty_prompt_processing_stats(today: dt.date | None = None) -> dict[str, Any]:
     week_start = prompt_processing_week_start(today)
     week_end = week_start + dt.timedelta(days=6)
-    uptime_seconds = int(time.time() - STARTED_AT)
     return {
         "week_start_date": week_start.isoformat(),
         "week_end_date": week_end.isoformat(),
@@ -2569,45 +2719,47 @@ def average_prompt_processing_seconds() -> float:
 
 
 def record_prompt_processing_time(elapsed_seconds: float, model: str) -> dict[str, Any]:
-    with PROMPT_SPEED_STATS_LOCK:
-        MACH_STATS_DIR.mkdir(parents=True, exist_ok=True)
-        stats = read_prompt_processing_stats()
-        elapsed = max(0.0, float(elapsed_seconds))
-        sample_count = int(stats.get("sample_count") or 0) + 1
-        total = float(stats.get("total_processing_seconds") or 0.0) + elapsed
-        model_counts = dict(stats.get("model_counts") or {})
-        model_key = str(model or "unknown")
-        model_counts[model_key] = int(model_counts.get(model_key) or 0) + 1
-        latest_samples = list(stats.get("latest_samples") or [])
-        latest_samples.append(
-            {
-                "processed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "elapsed_seconds": round(elapsed, 3),
-                "model": model_key,
-            }
-        )
-        stats.update(
-            {
-                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "sample_count": sample_count,
-                "total_processing_seconds": round(total, 3),
-                "average_processing_seconds": round(total / sample_count, 3),
-                "min_processing_seconds": round(
-                    elapsed if sample_count == 1 else min(float(stats.get("min_processing_seconds") or elapsed), elapsed),
-                    3,
-                ),
-                "max_processing_seconds": round(max(float(stats.get("max_processing_seconds") or 0.0), elapsed), 3),
-                "last_processing_seconds": round(elapsed, 3),
-                "model_counts": model_counts,
-                "latest_samples": latest_samples[-100:],
-            }
-        )
-        path = prompt_processing_stats_path()
-        temp_path = path.with_suffix(".json.tmp")
-        temp_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        temp_path.replace(path)
-        stats["stats_path"] = str(path)
-        return stats
+  with PROMPT_SPEED_STATS_LOCK:
+    MACH_STATS_DIR.mkdir(parents=True, exist_ok=True)
+    processed_at = time.time()
+    stats = read_prompt_processing_stats()
+    elapsed = max(0.0, float(elapsed_seconds))
+    sample_count = int(stats.get("sample_count") or 0) + 1
+    total = float(stats.get("total_processing_seconds") or 0.0) + elapsed
+    model_counts = dict(stats.get("model_counts") or {})
+    model_key = str(model or "unknown")
+    model_counts[model_key] = int(model_counts.get(model_key) or 0) + 1
+    latest_samples = list(stats.get("latest_samples") or [])
+    latest_samples.append(
+      {
+        "processed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "elapsed_seconds": round(elapsed, 3),
+        "model": model_key,
+      }
+    )
+    stats.update(
+      {
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "sample_count": sample_count,
+        "total_processing_seconds": round(total, 3),
+        "average_processing_seconds": round(total / sample_count, 3),
+        "min_processing_seconds": round(
+          elapsed if sample_count == 1 else min(float(stats.get("min_processing_seconds") or elapsed), elapsed),
+          3,
+        ),
+        "max_processing_seconds": round(max(float(stats.get("max_processing_seconds") or 0.0), elapsed), 3),
+        "last_processing_seconds": round(elapsed, 3),
+        "model_counts": model_counts,
+        "latest_samples": latest_samples[-100:],
+      }
+    )
+    path = prompt_processing_stats_path()
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temp_path.replace(path)
+    append_model_load_event(processed_at, elapsed, model_key)
+    stats["stats_path"] = str(path)
+    return stats
 
 
 def estimated_prompt_wait_seconds(prompts_ahead: int) -> float:
@@ -3213,9 +3365,11 @@ def status_payload() -> dict[str, Any]:
     models: list[str] = []
     ollama_reachable = False
     error = ""
+    uptime_seconds = int(time.time() - STARTED_AT)
     gpus, gpu_detection_error = list_gpus()
     selected_gpu = read_selected_gpu()
     selected_model = read_selected_model()
+    model_load = read_model_load_summary()
     try:
         models = list_ollama_models()
         ollama_reachable = True
@@ -3240,6 +3394,7 @@ def status_payload() -> dict[str, Any]:
         "context_length": OLLAMA_CONTEXT_LENGTH,
         "model_available": any(model_matches(name, selected_model) for name in models),
         "models": models,
+        "model_load": model_load,
         "prompt_queue": prompt_queue_status(),
         "uptime_seconds": uptime_seconds,
         "uptime_human": format_uptime_dhm(uptime_seconds),
