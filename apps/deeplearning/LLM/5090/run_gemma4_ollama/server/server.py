@@ -3614,23 +3614,39 @@ def known_ollama_pids(include_external: bool = False) -> list[int]:
     return pids
 
 
+def stop_ollama_pid(pid: int) -> str:
+    if is_windows():
+        result = subprocess.run(
+            ["taskkill", "/PID", str(pid), "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0:
+            return "stopped"
+        if not pid_is_ollama(pid):
+            return "missing"
+        return "denied"
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return "missing"
+    except PermissionError:
+        return "denied"
+    return "stopped"
+
+
 def stop_ollama_server() -> dict[str, Any]:
     stopped: list[int] = []
     missing: list[int] = []
     denied: list[int] = []
     pids = known_ollama_pids(include_external=True)
     for pid in pids:
-        try:
-            if is_windows():
-                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                os.kill(pid, signal.SIGTERM)
+        result = stop_ollama_pid(pid)
+        if result == "stopped":
             stopped.append(pid)
-        except ProcessLookupError:
+        elif result == "missing":
             missing.append(pid)
-        except PermissionError:
-            denied.append(pid)
-        except subprocess.CalledProcessError:
+        else:
             denied.append(pid)
     try:
         OLLAMA_PID_FILE.unlink()
@@ -3638,21 +3654,23 @@ def stop_ollama_server() -> dict[str, Any]:
         pass
     except OSError:
         pass
-    if denied:
+    remaining_pids = all_ollama_pids()
+    if denied and remaining_pids:
         return {
             "ok": False,
             "message": "Permission denied stopping some Ollama processes",
             "stopped_pids": stopped,
             "missing_pids": missing,
             "denied_pids": denied,
+            "remaining_pids": remaining_pids,
         }
-    external_pids = [pid for pid in all_ollama_pids() if pid not in pids]
     return {
         "ok": True,
         "stopped_pids": stopped,
         "missing_pids": missing,
         "denied_pids": denied,
-        "external_pids": external_pids,
+        "external_pids": [pid for pid in remaining_pids if pid not in pids],
+        "remaining_pids": remaining_pids,
     }
 
 
