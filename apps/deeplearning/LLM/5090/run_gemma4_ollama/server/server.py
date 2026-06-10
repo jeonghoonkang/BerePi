@@ -3618,7 +3618,7 @@ def stop_ollama_server() -> dict[str, Any]:
     stopped: list[int] = []
     missing: list[int] = []
     denied: list[int] = []
-    pids = known_ollama_pids()
+    pids = known_ollama_pids(include_external=True)
     for pid in pids:
         try:
             if is_windows():
@@ -3641,7 +3641,7 @@ def stop_ollama_server() -> dict[str, Any]:
     if denied:
         return {
             "ok": False,
-            "message": "Permission denied stopping Ollama process started by this service",
+            "message": "Permission denied stopping some Ollama processes",
             "stopped_pids": stopped,
             "missing_pids": missing,
             "denied_pids": denied,
