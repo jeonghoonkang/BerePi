@@ -1,0 +1,37 @@
+model_list:
+  - model_name: google/gemma-4-31b-it
+    litellm_params:
+      model: hosted_vllm/google/gemma-4-31B-it
+      api_base: os.environ/GOOGLE_GEMMA4_VLLM_API_BASE
+      api_key: os.environ/VLLM_API_KEY
+      timeout: 600
+      stream_timeout: 600
+    model_info:
+      mode: chat
+      input_cost_per_token: 0
+      output_cost_per_token: 0
+
+  - model_name: nvidia/gemma-4-31b-it-nvfp4
+    litellm_params:
+      model: hosted_vllm/nvidia/Gemma-4-31B-IT-NVFP4
+      api_base: os.environ/NVIDIA_GEMMA4_NVFP4_VLLM_API_BASE
+      api_key: os.environ/VLLM_API_KEY
+      timeout: 600
+      stream_timeout: 600
+    model_info:
+      mode: chat
+      input_cost_per_token: 0
+      output_cost_per_token: 0
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 600
+  num_retries: 1
+  set_verbose: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  master_key_auth: true
+  disable_master_key_return: true
+  # Optional LiteLLM IP filtering can be enabled by adding:
+  # allowed_ips: ["127.0.0.1", "192.168.0.10"]
