@@ -3519,77 +3519,141 @@ def start_ollama_server() -> dict[str, Any]:
     return {"ok": False, "message": "Ollama server start timed out", "pid": process.pid}
 
 
+def is_windows() -> bool:
+    return os.name == "nt"
+
+
+def powershell_lines(command: str) -> list[str]:
+    try:
+        output = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command", command],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def parse_pid_lines(lines: list[str]) -> list[int]:
+    pids: list[int] = []
+    for line in lines:
+        try:
+            pids.append(int(line.strip()))
+        except ValueError:
+            continue
+    return pids
+
+
+def pid_is_ollama(pid: int) -> bool:
+    if is_windows():
+        command = (
+            "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = %d\"; "
+            "if ($p) { $p.Name; $p.CommandLine }"
+        ) % pid
+        process_text = "\n".join(powershell_lines(command)).lower()
+        return "ollama" in process_text
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+    try:
+        output = subprocess.check_output(["ps", "-p", str(pid), "-o", "comm=,args="], text=True)
+    except (OSError, subprocess.CalledProcessError):
+        return True
+    return "ollama" in output.lower()
+
+
 def child_ollama_pids() -> list[int]:
+    if is_windows():
+        command = (
+            "$parent = %d; "
+            "Get-CimInstance Win32_Process | "
+            "Where-Object { $_.ParentProcessId -eq $parent -and $_.Name -ieq 'ollama.exe' } | "
+            "Select-Object -ExpandProperty ProcessId"
+        ) % os.getpid()
+        return parse_pid_lines(powershell_lines(command))
     try:
         output = subprocess.check_output(["pgrep", "-P", str(os.getpid()), "-f", "ollama"], text=True)
     except (OSError, subprocess.CalledProcessError):
         return []
-    pids: list[int] = []
-    for line in output.splitlines():
-        try:
-            pids.append(int(line.strip()))
-        except ValueError:
-            continue
-    return pids
+    return parse_pid_lines(output.splitlines())
 
 
 def all_ollama_pids() -> list[int]:
+    if is_windows():
+        return parse_pid_lines(
+            powershell_lines(
+                "Get-CimInstance Win32_Process -Filter \"Name = 'ollama.exe'\" | "
+                "Select-Object -ExpandProperty ProcessId"
+            )
+        )
     try:
         output = subprocess.check_output(["pgrep", "-x", "ollama"], text=True)
     except (OSError, subprocess.CalledProcessError):
         return []
-    pids: list[int] = []
-    for line in output.splitlines():
-        try:
-            pids.append(int(line.strip()))
-        except ValueError:
-            continue
-    return pids
+    return parse_pid_lines(output.splitlines())
 
 
-def known_ollama_pids() -> list[int]:
+def known_ollama_pids(include_external: bool = False) -> list[int]:
     pids: list[int] = []
     if OLLAMA_PID_FILE.exists():
         try:
-            pids.append(int(OLLAMA_PID_FILE.read_text(encoding="utf-8").strip()))
+            pid = int(OLLAMA_PID_FILE.read_text(encoding="utf-8").strip())
+            if pid_is_ollama(pid):
+                pids.append(pid)
         except (OSError, ValueError):
             pass
     for pid in child_ollama_pids():
         if pid not in pids:
             pids.append(pid)
-    for pid in all_ollama_pids():
-        if pid not in pids:
-            pids.append(pid)
+    if include_external:
+        for pid in all_ollama_pids():
+            if pid not in pids:
+                pids.append(pid)
     return pids
 
 
 def stop_ollama_server() -> dict[str, Any]:
-  stopped: list[int] = []
-  missing: list[int] = []
-  denied: list[int] = []
-  for pid in known_ollama_pids():
+    stopped: list[int] = []
+    missing: list[int] = []
+    denied: list[int] = []
+    pids = known_ollama_pids()
+    for pid in pids:
+        try:
+            if is_windows():
+                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                os.kill(pid, signal.SIGTERM)
+            stopped.append(pid)
+        except ProcessLookupError:
+            missing.append(pid)
+        except PermissionError:
+            denied.append(pid)
+        except subprocess.CalledProcessError:
+            denied.append(pid)
     try:
-      os.kill(pid, signal.SIGTERM)
-      stopped.append(pid)
-    except ProcessLookupError:
-      missing.append(pid)
-    except PermissionError:
-      denied.append(pid)
-  try:
-    OLLAMA_PID_FILE.unlink()
-  except FileNotFoundError:
-    pass
-  except OSError:
-    pass
-  if denied:
+        OLLAMA_PID_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+    if denied:
+        return {
+            "ok": False,
+            "message": "Permission denied stopping Ollama process started by this service",
+            "stopped_pids": stopped,
+            "missing_pids": missing,
+            "denied_pids": denied,
+        }
+    external_pids = [pid for pid in all_ollama_pids() if pid not in pids]
     return {
-      "ok": False,
-      "message": "Permission denied stopping some Ollama processes",
-      "stopped_pids": stopped,
-      "missing_pids": missing,
-      "denied_pids": denied,
+        "ok": True,
+        "stopped_pids": stopped,
+        "missing_pids": missing,
+        "denied_pids": denied,
+        "external_pids": external_pids,
     }
-  return {"ok": True, "stopped_pids": stopped, "missing_pids": missing, "denied_pids": denied}
 
 
 def parse_args() -> argparse.Namespace:
@@ -3777,6 +3841,14 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
                 return
             if not result.get("stopped_pids") and not result.get("missing_pids"):
+                if result.get("external_pids"):
+                    self.send_json(
+                        {
+                            "message": "No Ollama PID found for this service; an external Ollama process is still running",
+                            **result,
+                        }
+                    )
+                    return
                 self.send_json({"message": "No Ollama PID found for this service", **result})
                 return
             self.send_json({"message": "Ollama server stopped", **result})
