@@ -2909,22 +2909,22 @@ def print_prompt_request_received(
 
 
 def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
-    started_at = time.perf_counter()
-    result = request_json("/api/generate", payload=payload)
-    result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
-    result["model"] = payload["model"]
+  started_at = time.perf_counter()
+  result = request_json("/api/generate", payload=payload)
+  result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
+  result["model"] = payload["model"]
   selected_gpu = read_selected_gpu()
   gpus, _ = list_gpus()
   result["selected_gpu"] = selected_gpu
   result["runtime_gpu"] = selected_gpu_label(selected_gpu, gpus)
-    result["server_ip"] = server_ip()
-    result["server_port"] = PORT
-    result["elapsed_line"] = (
-        f"Elapsed time: {result['elapsed_seconds']:.2f}s | "
+  result["server_ip"] = server_ip()
+  result["server_port"] = PORT
+  result["elapsed_line"] = (
+    f"Elapsed time: {result['elapsed_seconds']:.2f}s | "
     f"Model: {result['model']} | GPU: {result['runtime_gpu']} | "
     f"IP: {result['server_ip']} | Port: {result['server_port']}"
-    )
-    return attach_thinking_fields(result)
+  )
+  return attach_thinking_fields(result)
 
 
 def trim_prompt_jobs_locked() -> None:
@@ -3533,17 +3533,17 @@ def child_ollama_pids() -> list[int]:
     return pids
 
 
-  def all_ollama_pids() -> list[int]:
+def all_ollama_pids() -> list[int]:
     try:
-      output = subprocess.check_output(["pgrep", "-x", "ollama"], text=True)
+        output = subprocess.check_output(["pgrep", "-x", "ollama"], text=True)
     except (OSError, subprocess.CalledProcessError):
-      return []
+        return []
     pids: list[int] = []
     for line in output.splitlines():
-      try:
-        pids.append(int(line.strip()))
-      except ValueError:
-        continue
+        try:
+            pids.append(int(line.strip()))
+        except ValueError:
+            continue
     return pids
 
 
@@ -3558,29 +3558,29 @@ def known_ollama_pids() -> list[int]:
         if pid not in pids:
             pids.append(pid)
     for pid in all_ollama_pids():
-      if pid not in pids:
-        pids.append(pid)
+        if pid not in pids:
+            pids.append(pid)
     return pids
 
 
 def stop_ollama_server() -> dict[str, Any]:
-    stopped: list[int] = []
-    missing: list[int] = []
+  stopped: list[int] = []
+  missing: list[int] = []
   denied: list[int] = []
-    for pid in known_ollama_pids():
-        try:
-            os.kill(pid, signal.SIGTERM)
-            stopped.append(pid)
-        except ProcessLookupError:
-            missing.append(pid)
+  for pid in known_ollama_pids():
+    try:
+      os.kill(pid, signal.SIGTERM)
+      stopped.append(pid)
+    except ProcessLookupError:
+      missing.append(pid)
     except PermissionError:
       denied.append(pid)
-    try:
-        OLLAMA_PID_FILE.unlink()
-    except FileNotFoundError:
-        pass
-    except OSError:
-        pass
+  try:
+    OLLAMA_PID_FILE.unlink()
+  except FileNotFoundError:
+    pass
+  except OSError:
+    pass
   if denied:
     return {
       "ok": False,
@@ -3790,35 +3790,35 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             except (OSError, json.JSONDecodeError) as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
                 return
-          ollama_restarted = False
-          restart_message = ""
-          if ollama_is_reachable():
-            stop_result = stop_ollama_server()
-            if stop_result.get("ok") and not ollama_is_reachable():
-              start_result = start_ollama_server()
-              if start_result.get("ok"):
-                ollama_restarted = True
-                restart_message = " Ollama restarted with the new GPU selection."
-              else:
-                restart_message = f" GPU saved, but restart failed: {start_result.get('message', 'unknown error')}."
-            elif stop_result.get("ok") and ollama_is_reachable():
-              restart_message = " GPU saved, but an external Ollama process is still running. Stop it first, then start Ollama again."
-            else:
-              restart_message = f" GPU saved, but stop failed: {stop_result.get('message', 'unknown error')}."
+            ollama_restarted = False
+            restart_message = ""
+            if ollama_is_reachable():
+                stop_result = stop_ollama_server()
+                if stop_result.get("ok") and not ollama_is_reachable():
+                    start_result = start_ollama_server()
+                    if start_result.get("ok"):
+                        ollama_restarted = True
+                        restart_message = " Ollama restarted with the new GPU selection."
+                    else:
+                        restart_message = f" GPU saved, but restart failed: {start_result.get('message', 'unknown error')}."
+                elif stop_result.get("ok") and ollama_is_reachable():
+                    restart_message = " GPU saved, but an external Ollama process is still running. Stop it first, then start Ollama again."
+                else:
+                    restart_message = f" GPU saved, but stop failed: {stop_result.get('message', 'unknown error')}."
 
-          self.send_json(
-            {
-              "message": (
-                "GPU selection saved."
-                f" CUDA_VISIBLE_DEVICES will be {cuda_visible_devices_for_selection(selected)}."
-                f"{restart_message}"
-              ),
-              "selected_gpu": selected,
-              "selected_gpu_label": selected_gpu_label(selected, list_gpus()[0]),
-              "cuda_visible_devices": cuda_visible_devices_for_selection(selected),
-              "ollama_restarted": ollama_restarted,
-            }
-          )
+            self.send_json(
+                {
+                    "message": (
+                        "GPU selection saved."
+                        f" CUDA_VISIBLE_DEVICES will be {cuda_visible_devices_for_selection(selected)}."
+                        f"{restart_message}"
+                    ),
+                    "selected_gpu": selected,
+                    "selected_gpu_label": selected_gpu_label(selected, list_gpus()[0]),
+                    "cuda_visible_devices": cuda_visible_devices_for_selection(selected),
+                    "ollama_restarted": ollama_restarted,
+                }
+            )
             return
 
         if self.path == "/api/select-model":
