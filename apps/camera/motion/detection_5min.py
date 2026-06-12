@@ -228,6 +228,16 @@ def image_modified_at(path: Path) -> datetime:
     return datetime.fromtimestamp(path.stat().st_mtime)
 
 
+def image_captured_at(path: Path) -> datetime:
+    match = re.match(r"^(\d{16,20})_", path.name)
+    if match:
+        try:
+            return datetime.fromtimestamp(int(match.group(1)) / 1_000_000_000)
+        except (OSError, OverflowError, ValueError):
+            pass
+    return image_modified_at(path)
+
+
 def image_history_key(path: Path) -> str:
     stat = path.stat()
     return f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
@@ -711,7 +721,7 @@ def format_time(value: datetime) -> str:
 
 
 def build_detection_event(image_path: Path, person_count: int, model_response: str) -> dict[str, Any]:
-    captured_at = image_modified_at(image_path).astimezone()
+    captured_at = image_captured_at(image_path).astimezone()
     detected_at = datetime.now().astimezone()
     return {
         "person_detected": True,
@@ -727,7 +737,7 @@ def build_detection_event(image_path: Path, person_count: int, model_response: s
 
 
 def build_reference_event(image_path: Path, reference_label: str) -> dict[str, Any]:
-    captured_at = image_modified_at(image_path).astimezone()
+    captured_at = image_captured_at(image_path).astimezone()
     reported_at = datetime.now().astimezone()
     return {
         "person_detected": False,
@@ -745,7 +755,7 @@ def build_reference_event(image_path: Path, reference_label: str) -> dict[str, A
 
 
 def build_forced_send_event(image_path: Path) -> dict[str, Any]:
-    captured_at = image_modified_at(image_path).astimezone()
+    captured_at = image_captured_at(image_path).astimezone()
     reported_at = datetime.now().astimezone()
     return {
         "person_detected": False,
@@ -877,6 +887,7 @@ def build_detection_text_batch(
                     f"{index}.",
                     f"file={event['image_name']}",
                     f"people={event['person_count']}",
+                    f"captured_at={event.get('image_captured_at', 'unknown')}",
                     f"detected_at={event['person_detected_at']}",
                 ]
             )
