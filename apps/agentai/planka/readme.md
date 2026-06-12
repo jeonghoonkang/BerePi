@@ -49,11 +49,28 @@ chmod +x *.sh
 ./stop-planka.sh
 ```
 
-If Docker only works with `sudo`, the scripts will automatically try
-`sudo docker compose`. Check Compose first:
+The scripts prefer `docker compose`, then legacy `docker-compose`, and only
+then try sudo variants. Check Compose first:
 
 ```bash
 sudo docker compose version || docker-compose version
+```
+
+The included `docker-compose.yml` uses Compose file version `2.3` on purpose,
+so old Ubuntu 18.04 environments such as `docker-compose version 1.17.1` can
+parse it.
+
+If you see `Couldn't connect to Docker daemon`, Docker is either not running or
+your current user cannot access `/var/run/docker.sock`. The scripts now test
+daemon access and will use `sudo docker-compose` automatically when sudo can
+reach Docker.
+
+If PLANKA logs show `ECONNREFUSED ...:5432`, PostgreSQL was not ready when
+PLANKA tried to connect. `start-planka.sh` starts PostgreSQL first and waits
+for its healthcheck before starting PLANKA. Check database logs with:
+
+```bash
+sudo docker logs planka_postgres_1
 ```
 
 On Ubuntu 18.04, install Compose if the command is missing:

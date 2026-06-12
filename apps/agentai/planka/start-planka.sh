@@ -35,17 +35,27 @@ EOF
 done
 
 compose_kind() {
-  if docker compose version >/dev/null 2>&1; then
-    echo "docker compose"
-  elif sudo docker compose version >/dev/null 2>&1; then
-    echo "sudo docker compose"
-  elif command -v docker-compose >/dev/null 2>&1; then
-    echo "docker-compose"
-  elif command -v sudo >/dev/null 2>&1 && sudo docker-compose version >/dev/null 2>&1; then
-    echo "sudo docker-compose"
+  if docker info >/dev/null 2>&1; then
+    if docker compose version >/dev/null 2>&1; then
+      echo "docker compose"
+    elif command -v docker-compose >/dev/null 2>&1; then
+      echo "docker-compose"
+    else
+      echo "Docker daemon is available, but Docker Compose is not installed." >&2
+      exit 1
+    fi
+  elif command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
+    if sudo docker compose version >/dev/null 2>&1; then
+      echo "sudo docker compose"
+    elif sudo docker-compose version >/dev/null 2>&1; then
+      echo "sudo docker-compose"
+    else
+      echo "Docker daemon is available through sudo, but Docker Compose is not installed for sudo." >&2
+      exit 1
+    fi
   else
-    echo "Docker Compose is not installed. Install Docker Engine with the compose plugin." >&2
-    echo "Ubuntu 18.04 often needs one of: sudo apt install docker-compose-plugin OR sudo apt install docker-compose." >&2
+    echo "Cannot access the Docker daemon." >&2
+    echo "Start Docker first, or run with a user in the docker group, or use sudo-enabled Docker." >&2
     exit 1
   fi
 }
@@ -53,6 +63,7 @@ compose_kind() {
 docker_compose() {
   local kind
   kind="$(compose_kind)"
+  echo "Using Compose command: ${kind}" >&2
   (
     cd "${SCRIPT_DIR}"
     case "${kind}" in
@@ -70,6 +81,41 @@ docker_compose() {
         ;;
     esac
   )
+}
+
+docker_cmd() {
+  if docker info >/dev/null 2>&1; then
+    docker "$@"
+  else
+    sudo docker "$@"
+  fi
+}
+
+wait_for_postgres() {
+  local container_id
+  local status
+  local attempt
+
+  container_id="$(docker_compose ps -q postgres)"
+  if [[ -z "${container_id}" ]]; then
+    echo "PostgreSQL container was not created." >&2
+    exit 1
+  fi
+
+  echo "Waiting for PostgreSQL to become healthy..."
+  for attempt in $(seq 1 60); do
+    status="$(docker_cmd inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container_id}" 2>/dev/null || true)"
+    if [[ "${status}" == "healthy" || "${status}" == "running" ]]; then
+      echo "PostgreSQL status: ${status}"
+      return 0
+    fi
+    echo "PostgreSQL status: ${status:-unknown} (${attempt}/60)"
+    sleep 2
+  done
+
+  echo "PostgreSQL did not become ready in time. Showing logs:" >&2
+  docker_compose logs --tail 80 postgres >&2 || true
+  exit 1
 }
 
 new_secret_key() {
@@ -95,10 +141,17 @@ if [[ "${PULL}" == "1" ]]; then
   docker_compose pull
 fi
 
+echo "Checking Docker Compose configuration..."
+docker_compose config >/dev/null
+
 args=(up)
 if [[ "${FOREGROUND}" != "1" ]]; then
   args+=(-d)
 fi
+
+echo "Starting PostgreSQL..."
+docker_compose up -d postgres
+wait_for_postgres
 
 echo "Starting PLANKA..."
 docker_compose "${args[@]}"
