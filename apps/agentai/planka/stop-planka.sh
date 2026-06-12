@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
+COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
+
+REMOVE_VOLUMES=0
+
+for arg in "$@"; do
+  case "${arg}" in
+    --remove-volumes|-v)
+      REMOVE_VOLUMES=1
+      ;;
+    --help|-h)
+      cat <<'EOF'
+Usage: ./stop-planka.sh [--remove-volumes]
+
+Options:
+  --remove-volumes, -v   Stop containers and delete PLANKA/PostgreSQL volumes.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: ${arg}" >&2
+      exit 1
+      ;;
+  esac
+done
+
+compose_kind() {
+  if docker compose version >/dev/null 2>&1; then
+    echo "docker compose"
+  elif sudo docker compose version >/dev/null 2>&1; then
+    echo "sudo docker compose"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    echo "docker-compose"
+  elif command -v sudo >/dev/null 2>&1 && sudo docker-compose version >/dev/null 2>&1; then
+    echo "sudo docker-compose"
+  else
+    echo "Docker Compose is not installed." >&2
+    echo "Ubuntu 18.04 often needs one of: sudo apt install docker-compose-plugin OR sudo apt install docker-compose." >&2
+    exit 1
+  fi
+}
+
+docker_compose() {
+  local kind
+  kind="$(compose_kind)"
+  (
+    cd "${SCRIPT_DIR}"
+    case "${kind}" in
+      "docker compose")
+        docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" "$@"
+        ;;
+      "sudo docker compose")
+        sudo docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" "$@"
+        ;;
+      "docker-compose")
+        docker-compose -f "${COMPOSE_FILE}" "$@"
+        ;;
+      "sudo docker-compose")
+        sudo docker-compose -f "${COMPOSE_FILE}" "$@"
+        ;;
+    esac
+  )
+}
+
+args=(down)
+if [[ "${REMOVE_VOLUMES}" == "1" ]]; then
+  args+=(-v)
+fi
+
+docker_compose "${args[@]}"

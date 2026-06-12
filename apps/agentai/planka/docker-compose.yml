@@ -1,0 +1,42 @@
+version: "3.7"
+
+services:
+  planka:
+    image: ghcr.io/plankanban/planka:latest
+    restart: unless-stopped
+    ports:
+      - "${PLANKA_PORT:-3000}:1337"
+    environment:
+      BASE_URL: "${BASE_URL:-http://localhost:3000}"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-planka}@postgres/planka"
+      SECRET_KEY: "${SECRET_KEY}"
+      DEFAULT_ADMIN_EMAIL: "${DEFAULT_ADMIN_EMAIL:-admin@example.local}"
+      DEFAULT_ADMIN_PASSWORD: "${DEFAULT_ADMIN_PASSWORD:-admin1234}"
+      DEFAULT_ADMIN_NAME: "${DEFAULT_ADMIN_NAME:-Project Admin}"
+      DEFAULT_ADMIN_USERNAME: "${DEFAULT_ADMIN_USERNAME:-admin}"
+      TRUST_PROXY: "${TRUST_PROXY:-false}"
+      DEFAULT_LANGUAGE: "${DEFAULT_LANGUAGE:-ko-KR}"
+      OUTGOING_BLOCKED_HOSTS: "${OUTGOING_BLOCKED_HOSTS:-localhost,postgres}"
+    volumes:
+      - planka-data:/app/data
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: planka
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-planka}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d planka"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  planka-data:
+  postgres-data:
