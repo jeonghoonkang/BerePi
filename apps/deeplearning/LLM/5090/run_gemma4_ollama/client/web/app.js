@@ -15,6 +15,7 @@ const state = {
 
 const elements = {
   configStatus: document.getElementById("configStatus"),
+  queueStatus: document.getElementById("queueStatus"),
   authStatus: document.getElementById("authStatus"),
   runStatus: document.getElementById("runStatus"),
   chainOrderStatus: document.getElementById("chainOrderStatus"),
@@ -366,6 +367,15 @@ function setHeaderRuntimeStatus({runState, connectionState, detail = ""}) {
   elements.headerRuntimeStatus.textContent = detail ? `${base} | ${detail}` : base;
 }
 
+function queueStatusLine(status) {
+  const queue = status?.prompt_queue || {};
+  const waiting = Number(status?.waiting_job_count ?? queue.waiting_job_count ?? queue.pending_count ?? 0);
+  const active = Number(status?.active_job_count ?? queue.active_job_count ?? (queue.active ? 1 : 0));
+  const total = Number(status?.total_unfinished_job_count ?? queue.total_unfinished_job_count ?? (waiting + active));
+  const waitSeconds = Number(queue.estimated_wait_seconds || 0);
+  return `Queue 대기 작업: ${waiting}개 | 처리 중: ${active}개 | 총 미완료: ${total}개${waitSeconds > 0 ? ` | 예상 대기: ${waitSeconds.toFixed(2)}s` : ""}`;
+}
+
 async function copyText(value) {
   if (navigator.clipboard && window.isSecureContext) {
     await navigator.clipboard.writeText(value);
@@ -534,8 +544,10 @@ async function testConnection() {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({config}),
   });
+  const queueLine = queueStatusLine(data.status);
   elements.configStatus.textContent = `연결 정상: ${data.status.server_base_url} | ${data.status.status_url} | ${data.status.model} | ${data.status.host}:${data.status.port} | Ollama ${data.status.ollama_reachable ? "reachable" : "unreachable"}`;
-  setHeaderRuntimeStatus({runState: "정지 중", connectionState: "연결됨", detail: data.status.status_url});
+  elements.queueStatus.textContent = queueLine;
+  setHeaderRuntimeStatus({runState: "정지 중", connectionState: "연결됨", detail: `${data.status.status_url} | ${queueLine}`});
 }
 
 function renderHistory() {
@@ -913,6 +925,18 @@ async function runChain() {
   elements.chainOrderStatus.textContent = `현재 체인 순서: ${formatChainOrder()}`;
   setHeaderRuntimeStatus({runState: "실행 중", connectionState: "연결 시도 중", detail: activeServerBaseUrl()});
   const config = {...readConfigFromForm(), prompts: readPromptState()};
+  try {
+    const status = await requestJson("/api/test-connection", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({config}),
+    });
+    const queueLine = queueStatusLine(status.status);
+    elements.queueStatus.textContent = queueLine;
+    elements.runStatus.textContent = `그룹 체인 실행 중입니다. ${queueLine}`;
+  } catch (error) {
+    elements.queueStatus.textContent = `Queue 대기 작업: 확인 실패 (${error})`;
+  }
   const data = await requestJson("/api/run-chain", {
     method: "POST",
     headers: {"Content-Type": "application/json"},

@@ -887,6 +887,12 @@ def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
     timeout = int(config["request_timeout_seconds"])
     status_url = join_url(config["server_base_url"], config["status_path"])
     data = request_json(status_url, None, timeout)
+    prompt_queue = data.get("prompt_queue") if isinstance(data.get("prompt_queue"), dict) else {}
+    waiting_job_count = int(prompt_queue.get("waiting_job_count", prompt_queue.get("pending_count", 0)) or 0)
+    active_job_count = int(prompt_queue.get("active_job_count", 1 if prompt_queue.get("active") else 0) or 0)
+    total_unfinished_job_count = int(
+        prompt_queue.get("total_unfinished_job_count", waiting_job_count + active_job_count) or 0
+    )
     return {
         "server_base_url": config["server_base_url"],
         "status_url": status_url,
@@ -895,6 +901,10 @@ def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
         "model": data.get("model", ""),
         "ollama_reachable": bool(data.get("ollama_reachable")),
         "model_available": bool(data.get("model_available")),
+        "prompt_queue": prompt_queue,
+        "waiting_job_count": waiting_job_count,
+        "active_job_count": active_job_count,
+        "total_unfinished_job_count": total_unfinished_job_count,
     }
 
 

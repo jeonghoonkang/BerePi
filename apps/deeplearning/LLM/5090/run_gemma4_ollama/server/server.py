@@ -1699,7 +1699,7 @@ if __name__ == "__main__":
         const res = await fetch("/api/status");
         const data = await res.json();
         const queue = data.prompt_queue || {};
-        const pendingCount = Number(queue.pending_count || 0);
+        const pendingCount = Number(queue.waiting_job_count ?? queue.pending_count ?? 0);
         const waitingAnswers = pendingCount;
         const estimatedWait = Number(queue.estimated_wait_seconds || 0);
         return {
@@ -1754,10 +1754,20 @@ if __name__ == "__main__":
         const uptimeText = data.uptime_human
           ? `${data.uptime_human}<br>${uptimeSeconds}s`
           : `${uptimeSeconds}s`;
+        const queue = data.prompt_queue || {};
+        const waitingJobCount = Number(queue.waiting_job_count ?? queue.pending_count ?? 0);
+        const activeJobCount = Number(queue.active_job_count ?? (queue.active ? 1 : 0));
+        const totalUnfinishedJobCount = Number(queue.total_unfinished_job_count ?? (waitingJobCount + activeJobCount));
+        const queueText = [
+          `대기 작업: ${waitingJobCount}개`,
+          `처리 중: ${activeJobCount}개`,
+          `총 미완료: ${totalUnfinishedJobCount}개`,
+        ].join("<br>");
         metrics.innerHTML = [
           metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
+          metric("Queue", queueText, waitingJobCount > 0 ? "warn" : "ok"),
           metric("Today Model Load", formatLoadMetric(modelLoad.today), "ok"),
           metric("Weekly Model Load", formatLoadMetric(modelLoad.week), "ok"),
           metric("Lifetime Model Load", formatLoadMetric(lifetimeLoad), "ok"),
@@ -2822,13 +2832,18 @@ def attach_thinking_fields(result: dict[str, Any]) -> dict[str, Any]:
 def prompt_queue_status() -> dict[str, Any]:
     with PROMPT_QUEUE_CONDITION:
         average_seconds = average_prompt_processing_seconds()
+        waiting_job_count = len(PROMPT_QUEUE)
+        active_job_count = 1 if PROMPT_QUEUE_ACTIVE else 0
         return {
             "active": PROMPT_QUEUE_ACTIVE,
-            "pending_count": len(PROMPT_QUEUE),
+            "active_job_count": active_job_count,
+            "pending_count": waiting_job_count,
+            "waiting_job_count": waiting_job_count,
+            "total_unfinished_job_count": waiting_job_count + active_job_count,
             "max_pending_count": PROMPT_QUEUE_MAX_SIZE,
             "pending_prompt_ids": [job.id for job in PROMPT_QUEUE],
             "average_prompt_processing_seconds": average_seconds,
-            "estimated_wait_seconds": estimated_prompt_wait_seconds(len(PROMPT_QUEUE) + (1 if PROMPT_QUEUE_ACTIVE else 0)),
+            "estimated_wait_seconds": estimated_prompt_wait_seconds(waiting_job_count + active_job_count),
         }
 
 
