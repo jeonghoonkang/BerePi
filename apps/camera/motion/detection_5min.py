@@ -273,6 +273,37 @@ def list_pending_images(config: AppConfig) -> list[Path]:
     return pending_images
 
 
+def pending_image_count(config: AppConfig) -> int:
+    try:
+        return len(list_pending_images(config))
+    except OSError as exc:
+        print(f"pending queue count failed: {config.pending_dir}: {exc}", file=sys.stderr)
+        return 0
+
+
+def build_queue_status(config: AppConfig) -> dict[str, Any]:
+    pending_count = pending_image_count(config)
+    try:
+        skipped_count = len(list_skipped_images(config))
+    except OSError as exc:
+        print(f"skipped queue count failed: {config.skipped_dir}: {exc}", file=sys.stderr)
+        skipped_count = 0
+    return {
+        "created_at": format_time(datetime.now().astimezone()),
+        "pending_dir": str(config.pending_dir),
+        "pending_image_count": pending_count,
+        "max_pending_files": config.max_pending_files,
+        "pending_capacity": max(0, config.max_pending_files - pending_count),
+        "skipped_dir": str(config.skipped_dir),
+        "skipped_image_count": skipped_count,
+        "total_unprocessed_image_count": pending_count + skipped_count,
+    }
+
+
+def print_queue_status(config: AppConfig) -> None:
+    print(json.dumps(build_queue_status(config), ensure_ascii=False, sort_keys=True, indent=2))
+
+
 def list_skipped_images(config: AppConfig) -> list[Path]:
     skipped_images = iter_image_files(config.skipped_dir, recursive=False)
     skipped_images.sort(key=lambda path: (image_modified_at(path), path.name))
@@ -823,11 +854,21 @@ def chunk_items(items: list[dict[str, Any]], size: int) -> list[list[dict[str, A
     return [items[index : index + size] for index in range(0, len(items), size)]
 
 
-def build_detection_text_batch(events: list[dict[str, Any]], batch_index: int, total_batches: int) -> str:
+def build_detection_text_batch(
+    events: list[dict[str, Any]],
+    batch_index: int,
+    total_batches: int,
+    remaining_pending_images: int = 0,
+    remaining_unprocessed_images: int | None = None,
+) -> str:
+    if remaining_unprocessed_images is None:
+        remaining_unprocessed_images = remaining_pending_images
     lines = [
         "Motion person detections",
         f"batch: {batch_index}/{total_batches}",
         f"items: {len(events)}",
+        f"remaining_pending_images: {remaining_pending_images}",
+        f"remaining_unprocessed_images: {remaining_unprocessed_images}",
     ]
     for index, event in enumerate(events, start=1):
         lines.append(
@@ -1180,10 +1221,19 @@ def process_recent_images(
         text_batches = chunk_items(overflow_text_events, max(1, text_batch_size))
         total_batches = len(text_batches)
         for batch_index, batch_events in enumerate(text_batches, start=1):
-            text = build_detection_text_batch(batch_events, batch_index, total_batches)
+            queue_status = build_queue_status(config)
+            text = build_detection_text_batch(
+                batch_events,
+                batch_index,
+                total_batches,
+                remaining_pending_images=int(queue_status["pending_image_count"]),
+                remaining_unprocessed_images=int(queue_status["total_unprocessed_image_count"]),
+            )
             if dry_run:
                 print(
-                    f"dry-run: telegram text batch send skipped: batch={batch_index}/{total_batches} items={len(batch_events)}"
+                    f"dry-run: telegram text batch send skipped: batch={batch_index}/{total_batches} "
+                    f"items={len(batch_events)} remaining_pending={queue_status['pending_image_count']} "
+                    f"remaining_unprocessed={queue_status['total_unprocessed_image_count']}"
                 )
                 alerts_sent += 1
                 continue
@@ -1195,7 +1245,11 @@ def process_recent_images(
                 print(f"telegram text batch send failed: {batch_names}: {exc}", file=sys.stderr)
                 continue
             alerts_sent += 1
-            print(f"telegram text batch sent: batch={batch_index}/{total_batches} items={len(batch_events)}")
+            print(
+                f"telegram text batch sent: batch={batch_index}/{total_batches} items={len(batch_events)} "
+                f"remaining_pending={queue_status['pending_image_count']} "
+                f"remaining_unprocessed={queue_status['total_unprocessed_image_count']}"
+            )
 
     if gpu_wait_timed_out:
         print("gpu remained busy; no reference image will be sent for this run")
@@ -1354,6 +1408,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--print-crontab", action="store_true", help="print a crontab line that runs this script every 5 minutes")
     parser.add_argument(
+        "--queue-status",
+        action="store_true",
+        help="print current pending/skipped image queue counts and exit",
+    )
+    parser.add_argument(
         "--cron-log",
         type=Path,
         default=DEFAULT_CRON_LOG_PATH,
@@ -1382,6 +1441,10 @@ def main() -> int:
             config.lookback_minutes = args.minutes
         if args.recursive:
             config.recursive = True
+
+        if args.queue_status:
+            print_queue_status(config)
+            return 0
 
         process_lock = acquire_process_lock(DEFAULT_PROCESS_LOCK_PATH)
         if process_lock is None:

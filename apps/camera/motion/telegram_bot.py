@@ -42,6 +42,7 @@ from typing import Any
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = APP_DIR / "conf_connect_model.conf"
 DEFAULT_MOTION_DIR = Path("/var/lib/motion")
+DEFAULT_PENDING_DIR = APP_DIR / "pending_model_images"
 DEFAULT_CAPTURE_DIR = Path("/tmp/berepi_telegram_bot")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -87,6 +88,19 @@ CURRENT_PHOTO_KEYWORDS: list[str] = [
     "livephoto",
 ]
 
+QUEUE_STATUS_KEYWORDS: list[str] = [
+    "/queue",
+    "/pending",
+    "/status",
+    "queue",
+    "pending",
+    "status",
+    "남은갯수",
+    "남은개수",
+    "대기이미지",
+    "큐상태",
+]
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -115,6 +129,7 @@ class TelegramBotConfig:
 @dataclass
 class MotionConfig:
     motion_dir: Path
+    pending_dir: Path
     recursive: bool = False
 
 
@@ -182,6 +197,9 @@ def load_config(config_path: Path) -> BotAppConfig:
     timeout_seconds = _get_int(tg, "timeout_seconds", 30)
 
     motion_dir = Path(_get_str(mo, "motion_dir", str(DEFAULT_MOTION_DIR))).expanduser()
+    pending_dir = Path(_get_str(mo, "pending_dir", str(DEFAULT_PENDING_DIR))).expanduser()
+    if not pending_dir.is_absolute():
+        pending_dir = (config_path.parent / pending_dir).resolve()
     recursive = _get_bool(mo, "recursive", False)
 
     capture_dir = DEFAULT_CAPTURE_DIR
@@ -201,6 +219,7 @@ def load_config(config_path: Path) -> BotAppConfig:
         ),
         motion=MotionConfig(
             motion_dir=motion_dir,
+            pending_dir=pending_dir,
             recursive=recursive,
         ),
         camera=CameraCaptureConfig(
@@ -239,6 +258,36 @@ def get_latest_image(motion_dir: Path, recursive: bool = False) -> Path | None:
         return None
     images.sort(key=lambda item: item[1], reverse=True)
     return images[0][0]
+
+
+def pending_image_count(pending_dir: Path) -> int:
+    """Return the number of images waiting in the model pending queue."""
+    if not pending_dir.exists():
+        return 0
+    try:
+        return sum(
+            1
+            for path in pending_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+        )
+    except OSError as exc:
+        log.warning("pending queue count failed: %s", exc)
+        return 0
+
+
+def build_queue_status_text(config: BotAppConfig) -> str:
+    pending_count = pending_image_count(config.motion.pending_dir)
+    latest = get_latest_image(config.motion.motion_dir, config.motion.recursive)
+    latest_line = f"latest_image: {latest.name}" if latest is not None else "latest_image: none"
+    return "\n".join(
+        [
+            "Motion queue status",
+            f"pending_image_count: {pending_count}",
+            f"pending_dir: {config.motion.pending_dir}",
+            latest_line,
+            f"checked_at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +430,15 @@ def is_current_photo_request(text: str) -> bool:
     return False
 
 
+def is_queue_status_request(text: str) -> bool:
+    """Return True if the message text asks for pending queue status."""
+    lower = text.strip().lower()
+    for kw in QUEUE_STATUS_KEYWORDS:
+        if kw.lower() in lower:
+            return True
+    return False
+
+
 def is_allowed(chat_id: str | int, allowed_chat_ids: set[str]) -> bool:
     """Return True if the sender is allowed to use the bot."""
     if not allowed_chat_ids:
@@ -391,6 +449,32 @@ def is_allowed(chat_id: str | int, allowed_chat_ids: set[str]) -> bool:
 # ---------------------------------------------------------------------------
 # Event handling
 # ---------------------------------------------------------------------------
+
+
+def handle_queue_status_request(update: dict[str, Any], config: BotAppConfig) -> None:
+    """Reply with the number of images currently waiting in the model queue."""
+    message = update.get("message", {})
+    chat_id = message.get("chat", {}).get("id")
+    from_user = message.get("from", {})
+    username = from_user.get("username") or from_user.get("first_name") or str(chat_id)
+
+    if chat_id is None:
+        log.warning("update has no chat.id; skipping")
+        return
+
+    if not is_allowed(chat_id, config.telegram.allowed_chat_ids):
+        log.info("chat_id %s not in whitelist; ignoring queue status request from %s", chat_id, username)
+        return
+
+    try:
+        tg_send_message(
+            config.telegram.token,
+            chat_id,
+            build_queue_status_text(config),
+            config.telegram.timeout_seconds,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("send queue status message failed: %s", exc)
 
 
 def handle_photo_request(update: dict[str, Any], config: BotAppConfig) -> None:
@@ -546,7 +630,9 @@ def process_update(update: dict[str, Any], config: BotAppConfig) -> None:
     if not text:
         return  # ignore non-text updates (stickers, etc.)
 
-    if is_current_photo_request(text):
+    if is_queue_status_request(text):
+        handle_queue_status_request(update, config)
+    elif is_current_photo_request(text):
         handle_current_photo_request(update, config)
     elif is_photo_request(text):
         handle_photo_request(update, config)
@@ -618,6 +704,8 @@ def test_config(config_path: Path) -> int:
     print(f"  bot_token    : {'*' * max(0, len(token) - 6) + token[-6:] if token else '(empty)'}")
     print(f"  chat_id      : {config.telegram.chat_id or '(empty)'}")
     print(f"  allowed_ids  : {', '.join(sorted(config.telegram.allowed_chat_ids)) or '(all allowed)'}")
+    print(f"  pending_dir  : {config.motion.pending_dir}")
+    print(f"  pending_count: {pending_image_count(config.motion.pending_dir)}")
     print(f"  timeout      : {config.telegram.timeout_seconds}s")
     print(f"  motion_dir   : {config.motion.motion_dir}")
     print(f"  recursive    : {config.motion.recursive}")
