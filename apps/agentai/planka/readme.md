@@ -111,3 +111,4 @@ Ubuntu:
 - `stop-planka.sh`: Ubuntu/Linux stop script
 - `status-planka.sh`: Ubuntu/Linux status script
 - `logs-planka.sh`: Ubuntu/Linux log script
+- /var/lib/docker/volumes/planka_planka-data/_data/private/attachments/1796848490710565956
