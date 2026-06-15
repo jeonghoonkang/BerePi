@@ -98,6 +98,30 @@ Ubuntu:
 ./stop-planka.sh --remove-volumes
 ```
 
+## Backup
+
+Backup scripts are in `backup_proc/`:
+
+```bash
+cd backup_proc
+./backup-planka.sh
+```
+
+By default, the backup is also copied to:
+
+```text
+user@10.0.0.53:backup/planka/<local-machine-name>/
+```
+
+Use `--skip-remote-copy` when you only want the local backup. Use
+`--remote-root USER@HOST:PATH` to override the remote root path.
+
+Each backup directory includes the PostgreSQL dump, PLANKA data archive,
+compose/env files, `manifest.sha256`, and `stack-info.txt`. The stack info file
+records the PostgreSQL server version, pg_dump/pg_restore versions, Docker and
+Compose versions, and the running PLANKA/PostgreSQL container image details and
+labels.
+
 ## Files
 
 - `docker-compose.yml`: PLANKA and PostgreSQL services
@@ -111,4 +135,7 @@ Ubuntu:
 - `stop-planka.sh`: Ubuntu/Linux stop script
 - `status-planka.sh`: Ubuntu/Linux status script
 - `logs-planka.sh`: Ubuntu/Linux log script
+- `backup_proc/backup-planka.sh`: Linux backup script
+- `backup_proc/backup-planka.ps1`: Windows backup script
+- `backup_proc/restore-planka.sh`: Linux restore script
 - /var/lib/docker/volumes/planka_planka-data/_data/private/attachments/1796848490710565956
