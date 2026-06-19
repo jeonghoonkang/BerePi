@@ -21,6 +21,7 @@
 ## 동작
 
 - WebDAV 루트 디렉토리 하위에 `tinyGW` 디렉토리를 만들고, 그 아래에 자신의 호스트명 디렉토리를 만듭니다.
+- `webdav.sub` 을 지정하면 `tinyGW/<sub>/<호스트명>/` 아래에 저장합니다. 배열로 여러 값을 지정하면 각 `sub` 경로마다 같은 `pulse_YYYYMMDD_HHMMSS.md` 파일을 추가로 만듭니다.
 - 전송할 때마다 `pulse_YYYYMMDD_HHMMSS.md` 파일을 새로 만듭니다.
 - 36개월보다 오래된 원격 파일은 자동 삭제합니다.
 - 부팅 후 첫 전송 메세지에는 `부팅한 직후`를 포함합니다.
@@ -74,6 +75,7 @@ python3 sender.py --iptime-list --config /path/to/custom-settings.json
 - 기본 설정 파일은 `/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/settings.json` 입니다.
 - CLI 에서 `--config` 를 주면 해당 JSON 파일을 설정 파일로 사용합니다.
 - 지정한 설정 파일이 없으면 기본값 템플릿과 병합되어 동작합니다.
+- 여러 서브 디렉토리에 동시에 저장하려면 `"webdav": { "sub": ["office", "backup"] }` 처럼 JSON 배열을 사용합니다. Streamlit 화면에서는 서브 디렉토리를 한 줄에 하나씩 입력하면 배열로 저장됩니다.
 - `--print-crontab` 은 현재 설정 기준으로 `@reboot` 와 주기 실행 cron 라인을 출력합니다.
 - `--config` 와 함께 쓰면 해당 설정 파일 경로가 포함된 cron 라인을 출력합니다.
 - cron 예시의 실행 시각은 `pulsedav.log` 첫 줄에 기록됩니다.

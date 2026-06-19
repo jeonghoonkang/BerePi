@@ -44,6 +44,22 @@ def current_time_text() -> str:
     return f"{now.year:04d}-{now.month:02d}-{now.day:02d} {now.hour:02d}:{now.minute:02d}:{now.second:02d} {now.tzname()}"
 
 
+def print_upload_targets(result: dict[str, object]) -> None:
+    remote_paths = result.get("remote_paths")
+    destination_urls = result.get("destination_urls")
+    if not isinstance(remote_paths, list) or len(remote_paths) <= 1:
+        return
+
+    print(f"- 업로드 개수: {len(remote_paths)}")
+    print("- 전체 저장 경로:")
+    for remote_path in remote_paths:
+        print(f"  - {remote_path}")
+    if isinstance(destination_urls, list):
+        print("- 전체 URL 목록:")
+        for destination_url in destination_urls:
+            print(f"  - {destination_url}")
+
+
 def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -> list[str]:
     """Build example crontab lines for the current CLI configuration."""
     app_dir = Path(__file__).resolve().parent
@@ -99,6 +115,7 @@ def main() -> int:
         print(f"- 저장 디렉토리: {result['remote_directory']}")
         print(f"- 저장 경로: {result['remote_path']}")
         print(f"- 전체 URL: {result['destination_url']}")
+        print_upload_targets(result)
         print()
 
     if args.loop:
@@ -124,6 +141,7 @@ def main() -> int:
     print(f"- 저장 디렉토리: {result['remote_directory']}")
     print(f"- 저장 경로: {result['remote_path']}")
     print(f"- 전체 URL: {result['destination_url']}")
+    print_upload_targets(result)
     return 0
 
 

@@ -6,7 +6,9 @@ from pulsedav import (
     ALL_SECTIONS,
     DEFAULT_INTERVAL_MINUTES,
     default_settings,
+    format_webdav_sub,
     load_settings,
+    parse_webdav_sub_input,
     quoted_command,
     save_settings,
     send_once,
@@ -37,7 +39,7 @@ def main() -> None:
     with col1:
         webdav_hostname = st.text_input("WebDAV 주소", settings["webdav"]["hostname"], placeholder="https://example.com")
         webdav_root = st.text_input("WebDAV 루트 경로", settings["webdav"]["root"])
-        webdav_sub = st.text_input("WebDAV 서브 디렉토리 (선택)", settings["webdav"].get("sub", ""))
+        webdav_sub = st.text_area("WebDAV 서브 디렉토리 (선택, 여러 줄 가능)", format_webdav_sub(settings["webdav"].get("sub", "")), height=80)
         webdav_username = st.text_input("WebDAV 사용자", settings["webdav"]["username"])
         webdav_password = st.text_input("WebDAV 비밀번호", settings["webdav"]["password"], type="password")
         verify_ssl = st.checkbox("SSL 검증", value=bool(settings["webdav"].get("verify_ssl", True)))
@@ -68,7 +70,7 @@ def main() -> None:
         "webdav": {
             "hostname": webdav_hostname.strip(),
             "root": webdav_root.strip(),
-            "sub": webdav_sub.strip(),
+            "sub": parse_webdav_sub_input(webdav_sub),
             "username": webdav_username.strip(),
             "password": webdav_password,
             "verify_ssl": verify_ssl,
@@ -111,6 +113,7 @@ def main() -> None:
                             f"- 저장 디렉토리: {result['remote_directory']}",
                             f"- 저장 경로: {result['remote_path']}",
                             f"- 전체 URL: {result['destination_url']}",
+                            f"- 업로드 개수: {len(result.get('remote_paths', [result['remote_path']]))}",
                         ]
                     )
                 )

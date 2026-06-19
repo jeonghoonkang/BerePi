@@ -51,7 +51,7 @@ class WebDAVConfig:
     username: str
     password: str
     verify_ssl: bool = True
-    sub: str = ""
+    sub: Any = ""
 
 
 class SimpleRequestException(Exception):
@@ -244,6 +244,32 @@ def get_effective_root(config: WebDAVConfig) -> str:
 
 def normalize_remote_path(path: str) -> str:
     return path.strip("/")
+
+
+def normalize_webdav_subs(value: Any) -> list[str]:
+    raw_values = value if isinstance(value, list) else [value]
+    subs: list[str] = []
+    for raw_value in raw_values:
+        normalized = normalize_remote_path(str(raw_value or "").strip())
+        if normalized not in subs:
+            subs.append(normalized)
+    return subs
+
+
+def upload_webdav_subs(config: WebDAVConfig) -> list[str]:
+    subs = normalize_webdav_subs(config.sub)
+    return subs if subs else [""]
+
+
+def format_webdav_sub(value: Any) -> str:
+    return "\n".join(normalize_webdav_subs(value))
+
+
+def parse_webdav_sub_input(value: str) -> str | list[str]:
+    subs = normalize_webdav_subs(value.splitlines())
+    if len(subs) <= 1:
+        return subs[0] if subs else ""
+    return subs
 
 
 def compose_webdav_url(config: WebDAVConfig, remote_path: str = "") -> str:
@@ -968,14 +994,23 @@ def build_webdav_config(settings: dict[str, Any]) -> WebDAVConfig:
         username=str(webdav.get("username", "")).strip(),
         password=str(webdav.get("password", "")).strip(),
         verify_ssl=as_bool(webdav.get("verify_ssl"), True),
-        sub=str(webdav.get("sub", "")).strip(),
+        sub=webdav.get("sub", ""),
     )
 
 
 def build_host_remote_dir(webdav_config: WebDAVConfig) -> str:
-    if webdav_config.sub:
-        return posixpath.join("tinyGW", normalize_remote_path(webdav_config.sub), normalize_remote_path(hostname())).strip("/")
-    return posixpath.join("tinyGW", normalize_remote_path(hostname())).strip("/")
+    return build_host_remote_dirs(webdav_config)[0]
+
+
+def build_host_remote_dirs(webdav_config: WebDAVConfig) -> list[str]:
+    host_name = normalize_remote_path(hostname())
+    remote_dirs: list[str] = []
+    for sub in upload_webdav_subs(webdav_config):
+        if sub:
+            remote_dirs.append(posixpath.join("tinyGW", sub, host_name).strip("/"))
+        else:
+            remote_dirs.append(posixpath.join("tinyGW", host_name).strip("/"))
+    return remote_dirs
 
 
 def format_iptime_markdown(report: str, settings: dict[str, Any]) -> str:
@@ -1005,24 +1040,29 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     report = get_iptime_report(settings)
     markdown = format_iptime_markdown(report, settings)
     webdav_config = build_webdav_config(settings)
-    host_dir = build_host_remote_dir(webdav_config)
+    host_dirs = build_host_remote_dirs(webdav_config)
     file_name = f"iptime_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-    remote_path = posixpath.join(host_dir, file_name).strip("/")
-    destination_url = compose_webdav_url(webdav_config, remote_path)
+    remote_paths = [posixpath.join(host_dir, file_name).strip("/") for host_dir in host_dirs]
+    destination_urls = [compose_webdav_url(webdav_config, remote_path) for remote_path in remote_paths]
+    deleted: list[str] = []
     try:
         print_webdav_wait_warning()
-        upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
-        deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
+        for host_dir, remote_path in zip(host_dirs, remote_paths):
+            upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
+            deleted.extend(prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS))
     except REQUEST_ERRORS as exc:
         raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
 
     return {
-        "remote_path": remote_path,
-        "remote_directory": host_dir,
-        "destination_url": destination_url,
+        "remote_path": remote_paths[0],
+        "remote_paths": remote_paths,
+        "remote_directory": host_dirs[0],
+        "remote_directories": host_dirs,
+        "destination_url": destination_urls[0],
+        "destination_urls": destination_urls,
         "webdav_hostname": webdav_config.hostname,
         "webdav_root": webdav_config.root,
-        "webdav_sub": webdav_config.sub,
+        "webdav_sub": format_webdav_sub(webdav_config.sub),
         "webdav_username": webdav_config.username,
         "file_name": file_name,
         "host_name": hostname(),
@@ -1048,33 +1088,38 @@ def send_once(
     markdown = format_markdown(settings, snapshot, first_boot, reboot_run=reboot_run)
 
     webdav_config = build_webdav_config(settings)
-    host_dir = build_host_remote_dir(webdav_config)
+    host_dirs = build_host_remote_dirs(webdav_config)
     file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-    remote_path = posixpath.join(host_dir, file_name).strip("/")
-    remote_directory = host_dir
-    destination_url = compose_webdav_url(webdav_config, remote_path)
+    remote_paths = [posixpath.join(host_dir, file_name).strip("/") for host_dir in host_dirs]
+    destination_urls = [compose_webdav_url(webdav_config, remote_path) for remote_path in remote_paths]
+    deleted: list[str] = []
     try:
         print_webdav_wait_warning()
-        upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
-        deleted = prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS)
+        for host_dir, remote_path in zip(host_dirs, remote_paths):
+            upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
+            deleted.extend(prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS))
     except REQUEST_ERRORS as exc:
         raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
 
     new_state = {
         "last_boot_marker": current_boot_marker,
         "last_sent_at": datetime.now().astimezone().isoformat(),
-        "last_remote_path": remote_path,
+        "last_remote_path": remote_paths[0],
+        "last_remote_paths": remote_paths,
         "last_uptime_minutes": snapshot["uptime_minutes"],
     }
     save_state(new_state)
 
     return {
-        "remote_path": remote_path,
-        "remote_directory": remote_directory,
-        "destination_url": destination_url,
+        "remote_path": remote_paths[0],
+        "remote_paths": remote_paths,
+        "remote_directory": host_dirs[0],
+        "remote_directories": host_dirs,
+        "destination_url": destination_urls[0],
+        "destination_urls": destination_urls,
         "webdav_hostname": webdav_config.hostname,
         "webdav_root": webdav_config.root,
-        "webdav_sub": webdav_config.sub,
+        "webdav_sub": format_webdav_sub(webdav_config.sub),
         "webdav_username": webdav_config.username,
         "file_name": file_name,
         "host_name": hostname(),
