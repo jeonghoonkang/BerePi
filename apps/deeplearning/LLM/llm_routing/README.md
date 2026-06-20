@@ -38,7 +38,7 @@ LLM_ROUTING_PORT=4005 ./run.sh
 http://SERVER_IP:4004
 ```
 
-프롬프트 테스트 탭에서 `전송`은 선택한 대상 또는 자동 선택 대상으로 prompt를 1회 보냅니다. `전체 모델 비교`는 활성화된 모든 LLM 대상에 동일 prompt를 순차 전송하고, 각 모델별 수신 내용과 소요 시간을 표로 비교합니다.
+프롬프트 테스트 탭에서 `전송`은 선택한 대상 또는 자동 선택 대상으로 prompt를 1회 보냅니다. `전체 모델 비교`는 활성화된 모든 LLM 대상 queue에 동일 prompt를 한 번에 넣고, 각 모델별 수신 내용과 소요 시간을 표로 비교합니다. 비교 결과의 GPU 칸에는 저장된 `selected_gpu_label`이 있으면 선택된 system device label을 우선 표시합니다.
 
 ## 관리 화면 접근 Password 적용 방법
 
@@ -195,7 +195,7 @@ OpenAI 호환 응답의 `routing` 필드에는 실제 사용된 target, IP/PORT,
 - `target_id`: 특정 LLM 대상에 보낼 때 사용합니다. 생략하면 자동 선택합니다.
 - `timeout`: backend LLM 응답 대기 시간입니다. 초 단위입니다.
 
-현재 `/api/generate`는 활성화된 LLM target마다 별도 queue와 worker를 사용합니다. target은 등록된 모델/GPU 조합으로 취급되며, 각 target queue는 기본 최대 10개 prompt를 보관합니다. 자동 선택 요청은 queue 여유가 있고 pending/active 부하가 낮은 target으로 들어가며, target worker가 queue에서 prompt를 하나씩 꺼내 backend LLM으로 전송합니다.
+현재 `/api/generate`는 활성화된 LLM target마다 별도 queue와 worker를 사용합니다. target은 등록된 모델/GPU 조합으로 취급되며, 각 target queue는 기본 최대 10개 prompt를 보관합니다. 자동 선택 요청은 idle target을 우선 선택하고, 모든 target이 처리 중이면 queue 여유가 있으며 pending/active 부하가 가장 낮은 target으로 들어갑니다. target worker가 queue에서 prompt를 하나씩 꺼내 backend LLM으로 전송합니다.
 
 HTTP 응답은 queue에 넣은 뒤 해당 prompt 처리가 완료될 때까지 기다렸다가 반환합니다. 모든 target queue가 가득 차면 `429 Too Many Requests`를 반환합니다. target별 queue 최대 길이는 `LLM_ROUTING_QUEUE_MAX_PER_TARGET` 환경 변수로 변경할 수 있습니다.
 

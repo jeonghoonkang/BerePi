@@ -67,6 +67,7 @@ class LLMTarget:
     gpu_info: str = ""
     gpu_type: str = ""
     selected_gpu: str = ""
+    selected_gpu_label: str = ""
     access_id: str = ""
     password: str = ""
     enabled: bool = True
@@ -203,6 +204,7 @@ def load_targets() -> list[LLMTarget]:
                     gpu_info=str(item.get("gpu_info") or ""),
                     gpu_type=str(item.get("gpu_type") or ""),
                     selected_gpu=str(item.get("selected_gpu") or ""),
+                    selected_gpu_label=str(item.get("selected_gpu_label") or ""),
                     access_id=str(item.get("access_id") or ""),
                     password=str(item.get("password") or ""),
                     enabled=bool(item.get("enabled", True)),
@@ -469,6 +471,7 @@ def target_from_lookup_payload(payload: dict[str, Any]) -> LLMTarget:
         model=str(payload.get("model") or ""),
         api_type=str(payload.get("api_type") or "ollama").strip(),
         selected_gpu=str(payload.get("selected_gpu") or "").strip(),
+        selected_gpu_label=str(payload.get("selected_gpu_label") or "").strip(),
         access_id=str(payload.get("access_id") or "").strip(),
         password=str(payload.get("password") or ""),
     )
@@ -542,6 +545,16 @@ def normalize_backend_response(target: LLMTarget, data: dict[str, Any]) -> dict[
     return {"response": str(data.get("response") or data.get("message") or ""), "raw": data}
 
 
+def selected_gpu_device(target: LLMTarget) -> str:
+    if target.selected_gpu_label:
+        return target.selected_gpu_label
+    if target.selected_gpu:
+        detail = " ".join(part for part in (target.gpu_type, target.gpu_info) if part).strip()
+        return f"GPU {target.selected_gpu}: {detail}" if detail else f"GPU {target.selected_gpu}"
+    detail = " ".join(part for part in (target.gpu_type, target.gpu_info) if part).strip()
+    return detail or "auto"
+
+
 def sync_queue_metric(target_id: str) -> None:
     with STATE_LOCK:
         q = TARGET_QUEUES.get(target_id)
@@ -571,6 +584,16 @@ def ensure_target_queues(targets: list[LLMTarget]) -> None:
             target_queue(target.id)
 
 
+def scheduler_load(target: LLMTarget) -> tuple[int, int, float]:
+    q = TARGET_QUEUES.get(target.id)
+    pending = q.qsize() if q else 0
+    metric = metric_for(target.id)
+    active = metric.active_requests
+    busy = 1 if active or pending else 0
+    weighted_load = (pending + active) / max(1, target.weight)
+    return busy, pending + active, weighted_load
+
+
 def choose_target(payload: dict[str, Any]) -> LLMTarget:
     global TARGET_CURSOR
     targets = [target for target in load_targets() if target.enabled]
@@ -585,15 +608,13 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
         raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")
 
     with STATE_LOCK:
-        candidates: list[tuple[float, LLMTarget]] = []
+        candidates: list[tuple[tuple[int, int, float], LLMTarget]] = []
         for target in targets:
             q = TARGET_QUEUES.get(target.id)
             pending = q.qsize() if q else 0
             if pending >= QUEUE_MAX_PER_TARGET:
                 continue
-            metric = metric_for(target.id)
-            load = pending + metric.active_requests
-            candidates.append((load / max(1, target.weight), target))
+            candidates.append((scheduler_load(target), target))
         if not candidates:
             raise QueueFullError(f"All target queues are full. max_per_target={QUEUE_MAX_PER_TARGET}")
         best_score = min(score for score, _ in candidates)
@@ -697,6 +718,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             "gpu_type": target.gpu_type,
             "gpu_info": target.gpu_info,
             "selected_gpu": target.selected_gpu,
+            "selected_gpu_label": target.selected_gpu_label,
+            "selected_gpu_device": selected_gpu_device(target),
             "response_seconds": elapsed,
             **normalized,
         }
@@ -751,32 +774,19 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
 
     started = time.time()
     results: list[dict[str, Any]] = []
+    jobs: list[PromptJob] = []
     for target in targets:
         item_payload = dict(payload)
         item_payload["target_id"] = target.id
         item_payload["client_id"] = str(payload.get("client_id") or "web-ui-compare")
-        item_started = time.time()
+        q = target_queue(target.id)
+        job = PromptJob(target=target, payload=item_payload, client=item_payload["client_id"])
         try:
-            data = route_prompt(handler, item_payload)
-            results.append(
-                {
-                    "ok": True,
-                    "target_id": target.id,
-                    "target_name": target.name,
-                    "target_host": target.host,
-                    "target_port": target.port,
-                    "target_url": target.base_url,
-                    "api_type": target.api_type,
-                    "model": target.model,
-                    "gpu_type": target.gpu_type,
-                    "gpu_info": target.gpu_info,
-                    "selected_gpu": target.selected_gpu,
-                    "response_seconds": data.get("response_seconds", time.time() - item_started),
-                    "response": data.get("response", ""),
-                    "raw": data.get("raw", {}),
-                }
-            )
-        except Exception as exc:  # noqa: BLE001
+            q.put_nowait(job)
+            jobs.append(job)
+            sync_queue_metric(target.id)
+        except queue.Full as exc:
+            sync_queue_metric(target.id)
             results.append(
                 {
                     "ok": False,
@@ -790,10 +800,83 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "gpu_type": target.gpu_type,
                     "gpu_info": target.gpu_info,
                     "selected_gpu": target.selected_gpu,
-                    "response_seconds": time.time() - item_started,
-                    "error": str(exc),
+                    "selected_gpu_label": target.selected_gpu_label,
+                    "selected_gpu_device": selected_gpu_device(target),
+                    "response_seconds": 0.0,
+                    "error": f"Queue is full for target {target.name}. max_per_target={QUEUE_MAX_PER_TARGET}",
                 }
             )
+
+    backend_timeout = int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS)
+    wait_timeout = int(payload.get("request_timeout") or (backend_timeout + QUEUE_MAX_PER_TARGET * backend_timeout + 10))
+    for job in jobs:
+        target = job.target
+        if not job.done.wait(wait_timeout):
+            results.append(
+                {
+                    "ok": False,
+                    "target_id": target.id,
+                    "target_name": target.name,
+                    "target_host": target.host,
+                    "target_port": target.port,
+                    "target_url": target.base_url,
+                    "api_type": target.api_type,
+                    "model": target.model,
+                    "gpu_type": target.gpu_type,
+                    "gpu_info": target.gpu_info,
+                    "selected_gpu": target.selected_gpu,
+                    "selected_gpu_label": target.selected_gpu_label,
+                    "selected_gpu_device": selected_gpu_device(target),
+                    "response_seconds": time.time() - job.enqueued_at,
+                    "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
+                    "error": f"Queued comparison prompt timed out after {wait_timeout}s for target {target.name}.",
+                }
+            )
+            continue
+        if job.error is not None:
+            results.append(
+                {
+                    "ok": False,
+                    "target_id": target.id,
+                    "target_name": target.name,
+                    "target_host": target.host,
+                    "target_port": target.port,
+                    "target_url": target.base_url,
+                    "api_type": target.api_type,
+                    "model": target.model,
+                    "gpu_type": target.gpu_type,
+                    "gpu_info": target.gpu_info,
+                    "selected_gpu": target.selected_gpu,
+                    "selected_gpu_label": target.selected_gpu_label,
+                    "selected_gpu_device": selected_gpu_device(target),
+                    "response_seconds": time.time() - job.enqueued_at,
+                    "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
+                    "error": str(job.error),
+                }
+            )
+            continue
+        data = job.result or {}
+        results.append(
+            {
+                "ok": True,
+                "target_id": target.id,
+                "target_name": target.name,
+                "target_host": target.host,
+                "target_port": target.port,
+                "target_url": target.base_url,
+                "api_type": target.api_type,
+                "model": target.model,
+                "gpu_type": target.gpu_type,
+                "gpu_info": target.gpu_info,
+                "selected_gpu": target.selected_gpu,
+                "selected_gpu_label": target.selected_gpu_label,
+                "selected_gpu_device": selected_gpu_device(target),
+                "response_seconds": data.get("response_seconds", time.time() - job.enqueued_at),
+                "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
+                "response": data.get("response", ""),
+                "raw": data.get("raw", {}),
+            }
+        )
 
     return {
         "ok": any(item.get("ok") for item in results),
@@ -828,6 +911,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             "gpu_type": data.get("gpu_type"),
             "gpu_info": data.get("gpu_info"),
             "selected_gpu": data.get("selected_gpu"),
+            "selected_gpu_label": data.get("selected_gpu_label"),
+            "selected_gpu_device": data.get("selected_gpu_device"),
             "response_seconds": data.get("response_seconds"),
         },
     }
@@ -1087,6 +1172,7 @@ INDEX_HTML = """<!doctype html>
         <input id="gpu_type" placeholder="GPU 종류">
         <input id="gpu_info" placeholder="GPU 정보">
         <select id="selected_gpu"><option value="">GPU 자동 선택</option></select>
+        <input id="selected_gpu_label" type="hidden">
         <input id="access_id" placeholder="접근 ID">
         <input id="password" placeholder="PASS" type="password">
         <input id="notes" placeholder="메모">
@@ -1256,7 +1342,7 @@ function renderTargets() {
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
       <td>${esc(t.model)}</td>
-      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(m.gpu_info || t.gpu_info)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
+      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(t.selected_gpu_label || m.gpu_info || t.gpu_info)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
       <td>${m.total_prompts||0}</td>
       <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
@@ -1313,7 +1399,7 @@ function renderAutoTargetRows(enabledTargets) {
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
       <td>${esc(t.model || '')}</td>
-      <td>${esc(gpuType)}<br><small>${esc(gpuInfo)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
+      <td>${esc(gpuType)}<br><small>${esc(t.selected_gpu_label || gpuInfo)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests || 0}, pending ${m.pending_queue || 0}/${m.queue_max_per_target || 10}</td>
     </tr>`;
   }).join('');
@@ -1338,7 +1424,7 @@ function setGpuOptions(gpus, selectedGpu = '') {
   }
 }
 function editTarget(t) {
-  for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) {
+  for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','selected_gpu_label','access_id','password','notes']) {
     const id = key === 'target_id' ? 'target_id' : key;
     const value = key === 'target_id' ? t.id : t[key];
     document.getElementById(id).value = value || '';
@@ -1348,7 +1434,7 @@ function editTarget(t) {
   document.getElementById('model_status').textContent = '';
 }
 function clearForm() {
-  for (const id of ['target_id','name','host','port','model','gpu_type','gpu_info','access_id','password','notes']) document.getElementById(id).value = '';
+  for (const id of ['target_id','name','host','port','model','gpu_type','gpu_info','selected_gpu_label','access_id','password','notes']) document.getElementById(id).value = '';
   document.getElementById('api_type').value = 'ollama';
   setModelOptions([]);
   setGpuOptions([]);
@@ -1374,6 +1460,8 @@ async function loadModels() {
 async function saveTarget() {
   const payload = {};
   for (const id of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
+  const gpuSelect = document.getElementById('selected_gpu');
+  payload.selected_gpu_label = gpuSelect.value ? (gpuSelect.options[gpuSelect.selectedIndex]?.textContent || '') : '';
   payload.enabled = true;
   await api('/api/targets', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
   clearForm(); await refresh();
@@ -1429,19 +1517,19 @@ function renderCompareResults(results) {
     const cls = item.ok ? 'ok' : 'error';
     const status = item.ok ? 'ok' : 'error';
     const response = item.ok ? (item.response || '') : (item.error || '');
-    const selectedGpu = item.selected_gpu || 'auto';
+    const selectedGpu = item.selected_gpu_device || item.selected_gpu_label || item.selected_gpu || 'auto';
     return `<tr>
       <td><span class="${cls}">${esc(status)}</span></td>
       <td>${esc(item.target_name)}<br><small>${esc(item.target_id)}</small></td>
       <td>${esc(item.model || '')}</td>
-      <td>${esc(item.gpu_type || '')}<br><small>${esc(item.gpu_info || '')}</small><br><small>selected: ${esc(selectedGpu)}</small></td>
+      <td>${esc(item.gpu_type || '')}<br><small>${esc(selectedGpu)}</small></td>
       <td>${Number(item.response_seconds || 0).toFixed(2)}s</td>
       <td><div class="compare-response">${esc(response)}</div></td>
     </tr>`;
   }).join('');
 }
 function promptResponseDetails(data) {
-  const selectedGpu = data.selected_gpu || 'auto';
+  const selectedGpu = data.selected_gpu_device || data.selected_gpu_label || data.selected_gpu || 'auto';
   const lines = [
     `### ${data.target_name || ''}`,
     `- Target: ${data.target_host || ''}:${data.target_port || ''}`,
@@ -1475,7 +1563,7 @@ async function compareAllPrompts() {
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
     document.getElementById('test_selected_target').textContent = `${successCount}/${results.length}개 완료`;
-    setAnswer(results.map(item => `### ${item.target_name} / ${item.model || ''}\\n- Target: ${item.target_host || ''}:${item.target_port || ''}\\n- GPU: ${item.selected_gpu || 'auto'}\\n\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n'));
+    setAnswer(results.map(item => `### ${item.target_name} / ${item.model || ''}\\n- Target: ${item.target_host || ''}:${item.target_port || ''}\\n- GPU: ${item.selected_gpu_device || item.selected_gpu_label || item.selected_gpu || 'auto'}\\n\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n'));
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
     renderCompareResults(results);
   } catch (err) {
@@ -1687,6 +1775,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             gpu_info=str(payload.get("gpu_info") or "").strip(),
             gpu_type=str(payload.get("gpu_type") or "").strip(),
             selected_gpu=str(payload.get("selected_gpu") or "").strip(),
+            selected_gpu_label=str(payload.get("selected_gpu_label") or "").strip(),
             access_id=str(payload.get("access_id") or "").strip(),
             password=str(payload.get("password") or ""),
             enabled=bool(payload.get("enabled", True)),
