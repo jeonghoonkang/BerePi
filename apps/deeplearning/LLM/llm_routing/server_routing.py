@@ -454,8 +454,33 @@ def target_from_lookup_payload(payload: dict[str, Any]) -> LLMTarget:
     )
 
 
+def prompt_text(payload: dict[str, Any]) -> str:
+    prompt = str(payload.get("prompt") or "")
+    if prompt.strip():
+        return prompt
+    messages = payload.get("messages")
+    if not isinstance(messages, list):
+        return ""
+    lines: list[str] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role") or "user")
+        content = message.get("content")
+        if isinstance(content, str):
+            lines.append(f"{role}: {content}")
+        elif isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(str(item.get("text") or ""))
+            if parts:
+                lines.append(f"{role}: {' '.join(parts)}")
+    return "\n".join(lines)
+
+
 def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    prompt = str(request_payload.get("prompt") or "")
+    prompt = prompt_text(request_payload)
     model = str(request_payload.get("model") or target.model or "")
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         messages = request_payload.get("messages")
@@ -553,7 +578,7 @@ def update_client_stats(client: str, response_seconds: float) -> None:
 
 
 def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
-    if not str(payload.get("prompt") or payload.get("messages") or "").strip():
+    if not prompt_text(payload).strip():
         raise ValueError("prompt or messages is required.")
     target = choose_target(payload)
     client = client_key(handler, payload)
@@ -600,6 +625,10 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
             "ok": True,
             "target_id": target.id,
             "target_name": target.name,
+            "target_host": target.host,
+            "target_port": target.port,
+            "target_url": target.base_url,
+            "api_type": target.api_type,
             "model": target.model,
             "gpu_type": target.gpu_type,
             "gpu_info": target.gpu_info,
@@ -622,7 +651,7 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
 
 
 def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
-    if not str(payload.get("prompt") or payload.get("messages") or "").strip():
+    if not prompt_text(payload).strip():
         raise ValueError("prompt or messages is required.")
     targets = [target for target in load_targets() if target.enabled]
     if not targets:
@@ -642,6 +671,10 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "ok": True,
                     "target_id": target.id,
                     "target_name": target.name,
+                    "target_host": target.host,
+                    "target_port": target.port,
+                    "target_url": target.base_url,
+                    "api_type": target.api_type,
                     "model": target.model,
                     "gpu_type": target.gpu_type,
                     "gpu_info": target.gpu_info,
@@ -657,6 +690,10 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "ok": False,
                     "target_id": target.id,
                     "target_name": target.name,
+                    "target_host": target.host,
+                    "target_port": target.port,
+                    "target_url": target.base_url,
+                    "api_type": target.api_type,
                     "model": target.model,
                     "gpu_type": target.gpu_type,
                     "gpu_info": target.gpu_info,
@@ -671,6 +708,36 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
         "target_count": len(targets),
         "response_seconds": time.time() - started,
         "results": results,
+    }
+
+
+def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
+    created = int(time.time())
+    return {
+        "id": f"chatcmpl-{uuid.uuid4().hex}",
+        "object": "chat.completion",
+        "created": created,
+        "model": data.get("model") or "",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": data.get("response") or ""},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "routing": {
+            "target_id": data.get("target_id"),
+            "target_name": data.get("target_name"),
+            "target_host": data.get("target_host"),
+            "target_port": data.get("target_port"),
+            "target_url": data.get("target_url"),
+            "api_type": data.get("api_type"),
+            "gpu_type": data.get("gpu_type"),
+            "gpu_info": data.get("gpu_info"),
+            "selected_gpu": data.get("selected_gpu"),
+            "response_seconds": data.get("response_seconds"),
+        },
     }
 
 
@@ -1145,7 +1212,7 @@ async function sendPrompt() {
     document.getElementById('test_status').textContent = '완료';
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
-    document.getElementById('test_answer').textContent = data.response || '';
+    document.getElementById('test_answer').textContent = promptResponseDetails(data);
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     const elapsedSeconds = (performance.now() - startedAt) / 1000;
@@ -1175,6 +1242,21 @@ function renderCompareResults(results) {
     </tr>`;
   }).join('');
 }
+function promptResponseDetails(data) {
+  const selectedGpu = data.selected_gpu || 'auto';
+  const lines = [
+    `LLM: ${data.target_name || ''}`,
+    `Target: ${data.target_host || ''}:${data.target_port || ''}`,
+    `API: ${data.api_type || ''}`,
+    `Model: ${data.model || ''}`,
+    `GPU: ${data.gpu_type || ''} ${data.gpu_info || ''}`.trim(),
+    `Selected GPU: ${selectedGpu}`,
+    `Elapsed: ${Number(data.response_seconds || 0).toFixed(2)}s`,
+    '',
+    data.response || ''
+  ];
+  return lines.join('\\n');
+}
 async function compareAllPrompts() {
   const payload = {prompt: document.getElementById('test_prompt').value, client_id: 'web-ui-compare'};
   const startedAt = performance.now();
@@ -1194,7 +1276,7 @@ async function compareAllPrompts() {
     document.getElementById('test_status').textContent = `비교 완료 ${successCount}/${results.length}`;
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
-    document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''}]\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n');
+    document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''} / ${item.target_host || ''}:${item.target_port || ''} / GPU ${item.selected_gpu || 'auto'}]\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n');
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
     renderCompareResults(results);
   } catch (err) {
@@ -1281,6 +1363,9 @@ class RoutingHandler(BaseHTTPRequestHandler):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1316,6 +1401,13 @@ class RoutingHandler(BaseHTTPRequestHandler):
             return
         self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
+    def do_OPTIONS(self) -> None:
+        self.send_response(HTTPStatus.NO_CONTENT)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.end_headers()
+
     def do_POST(self) -> None:
         try:
             payload = self.read_json()
@@ -1340,8 +1432,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            if self.path == "/api/generate":
+            if self.path in {"/api/generate", "/generate", "/api/chat"}:
                 self.write_json(route_prompt(self, payload))
+                return
+            if self.path == "/v1/chat/completions":
+                self.write_json(openai_chat_response(route_prompt(self, payload)))
                 return
             if not self.require_auth():
                 return

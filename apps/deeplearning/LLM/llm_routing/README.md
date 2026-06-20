@@ -83,12 +83,27 @@ LLM_ROUTING_ADMIN_PASSWORD='my-secret-password' ./start.sh
 
 ## Prompt API
 
-외부 머신에서는 LLM Routing 서버의 `POST /api/generate`로 prompt를 전송합니다. 이 API는 prompt 클라이언트용이므로 관리 화면 password 로그인 없이 호출할 수 있습니다.
+외부 머신에서는 LLM Routing 서버의 `4004` 포트로 prompt를 전송합니다. prompt 클라이언트용 API는 관리 화면 password 로그인 없이 호출할 수 있습니다.
+
+지원 endpoint:
+
+- `POST /api/generate`: 기본 LLM Routing generate API
+- `POST /generate`: `/api/generate`와 동일한 alias
+- `POST /api/chat`: chat 클라이언트용 alias
+- `POST /v1/chat/completions`: OpenAI 호환 chat completions API
 
 자동 대상 선택:
 
 ```bash
 curl -X POST http://127.0.0.1:4004/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"client_id":"client-a","prompt":"hello"}'
+```
+
+`/generate` alias:
+
+```bash
+curl -X POST http://127.0.0.1:4004/generate \
   -H 'Content-Type: application/json' \
   -d '{"client_id":"client-a","prompt":"hello"}'
 ```
@@ -157,6 +172,22 @@ const data = await response.json();
 console.log(data.response);
 ```
 
+OpenAI 호환 API 예제:
+
+```bash
+curl -X POST http://LLM_ROUTING_SERVER_IP:4004/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "LLM Routing 상태를 짧게 요약해줘"}
+    ],
+    "temperature": 0.2
+  }'
+```
+
+OpenAI 호환 응답의 `routing` 필드에는 실제 사용된 target, IP/PORT, GPU 정보가 포함됩니다.
+
 요청 필드:
 
 - `prompt`: 전송할 prompt 문자열
@@ -171,6 +202,10 @@ console.log(data.response);
   "ok": true,
   "target_id": "TARGET_ID",
   "target_name": "Local Ollama",
+  "target_host": "127.0.0.1",
+  "target_port": 11434,
+  "target_url": "http://127.0.0.1:11434",
+  "api_type": "ollama",
   "model": "llama3.1",
   "gpu_type": "NVIDIA",
   "gpu_info": "RTX 5090",
