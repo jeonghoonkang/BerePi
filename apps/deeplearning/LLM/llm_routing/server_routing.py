@@ -468,6 +468,22 @@ def parse_gpus(data: dict[str, Any]) -> list[dict[str, str]]:
     return gpus
 
 
+def gpu_label_matches_selection(label: str, selected_gpu: str) -> bool:
+    if not selected_gpu:
+        return False
+    match = re.match(r"^\s*GPU\s+([^:\s]+)", str(label or ""), flags=re.IGNORECASE)
+    return bool(match and match.group(1) == selected_gpu)
+
+
+def selected_gpu_label_from_health(target: LLMTarget, data: dict[str, Any]) -> str:
+    if not target.selected_gpu:
+        return ""
+    for gpu in parse_gpus(data):
+        if gpu.get("value") == target.selected_gpu:
+            return str(gpu.get("label") or "")
+    return ""
+
+
 def fetch_target_models(target: LLMTarget) -> list[str]:
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         data = request_json(f"{target.base_url}/v1/models", timeout=8, headers=target_auth_headers(target))
@@ -585,10 +601,17 @@ def normalize_backend_response(target: LLMTarget, data: dict[str, Any]) -> dict[
 
 
 def selected_gpu_device(target: LLMTarget) -> str:
-    if target.selected_gpu_label:
+    if target.selected_gpu_label and (not target.selected_gpu or gpu_label_matches_selection(target.selected_gpu_label, target.selected_gpu)):
         return target.selected_gpu_label
     if target.selected_gpu:
-        detail = " ".join(part for part in (target.gpu_type, target.gpu_info) if part).strip()
+        gpu_names = [part.strip() for part in target.gpu_info.split(",") if part.strip()]
+        detail = ""
+        if target.selected_gpu.isdigit():
+            index = int(target.selected_gpu)
+            if 0 <= index < len(gpu_names):
+                detail = gpu_names[index]
+        if not detail:
+            detail = " ".join(part for part in (target.gpu_type, target.gpu_info) if part).strip()
         return f"GPU {target.selected_gpu}: {detail}" if detail else f"GPU {target.selected_gpu}"
     detail = " ".join(part for part in (target.gpu_type, target.gpu_info) if part).strip()
     return detail or "auto"
@@ -1374,6 +1397,7 @@ def status_payload() -> dict[str, Any]:
         metric = metric_for(target.id)
         q = TARGET_QUEUES.get(target.id)
         local_pending = q.qsize() if q else 0
+        selected_gpu_health_label = ""
         if target.enabled and (not metric.last_seen_at or metric.status == "unknown"):
             health = target_health(target)
             metric.status = "ok" if health["ok"] else "error"
@@ -1403,7 +1427,8 @@ def status_payload() -> dict[str, Any]:
                 gpu_names = [str(gpu.get("name")) for gpu in gpus if isinstance(gpu, dict) and gpu.get("name")]
                 if gpu_names:
                     metric.remote_gpu_info = ", ".join(gpu_names)
-                    selected = str(data.get("selected_gpu_label") or "")
+                    selected_gpu_health_label = selected_gpu_label_from_health(target, data)
+                    selected = selected_gpu_health_label or str(data.get("selected_gpu_label") or "")
                     metric.remote_gpu_type = selected or gpu_names[0]
                 metric.queue_state = "pending" if metric.pending_queue else "idle"
             metric.last_seen_at = now_text()
@@ -1414,6 +1439,7 @@ def status_payload() -> dict[str, Any]:
             "average_response_seconds": metric.average_response_seconds,
             "gpu_info": metric.remote_gpu_info or target.gpu_info,
             "gpu_type": metric.remote_gpu_type or target.gpu_type,
+            "selected_gpu_device": selected_gpu_health_label or selected_gpu_device(target),
             "queue_max_per_target": QUEUE_MAX_PER_TARGET,
         }
 
@@ -1750,12 +1776,13 @@ function renderTargets() {
   document.getElementById('targetRows').innerHTML = targets.map(t => {
     const m = metrics[t.id] || {};
     const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
+    const selectedGpuDevice = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '';
     return `<tr>
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}</td>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
       <td>${esc(t.model)}</td>
-      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(t.selected_gpu_label || m.gpu_info || t.gpu_info)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
+      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(selectedGpuDevice)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
       <td>${m.total_prompts||0}</td>
       <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
@@ -1822,7 +1849,7 @@ function renderAutoTargetRows(enabledTargets) {
   document.getElementById('autoTargetRows').innerHTML = enabledTargets.map(t => {
     const m = metrics[t.id] || {};
     const gpuType = m.gpu_type || t.gpu_type || '';
-    const gpuInfo = m.gpu_info || t.gpu_info || '';
+    const gpuInfo = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '';
     return `<tr>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
@@ -1890,6 +1917,10 @@ async function saveTarget() {
   for (const id of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
   const gpuSelect = document.getElementById('selected_gpu');
   payload.selected_gpu_label = gpuSelect.value ? (gpuSelect.options[gpuSelect.selectedIndex]?.textContent || '') : '';
+  const selectedMatch = payload.selected_gpu_label.match(/^\\s*GPU\\s+([^:\\s]+)/i);
+  if (payload.selected_gpu && selectedMatch && selectedMatch[1] !== payload.selected_gpu) {
+    payload.selected_gpu_label = '';
+  }
   payload.enabled = true;
   await api('/api/targets', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
   clearForm(); await refresh();
