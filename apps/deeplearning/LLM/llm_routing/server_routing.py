@@ -62,6 +62,7 @@ class LLMTarget:
     api_type: str = "ollama"
     gpu_info: str = ""
     gpu_type: str = ""
+    selected_gpu: str = ""
     access_id: str = ""
     password: str = ""
     enabled: bool = True
@@ -181,6 +182,7 @@ def load_targets() -> list[LLMTarget]:
                     api_type=str(item.get("api_type") or "ollama"),
                     gpu_info=str(item.get("gpu_info") or ""),
                     gpu_type=str(item.get("gpu_type") or ""),
+                    selected_gpu=str(item.get("selected_gpu") or ""),
                     access_id=str(item.get("access_id") or ""),
                     password=str(item.get("password") or ""),
                     enabled=bool(item.get("enabled", True)),
@@ -389,6 +391,23 @@ def parse_model_ids(target: LLMTarget, data: dict[str, Any]) -> list[str]:
     return sorted(name for name in names if name)
 
 
+def parse_gpus(data: dict[str, Any]) -> list[dict[str, str]]:
+    values = data.get("gpus") if isinstance(data.get("gpus"), list) else []
+    gpus: list[dict[str, str]] = []
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        index = item.get("index") if item.get("index") is not None else item.get("id")
+        value = str(index if index is not None else "").strip()
+        name = str(item.get("name") or value or "GPU").strip()
+        label = f"GPU {value}: {name}" if value else name
+        memory = item.get("memory_total_mb")
+        if isinstance(memory, (int, float)) and memory > 0:
+            label = f"{label} ({int(memory)} MB)"
+        gpus.append({"value": value, "label": label, "name": name})
+    return gpus
+
+
 def fetch_target_models(target: LLMTarget) -> list[str]:
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         data = request_json(f"{target.base_url}/v1/models", timeout=8, headers=target_auth_headers(target))
@@ -400,6 +419,19 @@ def fetch_target_models(target: LLMTarget) -> list[str]:
                 raise
             data = request_json(f"{target.base_url}/health", timeout=8, headers=target_auth_headers(target))
     return parse_model_ids(target, data)
+
+
+def fetch_target_options(target: LLMTarget) -> dict[str, Any]:
+    models = fetch_target_models(target)
+    gpus: list[dict[str, str]] = []
+    try:
+        health = request_json(f"{target.base_url}/health", timeout=8, headers=target_auth_headers(target))
+        gpus = parse_gpus(health)
+        if not models:
+            models = parse_model_ids(target, health)
+    except Exception:
+        pass
+    return {"models": models, "gpus": gpus}
 
 
 def target_from_lookup_payload(payload: dict[str, Any]) -> LLMTarget:
@@ -416,6 +448,7 @@ def target_from_lookup_payload(payload: dict[str, Any]) -> LLMTarget:
         port=port,
         model=str(payload.get("model") or ""),
         api_type=str(payload.get("api_type") or "ollama").strip(),
+        selected_gpu=str(payload.get("selected_gpu") or "").strip(),
         access_id=str(payload.get("access_id") or "").strip(),
         password=str(payload.get("password") or ""),
     )
@@ -442,6 +475,8 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
     payload["prompt"] = prompt
     if model:
         payload["model"] = model
+    if target.selected_gpu:
+        payload["selected_gpu"] = target.selected_gpu
     payload["stream"] = False
     payload.pop("target_id", None)
     payload.pop("client_id", None)
@@ -581,6 +616,53 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
             store_metric(target.id, metric)
         record_access({"client": client, "target": target.name, "target_id": target.id, "status": "error", "error": str(exc), "response_seconds": round(elapsed, 3)})
         raise
+
+
+def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
+    if not str(payload.get("prompt") or payload.get("messages") or "").strip():
+        raise ValueError("prompt or messages is required.")
+    targets = [target for target in load_targets() if target.enabled]
+    if not targets:
+        raise ValueError("No enabled LLM targets are configured.")
+
+    started = time.time()
+    results: list[dict[str, Any]] = []
+    for target in targets:
+        item_payload = dict(payload)
+        item_payload["target_id"] = target.id
+        item_payload["client_id"] = str(payload.get("client_id") or "web-ui-compare")
+        item_started = time.time()
+        try:
+            data = route_prompt(handler, item_payload)
+            results.append(
+                {
+                    "ok": True,
+                    "target_id": target.id,
+                    "target_name": target.name,
+                    "model": target.model,
+                    "response_seconds": data.get("response_seconds", time.time() - item_started),
+                    "response": data.get("response", ""),
+                    "raw": data.get("raw", {}),
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            results.append(
+                {
+                    "ok": False,
+                    "target_id": target.id,
+                    "target_name": target.name,
+                    "model": target.model,
+                    "response_seconds": time.time() - item_started,
+                    "error": str(exc),
+                }
+            )
+
+    return {
+        "ok": any(item.get("ok") for item in results),
+        "target_count": len(targets),
+        "response_seconds": time.time() - started,
+        "results": results,
+    }
 
 
 def read_access_log(limit: int = 200) -> list[dict[str, Any]]:
@@ -783,6 +865,7 @@ INDEX_HTML = """<!doctype html>
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
     .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
     .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
+    .compare-response { max-width:420px; max-height:120px; overflow:auto; white-space:pre-wrap; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
     button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
     button.danger { color:#fff; background:var(--bad); border-color:var(--bad); }
@@ -821,6 +904,7 @@ INDEX_HTML = """<!doctype html>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
         <input id="gpu_info" placeholder="GPU 정보">
+        <select id="selected_gpu"><option value="">GPU 자동 선택</option></select>
         <input id="access_id" placeholder="접근 ID">
         <input id="password" placeholder="PASS" type="password">
         <input id="notes" placeholder="메모">
@@ -851,6 +935,7 @@ INDEX_HTML = """<!doctype html>
       <textarea id="test_prompt" placeholder="전송할 prompt"></textarea>
       <div class="test-toolbar">
         <button class="primary" onclick="sendPrompt()">전송</button>
+        <button onclick="compareAllPrompts()">전체 모델 비교</button>
         <button onclick="clearPromptTest()">결과 지우기</button>
       </div>
     </div>
@@ -869,6 +954,8 @@ INDEX_HTML = """<!doctype html>
         <pre id="test_result"></pre>
       </div>
     </div>
+    <h3>전체 모델 비교</h3>
+    <table><thead><tr><th>상태</th><th>LLM</th><th>모델</th><th>소요 시간</th><th>수신 내용</th></tr></thead><tbody id="compareRows"></tbody></table>
   </section>
 </main>
 <script>
@@ -919,7 +1006,7 @@ function renderTargets() {
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
       <td>${esc(t.model)}</td>
-      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(m.gpu_info || t.gpu_info)}</small></td>
+      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(m.gpu_info || t.gpu_info)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}</td>
       <td>${m.total_prompts||0}</td>
       <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
@@ -970,19 +1057,32 @@ function setModelOptions(models, selectedModel = '') {
     select.value = currentModel;
   }
 }
+function setGpuOptions(gpus, selectedGpu = '') {
+  const select = document.getElementById('selected_gpu');
+  const currentGpu = selectedGpu || select.value;
+  select.innerHTML = '<option value="">GPU 자동 선택</option>' + gpus.map(gpu => `<option value="${esc(gpu.value)}">${esc(gpu.label || gpu.value)}</option>`).join('');
+  if (currentGpu && gpus.some(gpu => gpu.value === currentGpu)) {
+    select.value = currentGpu;
+  } else if (currentGpu) {
+    select.innerHTML += `<option value="${esc(currentGpu)}">GPU ${esc(currentGpu)} (저장됨)</option>`;
+    select.value = currentGpu;
+  }
+}
 function editTarget(t) {
-  for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','access_id','password','notes']) {
+  for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) {
     const id = key === 'target_id' ? 'target_id' : key;
     const value = key === 'target_id' ? t.id : t[key];
     document.getElementById(id).value = value || '';
   }
   setModelOptions([], t.model || '');
+  setGpuOptions([], t.selected_gpu || '');
   document.getElementById('model_status').textContent = '';
 }
 function clearForm() {
   for (const id of ['target_id','name','host','port','model','gpu_type','gpu_info','access_id','password','notes']) document.getElementById(id).value = '';
   document.getElementById('api_type').value = 'ollama';
   setModelOptions([]);
+  setGpuOptions([]);
   document.getElementById('model_status').textContent = '';
 }
 async function loadModels() {
@@ -993,15 +1093,18 @@ async function loadModels() {
   try {
     const data = await api('/api/models', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
     setModelOptions(data.models || []);
-    status.textContent = `${(data.models || []).length}개 모델을 찾았습니다.`;
+    setGpuOptions(data.gpus || []);
+    const gpuText = (data.gpus || []).length ? `, GPU ${(data.gpus || []).length}개` : '';
+    status.textContent = `${(data.models || []).length}개 모델${gpuText}를 찾았습니다.`;
   } catch (err) {
     setModelOptions([]);
+    setGpuOptions([]);
     status.textContent = String(err);
   }
 }
 async function saveTarget() {
   const payload = {};
-  for (const id of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
+  for (const id of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
   payload.enabled = true;
   await api('/api/targets', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
   clearForm(); await refresh();
@@ -1047,12 +1150,61 @@ async function sendPrompt() {
   }
   await refresh();
 }
+function renderCompareResults(results) {
+  document.getElementById('compareRows').innerHTML = results.map(item => {
+    const cls = item.ok ? 'ok' : 'error';
+    const status = item.ok ? 'ok' : 'error';
+    const response = item.ok ? (item.response || '') : (item.error || '');
+    return `<tr>
+      <td><span class="${cls}">${esc(status)}</span></td>
+      <td>${esc(item.target_name)}<br><small>${esc(item.target_id)}</small></td>
+      <td>${esc(item.model || '')}</td>
+      <td>${Number(item.response_seconds || 0).toFixed(2)}s</td>
+      <td><div class="compare-response">${esc(response)}</div></td>
+    </tr>`;
+  }).join('');
+}
+async function compareAllPrompts() {
+  const payload = {prompt: document.getElementById('test_prompt').value, client_id: 'web-ui-compare'};
+  const startedAt = performance.now();
+  let elapsedTimer = window.setInterval(() => {
+    document.getElementById('test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
+  }, 100);
+  document.getElementById('test_status').textContent = '전체 비교 중';
+  document.getElementById('test_response_time').textContent = '-';
+  document.getElementById('test_answer').textContent = '';
+  document.getElementById('test_result').textContent = 'Running comparison...';
+  document.getElementById('compareRows').innerHTML = '';
+  try {
+    const data = await api('/api/compare', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const elapsedSeconds = (performance.now() - startedAt) / 1000;
+    const results = data.results || [];
+    const successCount = results.filter(item => item.ok).length;
+    document.getElementById('test_status').textContent = `비교 완료 ${successCount}/${results.length}`;
+    document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
+    document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
+    document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''}]\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\n\n---\n\n');
+    document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
+    renderCompareResults(results);
+  } catch (err) {
+    const elapsedSeconds = (performance.now() - startedAt) / 1000;
+    document.getElementById('test_status').textContent = '비교 오류';
+    document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
+    document.getElementById('test_response_time').textContent = '-';
+    document.getElementById('test_answer').textContent = '';
+    document.getElementById('test_result').textContent = String(err);
+  } finally {
+    window.clearInterval(elapsedTimer);
+  }
+  await refresh();
+}
 function clearPromptTest() {
   document.getElementById('test_status').textContent = '대기';
   document.getElementById('test_elapsed').textContent = '-';
   document.getElementById('test_response_time').textContent = '-';
   document.getElementById('test_answer').textContent = '';
   document.getElementById('test_result').textContent = '';
+  document.getElementById('compareRows').innerHTML = '';
 }
 refresh();
 setInterval(refresh, 5000);
@@ -1072,6 +1224,7 @@ document.getElementById('model_select').addEventListener('change', (event) => {
 for (const id of ['host','port','api_type','access_id','password']) {
   document.getElementById(id).addEventListener('change', () => {
     setModelOptions([]);
+    setGpuOptions([]);
     document.getElementById('model_status').textContent = '';
   });
 }
@@ -1181,6 +1334,9 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 return
             if not self.require_auth():
                 return
+            if self.path == "/api/compare":
+                self.write_json(compare_prompt(self, payload))
+                return
             if self.path == "/api/targets":
                 self.write_json({"ok": True, "target": self.upsert_target(payload)})
                 return
@@ -1189,7 +1345,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/models":
                 target = target_from_lookup_payload(payload)
-                self.write_json({"ok": True, "models": fetch_target_models(target)})
+                self.write_json({"ok": True, **fetch_target_options(target)})
                 return
             self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except ValueError as exc:
@@ -1221,6 +1377,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             api_type=str(payload.get("api_type") or "ollama").strip(),
             gpu_info=str(payload.get("gpu_info") or "").strip(),
             gpu_type=str(payload.get("gpu_type") or "").strip(),
+            selected_gpu=str(payload.get("selected_gpu") or "").strip(),
             access_id=str(payload.get("access_id") or "").strip(),
             password=str(payload.get("password") or ""),
             enabled=bool(payload.get("enabled", True)),

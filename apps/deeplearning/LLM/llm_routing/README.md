@@ -8,6 +8,7 @@
 - 각 LLM 상태 표시: GPU 정보, uptime, 처리 prompt 수, queue 상태, pending queue 수, 평균 응답시간
 - 서비스 탭: 접속한 prompt 클라이언트 수, 클라이언트별 요청 prompt 수, 초당 질의 수
 - 로컬머신 탭: 현재 시스템 CPU 상태, GPU 상태, 접근 로그
+- 프롬프트 테스트 탭: 단일 대상 테스트와 활성화된 전체 LLM 대상의 동일 prompt 응답/소요 시간 비교
 - API 라우팅: `POST /api/generate` 요청을 Ollama, OpenAI API, vLLM OpenAI 호환 서버로 전달
 
 ## 실행
@@ -37,18 +38,48 @@ LLM_ROUTING_PORT=4005 ./run.sh
 http://SERVER_IP:4004
 ```
 
-처음 접속하면 password 입력 화면이 표시됩니다. 기본 password 파일은 `admin_password.conf`이며, 파일이 없으면 첫 실행 시 `change-me-now` 값으로 생성됩니다. 운영 전에 이 파일 내용을 원하는 password로 변경하거나 환경 변수로 지정하세요.
+프롬프트 테스트 탭에서 `전송`은 선택한 대상 또는 자동 선택 대상으로 prompt를 1회 보냅니다. `전체 모델 비교`는 활성화된 모든 LLM 대상에 동일 prompt를 순차 전송하고, 각 모델별 수신 내용과 소요 시간을 표로 비교합니다.
+
+## 관리 화면 접근 Password 적용 방법
+
+처음 LLM Routing 페이지에 접속하면 password 입력 화면이 표시됩니다. 관리 화면 password는 `admin_password.conf` 파일 또는 `LLM_ROUTING_ADMIN_PASSWORD` 환경 변수로 적용할 수 있습니다.
+
+### 1. password 파일로 적용
+
+`llm_routing` 디렉터리에서 원하는 password를 `admin_password.conf`에 저장합니다.
 
 ```bash
+cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/llm_routing
 echo 'my-secret-password' > admin_password.conf
 chmod 600 admin_password.conf
 ```
 
-환경 변수로 지정할 수도 있습니다.
+서비스를 재시작합니다.
+
+```bash
+./stop.sh
+./start.sh
+```
+
+이후 브라우저에서 `http://SERVER_IP:4004`에 접속하고, 위에서 저장한 `my-secret-password`를 입력합니다.
+
+`admin_password.conf` 파일이 없으면 서버 첫 실행 시 기본값 `change-me-now`로 자동 생성됩니다. 운영 전에 반드시 원하는 password로 변경하세요.
+
+### 2. 환경 변수로 임시 적용
+
+파일을 변경하지 않고 실행할 때만 password를 지정할 수도 있습니다.
 
 ```bash
 LLM_ROUTING_ADMIN_PASSWORD='my-secret-password' ./run.sh
 ```
+
+백그라운드 실행에 적용하려면 다음처럼 실행합니다.
+
+```bash
+LLM_ROUTING_ADMIN_PASSWORD='my-secret-password' ./start.sh
+```
+
+환경 변수 값이 있으면 `admin_password.conf`보다 우선 적용됩니다.
 
 ## Prompt API
 
@@ -98,6 +129,7 @@ LLM 대상 목록은 `llm_targets.json`에 저장됩니다. 처음 실행하면 
       "api_type": "ollama",
       "gpu_info": "RTX 5090",
       "gpu_type": "NVIDIA",
+      "selected_gpu": "0",
       "access_id": "",
       "password": "",
       "enabled": true
@@ -113,6 +145,8 @@ LLM 대상 목록은 `llm_targets.json`에 저장됩니다. 처음 실행하면 
 - `ollama`: `http://HOST:PORT/api/generate`와 `http://HOST:PORT/api/tags`를 사용합니다. `/api/tags`가 없는 Gemma4OllamaServer 형태는 `/health`의 `models`, GPU, queue 정보를 fallback으로 사용합니다.
 - `openai`: `http://HOST:PORT/v1/chat/completions`와 `http://HOST:PORT/v1/models`를 사용합니다.
 - `vllm`: vLLM의 OpenAI 호환 서버 기준으로 `http://HOST:PORT/v1/chat/completions`, `http://HOST:PORT/v1/models`, `http://HOST:PORT/health`, `http://HOST:PORT/metrics`를 사용합니다.
+
+GPU가 2개 이상 있는 서버는 LLM 리스트 화면에서 IP/PORT를 입력한 뒤 `모델 조회`를 누르면 `/health`의 GPU 목록을 읽어 `GPU 자동 선택` 드롭다운에 표시합니다. 특정 GPU를 선택하고 저장하면 prompt 전송 시 `selected_gpu` 값이 backend로 전달됩니다. 자동 배정을 쓰려면 `GPU 자동 선택` 상태로 저장하세요.
 
 OpenAI/vLLM 타입의 상태 확인은 `tospark_client`와 같은 probe 방식을 사용합니다. `/health`, `/v1/models`, `/metrics`를 확인하고, vLLM의 `vllm:num_requests_running`, `vllm:num_requests_waiting` metric이 있으면 active/pending queue 상태에 반영합니다.
 
