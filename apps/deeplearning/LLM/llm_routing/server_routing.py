@@ -7,14 +7,17 @@ import datetime as dt
 import html
 import json
 import os
+import posixpath
 import queue
 import re
 import secrets
 import socket
+import ssl
 import subprocess
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass, field
@@ -29,10 +32,12 @@ CONFIG_PATH = Path(os.getenv("LLM_ROUTING_CONFIG", APP_DIR / "llm_targets.json")
 LOG_DIR = Path(os.getenv("LLM_ROUTING_LOG_DIR", APP_DIR / "logs"))
 ACCESS_LOG_PATH = Path(os.getenv("LLM_ROUTING_ACCESS_LOG", LOG_DIR / "access.jsonl"))
 ADMIN_PASSWORD_PATH = Path(os.getenv("LLM_ROUTING_ADMIN_PASSWORD_FILE", APP_DIR / "admin_password.conf"))
+WEBDAV_CONFIG_PATH = Path(os.getenv("LLM_ROUTING_WEBDAV_CONFIG", APP_DIR / "webdav_settings.json"))
 HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
 QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
+WEBDAV_DEFAULT_INTERVAL_MINUTES = int(os.getenv("LLM_ROUTING_WEBDAV_INTERVAL_MINUTES", "30"))
 SESSION_COOKIE_NAME = "llm_routing_session"
 SESSION_TTL_SECONDS = int(os.getenv("LLM_ROUTING_SESSION_TTL_SECONDS", "28800"))
 STARTED_AT = time.time()
@@ -44,6 +49,14 @@ RECENT_ACCESS: list[dict[str, Any]] = []
 AUTH_SESSIONS: dict[str, float] = {}
 TARGET_QUEUES: dict[str, queue.Queue["PromptJob"]] = {}
 TARGET_WORKERS: dict[str, threading.Thread] = {}
+WEBDAV_REPORT_STATE: dict[str, Any] = {
+    "enabled": False,
+    "status": "disabled",
+    "last_sent_at": "",
+    "last_error": "",
+    "remote_paths": [],
+    "destination_urls": [],
+}
 MAX_RECENT_ACCESS = 300
 OPENAI_COMPATIBLE_API_TYPES = {"openai", "vllm"}
 GPU_METRIC_KEYWORDS = (
@@ -184,6 +197,31 @@ def valid_session(token: str) -> bool:
             return False
         AUTH_SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
         return True
+
+
+def prompt_api_password(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> str:
+    auth = str(handler.headers.get("Authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1].strip()
+    if auth.lower().startswith("basic "):
+        try:
+            decoded = base64.b64decode(auth.split(" ", 1)[1].strip()).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            decoded = ""
+        if ":" in decoded:
+            return decoded.split(":", 1)[1]
+    for header_name in ("X-LLM-Routing-Password", "X-API-Key"):
+        value = str(handler.headers.get(header_name) or "").strip()
+        if value:
+            return value
+    return str(payload.get("api_password") or payload.get("password") or "").strip()
+
+
+def prompt_api_authenticated(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> bool:
+    if valid_session(getattr(handler, "session_token")()):
+        return True
+    supplied = prompt_api_password(handler, payload)
+    return bool(supplied) and secrets.compare_digest(supplied, admin_password())
 
 
 def load_targets() -> list[LLMTarget]:
@@ -530,6 +568,7 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
     payload.pop("client_id", None)
     payload.pop("user_id", None)
     payload.pop("password", None)
+    payload.pop("api_password", None)
     return f"{target.base_url}/api/generate", payload
 
 
@@ -942,12 +981,224 @@ def run_command(command: list[str], timeout: int = 5) -> str:
     return (completed.stdout or completed.stderr or "").strip()
 
 
-def local_system_stats() -> dict[str, Any]:
-    load_avg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
-    cpu_count = os.cpu_count() or 0
+def load_webdav_settings() -> dict[str, Any]:
+    return load_json(
+        WEBDAV_CONFIG_PATH,
+        {
+            "enabled": False,
+            "schedule": {"interval_minutes": WEBDAV_DEFAULT_INTERVAL_MINUTES},
+            "report": {"filename": "llm_routing_status.md"},
+            "webdav": {
+                "hostname": "",
+                "root": "",
+                "sub": "",
+                "username": "",
+                "password": "",
+                "verify_ssl": True,
+            },
+        },
+    )
+
+
+def normalize_webdav_path(value: str) -> str:
+    return str(value or "").strip().strip("/")
+
+
+def normalize_webdav_subs(value: Any) -> list[str]:
+    values = value if isinstance(value, list) else [value]
+    subs: list[str] = []
+    for item in values:
+        normalized = normalize_webdav_path(str(item or ""))
+        if normalized not in subs:
+            subs.append(normalized)
+    return subs
+
+
+def webdav_remote_dirs(settings: dict[str, Any]) -> list[str]:
+    host_name = normalize_webdav_path(socket.gethostname())
+    remote_dirs: list[str] = []
+    for sub in normalize_webdav_subs(settings.get("webdav", {}).get("sub", "")):
+        if sub:
+            remote_dirs.append(posixpath.join("tinyGW", sub, host_name).strip("/"))
+        else:
+            remote_dirs.append(posixpath.join("tinyGW", host_name).strip("/"))
+    return remote_dirs or [posixpath.join("tinyGW", host_name).strip("/")]
+
+
+def webdav_url(settings: dict[str, Any], remote_path: str = "") -> str:
+    webdav = settings.get("webdav", {})
+    hostname = str(webdav.get("hostname") or "").rstrip("/")
+    root = normalize_webdav_path(str(webdav.get("root") or ""))
+    path = posixpath.join(root, normalize_webdav_path(remote_path)).strip("/")
+    quoted = "/".join(urllib.parse.quote(part) for part in path.split("/") if part)
+    return f"{hostname}/{quoted}" if quoted else hostname
+
+
+def webdav_request(
+    settings: dict[str, Any],
+    method: str,
+    remote_path: str,
+    data: bytes | None = None,
+    content_type: str = "text/markdown; charset=utf-8",
+) -> None:
+    webdav = settings.get("webdav", {})
+    username = str(webdav.get("username") or "")
+    password = str(webdav.get("password") or "")
+    headers: dict[str, str] = {}
+    if username or password:
+        token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+        headers["Authorization"] = f"Basic {token}"
+    if data is not None:
+        headers["Content-Type"] = content_type
+    context = None
+    if not bool(webdav.get("verify_ssl", True)):
+        context = ssl._create_unverified_context()  # noqa: SLF001
+    req = urllib.request.Request(webdav_url(settings, remote_path), data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=20, context=context) as response:
+            response.read()
+    except urllib.error.HTTPError as exc:
+        if method == "MKCOL" and exc.code in {405, 409}:
+            return
+        body = exc.read().decode("utf-8", errors="replace").strip()
+        detail = body[:300] if body else exc.reason
+        raise RuntimeError(f"WebDAV {method} failed: HTTP {exc.code} {detail}") from exc
+
+
+def ensure_webdav_remote_dirs(settings: dict[str, Any], remote_dir: str) -> None:
+    current = ""
+    for part in normalize_webdav_path(remote_dir).split("/"):
+        if not part:
+            continue
+        current = posixpath.join(current, part).strip("/")
+        webdav_request(settings, "MKCOL", current)
+
+
+def webdav_settings_error(settings: dict[str, Any]) -> str:
+    if not settings.get("enabled", False):
+        return "disabled"
+    webdav = settings.get("webdav", {})
+    for key in ("hostname", "root", "username", "password"):
+        if not str(webdav.get(key) or "").strip():
+            return f"webdav.{key} is required"
+    return ""
+
+
+def snapshot_metrics() -> dict[str, dict[str, Any]]:
+    with STATE_LOCK:
+        return {target_id: dict(values) for target_id, values in TARGET_RUNTIME.items()}
+
+
+def llm_selection_markdown() -> str:
+    targets = load_targets()
+    metrics = snapshot_metrics()
+    lines = [
+        f"# LLM Routing Status - {socket.gethostname()}",
+        "",
+        f"- 생성 시각: {now_text()}",
+        f"- 서비스 uptime: {seconds_to_uptime(time.time() - STARTED_AT)}",
+        f"- 등록 LLM: {len(targets)}",
+        f"- 활성 LLM: {sum(1 for target in targets if target.enabled)}",
+        "",
+        "## 모델/GPU 선택 상태",
+        "",
+        "| 상태 | 이름 | 주소 | 모델 | 선택 GPU | Queue | 처리 수 | 평균 응답 |",
+        "| --- | --- | --- | --- | --- | --- | ---: | ---: |",
+    ]
+    for target in targets:
+        metric = metrics.get(target.id, {})
+        total = int(metric.get("total_prompts") or 0)
+        avg = 0.0
+        if total:
+            avg = float(metric.get("total_response_seconds") or 0.0) / total
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    "enabled" if target.enabled else "disabled",
+                    target.name,
+                    f"{target.host}:{target.port}",
+                    target.model or "-",
+                    selected_gpu_device(target),
+                    f"{metric.get('queue_state', 'idle')} active {metric.get('active_requests', 0)} pending {metric.get('pending_queue', 0)}/{QUEUE_MAX_PER_TARGET}",
+                    str(total),
+                    f"{avg:.2f}s",
+                ]
+            )
+            + " |"
+        )
+    lines.extend(["", "## 로컬 GPU 상태", "", "```text", local_gpu_status(), "```", ""])
+    return "\n".join(lines)
+
+
+def local_gpu_status() -> str:
     gpu_text = run_command(["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"], timeout=4)
     if not gpu_text or "No such file" in gpu_text:
         gpu_text = run_command(["system_profiler", "SPDisplaysDataType"], timeout=5)
+    return gpu_text[:5000]
+
+
+def update_webdav_report_state(**values: Any) -> None:
+    with STATE_LOCK:
+        WEBDAV_REPORT_STATE.update(values)
+
+
+def send_webdav_status_once(settings: dict[str, Any]) -> dict[str, Any]:
+    error = webdav_settings_error(settings)
+    if error:
+        raise ValueError(error)
+    report = settings.get("report", {}) if isinstance(settings.get("report"), dict) else {}
+    file_name = normalize_webdav_path(str(report.get("filename") or "llm_routing_status.md")) or "llm_routing_status.md"
+    markdown = llm_selection_markdown().encode("utf-8")
+    remote_dirs = webdav_remote_dirs(settings)
+    remote_paths = [posixpath.join(remote_dir, file_name).strip("/") for remote_dir in remote_dirs]
+    for remote_dir, remote_path in zip(remote_dirs, remote_paths):
+        ensure_webdav_remote_dirs(settings, remote_dir)
+        webdav_request(settings, "PUT", remote_path, data=markdown)
+    return {
+        "remote_paths": remote_paths,
+        "destination_urls": [webdav_url(settings, remote_path) for remote_path in remote_paths],
+    }
+
+
+def webdav_report_loop() -> None:
+    settings = load_webdav_settings()
+    error = webdav_settings_error(settings)
+    if error == "disabled":
+        update_webdav_report_state(enabled=False, status="disabled", last_error="")
+        return
+    if error:
+        update_webdav_report_state(enabled=True, status="error", last_error=error)
+        return
+    interval = int(settings.get("schedule", {}).get("interval_minutes") or WEBDAV_DEFAULT_INTERVAL_MINUTES)
+    interval = max(1, interval)
+    update_webdav_report_state(enabled=True, status="waiting", interval_minutes=interval)
+    while True:
+        try:
+            result = send_webdav_status_once(settings)
+            update_webdav_report_state(
+                status="ok",
+                last_sent_at=now_text(),
+                last_error="",
+                remote_paths=result["remote_paths"],
+                destination_urls=result["destination_urls"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            update_webdav_report_state(status="error", last_error=str(exc))
+        time.sleep(interval * 60)
+
+
+def start_webdav_reporter() -> None:
+    thread = threading.Thread(target=webdav_report_loop, daemon=True, name="llm-routing-webdav-reporter")
+    thread.start()
+
+
+def local_system_stats() -> dict[str, Any]:
+    load_avg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
+    cpu_count = os.cpu_count() or 0
+    gpu_text = local_gpu_status()
+    with STATE_LOCK:
+        webdav_report = dict(WEBDAV_REPORT_STATE)
     return {
         "hostname": socket.gethostname(),
         "service_uptime": seconds_to_uptime(time.time() - STARTED_AT),
@@ -955,6 +1206,7 @@ def local_system_stats() -> dict[str, Any]:
         "load_average": [round(value, 2) for value in load_avg],
         "gpu_status": gpu_text[:5000],
         "access_log": read_access_log(100),
+        "webdav_report": webdav_report,
     }
 
 
@@ -1194,6 +1446,7 @@ INDEX_HTML = """<!doctype html>
   </section>
   <section id="local">
     <div class="grid" id="localMetrics"></div>
+    <h3>LLM Routing WebDAV 전송</h3><pre id="webdavStatus"></pre>
     <h3>GPU 상태</h3><pre id="gpuStatus"></pre>
     <h3>접근 로그</h3><pre id="accessLog"></pre>
   </section>
@@ -1363,12 +1616,14 @@ function renderService() {
 }
 function renderLocal() {
   const local = state.local || {};
+  const webdav = local.webdav_report || {};
   document.getElementById('localMetrics').innerHTML = [
     metric('호스트', local.hostname || ''),
     metric('CPU cores', local.cpu_count || 0),
     metric('Load avg', (local.load_average || []).join(', ')),
     metric('서비스 uptime', local.service_uptime || '')
   ].join('');
+  document.getElementById('webdavStatus').textContent = JSON.stringify(webdav, null, 2);
   document.getElementById('gpuStatus').textContent = local.gpu_status || '';
   document.getElementById('accessLog').textContent = JSON.stringify(local.access_log || [], null, 2);
 }
@@ -1654,7 +1909,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-LLM-Routing-Password, X-API-Key")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1694,7 +1949,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.NO_CONTENT)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-LLM-Routing-Password, X-API-Key")
         self.end_headers()
 
     def do_POST(self) -> None:
@@ -1722,9 +1977,15 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             if self.path in {"/api/generate", "/generate", "/api/chat"}:
+                if not prompt_api_authenticated(self, payload):
+                    self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
+                    return
                 self.write_json(route_prompt(self, payload))
                 return
             if self.path == "/v1/chat/completions":
+                if not prompt_api_authenticated(self, payload):
+                    self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
+                    return
                 self.write_json(openai_chat_response(route_prompt(self, payload)))
                 return
             if not self.require_auth():
@@ -1813,6 +2074,7 @@ def main() -> int:
     ensure_default_config()
     ensure_admin_password()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    start_webdav_reporter()
     httpd = ThreadingHTTPServer((args.host, args.port), RoutingHandler)
     print(f"LLM Routing listening on http://{args.host}:{args.port}", flush=True)
     try:

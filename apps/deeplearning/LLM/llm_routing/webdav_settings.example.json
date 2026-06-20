@@ -1,0 +1,17 @@
+{
+  "enabled": false,
+  "schedule": {
+    "interval_minutes": 30
+  },
+  "report": {
+    "filename": "llm_routing_status.md"
+  },
+  "webdav": {
+    "hostname": "https://nextcloud.example.com:443",
+    "root": "/remote.php/dav/files/username",
+    "sub": "",
+    "username": "username",
+    "password": "app-password-or-token",
+    "verify_ssl": true
+  }
+}

@@ -4,3 +4,4 @@ logs/
 server.pid
 llm_targets.json
 admin_password.conf
+webdav_settings.json
