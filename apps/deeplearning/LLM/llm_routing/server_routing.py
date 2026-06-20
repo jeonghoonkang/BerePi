@@ -601,6 +601,9 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
             "target_id": target.id,
             "target_name": target.name,
             "model": target.model,
+            "gpu_type": target.gpu_type,
+            "gpu_info": target.gpu_info,
+            "selected_gpu": target.selected_gpu,
             "response_seconds": elapsed,
             **normalized,
         }
@@ -640,6 +643,9 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "target_id": target.id,
                     "target_name": target.name,
                     "model": target.model,
+                    "gpu_type": target.gpu_type,
+                    "gpu_info": target.gpu_info,
+                    "selected_gpu": target.selected_gpu,
                     "response_seconds": data.get("response_seconds", time.time() - item_started),
                     "response": data.get("response", ""),
                     "raw": data.get("raw", {}),
@@ -652,6 +658,9 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "target_id": target.id,
                     "target_name": target.name,
                     "model": target.model,
+                    "gpu_type": target.gpu_type,
+                    "gpu_info": target.gpu_info,
+                    "selected_gpu": target.selected_gpu,
                     "response_seconds": time.time() - item_started,
                     "error": str(exc),
                 }
@@ -955,7 +964,7 @@ INDEX_HTML = """<!doctype html>
       </div>
     </div>
     <h3>전체 모델 비교</h3>
-    <table><thead><tr><th>상태</th><th>LLM</th><th>모델</th><th>소요 시간</th><th>수신 내용</th></tr></thead><tbody id="compareRows"></tbody></table>
+    <table><thead><tr><th>상태</th><th>LLM</th><th>모델</th><th>GPU</th><th>소요 시간</th><th>수신 내용</th></tr></thead><tbody id="compareRows"></tbody></table>
   </section>
 </main>
 <script>
@@ -1155,10 +1164,12 @@ function renderCompareResults(results) {
     const cls = item.ok ? 'ok' : 'error';
     const status = item.ok ? 'ok' : 'error';
     const response = item.ok ? (item.response || '') : (item.error || '');
+    const selectedGpu = item.selected_gpu || 'auto';
     return `<tr>
       <td><span class="${cls}">${esc(status)}</span></td>
       <td>${esc(item.target_name)}<br><small>${esc(item.target_id)}</small></td>
       <td>${esc(item.model || '')}</td>
+      <td>${esc(item.gpu_type || '')}<br><small>${esc(item.gpu_info || '')}</small><br><small>selected: ${esc(selectedGpu)}</small></td>
       <td>${Number(item.response_seconds || 0).toFixed(2)}s</td>
       <td><div class="compare-response">${esc(response)}</div></td>
     </tr>`;

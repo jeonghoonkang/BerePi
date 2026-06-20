@@ -83,6 +83,8 @@ LLM_ROUTING_ADMIN_PASSWORD='my-secret-password' ./start.sh
 
 ## Prompt API
 
+외부 머신에서는 LLM Routing 서버의 `POST /api/generate`로 prompt를 전송합니다. 이 API는 prompt 클라이언트용이므로 관리 화면 password 로그인 없이 호출할 수 있습니다.
+
 자동 대상 선택:
 
 ```bash
@@ -99,6 +101,69 @@ curl -X POST http://127.0.0.1:4004/api/generate \
   -d '{"client_id":"client-a","target_id":"TARGET_ID","prompt":"hello"}'
 ```
 
+다른 머신에서 호출할 때는 `127.0.0.1` 대신 LLM Routing 서버 IP 또는 DNS 이름을 사용합니다.
+
+```bash
+curl -X POST http://LLM_ROUTING_SERVER_IP:4004/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_id": "my-client-01",
+    "prompt": "GPU 서버 상태를 한 문장으로 요약해줘",
+    "timeout": 180
+  }'
+```
+
+Python 예제:
+
+```python
+import requests
+
+url = "http://LLM_ROUTING_SERVER_IP:4004/api/generate"
+payload = {
+    "client_id": "python-client-01",
+    "prompt": "오늘 처리할 작업 우선순위를 정리해줘",
+    # "target_id": "TARGET_ID",  # 특정 LLM으로 보낼 때만 사용
+    "timeout": 180,
+}
+
+response = requests.post(url, json=payload, timeout=200)
+response.raise_for_status()
+data = response.json()
+
+print("target:", data.get("target_name"))
+print("model:", data.get("model"))
+print("seconds:", data.get("response_seconds"))
+print("answer:", data.get("response"))
+```
+
+JavaScript fetch 예제:
+
+```javascript
+const response = await fetch("http://LLM_ROUTING_SERVER_IP:4004/api/generate", {
+  method: "POST",
+  headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({
+    client_id: "web-client-01",
+    prompt: "이 문장을 영어로 번역해줘: 안녕하세요",
+    timeout: 180
+  })
+});
+
+if (!response.ok) {
+  throw new Error(await response.text());
+}
+
+const data = await response.json();
+console.log(data.response);
+```
+
+요청 필드:
+
+- `prompt`: 전송할 prompt 문자열
+- `client_id`: 호출한 외부 클라이언트 이름 또는 ID
+- `target_id`: 특정 LLM 대상에 보낼 때 사용합니다. 생략하면 자동 선택합니다.
+- `timeout`: backend LLM 응답 대기 시간입니다. 초 단위입니다.
+
 응답 예:
 
 ```json
@@ -107,6 +172,9 @@ curl -X POST http://127.0.0.1:4004/api/generate \
   "target_id": "TARGET_ID",
   "target_name": "Local Ollama",
   "model": "llama3.1",
+  "gpu_type": "NVIDIA",
+  "gpu_info": "RTX 5090",
+  "selected_gpu": "0",
   "response_seconds": 1.23,
   "response": "...",
   "raw": {}
