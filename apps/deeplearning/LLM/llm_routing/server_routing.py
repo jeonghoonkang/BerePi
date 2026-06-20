@@ -1183,7 +1183,7 @@ async function compareAllPrompts() {
     document.getElementById('test_status').textContent = `비교 완료 ${successCount}/${results.length}`;
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
-    document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''}]\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\n\n---\n\n');
+    document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''}]\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n');
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
     renderCompareResults(results);
   } catch (err) {
