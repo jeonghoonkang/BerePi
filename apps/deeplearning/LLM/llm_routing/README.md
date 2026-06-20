@@ -37,6 +37,19 @@ LLM_ROUTING_PORT=4005 ./run.sh
 http://SERVER_IP:4004
 ```
 
+처음 접속하면 password 입력 화면이 표시됩니다. 기본 password 파일은 `admin_password.conf`이며, 파일이 없으면 첫 실행 시 `change-me-now` 값으로 생성됩니다. 운영 전에 이 파일 내용을 원하는 password로 변경하거나 환경 변수로 지정하세요.
+
+```bash
+echo 'my-secret-password' > admin_password.conf
+chmod 600 admin_password.conf
+```
+
+환경 변수로 지정할 수도 있습니다.
+
+```bash
+LLM_ROUTING_ADMIN_PASSWORD='my-secret-password' ./run.sh
+```
+
 ## Prompt API
 
 자동 대상 선택:
@@ -97,13 +110,13 @@ LLM 대상 목록은 `llm_targets.json`에 저장됩니다. 처음 실행하면 
 
 ## Backend Type
 
-- `ollama`: `http://HOST:PORT/api/generate`와 `http://HOST:PORT/api/tags`를 사용합니다.
+- `ollama`: `http://HOST:PORT/api/generate`와 `http://HOST:PORT/api/tags`를 사용합니다. `/api/tags`가 없는 Gemma4OllamaServer 형태는 `/health`의 `models`, GPU, queue 정보를 fallback으로 사용합니다.
 - `openai`: `http://HOST:PORT/v1/chat/completions`와 `http://HOST:PORT/v1/models`를 사용합니다.
 - `vllm`: vLLM의 OpenAI 호환 서버 기준으로 `http://HOST:PORT/v1/chat/completions`, `http://HOST:PORT/v1/models`, `http://HOST:PORT/health`, `http://HOST:PORT/metrics`를 사용합니다.
 
 OpenAI/vLLM 타입의 상태 확인은 `tospark_client`와 같은 probe 방식을 사용합니다. `/health`, `/v1/models`, `/metrics`를 확인하고, vLLM의 `vllm:num_requests_running`, `vllm:num_requests_waiting` metric이 있으면 active/pending queue 상태에 반영합니다.
 
-OpenAI/vLLM 타입에서 `password` 또는 `access_id` 값이 있으면 `Authorization: Bearer ...` 헤더로 전달합니다. Ollama 타입에서 `access_id` 값이 있으면 Basic Auth로 전달합니다.
+OpenAI/vLLM 타입에서 `password` 또는 `access_id` 값이 있으면 `Authorization: Bearer ...` 헤더로 전달합니다. Ollama 타입에서 `access_id` 값이 있으면 Basic Auth로 전달합니다. `keti-ev1.iptime.org:8082`처럼 `/api/generate`가 401을 반환하는 서버는 대상 설정에 접근 ID와 PASS를 입력해야 합니다.
 
 vLLM 예:
 

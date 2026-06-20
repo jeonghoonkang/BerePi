@@ -8,6 +8,7 @@ import html
 import json
 import os
 import re
+import secrets
 import socket
 import subprocess
 import threading
@@ -26,15 +27,19 @@ APP_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("LLM_ROUTING_CONFIG", APP_DIR / "llm_targets.json"))
 LOG_DIR = Path(os.getenv("LLM_ROUTING_LOG_DIR", APP_DIR / "logs"))
 ACCESS_LOG_PATH = Path(os.getenv("LLM_ROUTING_ACCESS_LOG", LOG_DIR / "access.jsonl"))
+ADMIN_PASSWORD_PATH = Path(os.getenv("LLM_ROUTING_ADMIN_PASSWORD_FILE", APP_DIR / "admin_password.conf"))
 HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
+SESSION_COOKIE_NAME = "llm_routing_session"
+SESSION_TTL_SECONDS = int(os.getenv("LLM_ROUTING_SESSION_TTL_SECONDS", "28800"))
 STARTED_AT = time.time()
 STATE_LOCK = threading.RLock()
 TARGET_CURSOR = 0
 CLIENT_STATS: dict[str, dict[str, Any]] = {}
 TARGET_RUNTIME: dict[str, dict[str, Any]] = {}
 RECENT_ACCESS: list[dict[str, Any]] = []
+AUTH_SESSIONS: dict[str, float] = {}
 MAX_RECENT_ACCESS = 300
 OPENAI_COMPATIBLE_API_TYPES = {"openai", "vllm"}
 GPU_METRIC_KEYWORDS = (
@@ -115,6 +120,48 @@ def load_json(path: Path, default: Any) -> Any:
 def save_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def ensure_admin_password() -> None:
+    if os.getenv("LLM_ROUTING_ADMIN_PASSWORD"):
+        return
+    if ADMIN_PASSWORD_PATH.exists():
+        return
+    ADMIN_PASSWORD_PATH.write_text("change-me-now\n", encoding="utf-8")
+    try:
+        os.chmod(ADMIN_PASSWORD_PATH, 0o600)
+    except OSError:
+        pass
+
+
+def admin_password() -> str:
+    value = os.getenv("LLM_ROUTING_ADMIN_PASSWORD", "").strip()
+    if value:
+        return value
+    ensure_admin_password()
+    try:
+        return ADMIN_PASSWORD_PATH.read_text(encoding="utf-8").strip()
+    except OSError:
+        return "change-me-now"
+
+
+def create_session() -> str:
+    token = secrets.token_urlsafe(32)
+    with STATE_LOCK:
+        AUTH_SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
+    return token
+
+
+def valid_session(token: str) -> bool:
+    if not token:
+        return False
+    with STATE_LOCK:
+        expires_at = AUTH_SESSIONS.get(token, 0)
+        if expires_at <= time.time():
+            AUTH_SESSIONS.pop(token, None)
+            return False
+        AUTH_SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
+        return True
 
 
 def load_targets() -> list[LLMTarget]:
@@ -204,8 +251,13 @@ def request_json(
     if payload is not None:
         request_headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=request_headers, method="GET" if payload is None else "POST")
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        body = response.read().decode("utf-8", errors="replace")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace").strip()
+        detail = body[:500] if body else exc.reason
+        raise RuntimeError(f"HTTP {exc.code} from backend: {detail}") from exc
     if not body.strip():
         return {}
     return json.loads(body)
@@ -310,8 +362,12 @@ def target_health(target: LLMTarget) -> dict[str, Any]:
         if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
             data = probe_openai_compatible_target(target)
             return {"ok": bool(data.get("ok")), "data": data}
-        else:
+        try:
             data = request_json(f"{target.base_url}/api/tags", timeout=5, headers=target_auth_headers(target))
+        except RuntimeError as exc:
+            if "HTTP 404" not in str(exc):
+                raise
+            data = request_json(f"{target.base_url}/health", timeout=5, headers=target_auth_headers(target))
         return {"ok": True, "data": data}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
@@ -322,8 +378,14 @@ def parse_model_ids(target: LLMTarget, data: dict[str, Any]) -> list[str]:
         values = data.get("data", [])
         return sorted({str(item.get("id")) for item in values if isinstance(item, dict) and item.get("id")})
     values = data.get("models", [])
+    if values and all(isinstance(item, str) for item in values):
+        return sorted({str(item) for item in values if str(item)})
     names = {str(item.get("name")) for item in values if isinstance(item, dict) and item.get("name")}
     names.update(str(item.get("model")) for item in values if isinstance(item, dict) and item.get("model"))
+    if data.get("model"):
+        names.add(str(data.get("model")))
+    if data.get("default_model"):
+        names.add(str(data.get("default_model")))
     return sorted(name for name in names if name)
 
 
@@ -331,7 +393,12 @@ def fetch_target_models(target: LLMTarget) -> list[str]:
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         data = request_json(f"{target.base_url}/v1/models", timeout=8, headers=target_auth_headers(target))
     else:
-        data = request_json(f"{target.base_url}/api/tags", timeout=8, headers=target_auth_headers(target))
+        try:
+            data = request_json(f"{target.base_url}/api/tags", timeout=8, headers=target_auth_headers(target))
+        except RuntimeError as exc:
+            if "HTTP 404" not in str(exc):
+                raise
+            data = request_json(f"{target.base_url}/health", timeout=8, headers=target_auth_headers(target))
     return parse_model_ids(target, data)
 
 
@@ -578,6 +645,21 @@ def status_payload() -> dict[str, Any]:
                 if data.get("gpu_metric_lines"):
                     metric.remote_gpu_type = target.api_type
                 metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
+            elif isinstance(data, dict):
+                queue = data.get("prompt_queue") if isinstance(data.get("prompt_queue"), dict) else {}
+                if isinstance(queue.get("pending_count"), int):
+                    metric.pending_queue = int(queue.get("pending_count", 0))
+                if isinstance(queue.get("average_prompt_processing_seconds"), (int, float)):
+                    metric.last_response_seconds = float(queue.get("average_prompt_processing_seconds", 0.0))
+                if data.get("uptime_human"):
+                    metric.uptime = str(data.get("uptime_human"))
+                gpus = data.get("gpus") if isinstance(data.get("gpus"), list) else []
+                gpu_names = [str(gpu.get("name")) for gpu in gpus if isinstance(gpu, dict) and gpu.get("name")]
+                if gpu_names:
+                    metric.remote_gpu_info = ", ".join(gpu_names)
+                    selected = str(data.get("selected_gpu_label") or "")
+                    metric.remote_gpu_type = selected or gpu_names[0]
+                metric.queue_state = "pending" if metric.pending_queue else "idle"
             metric.last_seen_at = now_text()
             store_metric(target.id, metric)
         health_by_id[target.id] = metric.__dict__ | {
@@ -613,6 +695,60 @@ def status_payload() -> dict[str, Any]:
     }
 
 
+LOGIN_HTML = """<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Routing Login</title>
+  <style>
+    :root { --ink:#182026; --muted:#64717c; --line:#d7dee5; --panel:#f7f9fb; --accent:#0f766e; --bad:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:#fff; }
+    main { width:min(420px, calc(100vw - 32px)); border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:24px; }
+    h1 { margin:0 0 8px; font-size:24px; letter-spacing:0; }
+    p { margin:0 0 18px; color:var(--muted); }
+    input { width:100%; min-height:40px; border:1px solid var(--line); border-radius:6px; padding:8px 10px; font:inherit; background:#fff; }
+    button { width:100%; min-height:40px; margin-top:10px; border:1px solid var(--accent); border-radius:6px; background:var(--accent); color:#fff; font-weight:700; cursor:pointer; }
+    .error { margin-top:10px; color:var(--bad); min-height:20px; font-size:14px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>LLM Routing</h1>
+  <p>관리 화면에 접속하려면 password를 입력하세요.</p>
+  <input id="password" type="password" placeholder="Password" autofocus>
+  <button onclick="login()">Login</button>
+  <div id="error" class="error"></div>
+</main>
+<script>
+async function login() {
+  const password = document.getElementById('password').value;
+  document.getElementById('error').textContent = '';
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password})
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'login failed');
+    }
+    window.location.href = '/';
+  } catch (err) {
+    document.getElementById('error').textContent = String(err);
+  }
+}
+document.getElementById('password').addEventListener('keydown', event => {
+  if (event.key === 'Enter') login();
+});
+</script>
+</body>
+</html>
+"""
+
+
 INDEX_HTML = """<!doctype html>
 <html lang="ko">
 <head>
@@ -644,6 +780,9 @@ INDEX_HTML = """<!doctype html>
     .form-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:end; }
     .model-row { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto; gap:10px; margin-top:10px; align-items:end; }
     .model-status { color:var(--muted); font-size:13px; align-self:center; min-height:20px; }
+    .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+    .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
+    .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
     button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
     button.danger { color:#fff; background:var(--bad); border-color:var(--bad); }
@@ -660,7 +799,10 @@ INDEX_HTML = """<!doctype html>
       <h1>LLM Routing</h1>
       <p>외부 prompt를 등록된 LLM 서버로 전달하고 응답을 되돌려주는 라우터</p>
     </div>
-    <button onclick="refresh()">Refresh</button>
+    <div>
+      <button onclick="refresh()">Refresh</button>
+      <button onclick="logout()">Logout</button>
+    </div>
   </header>
   <nav>
     <button class="active" data-tab="llms">LLM 리스트</button>
@@ -707,9 +849,26 @@ INDEX_HTML = """<!doctype html>
     <div class="panel">
       <select id="test_target"></select>
       <textarea id="test_prompt" placeholder="전송할 prompt"></textarea>
-      <button class="primary" onclick="sendPrompt()">전송</button>
+      <div class="test-toolbar">
+        <button class="primary" onclick="sendPrompt()">전송</button>
+        <button onclick="clearPromptTest()">결과 지우기</button>
+      </div>
     </div>
-    <pre id="test_result" style="margin-top:12px"></pre>
+    <div class="test-metrics">
+      <div class="metric"><div class="label">상태</div><div id="test_status" class="value">대기</div></div>
+      <div class="metric"><div class="label">경과 시간</div><div id="test_elapsed" class="value">-</div></div>
+      <div class="metric"><div class="label">응답 시간</div><div id="test_response_time" class="value">-</div></div>
+    </div>
+    <div class="test-output">
+      <div>
+        <h3>회신</h3>
+        <pre id="test_answer"></pre>
+      </div>
+      <div>
+        <h3>원본 응답</h3>
+        <pre id="test_result"></pre>
+      </div>
+    </div>
   </section>
 </main>
 <script>
@@ -727,9 +886,17 @@ function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
 async function api(path, options) {
   const res = await fetch(path, options);
+  if (res.status === 401) {
+    window.location.href = '/';
+    throw new Error('login required');
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
+}
+async function logout() {
+  await api('/api/logout', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  window.location.href = '/';
 }
 async function refresh() {
   state = await api('/api/status');
@@ -852,14 +1019,40 @@ async function sendPrompt() {
     localStorage.removeItem('llmRoutingTestTargetId');
   }
   const payload = {prompt: document.getElementById('test_prompt').value, target_id: selectedTestTargetId, client_id: 'web-ui'};
+  const startedAt = performance.now();
+  let elapsedTimer = window.setInterval(() => {
+    document.getElementById('test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
+  }, 100);
+  document.getElementById('test_status').textContent = '전송 중';
+  document.getElementById('test_response_time').textContent = '-';
+  document.getElementById('test_answer').textContent = '';
   document.getElementById('test_result').textContent = 'Running...';
   try {
     const data = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const elapsedSeconds = (performance.now() - startedAt) / 1000;
+    document.getElementById('test_status').textContent = '완료';
+    document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
+    document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
+    document.getElementById('test_answer').textContent = data.response || '';
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
   } catch (err) {
+    const elapsedSeconds = (performance.now() - startedAt) / 1000;
+    document.getElementById('test_status').textContent = '오류';
+    document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
+    document.getElementById('test_response_time').textContent = '-';
+    document.getElementById('test_answer').textContent = '';
     document.getElementById('test_result').textContent = String(err);
+  } finally {
+    window.clearInterval(elapsedTimer);
   }
   await refresh();
+}
+function clearPromptTest() {
+  document.getElementById('test_status').textContent = '대기';
+  document.getElementById('test_elapsed').textContent = '-';
+  document.getElementById('test_response_time').textContent = '-';
+  document.getElementById('test_answer').textContent = '';
+  document.getElementById('test_result').textContent = '';
 }
 refresh();
 setInterval(refresh, 5000);
@@ -894,6 +1087,25 @@ class RoutingHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         return
 
+    def session_token(self) -> str:
+        cookie_header = self.headers.get("Cookie", "")
+        for item in cookie_header.split(";"):
+            if "=" not in item:
+                continue
+            name, value = item.strip().split("=", 1)
+            if name == SESSION_COOKIE_NAME:
+                return value
+        return ""
+
+    def is_authenticated(self) -> bool:
+        return valid_session(self.session_token())
+
+    def require_auth(self) -> bool:
+        if self.is_authenticated():
+            return True
+        self.write_json({"ok": False, "error": "login required"}, HTTPStatus.UNAUTHORIZED)
+        return False
+
     def read_json(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length <= 0:
@@ -909,6 +1121,15 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def write_login_cookie(self, token: str) -> None:
+        self.send_header(
+            "Set-Cookie",
+            f"{SESSION_COOKIE_NAME}={token}; Path=/; Max-Age={SESSION_TTL_SECONDS}; HttpOnly; SameSite=Lax",
+        )
+
+    def clear_login_cookie(self) -> None:
+        self.send_header("Set-Cookie", f"{SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+
     def write_html(self, body: str) -> None:
         encoded = body.encode("utf-8")
         self.send_response(200)
@@ -919,12 +1140,14 @@ class RoutingHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/" or self.path.startswith("/?"):
-            self.write_html(INDEX_HTML)
+            self.write_html(INDEX_HTML if self.is_authenticated() else LOGIN_HTML)
             return
         if self.path == "/health":
             self.write_json({"ok": True, "uptime": seconds_to_uptime(time.time() - STARTED_AT)})
             return
         if self.path == "/api/status":
+            if not self.require_auth():
+                return
             self.write_json(status_payload())
             return
         self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
@@ -932,8 +1155,31 @@ class RoutingHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self.read_json()
+            if self.path == "/api/login":
+                if secrets.compare_digest(str(payload.get("password") or ""), admin_password()):
+                    body = json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
+                    self.send_response(HTTPStatus.OK)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.write_login_cookie(create_session())
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                self.write_json({"ok": False, "error": "invalid password"}, HTTPStatus.UNAUTHORIZED)
+                return
+            if self.path == "/api/logout":
+                body = json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.clear_login_cookie()
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path == "/api/generate":
                 self.write_json(route_prompt(self, payload))
+                return
+            if not self.require_auth():
                 return
             if self.path == "/api/targets":
                 self.write_json({"ok": True, "target": self.upsert_target(payload)})
@@ -1010,6 +1256,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()
     ensure_default_config()
+    ensure_admin_password()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     httpd = ThreadingHTTPServer((args.host, args.port), RoutingHandler)
     print(f"LLM Routing listening on http://{args.host}:{args.port}", flush=True)
