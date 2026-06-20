@@ -1274,6 +1274,47 @@ def send_webdav_status_once(settings: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def test_webdav_settings() -> dict[str, Any]:
+    settings = load_webdav_settings()
+    error = webdav_settings_error(settings)
+    if error:
+        return {
+            "ok": False,
+            "config_path": str(WEBDAV_CONFIG_PATH),
+            "error": error,
+            "settings_enabled": bool(settings.get("enabled", False)),
+        }
+
+    file_name = f"llm_routing_webdav_test_{int(time.time())}.txt"
+    remote_dirs = webdav_remote_dirs(settings)
+    remote_paths = [posixpath.join(remote_dir, file_name).strip("/") for remote_dir in remote_dirs]
+    payload = f"LLM Routing WebDAV test\nhost={socket.gethostname()}\ntime={now_text()}\n".encode("utf-8")
+    uploaded: list[dict[str, str]] = []
+    try:
+        for remote_dir, remote_path in zip(remote_dirs, remote_paths):
+            ensure_webdav_remote_dirs(settings, remote_dir)
+            webdav_request(settings, "PUT", remote_path, data=payload, content_type="text/plain; charset=utf-8")
+            uploaded.append({"remote_path": remote_path, "destination_url": webdav_url(settings, remote_path)})
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "config_path": str(WEBDAV_CONFIG_PATH),
+            "error": str(exc),
+            "remote_dirs": remote_dirs,
+            "remote_paths": remote_paths,
+            "uploaded": uploaded,
+        }
+
+    return {
+        "ok": True,
+        "config_path": str(WEBDAV_CONFIG_PATH),
+        "message": "WebDAV settings are valid. Test file uploaded.",
+        "remote_dirs": remote_dirs,
+        "remote_paths": remote_paths,
+        "destination_urls": [item["destination_url"] for item in uploaded],
+    }
+
+
 def webdav_report_loop() -> None:
     settings = load_webdav_settings()
     error = webdav_settings_error(settings)
@@ -1561,7 +1602,11 @@ INDEX_HTML = """<!doctype html>
   </section>
   <section id="local">
     <div class="grid" id="localMetrics"></div>
-    <h3>LLM Routing WebDAV 전송</h3><pre id="webdavStatus"></pre>
+    <h3>LLM Routing WebDAV 전송</h3>
+    <div class="test-toolbar">
+      <button onclick="testWebdavSettings()">WebDAV 설정 확인</button>
+    </div>
+    <pre id="webdavStatus"></pre>
     <h3>GPU 상태</h3><pre id="gpuStatus"></pre>
     <h3>접근 로그</h3><pre id="accessLog"></pre>
   </section>
@@ -1743,6 +1788,17 @@ function renderLocal() {
   document.getElementById('webdavStatus').textContent = JSON.stringify(webdav, null, 2);
   document.getElementById('gpuStatus').textContent = local.gpu_status || '';
   document.getElementById('accessLog').textContent = JSON.stringify(local.access_log || [], null, 2);
+}
+async function testWebdavSettings() {
+  const box = document.getElementById('webdavStatus');
+  box.textContent = 'WebDAV 설정을 확인 중입니다...';
+  try {
+    const data = await api('/api/webdav-test', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    box.textContent = JSON.stringify(data, null, 2);
+    await refresh();
+  } catch (err) {
+    box.textContent = String(err);
+  }
 }
 function renderTestTargets() {
   const select = document.getElementById('test_target');
@@ -2109,6 +2165,9 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/compare":
                 self.write_json(compare_prompt(self, payload))
+                return
+            if self.path == "/api/webdav-test":
+                self.write_json(test_webdav_settings())
                 return
             if self.path == "/api/targets":
                 self.write_json({"ok": True, "target": self.upsert_target(payload)})
