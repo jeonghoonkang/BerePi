@@ -670,6 +670,7 @@ INDEX_HTML = """<!doctype html>
 </main>
 <script>
 let state = {};
+let selectedTestTargetId = localStorage.getItem('llmRoutingTestTargetId') || '';
 for (const btn of document.querySelectorAll('nav button')) {
   btn.onclick = () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
@@ -739,7 +740,16 @@ function renderLocal() {
 }
 function renderTestTargets() {
   const select = document.getElementById('test_target');
+  const previousValue = select.value || selectedTestTargetId;
+  const enabledTargets = (state.targets || []).filter(t=>t.enabled);
   select.innerHTML = '<option value="">자동 선택</option>' + (state.targets || []).filter(t=>t.enabled).map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
+  if (previousValue && enabledTargets.some(t => t.id === previousValue)) {
+    select.value = previousValue;
+  } else {
+    select.value = '';
+    selectedTestTargetId = '';
+    localStorage.removeItem('llmRoutingTestTargetId');
+  }
 }
 function editTarget(t) {
   for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','access_id','password','notes']) {
@@ -764,7 +774,14 @@ async function deleteTarget(id) {
   await refresh();
 }
 async function sendPrompt() {
-  const payload = {prompt: document.getElementById('test_prompt').value, target_id: document.getElementById('test_target').value, client_id: 'web-ui'};
+  const select = document.getElementById('test_target');
+  selectedTestTargetId = select.value;
+  if (selectedTestTargetId) {
+    localStorage.setItem('llmRoutingTestTargetId', selectedTestTargetId);
+  } else {
+    localStorage.removeItem('llmRoutingTestTargetId');
+  }
+  const payload = {prompt: document.getElementById('test_prompt').value, target_id: selectedTestTargetId, client_id: 'web-ui'};
   document.getElementById('test_result').textContent = 'Running...';
   try {
     const data = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
@@ -776,6 +793,14 @@ async function sendPrompt() {
 }
 refresh();
 setInterval(refresh, 5000);
+document.getElementById('test_target').addEventListener('change', (event) => {
+  selectedTestTargetId = event.target.value;
+  if (selectedTestTargetId) {
+    localStorage.setItem('llmRoutingTestTargetId', selectedTestTargetId);
+  } else {
+    localStorage.removeItem('llmRoutingTestTargetId');
+  }
+});
 </script>
 </body>
 </html>
@@ -839,7 +864,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except urllib.error.HTTPError as exc:
-            self.write_json({"ok": False, "error": f"Backend HTTP {exc.code}: {exc.reason}"}, HTTPStatus.BAD_GATEWAY)
+            body = exc.read().decode("utf-8", errors="replace").strip()
+            detail = f"Backend HTTP {exc.code}: {exc.reason}"
+            if body:
+                detail = f"{detail}\n{body[:2000]}"
+            self.write_json({"ok": False, "error": detail}, HTTPStatus.BAD_GATEWAY)
         except Exception as exc:  # noqa: BLE001
             self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
