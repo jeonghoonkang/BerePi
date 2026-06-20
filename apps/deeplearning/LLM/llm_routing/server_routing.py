@@ -7,6 +7,7 @@ import datetime as dt
 import html
 import json
 import os
+import queue
 import re
 import secrets
 import socket
@@ -31,6 +32,7 @@ ADMIN_PASSWORD_PATH = Path(os.getenv("LLM_ROUTING_ADMIN_PASSWORD_FILE", APP_DIR 
 HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
+QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
 SESSION_COOKIE_NAME = "llm_routing_session"
 SESSION_TTL_SECONDS = int(os.getenv("LLM_ROUTING_SESSION_TTL_SECONDS", "28800"))
 STARTED_AT = time.time()
@@ -40,6 +42,8 @@ CLIENT_STATS: dict[str, dict[str, Any]] = {}
 TARGET_RUNTIME: dict[str, dict[str, Any]] = {}
 RECENT_ACCESS: list[dict[str, Any]] = []
 AUTH_SESSIONS: dict[str, float] = {}
+TARGET_QUEUES: dict[str, queue.Queue["PromptJob"]] = {}
+TARGET_WORKERS: dict[str, threading.Thread] = {}
 MAX_RECENT_ACCESS = 300
 OPENAI_COMPATIBLE_API_TYPES = {"openai", "vllm"}
 GPU_METRIC_KEYWORDS = (
@@ -95,6 +99,22 @@ class TargetMetrics:
         if self.total_prompts <= 0:
             return 0.0
         return self.total_response_seconds / self.total_prompts
+
+
+@dataclass
+class PromptJob:
+    target: LLMTarget
+    payload: dict[str, Any]
+    client: str
+    enqueued_at: float = field(default_factory=time.time)
+    started_at: float = 0.0
+    done: threading.Event = field(default_factory=threading.Event)
+    result: dict[str, Any] | None = None
+    error: Exception | None = None
+
+
+class QueueFullError(Exception):
+    pass
 
 
 def now_text() -> str:
@@ -522,11 +542,41 @@ def normalize_backend_response(target: LLMTarget, data: dict[str, Any]) -> dict[
     return {"response": str(data.get("response") or data.get("message") or ""), "raw": data}
 
 
+def sync_queue_metric(target_id: str) -> None:
+    with STATE_LOCK:
+        q = TARGET_QUEUES.get(target_id)
+        metric = metric_for(target_id)
+        metric.pending_queue = q.qsize() if q else 0
+        metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
+        store_metric(target_id, metric)
+
+
+def target_queue(target_id: str) -> queue.Queue[PromptJob]:
+    with STATE_LOCK:
+        q = TARGET_QUEUES.get(target_id)
+        if q is None:
+            q = queue.Queue(maxsize=QUEUE_MAX_PER_TARGET)
+            TARGET_QUEUES[target_id] = q
+        worker = TARGET_WORKERS.get(target_id)
+        if worker is None or not worker.is_alive():
+            worker = threading.Thread(target=target_worker, args=(target_id, q), daemon=True, name=f"llm-routing-worker-{target_id}")
+            TARGET_WORKERS[target_id] = worker
+            worker.start()
+        return q
+
+
+def ensure_target_queues(targets: list[LLMTarget]) -> None:
+    for target in targets:
+        if target.enabled:
+            target_queue(target.id)
+
+
 def choose_target(payload: dict[str, Any]) -> LLMTarget:
     global TARGET_CURSOR
     targets = [target for target in load_targets() if target.enabled]
     if not targets:
         raise ValueError("No enabled LLM targets are configured.")
+    ensure_target_queues(targets)
     requested_id = str(payload.get("target_id") or "")
     if requested_id:
         for target in targets:
@@ -535,13 +585,20 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
         raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")
 
     with STATE_LOCK:
-        weighted: list[LLMTarget] = []
+        candidates: list[tuple[float, LLMTarget]] = []
         for target in targets:
+            q = TARGET_QUEUES.get(target.id)
+            pending = q.qsize() if q else 0
+            if pending >= QUEUE_MAX_PER_TARGET:
+                continue
             metric = metric_for(target.id)
-            penalty = metric.pending_queue + metric.active_requests
-            weighted.extend([target] * max(1, target.weight - penalty))
-        candidates = weighted or targets
-        target = candidates[TARGET_CURSOR % len(candidates)]
+            load = pending + metric.active_requests
+            candidates.append((load / max(1, target.weight), target))
+        if not candidates:
+            raise QueueFullError(f"All target queues are full. max_per_target={QUEUE_MAX_PER_TARGET}")
+        best_score = min(score for score, _ in candidates)
+        best = [target for score, target in candidates if score == best_score]
+        target = best[TARGET_CURSOR % len(best)]
         TARGET_CURSOR += 1
         return target
 
@@ -577,25 +634,30 @@ def update_client_stats(client: str, response_seconds: float) -> None:
         stats["last_response_seconds"] = response_seconds
 
 
-def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
-    if not prompt_text(payload).strip():
-        raise ValueError("prompt or messages is required.")
-    target = choose_target(payload)
-    client = client_key(handler, payload)
+def target_worker(target_id: str, q: queue.Queue[PromptJob]) -> None:
+    while True:
+        job = q.get()
+        job.started_at = time.time()
+        sync_queue_metric(target_id)
+        try:
+            job.result = execute_prompt(job.target, job.payload, job.client)
+        except Exception as exc:  # noqa: BLE001
+            job.error = exc
+        finally:
+            job.done.set()
+            q.task_done()
+            sync_queue_metric(target_id)
+
+
+def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> dict[str, Any]:
     with STATE_LOCK:
         metric = metric_for(target.id)
-        metric.pending_queue += 1
-        metric.queue_state = "pending"
+        metric.active_requests += 1
+        metric.queue_state = "running"
         store_metric(target.id, metric)
 
     started = time.time()
     try:
-        with STATE_LOCK:
-            metric = metric_for(target.id)
-            metric.pending_queue = max(0, metric.pending_queue - 1)
-            metric.active_requests += 1
-            metric.queue_state = "running"
-            store_metric(target.id, metric)
         url, backend_payload = build_backend_payload(target, payload)
         data = request_json(
             url,
@@ -614,7 +676,9 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
             metric.last_seen_at = now_text()
             metric.status = "ok"
             metric.active_requests = max(0, metric.active_requests - 1)
-            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else "running"
+            q = TARGET_QUEUES.get(target.id)
+            metric.pending_queue = q.qsize() if q else metric.pending_queue
+            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else ("running" if metric.active_requests else "pending")
             recent = metric.recent_response_seconds
             recent.append(elapsed)
             del recent[:-30]
@@ -643,11 +707,39 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
             metric.last_error = str(exc)
             metric.status = "error"
             metric.active_requests = max(0, metric.active_requests - 1)
-            metric.pending_queue = max(0, metric.pending_queue - 1)
-            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else "running"
+            q = TARGET_QUEUES.get(target.id)
+            metric.pending_queue = q.qsize() if q else max(0, metric.pending_queue)
+            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else ("running" if metric.active_requests else "pending")
             store_metric(target.id, metric)
         record_access({"client": client, "target": target.name, "target_id": target.id, "status": "error", "error": str(exc), "response_seconds": round(elapsed, 3)})
         raise
+
+
+def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
+    if not prompt_text(payload).strip():
+        raise ValueError("prompt or messages is required.")
+    target = choose_target(payload)
+    client = client_key(handler, payload)
+    q = target_queue(target.id)
+    job = PromptJob(target=target, payload=dict(payload), client=client)
+    try:
+        q.put_nowait(job)
+    except queue.Full as exc:
+        sync_queue_metric(target.id)
+        raise QueueFullError(f"Queue is full for target {target.name}. max_per_target={QUEUE_MAX_PER_TARGET}") from exc
+
+    sync_queue_metric(target.id)
+    queued_count = q.qsize()
+    backend_timeout = int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS)
+    wait_timeout = int(payload.get("request_timeout") or (backend_timeout * max(1, queued_count) + 10))
+    if not job.done.wait(wait_timeout):
+        raise TimeoutError(f"Queued prompt timed out after {wait_timeout}s for target {target.name}.")
+    if job.error is not None:
+        raise job.error
+    result = dict(job.result or {})
+    result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
+    result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET
+    return result
 
 
 def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
@@ -783,9 +875,12 @@ def local_system_stats() -> dict[str, Any]:
 
 def status_payload() -> dict[str, Any]:
     targets = load_targets()
+    ensure_target_queues(targets)
     health_by_id: dict[str, dict[str, Any]] = {}
     for target in targets:
         metric = metric_for(target.id)
+        q = TARGET_QUEUES.get(target.id)
+        local_pending = q.qsize() if q else 0
         if target.enabled and (not metric.last_seen_at or metric.status == "unknown"):
             health = target_health(target)
             metric.status = "ok" if health["ok"] else "error"
@@ -819,11 +914,14 @@ def status_payload() -> dict[str, Any]:
                     metric.remote_gpu_type = selected or gpu_names[0]
                 metric.queue_state = "pending" if metric.pending_queue else "idle"
             metric.last_seen_at = now_text()
-            store_metric(target.id, metric)
+        metric.pending_queue = max(metric.pending_queue, local_pending)
+        metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
+        store_metric(target.id, metric)
         health_by_id[target.id] = metric.__dict__ | {
             "average_response_seconds": metric.average_response_seconds,
             "gpu_info": metric.remote_gpu_info or target.gpu_info,
             "gpu_type": metric.remote_gpu_type or target.gpu_type,
+            "queue_max_per_target": QUEUE_MAX_PER_TARGET,
         }
 
     now = time.time()
@@ -1008,6 +1106,7 @@ INDEX_HTML = """<!doctype html>
   <section id="test">
     <div class="panel">
       <select id="test_target"></select>
+      <div id="autoTargetSummary" class="model-status"></div>
       <textarea id="test_prompt" placeholder="전송할 prompt"></textarea>
       <div class="test-toolbar">
         <button class="primary" onclick="sendPrompt()">전송</button>
@@ -1019,7 +1118,10 @@ INDEX_HTML = """<!doctype html>
       <div class="metric"><div class="label">상태</div><div id="test_status" class="value">대기</div></div>
       <div class="metric"><div class="label">경과 시간</div><div id="test_elapsed" class="value">-</div></div>
       <div class="metric"><div class="label">응답 시간</div><div id="test_response_time" class="value">-</div></div>
+      <div class="metric"><div class="label">선택 결과</div><div id="test_selected_target" class="value">-</div></div>
     </div>
+    <h3>자동 선택 대상 모델/GPU</h3>
+    <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
     <div class="test-output">
       <div>
         <h3>회신</h3>
@@ -1083,7 +1185,7 @@ function renderTargets() {
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
       <td>${esc(t.model)}</td>
       <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(m.gpu_info || t.gpu_info)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
-      <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}</td>
+      <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
       <td>${m.total_prompts||0}</td>
       <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
       <td><button onclick='editTarget(${JSON.stringify(t)})'>편집</button> <button class="danger" onclick="deleteTarget('${t.id}')">삭제</button></td>
@@ -1124,6 +1226,25 @@ function renderTestTargets() {
     selectedTestTargetId = '';
     localStorage.removeItem('llmRoutingTestTargetId');
   }
+  renderAutoTargetRows(enabledTargets);
+}
+function renderAutoTargetRows(enabledTargets) {
+  const metrics = state.metrics || {};
+  document.getElementById('autoTargetSummary').textContent = enabledTargets.length
+    ? `자동 선택 후보 ${enabledTargets.length}개`
+    : '자동 선택 가능한 활성 LLM이 없습니다.';
+  document.getElementById('autoTargetRows').innerHTML = enabledTargets.map(t => {
+    const m = metrics[t.id] || {};
+    const gpuType = m.gpu_type || t.gpu_type || '';
+    const gpuInfo = m.gpu_info || t.gpu_info || '';
+    return `<tr>
+      <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
+      <td>${esc(t.model || '')}</td>
+      <td>${esc(gpuType)}<br><small>${esc(gpuInfo)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
+      <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests || 0}, pending ${m.pending_queue || 0}/${m.queue_max_per_target || 10}</td>
+    </tr>`;
+  }).join('');
 }
 function setModelOptions(models, selectedModel = '') {
   const select = document.getElementById('model_select');
@@ -1212,6 +1333,7 @@ async function sendPrompt() {
     document.getElementById('test_status').textContent = '완료';
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
+    document.getElementById('test_selected_target').textContent = selectedTargetLabel(data);
     document.getElementById('test_answer').textContent = promptResponseDetails(data);
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
   } catch (err) {
@@ -1219,12 +1341,16 @@ async function sendPrompt() {
     document.getElementById('test_status').textContent = '오류';
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = '-';
+    document.getElementById('test_selected_target').textContent = '-';
     document.getElementById('test_answer').textContent = '';
     document.getElementById('test_result').textContent = String(err);
   } finally {
     window.clearInterval(elapsedTimer);
   }
   await refresh();
+}
+function selectedTargetLabel(data) {
+  return `${data.target_name || ''} / ${data.model || ''} / ${data.target_host || ''}:${data.target_port || ''} / GPU ${data.selected_gpu || 'auto'}`;
 }
 function renderCompareResults(results) {
   document.getElementById('compareRows').innerHTML = results.map(item => {
@@ -1276,6 +1402,7 @@ async function compareAllPrompts() {
     document.getElementById('test_status').textContent = `비교 완료 ${successCount}/${results.length}`;
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
+    document.getElementById('test_selected_target').textContent = `${successCount}/${results.length}개 완료`;
     document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''} / ${item.target_host || ''}:${item.target_port || ''} / GPU ${item.selected_gpu || 'auto'}]\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n');
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
     renderCompareResults(results);
@@ -1284,6 +1411,7 @@ async function compareAllPrompts() {
     document.getElementById('test_status').textContent = '비교 오류';
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = '-';
+    document.getElementById('test_selected_target').textContent = '-';
     document.getElementById('test_answer').textContent = '';
     document.getElementById('test_result').textContent = String(err);
   } finally {
@@ -1295,6 +1423,7 @@ function clearPromptTest() {
   document.getElementById('test_status').textContent = '대기';
   document.getElementById('test_elapsed').textContent = '-';
   document.getElementById('test_response_time').textContent = '-';
+  document.getElementById('test_selected_target').textContent = '-';
   document.getElementById('test_answer').textContent = '';
   document.getElementById('test_result').textContent = '';
   document.getElementById('compareRows').innerHTML = '';
@@ -1454,6 +1583,8 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 self.write_json({"ok": True, **fetch_target_options(target)})
                 return
             self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        except QueueFullError as exc:
+            self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.TOO_MANY_REQUESTS)
         except ValueError as exc:
             self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except urllib.error.HTTPError as exc:
