@@ -1159,15 +1159,96 @@ def llm_selection_markdown() -> str:
             )
             + " |"
         )
-    lines.extend(["", "## 로컬 GPU 상태", "", "```text", local_gpu_status(), "```", ""])
+    local_gpu = local_gpu_info()
+    lines.extend(
+        [
+            "",
+            "## 로컬 GPU 상태",
+            "",
+            f"- 요약: {local_gpu['summary']}",
+            f"- source: {local_gpu['source']}",
+            "",
+            "```text",
+            str(local_gpu["detail"]),
+            "```",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
-def local_gpu_status() -> str:
-    gpu_text = run_command(["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"], timeout=4)
-    if not gpu_text or "No such file" in gpu_text:
-        gpu_text = run_command(["system_profiler", "SPDisplaysDataType"], timeout=5)
-    return gpu_text[:5000]
+def command_failed_text(value: str) -> bool:
+    lowered = str(value or "").lower()
+    return not lowered.strip() or any(
+        marker in lowered
+        for marker in (
+            "no such file",
+            "not found",
+            "command not found",
+            "not recognized",
+            "unable to locate",
+        )
+    )
+
+
+def summarize_nvidia_smi(value: str) -> str:
+    gpus: list[str] = []
+    for index, line in enumerate(value.splitlines()):
+        parts = [part.strip() for part in line.split(",")]
+        if not parts or not parts[0]:
+            continue
+        name = parts[0]
+        util = f"{parts[1]}%" if len(parts) > 1 and parts[1] else "n/a"
+        memory = f"{parts[2]}/{parts[3]} MB" if len(parts) > 3 and parts[2] and parts[3] else "n/a"
+        temp = f"{parts[4]}C" if len(parts) > 4 and parts[4] else "n/a"
+        gpus.append(f"GPU {index}: {name}, util {util}, mem {memory}, temp {temp}")
+    return "; ".join(gpus) if gpus else "NVIDIA GPU detected"
+
+
+def summarize_system_profiler_gpu(value: str) -> str:
+    names: list[str] = []
+    current_name = ""
+    cores = ""
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if line.startswith("Chipset Model:"):
+            current_name = line.split(":", 1)[1].strip()
+        elif line.startswith("Total Number of Cores:"):
+            cores = line.split(":", 1)[1].strip()
+        if current_name and (cores or line.startswith("Metal Support:")):
+            label = current_name if not cores else f"{current_name} ({cores} cores)"
+            if label not in names:
+                names.append(label)
+            current_name = ""
+            cores = ""
+    return "; ".join(names) if names else "GPU information available"
+
+
+def local_gpu_info() -> dict[str, str]:
+    nvidia_text = run_command(
+        ["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"],
+        timeout=4,
+    )
+    if not command_failed_text(nvidia_text):
+        return {
+            "source": "nvidia-smi",
+            "summary": summarize_nvidia_smi(nvidia_text),
+            "detail": nvidia_text[:5000],
+        }
+
+    profiler_text = run_command(["system_profiler", "SPDisplaysDataType"], timeout=5)
+    if not command_failed_text(profiler_text):
+        return {
+            "source": "system_profiler",
+            "summary": summarize_system_profiler_gpu(profiler_text),
+            "detail": profiler_text[:5000],
+        }
+
+    return {
+        "source": "unavailable",
+        "summary": "GPU 정보를 찾을 수 없습니다",
+        "detail": f"nvidia-smi: {nvidia_text}\nsystem_profiler: {profiler_text}",
+    }
 
 
 def update_webdav_report_state(**values: Any) -> None:
@@ -1228,7 +1309,7 @@ def start_webdav_reporter() -> None:
 def local_system_stats() -> dict[str, Any]:
     load_avg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
     cpu_count = os.cpu_count() or 0
-    gpu_text = local_gpu_status()
+    gpu = local_gpu_info()
     with STATE_LOCK:
         webdav_report = dict(WEBDAV_REPORT_STATE)
     return {
@@ -1236,7 +1317,9 @@ def local_system_stats() -> dict[str, Any]:
         "service_uptime": seconds_to_uptime(time.time() - STARTED_AT),
         "cpu_count": cpu_count,
         "load_average": [round(value, 2) for value in load_avg],
-        "gpu_status": gpu_text[:5000],
+        "gpu_source": gpu["source"],
+        "gpu_summary": gpu["summary"],
+        "gpu_status": gpu["detail"][:5000],
         "access_log": read_access_log(100),
         "webdav_report": webdav_report,
     }
@@ -1653,6 +1736,8 @@ function renderLocal() {
     metric('호스트', local.hostname || ''),
     metric('CPU cores', local.cpu_count || 0),
     metric('Load avg', (local.load_average || []).join(', ')),
+    metric('로컬 GPU', local.gpu_summary || ''),
+    metric('GPU source', local.gpu_source || ''),
     metric('서비스 uptime', local.service_uptime || '')
   ].join('');
   document.getElementById('webdavStatus').textContent = JSON.stringify(webdav, null, 2);
