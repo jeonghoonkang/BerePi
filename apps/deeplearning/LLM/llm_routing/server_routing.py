@@ -694,6 +694,23 @@ def update_client_stats(client: str, response_seconds: float) -> None:
         stats["last_response_seconds"] = response_seconds
 
 
+def access_target_fields(target: LLMTarget) -> dict[str, Any]:
+    return {
+        "target": target.name,
+        "target_id": target.id,
+        "target_host": target.host,
+        "target_port": target.port,
+        "target_url": target.base_url,
+        "api_type": target.api_type,
+        "model": target.model,
+        "gpu_type": target.gpu_type,
+        "gpu_info": target.gpu_info,
+        "selected_gpu": target.selected_gpu,
+        "selected_gpu_label": target.selected_gpu_label,
+        "selected_gpu_device": selected_gpu_device(target),
+    }
+
+
 def target_worker(target_id: str, q: queue.Queue[PromptJob]) -> None:
     while True:
         job = q.get()
@@ -744,7 +761,14 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             del recent[:-30]
             store_metric(target.id, metric)
         update_client_stats(client, elapsed)
-        record_access({"client": client, "target": target.name, "target_id": target.id, "status": "ok", "response_seconds": round(elapsed, 3)})
+        record_access(
+            {
+                "client": client,
+                "status": "ok",
+                "response_seconds": round(elapsed, 3),
+                **access_target_fields(target),
+            }
+        )
         return {
             "ok": True,
             "target_id": target.id,
@@ -773,7 +797,15 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             metric.pending_queue = q.qsize() if q else max(0, metric.pending_queue)
             metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else ("running" if metric.active_requests else "pending")
             store_metric(target.id, metric)
-        record_access({"client": client, "target": target.name, "target_id": target.id, "status": "error", "error": str(exc), "response_seconds": round(elapsed, 3)})
+        record_access(
+            {
+                "client": client,
+                "status": "error",
+                "error": str(exc),
+                "response_seconds": round(elapsed, 3),
+                **access_target_fields(target),
+            }
+        )
         raise
 
 
