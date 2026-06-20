@@ -1,0 +1,776 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import base64
+import datetime as dt
+import html
+import json
+import os
+import socket
+import subprocess
+import threading
+import time
+import urllib.error
+import urllib.request
+import uuid
+from dataclasses import dataclass, field
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+
+
+APP_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = Path(os.getenv("LLM_ROUTING_CONFIG", APP_DIR / "llm_targets.json"))
+LOG_DIR = Path(os.getenv("LLM_ROUTING_LOG_DIR", APP_DIR / "logs"))
+ACCESS_LOG_PATH = Path(os.getenv("LLM_ROUTING_ACCESS_LOG", LOG_DIR / "access.jsonl"))
+HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
+PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
+DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
+STARTED_AT = time.time()
+STATE_LOCK = threading.RLock()
+TARGET_CURSOR = 0
+CLIENT_STATS: dict[str, dict[str, Any]] = {}
+TARGET_RUNTIME: dict[str, dict[str, Any]] = {}
+RECENT_ACCESS: list[dict[str, Any]] = []
+MAX_RECENT_ACCESS = 300
+
+
+@dataclass
+class LLMTarget:
+    id: str
+    name: str
+    host: str
+    port: int
+    model: str = ""
+    api_type: str = "ollama"
+    gpu_info: str = ""
+    gpu_type: str = ""
+    access_id: str = ""
+    password: str = ""
+    enabled: bool = True
+    weight: int = 1
+    notes: str = ""
+
+    @property
+    def base_url(self) -> str:
+        return f"http://{self.host}:{self.port}".rstrip("/")
+
+
+@dataclass
+class TargetMetrics:
+    total_prompts: int = 0
+    pending_queue: int = 0
+    active_requests: int = 0
+    total_response_seconds: float = 0.0
+    last_response_seconds: float = 0.0
+    last_error: str = ""
+    last_seen_at: str = ""
+    status: str = "unknown"
+    uptime: str = ""
+    queue_state: str = "idle"
+    remote_gpu_info: str = ""
+    remote_gpu_type: str = ""
+    recent_response_seconds: list[float] = field(default_factory=list)
+
+    @property
+    def average_response_seconds(self) -> float:
+        if self.total_prompts <= 0:
+            return 0.0
+        return self.total_response_seconds / self.total_prompts
+
+
+def now_text() -> str:
+    return dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+
+
+def seconds_to_uptime(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    return f"{days}D {hours}H {minutes}M"
+
+
+def load_json(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+
+
+def save_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_targets() -> list[LLMTarget]:
+    raw = load_json(CONFIG_PATH, {"targets": []})
+    targets: list[LLMTarget] = []
+    for item in raw.get("targets", []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            targets.append(
+                LLMTarget(
+                    id=str(item.get("id") or uuid.uuid4().hex),
+                    name=str(item.get("name") or item.get("model") or "LLM"),
+                    host=str(item.get("host") or "127.0.0.1"),
+                    port=int(item.get("port") or 11434),
+                    model=str(item.get("model") or ""),
+                    api_type=str(item.get("api_type") or "ollama"),
+                    gpu_info=str(item.get("gpu_info") or ""),
+                    gpu_type=str(item.get("gpu_type") or ""),
+                    access_id=str(item.get("access_id") or ""),
+                    password=str(item.get("password") or ""),
+                    enabled=bool(item.get("enabled", True)),
+                    weight=max(1, int(item.get("weight") or 1)),
+                    notes=str(item.get("notes") or ""),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+    return targets
+
+
+def save_targets(targets: list[LLMTarget]) -> None:
+    save_json(CONFIG_PATH, {"targets": [target.__dict__ for target in targets]})
+
+
+def ensure_default_config() -> None:
+    if CONFIG_PATH.exists():
+        return
+    save_targets(
+        [
+            LLMTarget(
+                id=uuid.uuid4().hex,
+                name="Local Ollama",
+                host="127.0.0.1",
+                port=11434,
+                model="llama3.1",
+                api_type="ollama",
+                gpu_info="local GPU",
+                gpu_type="auto",
+                enabled=False,
+                notes="Enable and edit this target from the web UI.",
+            )
+        ]
+    )
+
+
+def metric_for(target_id: str) -> TargetMetrics:
+    raw = TARGET_RUNTIME.setdefault(target_id, TargetMetrics().__dict__)
+    metric = TargetMetrics(**{key: raw.get(key, getattr(TargetMetrics(), key)) for key in TargetMetrics().__dict__})
+    TARGET_RUNTIME[target_id] = metric.__dict__
+    return metric
+
+
+def store_metric(target_id: str, metric: TargetMetrics) -> None:
+    TARGET_RUNTIME[target_id] = metric.__dict__
+
+
+def request_json(url: str, payload: dict[str, Any] | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS, auth: tuple[str, str] | None = None) -> dict[str, Any]:
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {"Accept": "application/json"}
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    if auth and auth[0]:
+        token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode("utf-8")).decode("ascii")
+        headers["Authorization"] = f"Basic {token}"
+    req = urllib.request.Request(url, data=data, headers=headers, method="GET" if payload is None else "POST")
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        body = response.read().decode("utf-8", errors="replace")
+    if not body.strip():
+        return {}
+    return json.loads(body)
+
+
+def target_health(target: LLMTarget) -> dict[str, Any]:
+    try:
+        if target.api_type == "openai":
+            data = request_json(f"{target.base_url}/v1/models", timeout=5, auth=(target.access_id, target.password))
+        else:
+            data = request_json(f"{target.base_url}/api/tags", timeout=5, auth=(target.access_id, target.password))
+        return {"ok": True, "data": data}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    prompt = str(request_payload.get("prompt") or "")
+    model = str(request_payload.get("model") or target.model or "")
+    if target.api_type == "openai":
+        messages = request_payload.get("messages")
+        if not isinstance(messages, list):
+            messages = [{"role": "user", "content": prompt}]
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+        }
+        for key in ("temperature", "max_tokens", "top_p"):
+            if key in request_payload:
+                payload[key] = request_payload[key]
+        return f"{target.base_url}/v1/chat/completions", payload
+
+    payload = dict(request_payload)
+    payload["prompt"] = prompt
+    if model:
+        payload["model"] = model
+    payload["stream"] = False
+    payload.pop("target_id", None)
+    payload.pop("client_id", None)
+    payload.pop("user_id", None)
+    payload.pop("password", None)
+    return f"{target.base_url}/api/generate", payload
+
+
+def normalize_backend_response(target: LLMTarget, data: dict[str, Any]) -> dict[str, Any]:
+    if target.api_type == "openai":
+        content = ""
+        choices = data.get("choices")
+        if isinstance(choices, list) and choices:
+            message = choices[0].get("message") if isinstance(choices[0], dict) else {}
+            if isinstance(message, dict):
+                content = str(message.get("content") or "")
+        return {"response": content, "raw": data}
+    return {"response": str(data.get("response") or data.get("message") or ""), "raw": data}
+
+
+def choose_target(payload: dict[str, Any]) -> LLMTarget:
+    global TARGET_CURSOR
+    targets = [target for target in load_targets() if target.enabled]
+    if not targets:
+        raise ValueError("No enabled LLM targets are configured.")
+    requested_id = str(payload.get("target_id") or "")
+    if requested_id:
+        for target in targets:
+            if target.id == requested_id:
+                return target
+        raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")
+
+    with STATE_LOCK:
+        weighted: list[LLMTarget] = []
+        for target in targets:
+            metric = metric_for(target.id)
+            penalty = metric.pending_queue + metric.active_requests
+            weighted.extend([target] * max(1, target.weight - penalty))
+        candidates = weighted or targets
+        target = candidates[TARGET_CURSOR % len(candidates)]
+        TARGET_CURSOR += 1
+        return target
+
+
+def record_access(event: dict[str, Any]) -> None:
+    event = {"time": now_text(), **event}
+    with STATE_LOCK:
+        RECENT_ACCESS.insert(0, event)
+        del RECENT_ACCESS[MAX_RECENT_ACCESS:]
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    with ACCESS_LOG_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def client_key(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> str:
+    client_id = str(payload.get("client_id") or payload.get("user_id") or "")
+    if client_id:
+        return client_id
+    return handler.client_address[0] if handler.client_address else "unknown"
+
+
+def update_client_stats(client: str, response_seconds: float) -> None:
+    with STATE_LOCK:
+        stats = CLIENT_STATS.setdefault(
+            client,
+            {"client": client, "prompt_count": 0, "first_seen": time.time(), "last_seen": time.time(), "recent_times": []},
+        )
+        stats["prompt_count"] += 1
+        stats["last_seen"] = time.time()
+        recent = stats.setdefault("recent_times", [])
+        recent.append(time.time())
+        del recent[:-120]
+        stats["last_response_seconds"] = response_seconds
+
+
+def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
+    if not str(payload.get("prompt") or payload.get("messages") or "").strip():
+        raise ValueError("prompt or messages is required.")
+    target = choose_target(payload)
+    client = client_key(handler, payload)
+    with STATE_LOCK:
+        metric = metric_for(target.id)
+        metric.pending_queue += 1
+        metric.queue_state = "pending"
+        store_metric(target.id, metric)
+
+    started = time.time()
+    try:
+        with STATE_LOCK:
+            metric = metric_for(target.id)
+            metric.pending_queue = max(0, metric.pending_queue - 1)
+            metric.active_requests += 1
+            metric.queue_state = "running"
+            store_metric(target.id, metric)
+        url, backend_payload = build_backend_payload(target, payload)
+        data = request_json(url, backend_payload, int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS), auth=(target.access_id, target.password))
+        elapsed = time.time() - started
+        normalized = normalize_backend_response(target, data)
+        with STATE_LOCK:
+            metric = metric_for(target.id)
+            metric.total_prompts += 1
+            metric.total_response_seconds += elapsed
+            metric.last_response_seconds = elapsed
+            metric.last_error = ""
+            metric.last_seen_at = now_text()
+            metric.status = "ok"
+            metric.active_requests = max(0, metric.active_requests - 1)
+            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else "running"
+            recent = metric.recent_response_seconds
+            recent.append(elapsed)
+            del recent[:-30]
+            store_metric(target.id, metric)
+        update_client_stats(client, elapsed)
+        record_access({"client": client, "target": target.name, "target_id": target.id, "status": "ok", "response_seconds": round(elapsed, 3)})
+        return {
+            "ok": True,
+            "target_id": target.id,
+            "target_name": target.name,
+            "model": target.model,
+            "response_seconds": elapsed,
+            **normalized,
+        }
+    except Exception as exc:  # noqa: BLE001
+        elapsed = time.time() - started
+        with STATE_LOCK:
+            metric = metric_for(target.id)
+            metric.last_error = str(exc)
+            metric.status = "error"
+            metric.active_requests = max(0, metric.active_requests - 1)
+            metric.pending_queue = max(0, metric.pending_queue - 1)
+            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else "running"
+            store_metric(target.id, metric)
+        record_access({"client": client, "target": target.name, "target_id": target.id, "status": "error", "error": str(exc), "response_seconds": round(elapsed, 3)})
+        raise
+
+
+def read_access_log(limit: int = 200) -> list[dict[str, Any]]:
+    if not ACCESS_LOG_PATH.exists():
+        return []
+    try:
+        lines = ACCESS_LOG_PATH.read_text(encoding="utf-8").splitlines()[-limit:]
+    except OSError:
+        return []
+    events = []
+    for line in reversed(lines):
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def run_command(command: list[str], timeout: int = 5) -> str:
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return str(exc)
+    return (completed.stdout or completed.stderr or "").strip()
+
+
+def local_system_stats() -> dict[str, Any]:
+    load_avg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
+    cpu_count = os.cpu_count() or 0
+    gpu_text = run_command(["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"], timeout=4)
+    if not gpu_text or "No such file" in gpu_text:
+        gpu_text = run_command(["system_profiler", "SPDisplaysDataType"], timeout=5)
+    return {
+        "hostname": socket.gethostname(),
+        "service_uptime": seconds_to_uptime(time.time() - STARTED_AT),
+        "cpu_count": cpu_count,
+        "load_average": [round(value, 2) for value in load_avg],
+        "gpu_status": gpu_text[:5000],
+        "access_log": read_access_log(100),
+    }
+
+
+def status_payload() -> dict[str, Any]:
+    targets = load_targets()
+    health_by_id: dict[str, dict[str, Any]] = {}
+    for target in targets:
+        metric = metric_for(target.id)
+        if target.enabled and (not metric.last_seen_at or metric.status == "unknown"):
+            health = target_health(target)
+            metric.status = "ok" if health["ok"] else "error"
+            metric.last_error = "" if health["ok"] else health.get("error", "")
+            metric.last_seen_at = now_text()
+            store_metric(target.id, metric)
+        health_by_id[target.id] = metric.__dict__ | {
+            "average_response_seconds": metric.average_response_seconds,
+            "gpu_info": metric.remote_gpu_info or target.gpu_info,
+            "gpu_type": metric.remote_gpu_type or target.gpu_type,
+        }
+
+    now = time.time()
+    clients = []
+    for stats in CLIENT_STATS.values():
+        recent = [stamp for stamp in stats.get("recent_times", []) if now - stamp <= 60]
+        clients.append(
+            {
+                "client": stats["client"],
+                "prompt_count": stats.get("prompt_count", 0),
+                "qps": round(len(recent) / 60, 3),
+                "last_response_seconds": round(float(stats.get("last_response_seconds", 0.0)), 3),
+                "last_seen": seconds_to_uptime(now - float(stats.get("last_seen", now))) + " ago",
+            }
+        )
+    return {
+        "started_at": dt.datetime.fromtimestamp(STARTED_AT).astimezone().isoformat(),
+        "uptime": seconds_to_uptime(time.time() - STARTED_AT),
+        "targets": [target.__dict__ for target in targets],
+        "metrics": health_by_id,
+        "service": {
+            "client_count": len(CLIENT_STATS),
+            "clients": sorted(clients, key=lambda item: item["prompt_count"], reverse=True),
+            "recent_access": list(RECENT_ACCESS),
+        },
+        "local": local_system_stats(),
+    }
+
+
+INDEX_HTML = """<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Routing</title>
+  <style>
+    :root { --ink:#182026; --muted:#64717c; --line:#d7dee5; --panel:#f7f9fb; --accent:#0f766e; --bad:#b42318; --warn:#996000; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:#fff; }
+    main { width:min(1220px, calc(100vw - 32px)); margin:0 auto; padding:26px 0 48px; }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; border-bottom:1px solid var(--line); padding-bottom:18px; }
+    h1 { margin:0 0 6px; font-size:28px; letter-spacing:0; }
+    p { margin:0; color:var(--muted); }
+    nav { display:flex; gap:8px; margin-top:20px; border-bottom:1px solid var(--line); }
+    nav button { border:0; border-bottom:3px solid transparent; background:#fff; padding:12px 14px; cursor:pointer; font-weight:700; }
+    nav button.active { border-color:var(--accent); color:var(--accent); }
+    section { display:none; padding-top:18px; }
+    section.active { display:block; }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .metric, .panel { border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:14px; }
+    .metric .label { color:var(--muted); font-size:13px; margin-bottom:6px; }
+    .metric .value { font-size:18px; font-weight:800; overflow-wrap:anywhere; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; font-size:14px; }
+    th, td { border-bottom:1px solid var(--line); padding:9px; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; }
+    input, select, textarea { width:100%; min-height:36px; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; background:#fff; }
+    textarea { min-height:76px; resize:vertical; }
+    .form-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:end; }
+    button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
+    button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+    button.danger { color:#fff; background:var(--bad); border-color:var(--bad); }
+    .ok { color:var(--accent); font-weight:700; } .error { color:var(--bad); font-weight:700; } .warn { color:var(--warn); font-weight:700; }
+    pre { margin:0; white-space:pre-wrap; overflow:auto; max-height:420px; background:#101820; color:#ecf3f5; border-radius:8px; padding:12px; }
+    @media (max-width:900px) { .grid, .form-grid { grid-template-columns:1fr 1fr; } header { display:block; } }
+    @media (max-width:620px) { .grid, .form-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>LLM Routing</h1>
+      <p>외부 prompt를 등록된 LLM 서버로 전달하고 응답을 되돌려주는 라우터</p>
+    </div>
+    <button onclick="refresh()">Refresh</button>
+  </header>
+  <nav>
+    <button class="active" data-tab="llms">LLM 리스트</button>
+    <button data-tab="service">서비스</button>
+    <button data-tab="local">로컬머신</button>
+    <button data-tab="test">프롬프트 테스트</button>
+  </nav>
+  <section id="llms" class="active">
+    <div class="grid" id="targetMetrics"></div>
+    <div class="panel" style="margin-top:14px">
+      <div class="form-grid">
+        <input id="name" placeholder="이름">
+        <input id="host" placeholder="IP 주소">
+        <input id="port" placeholder="PORT" type="number">
+        <input id="model" placeholder="모델 이름">
+        <select id="api_type"><option value="ollama">ollama</option><option value="openai">openai</option></select>
+        <button class="primary" onclick="saveTarget()">저장</button>
+        <input id="gpu_type" placeholder="GPU 종류">
+        <input id="gpu_info" placeholder="GPU 정보">
+        <input id="access_id" placeholder="접근 ID">
+        <input id="password" placeholder="PASS" type="password">
+        <input id="notes" placeholder="메모">
+        <button onclick="clearForm()">신규 입력</button>
+      </div>
+      <input id="target_id" type="hidden">
+    </div>
+    <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>평균 응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
+  </section>
+  <section id="service">
+    <div class="grid" id="serviceMetrics"></div>
+    <table><thead><tr><th>클라이언트</th><th>요청 prompt 수</th><th>초당 질의</th><th>최근 응답</th><th>최근 접속</th></tr></thead><tbody id="clientRows"></tbody></table>
+  </section>
+  <section id="local">
+    <div class="grid" id="localMetrics"></div>
+    <h3>GPU 상태</h3><pre id="gpuStatus"></pre>
+    <h3>접근 로그</h3><pre id="accessLog"></pre>
+  </section>
+  <section id="test">
+    <div class="panel">
+      <select id="test_target"></select>
+      <textarea id="test_prompt" placeholder="전송할 prompt"></textarea>
+      <button class="primary" onclick="sendPrompt()">전송</button>
+    </div>
+    <pre id="test_result" style="margin-top:12px"></pre>
+  </section>
+</main>
+<script>
+let state = {};
+for (const btn of document.querySelectorAll('nav button')) {
+  btn.onclick = () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  };
+}
+function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
+async function api(path, options) {
+  const res = await fetch(path, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+async function refresh() {
+  state = await api('/api/status');
+  renderTargets(); renderService(); renderLocal(); renderTestTargets();
+}
+function renderTargets() {
+  const targets = state.targets || [];
+  const metrics = state.metrics || {};
+  document.getElementById('targetMetrics').innerHTML = [
+    metric('등록 LLM', targets.length),
+    metric('활성 LLM', targets.filter(t => t.enabled).length),
+    metric('전체 pending queue', targets.reduce((n,t)=>n+(metrics[t.id]?.pending_queue||0),0)),
+    metric('전체 처리 prompt', targets.reduce((n,t)=>n+(metrics[t.id]?.total_prompts||0),0))
+  ].join('');
+  document.getElementById('targetRows').innerHTML = targets.map(t => {
+    const m = metrics[t.id] || {};
+    const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
+    return `<tr>
+      <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}</td>
+      <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
+      <td>${esc(t.model)}</td>
+      <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(m.gpu_info || t.gpu_info)}</small></td>
+      <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}</td>
+      <td>${m.total_prompts||0}</td>
+      <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
+      <td><button onclick='editTarget(${JSON.stringify(t)})'>편집</button> <button class="danger" onclick="deleteTarget('${t.id}')">삭제</button></td>
+    </tr>`;
+  }).join('');
+}
+function renderService() {
+  const service = state.service || {};
+  const clients = service.clients || [];
+  document.getElementById('serviceMetrics').innerHTML = [
+    metric('접속 prompt 클라이언트', service.client_count || 0),
+    metric('전체 클라이언트 요청', clients.reduce((n,c)=>n+(c.prompt_count||0),0)),
+    metric('총 QPS', clients.reduce((n,c)=>n+(c.qps||0),0).toFixed(3)),
+    metric('라우터 uptime', state.uptime || '')
+  ].join('');
+  document.getElementById('clientRows').innerHTML = clients.map(c => `<tr><td>${esc(c.client)}</td><td>${c.prompt_count}</td><td>${c.qps}</td><td>${c.last_response_seconds}s</td><td>${esc(c.last_seen)}</td></tr>`).join('');
+}
+function renderLocal() {
+  const local = state.local || {};
+  document.getElementById('localMetrics').innerHTML = [
+    metric('호스트', local.hostname || ''),
+    metric('CPU cores', local.cpu_count || 0),
+    metric('Load avg', (local.load_average || []).join(', ')),
+    metric('서비스 uptime', local.service_uptime || '')
+  ].join('');
+  document.getElementById('gpuStatus').textContent = local.gpu_status || '';
+  document.getElementById('accessLog').textContent = JSON.stringify(local.access_log || [], null, 2);
+}
+function renderTestTargets() {
+  const select = document.getElementById('test_target');
+  select.innerHTML = '<option value="">자동 선택</option>' + (state.targets || []).filter(t=>t.enabled).map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
+}
+function editTarget(t) {
+  for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','access_id','password','notes']) {
+    const id = key === 'target_id' ? 'target_id' : key;
+    const value = key === 'target_id' ? t.id : t[key];
+    document.getElementById(id).value = value || '';
+  }
+}
+function clearForm() {
+  for (const id of ['target_id','name','host','port','model','gpu_type','gpu_info','access_id','password','notes']) document.getElementById(id).value = '';
+  document.getElementById('api_type').value = 'ollama';
+}
+async function saveTarget() {
+  const payload = {};
+  for (const id of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
+  payload.enabled = true;
+  await api('/api/targets', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  clearForm(); await refresh();
+}
+async function deleteTarget(id) {
+  await api('/api/delete-target', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  await refresh();
+}
+async function sendPrompt() {
+  const payload = {prompt: document.getElementById('test_prompt').value, target_id: document.getElementById('test_target').value, client_id: 'web-ui'};
+  document.getElementById('test_result').textContent = 'Running...';
+  try {
+    const data = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    document.getElementById('test_result').textContent = String(err);
+  }
+  await refresh();
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
+"""
+
+
+class RoutingHandler(BaseHTTPRequestHandler):
+    server_version = "LLMRouting/0.1"
+
+    def log_message(self, fmt: str, *args: Any) -> None:
+        return
+
+    def read_json(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0:
+            return {}
+        raw = self.rfile.read(length).decode("utf-8", errors="replace")
+        return json.loads(raw) if raw.strip() else {}
+
+    def write_json(self, data: dict[str, Any], status: int = 200) -> None:
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def write_html(self, body: str) -> None:
+        encoded = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def do_GET(self) -> None:
+        if self.path == "/" or self.path.startswith("/?"):
+            self.write_html(INDEX_HTML)
+            return
+        if self.path == "/health":
+            self.write_json({"ok": True, "uptime": seconds_to_uptime(time.time() - STARTED_AT)})
+            return
+        if self.path == "/api/status":
+            self.write_json(status_payload())
+            return
+        self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+
+    def do_POST(self) -> None:
+        try:
+            payload = self.read_json()
+            if self.path == "/api/generate":
+                self.write_json(route_prompt(self, payload))
+                return
+            if self.path == "/api/targets":
+                self.write_json({"ok": True, "target": self.upsert_target(payload)})
+                return
+            if self.path == "/api/delete-target":
+                self.write_json({"ok": True, "deleted": self.delete_target(str(payload.get("id") or ""))})
+                return
+            self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        except ValueError as exc:
+            self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        except urllib.error.HTTPError as exc:
+            self.write_json({"ok": False, "error": f"Backend HTTP {exc.code}: {exc.reason}"}, HTTPStatus.BAD_GATEWAY)
+        except Exception as exc:  # noqa: BLE001
+            self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def upsert_target(self, payload: dict[str, Any]) -> dict[str, Any]:
+        target_id = str(payload.get("id") or uuid.uuid4().hex)
+        name = str(payload.get("name") or payload.get("model") or "LLM").strip()
+        host = str(payload.get("host") or "").strip()
+        if not host:
+            raise ValueError("host is required.")
+        port = int(payload.get("port") or 0)
+        if port <= 0:
+            raise ValueError("port is required.")
+        new_target = LLMTarget(
+            id=target_id,
+            name=name,
+            host=host,
+            port=port,
+            model=str(payload.get("model") or "").strip(),
+            api_type=str(payload.get("api_type") or "ollama").strip(),
+            gpu_info=str(payload.get("gpu_info") or "").strip(),
+            gpu_type=str(payload.get("gpu_type") or "").strip(),
+            access_id=str(payload.get("access_id") or "").strip(),
+            password=str(payload.get("password") or ""),
+            enabled=bool(payload.get("enabled", True)),
+            weight=max(1, int(payload.get("weight") or 1)),
+            notes=str(payload.get("notes") or "").strip(),
+        )
+        targets = load_targets()
+        replaced = False
+        for index, target in enumerate(targets):
+            if target.id == target_id:
+                targets[index] = new_target
+                replaced = True
+                break
+        if not replaced:
+            targets.append(new_target)
+        save_targets(targets)
+        return new_target.__dict__
+
+    def delete_target(self, target_id: str) -> bool:
+        if not target_id:
+            raise ValueError("id is required.")
+        targets = load_targets()
+        filtered = [target for target in targets if target.id != target_id]
+        save_targets(filtered)
+        with STATE_LOCK:
+            TARGET_RUNTIME.pop(target_id, None)
+        return len(filtered) != len(targets)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Route prompt requests to multiple LLM backends.")
+    parser.add_argument("--host", default=HOST)
+    parser.add_argument("--port", type=int, default=PORT)
+    args = parser.parse_args()
+    ensure_default_config()
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    httpd = ThreadingHTTPServer((args.host, args.port), RoutingHandler)
+    print(f"LLM Routing listening on http://{args.host}:{args.port}", flush=True)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("Stopping LLM Routing", flush=True)
+    finally:
+        httpd.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
