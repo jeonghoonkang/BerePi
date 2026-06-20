@@ -317,6 +317,43 @@ def target_health(target: LLMTarget) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+def parse_model_ids(target: LLMTarget, data: dict[str, Any]) -> list[str]:
+    if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
+        values = data.get("data", [])
+        return sorted({str(item.get("id")) for item in values if isinstance(item, dict) and item.get("id")})
+    values = data.get("models", [])
+    names = {str(item.get("name")) for item in values if isinstance(item, dict) and item.get("name")}
+    names.update(str(item.get("model")) for item in values if isinstance(item, dict) and item.get("model"))
+    return sorted(name for name in names if name)
+
+
+def fetch_target_models(target: LLMTarget) -> list[str]:
+    if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
+        data = request_json(f"{target.base_url}/v1/models", timeout=8, headers=target_auth_headers(target))
+    else:
+        data = request_json(f"{target.base_url}/api/tags", timeout=8, headers=target_auth_headers(target))
+    return parse_model_ids(target, data)
+
+
+def target_from_lookup_payload(payload: dict[str, Any]) -> LLMTarget:
+    host = str(payload.get("host") or "").strip()
+    if not host:
+        raise ValueError("host is required.")
+    port = int(payload.get("port") or 0)
+    if port <= 0:
+        raise ValueError("port is required.")
+    return LLMTarget(
+        id=str(payload.get("id") or "lookup"),
+        name=str(payload.get("name") or "lookup"),
+        host=host,
+        port=port,
+        model=str(payload.get("model") or ""),
+        api_type=str(payload.get("api_type") or "ollama").strip(),
+        access_id=str(payload.get("access_id") or "").strip(),
+        password=str(payload.get("password") or ""),
+    )
+
+
 def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     prompt = str(request_payload.get("prompt") or "")
     model = str(request_payload.get("model") or target.model or "")
@@ -605,6 +642,8 @@ INDEX_HTML = """<!doctype html>
     input, select, textarea { width:100%; min-height:36px; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; background:#fff; }
     textarea { min-height:76px; resize:vertical; }
     .form-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:end; }
+    .model-row { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto; gap:10px; margin-top:10px; align-items:end; }
+    .model-status { color:var(--muted); font-size:13px; align-self:center; min-height:20px; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
     button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
     button.danger { color:#fff; background:var(--bad); border-color:var(--bad); }
@@ -636,7 +675,6 @@ INDEX_HTML = """<!doctype html>
         <input id="name" placeholder="이름">
         <input id="host" placeholder="IP 주소">
         <input id="port" placeholder="PORT" type="number">
-        <input id="model" placeholder="모델 이름">
         <select id="api_type"><option value="ollama">ollama</option><option value="openai">openai</option><option value="vllm">vllm</option></select>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
@@ -646,6 +684,12 @@ INDEX_HTML = """<!doctype html>
         <input id="notes" placeholder="메모">
         <button onclick="clearForm()">신규 입력</button>
       </div>
+      <div class="model-row">
+        <input id="model" placeholder="모델 이름">
+        <select id="model_select"><option value="">모델 목록</option></select>
+        <button onclick="loadModels()">모델 조회</button>
+      </div>
+      <div id="model_status" class="model-status"></div>
       <input id="target_id" type="hidden">
     </div>
     <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>평균 응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
@@ -751,16 +795,42 @@ function renderTestTargets() {
     localStorage.removeItem('llmRoutingTestTargetId');
   }
 }
+function setModelOptions(models, selectedModel = '') {
+  const select = document.getElementById('model_select');
+  const currentModel = selectedModel || document.getElementById('model').value;
+  select.innerHTML = '<option value="">모델 목록</option>' + models.map(model => `<option value="${esc(model)}">${esc(model)}</option>`).join('');
+  if (currentModel && models.includes(currentModel)) {
+    select.value = currentModel;
+  }
+}
 function editTarget(t) {
   for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','access_id','password','notes']) {
     const id = key === 'target_id' ? 'target_id' : key;
     const value = key === 'target_id' ? t.id : t[key];
     document.getElementById(id).value = value || '';
   }
+  setModelOptions([], t.model || '');
+  document.getElementById('model_status').textContent = '';
 }
 function clearForm() {
   for (const id of ['target_id','name','host','port','model','gpu_type','gpu_info','access_id','password','notes']) document.getElementById(id).value = '';
   document.getElementById('api_type').value = 'ollama';
+  setModelOptions([]);
+  document.getElementById('model_status').textContent = '';
+}
+async function loadModels() {
+  const status = document.getElementById('model_status');
+  const payload = {};
+  for (const id of ['host','port','api_type','access_id','password']) payload[id] = document.getElementById(id).value;
+  status.textContent = '모델 목록을 조회 중입니다...';
+  try {
+    const data = await api('/api/models', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    setModelOptions(data.models || []);
+    status.textContent = `${(data.models || []).length}개 모델을 찾았습니다.`;
+  } catch (err) {
+    setModelOptions([]);
+    status.textContent = String(err);
+  }
 }
 async function saveTarget() {
   const payload = {};
@@ -801,6 +871,17 @@ document.getElementById('test_target').addEventListener('change', (event) => {
     localStorage.removeItem('llmRoutingTestTargetId');
   }
 });
+document.getElementById('model_select').addEventListener('change', (event) => {
+  if (event.target.value) {
+    document.getElementById('model').value = event.target.value;
+  }
+});
+for (const id of ['host','port','api_type','access_id','password']) {
+  document.getElementById(id).addEventListener('change', () => {
+    setModelOptions([]);
+    document.getElementById('model_status').textContent = '';
+  });
+}
 </script>
 </body>
 </html>
@@ -859,6 +940,10 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/delete-target":
                 self.write_json({"ok": True, "deleted": self.delete_target(str(payload.get("id") or ""))})
+                return
+            if self.path == "/api/models":
+                target = target_from_lookup_payload(payload)
+                self.write_json({"ok": True, "models": fetch_target_models(target)})
                 return
             self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except ValueError as exc:
