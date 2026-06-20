@@ -7,6 +7,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import socket
 import subprocess
 import threading
@@ -35,6 +36,15 @@ CLIENT_STATS: dict[str, dict[str, Any]] = {}
 TARGET_RUNTIME: dict[str, dict[str, Any]] = {}
 RECENT_ACCESS: list[dict[str, Any]] = []
 MAX_RECENT_ACCESS = 300
+OPENAI_COMPATIBLE_API_TYPES = {"openai", "vllm"}
+GPU_METRIC_KEYWORDS = (
+    "gpu",
+    "cuda",
+    "kv_cache",
+    "cache_usage",
+    "vllm:num_requests_running",
+    "vllm:num_requests_waiting",
+)
 
 
 @dataclass
@@ -172,15 +182,28 @@ def store_metric(target_id: str, metric: TargetMetrics) -> None:
     TARGET_RUNTIME[target_id] = metric.__dict__
 
 
-def request_json(url: str, payload: dict[str, Any] | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS, auth: tuple[str, str] | None = None) -> dict[str, Any]:
+def target_auth_headers(target: LLMTarget) -> dict[str, str]:
+    if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
+        token = target.password or target.access_id
+        return {"Authorization": f"Bearer {token}"} if token else {}
+    if target.access_id:
+        token = base64.b64encode(f"{target.access_id}:{target.password}".encode("utf-8")).decode("ascii")
+        return {"Authorization": f"Basic {token}"}
+    return {}
+
+
+def request_json(
+    url: str,
+    payload: dict[str, Any] | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
     data = None if payload is None else json.dumps(payload).encode("utf-8")
-    headers = {"Accept": "application/json"}
+    request_headers = {"Accept": "application/json"}
+    request_headers.update(headers or {})
     if payload is not None:
-        headers["Content-Type"] = "application/json"
-    if auth and auth[0]:
-        token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode("utf-8")).decode("ascii")
-        headers["Authorization"] = f"Basic {token}"
-    req = urllib.request.Request(url, data=data, headers=headers, method="GET" if payload is None else "POST")
+        request_headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=request_headers, method="GET" if payload is None else "POST")
     with urllib.request.urlopen(req, timeout=timeout) as response:
         body = response.read().decode("utf-8", errors="replace")
     if not body.strip():
@@ -188,12 +211,107 @@ def request_json(url: str, payload: dict[str, Any] | None = None, timeout: int =
     return json.loads(body)
 
 
+def request_text(url: str, timeout: int = 5, headers: dict[str, str] | None = None) -> tuple[int, str, str]:
+    request_headers = {"Accept": "application/json, text/plain, */*"}
+    request_headers.update(headers or {})
+    req = urllib.request.Request(url, headers=request_headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        body = response.read().decode("utf-8", errors="replace")
+        return response.status, response.headers.get("Content-Type", ""), body
+
+
+def interesting_metric_lines(metrics_text: str) -> list[str]:
+    lines: list[str] = []
+    for line in metrics_text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        lowered = stripped.lower()
+        if any(keyword in lowered for keyword in GPU_METRIC_KEYWORDS):
+            lines.append(stripped)
+    return lines[:80]
+
+
+def metric_number(metrics_text: str, metric_name: str) -> float | None:
+    pattern = re.compile(rf"^{re.escape(metric_name)}(?:\{{[^}}]*\}})?\s+([-+]?\d+(?:\.\d+)?)$")
+    for line in metrics_text.splitlines():
+        match = pattern.match(line.strip())
+        if match:
+            return float(match.group(1))
+    return None
+
+
+def probe_openai_compatible_target(target: LLMTarget) -> dict[str, Any]:
+    probes: dict[str, Any] = {}
+    summary: list[str] = [f"Origin: {target.base_url}"]
+    headers = target_auth_headers(target)
+    metrics_body = ""
+
+    for path in ("/health", "/v1/models", "/metrics"):
+        url = f"{target.base_url}{path}"
+        try:
+            status, content_type, body = request_text(url, timeout=5, headers=headers)
+            probes[path] = {
+                "ok": 200 <= status < 300,
+                "status": status,
+                "content_type": content_type,
+                "body_preview": body[:4000],
+            }
+            if path == "/metrics":
+                metrics_body = body
+        except urllib.error.HTTPError as exc:
+            probes[path] = {"ok": False, "status": exc.code, "error": exc.read().decode("utf-8", errors="replace")[:1000]}
+        except (OSError, urllib.error.URLError, TimeoutError) as exc:
+            probes[path] = {"ok": False, "error": str(exc)}
+
+    health = probes.get("/health", {})
+    if health.get("ok"):
+        summary.append("Health: reachable")
+    else:
+        summary.append(f"Health: unavailable ({health.get('status') or health.get('error')})")
+
+    model_ids: list[str] = []
+    models = probes.get("/v1/models", {})
+    if models.get("ok"):
+        try:
+            model_data = json.loads(str(models.get("body_preview") or "{}"))
+            model_ids = [str(item.get("id")) for item in model_data.get("data", []) if isinstance(item, dict) and item.get("id")]
+            if model_ids:
+                summary.append("Models: " + ", ".join(model_ids[:4]))
+            else:
+                summary.append("Models: reachable")
+        except (TypeError, json.JSONDecodeError):
+            summary.append("Models: reachable")
+
+    metric_lines = interesting_metric_lines(metrics_body)
+    running = metric_number(metrics_body, "vllm:num_requests_running")
+    waiting = metric_number(metrics_body, "vllm:num_requests_waiting")
+    if metric_lines:
+        summary.append(f"GPU/vLLM metrics: {len(metric_lines)} relevant lines found")
+    elif probes.get("/metrics", {}).get("ok"):
+        summary.append("GPU/vLLM metrics: /metrics reachable, no GPU-specific lines in preview")
+    else:
+        metrics = probes.get("/metrics", {})
+        summary.append(f"GPU/vLLM metrics: unavailable ({metrics.get('status') or metrics.get('error')})")
+
+    return {
+        "ok": bool(health.get("ok") or models.get("ok")),
+        "summary": "\n".join(summary),
+        "model_ids": model_ids,
+        "gpu_metric_lines": metric_lines,
+        "num_requests_running": running,
+        "num_requests_waiting": waiting,
+        "probes": probes,
+    }
+
+
 def target_health(target: LLMTarget) -> dict[str, Any]:
     try:
-        if target.api_type == "openai":
-            data = request_json(f"{target.base_url}/v1/models", timeout=5, auth=(target.access_id, target.password))
+        if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
+            data = probe_openai_compatible_target(target)
+            return {"ok": bool(data.get("ok")), "data": data}
         else:
-            data = request_json(f"{target.base_url}/api/tags", timeout=5, auth=(target.access_id, target.password))
+            data = request_json(f"{target.base_url}/api/tags", timeout=5, headers=target_auth_headers(target))
         return {"ok": True, "data": data}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
@@ -202,7 +320,7 @@ def target_health(target: LLMTarget) -> dict[str, Any]:
 def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     prompt = str(request_payload.get("prompt") or "")
     model = str(request_payload.get("model") or target.model or "")
-    if target.api_type == "openai":
+    if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         messages = request_payload.get("messages")
         if not isinstance(messages, list):
             messages = [{"role": "user", "content": prompt}]
@@ -229,7 +347,7 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
 
 
 def normalize_backend_response(target: LLMTarget, data: dict[str, Any]) -> dict[str, Any]:
-    if target.api_type == "openai":
+    if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         content = ""
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
@@ -315,7 +433,12 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
             metric.queue_state = "running"
             store_metric(target.id, metric)
         url, backend_payload = build_backend_payload(target, payload)
-        data = request_json(url, backend_payload, int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS), auth=(target.access_id, target.password))
+        data = request_json(
+            url,
+            backend_payload,
+            int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS),
+            headers=target_auth_headers(target),
+        )
         elapsed = time.time() - started
         normalized = normalize_backend_response(target, data)
         with STATE_LOCK:
@@ -405,6 +528,19 @@ def status_payload() -> dict[str, Any]:
             health = target_health(target)
             metric.status = "ok" if health["ok"] else "error"
             metric.last_error = "" if health["ok"] else health.get("error", "")
+            data = health.get("data") if isinstance(health.get("data"), dict) else {}
+            if target.api_type in OPENAI_COMPATIBLE_API_TYPES and isinstance(data, dict):
+                running = data.get("num_requests_running")
+                waiting = data.get("num_requests_waiting")
+                if isinstance(running, (int, float)):
+                    metric.active_requests = int(running)
+                if isinstance(waiting, (int, float)):
+                    metric.pending_queue = int(waiting)
+                if data.get("summary"):
+                    metric.remote_gpu_info = str(data.get("summary"))
+                if data.get("gpu_metric_lines"):
+                    metric.remote_gpu_type = target.api_type
+                metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
             metric.last_seen_at = now_text()
             store_metric(target.id, metric)
         health_by_id[target.id] = metric.__dict__ | {
@@ -501,7 +637,7 @@ INDEX_HTML = """<!doctype html>
         <input id="host" placeholder="IP 주소">
         <input id="port" placeholder="PORT" type="number">
         <input id="model" placeholder="모델 이름">
-        <select id="api_type"><option value="ollama">ollama</option><option value="openai">openai</option></select>
+        <select id="api_type"><option value="ollama">ollama</option><option value="openai">openai</option><option value="vllm">vllm</option></select>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
         <input id="gpu_info" placeholder="GPU 정보">

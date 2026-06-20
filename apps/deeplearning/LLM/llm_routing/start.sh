@@ -30,6 +30,6 @@ then
 fi
 
 cd "${APP_DIR}"
-nohup python3 server.py --host "${LLM_ROUTING_HOST}" --port "${LLM_ROUTING_PORT}" > "${LOG_DIR}/server.log" 2>&1 &
+nohup python3 server_routing.py --host "${LLM_ROUTING_HOST}" --port "${LLM_ROUTING_PORT}" > "${LOG_DIR}/server.log" 2>&1 &
 echo "$!" > "${PID_FILE}"
 echo "LLM Routing started at http://127.0.0.1:${LLM_ROUTING_PORT} with PID $(cat "${PID_FILE}")"

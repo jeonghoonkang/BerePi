@@ -6,4 +6,4 @@ export LLM_ROUTING_HOST="${LLM_ROUTING_HOST:-0.0.0.0}"
 export LLM_ROUTING_PORT="${LLM_ROUTING_PORT:-4004}"
 
 cd "${APP_DIR}"
-exec python3 server.py --host "${LLM_ROUTING_HOST}" --port "${LLM_ROUTING_PORT}"
+exec python3 server_routing.py --host "${LLM_ROUTING_HOST}" --port "${LLM_ROUTING_PORT}"

@@ -8,7 +8,7 @@
 - 각 LLM 상태 표시: GPU 정보, uptime, 처리 prompt 수, queue 상태, pending queue 수, 평균 응답시간
 - 서비스 탭: 접속한 prompt 클라이언트 수, 클라이언트별 요청 prompt 수, 초당 질의 수
 - 로컬머신 탭: 현재 시스템 CPU 상태, GPU 상태, 접근 로그
-- API 라우팅: `POST /api/generate` 요청을 Ollama 또는 OpenAI 호환 LLM 서버로 전달
+- API 라우팅: `POST /api/generate` 요청을 Ollama, OpenAI API, vLLM OpenAI 호환 서버로 전달
 
 ## 실행
 
@@ -93,4 +93,36 @@ LLM 대상 목록은 `llm_targets.json`에 저장됩니다. 처음 실행하면 
 }
 ```
 
-`api_type`은 `ollama` 또는 `openai`를 지원합니다.
+`api_type`은 `ollama`, `openai`, `vllm`을 지원합니다.
+
+## Backend Type
+
+- `ollama`: `http://HOST:PORT/api/generate`와 `http://HOST:PORT/api/tags`를 사용합니다.
+- `openai`: `http://HOST:PORT/v1/chat/completions`와 `http://HOST:PORT/v1/models`를 사용합니다.
+- `vllm`: vLLM의 OpenAI 호환 서버 기준으로 `http://HOST:PORT/v1/chat/completions`, `http://HOST:PORT/v1/models`, `http://HOST:PORT/health`, `http://HOST:PORT/metrics`를 사용합니다.
+
+OpenAI/vLLM 타입의 상태 확인은 `tospark_client`와 같은 probe 방식을 사용합니다. `/health`, `/v1/models`, `/metrics`를 확인하고, vLLM의 `vllm:num_requests_running`, `vllm:num_requests_waiting` metric이 있으면 active/pending queue 상태에 반영합니다.
+
+OpenAI/vLLM 타입에서 `password` 또는 `access_id` 값이 있으면 `Authorization: Bearer ...` 헤더로 전달합니다. Ollama 타입에서 `access_id` 값이 있으면 Basic Auth로 전달합니다.
+
+vLLM 예:
+
+```json
+{
+  "targets": [
+    {
+      "id": "vllm-gpu-1",
+      "name": "vLLM GPU 1",
+      "host": "192.168.0.10",
+      "port": 8000,
+      "model": "Qwen/Qwen2.5-32B-Instruct",
+      "api_type": "vllm",
+      "gpu_info": "4x RTX 5090",
+      "gpu_type": "NVIDIA",
+      "access_id": "",
+      "password": "",
+      "enabled": true
+    }
+  ]
+}
+```
