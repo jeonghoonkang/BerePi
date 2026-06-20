@@ -1039,6 +1039,14 @@ INDEX_HTML = """<!doctype html>
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
     .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
     .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
+    .response-box { margin:0; min-height:630px; max-height:630px; overflow:auto; background:#f1f3f5; color:#24292f; border:1px solid #d0d7de; border-radius:8px; padding:14px; line-height:1.48; }
+    .markdown-view { white-space:normal; overflow-wrap:anywhere; }
+    .markdown-view h1, .markdown-view h2, .markdown-view h3 { margin:12px 0 8px; line-height:1.25; }
+    .markdown-view p { margin:0 0 10px; color:#24292f; }
+    .markdown-view ul, .markdown-view ol { margin:0 0 10px 22px; padding:0; }
+    .markdown-view code { background:#e5e7eb; border-radius:4px; padding:1px 4px; }
+    .markdown-view pre { max-height:none; background:#e5e7eb; color:#24292f; border:1px solid #d0d7de; }
+    .raw-view { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
     .compare-response { max-width:420px; max-height:120px; overflow:auto; white-space:pre-wrap; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
     button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
@@ -1125,11 +1133,11 @@ INDEX_HTML = """<!doctype html>
     <div class="test-output">
       <div>
         <h3>회신</h3>
-        <pre id="test_answer"></pre>
+        <div id="test_answer" class="response-box markdown-view"></div>
       </div>
       <div>
         <h3>원본 응답</h3>
-        <pre id="test_result"></pre>
+        <pre id="test_result" class="response-box raw-view"></pre>
       </div>
     </div>
     <h3>전체 모델 비교</h3>
@@ -1148,6 +1156,70 @@ for (const btn of document.querySelectorAll('nav button')) {
   };
 }
 function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function inlineMarkdown(text) {
+  return esc(text)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+}
+function renderMarkdown(text) {
+  const lines = String(text || '').split(/\\r?\\n/);
+  const html = [];
+  let inCode = false;
+  let codeLines = [];
+  let inList = false;
+  function closeList() {
+    if (inList) {
+      html.push('</ul>');
+      inList = false;
+    }
+  }
+  for (const line of lines) {
+    if (line.trim().startsWith('```')) {
+      if (inCode) {
+        html.push(`<pre><code>${esc(codeLines.join('\\n'))}</code></pre>`);
+        codeLines = [];
+        inCode = false;
+      } else {
+        closeList();
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+    if (heading) {
+      closeList();
+      html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    const bullet = line.match(/^\\s*[-*]\\s+(.+)$/);
+    if (bullet) {
+      if (!inList) {
+        html.push('<ul>');
+        inList = true;
+      }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+    closeList();
+    if (!line.trim()) {
+      html.push('<br>');
+    } else {
+      html.push(`<p>${inlineMarkdown(line)}</p>`);
+    }
+  }
+  if (inCode) {
+    html.push(`<pre><code>${esc(codeLines.join('\\n'))}</code></pre>`);
+  }
+  closeList();
+  return html.join('');
+}
+function setAnswer(text) {
+  document.getElementById('test_answer').innerHTML = renderMarkdown(text);
+}
 function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
 async function api(path, options) {
   const res = await fetch(path, options);
@@ -1325,7 +1397,7 @@ async function sendPrompt() {
   }, 100);
   document.getElementById('test_status').textContent = '전송 중';
   document.getElementById('test_response_time').textContent = '-';
-  document.getElementById('test_answer').textContent = '';
+  setAnswer('');
   document.getElementById('test_result').textContent = 'Running...';
   try {
     const data = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
@@ -1334,7 +1406,7 @@ async function sendPrompt() {
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
     document.getElementById('test_selected_target').textContent = selectedTargetLabel(data);
-    document.getElementById('test_answer').textContent = promptResponseDetails(data);
+    setAnswer(promptResponseDetails(data));
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     const elapsedSeconds = (performance.now() - startedAt) / 1000;
@@ -1342,7 +1414,7 @@ async function sendPrompt() {
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = '-';
     document.getElementById('test_selected_target').textContent = '-';
-    document.getElementById('test_answer').textContent = '';
+    setAnswer('');
     document.getElementById('test_result').textContent = String(err);
   } finally {
     window.clearInterval(elapsedTimer);
@@ -1371,13 +1443,13 @@ function renderCompareResults(results) {
 function promptResponseDetails(data) {
   const selectedGpu = data.selected_gpu || 'auto';
   const lines = [
-    `LLM: ${data.target_name || ''}`,
-    `Target: ${data.target_host || ''}:${data.target_port || ''}`,
-    `API: ${data.api_type || ''}`,
-    `Model: ${data.model || ''}`,
-    `GPU: ${data.gpu_type || ''} ${data.gpu_info || ''}`.trim(),
-    `Selected GPU: ${selectedGpu}`,
-    `Elapsed: ${Number(data.response_seconds || 0).toFixed(2)}s`,
+    `### ${data.target_name || ''}`,
+    `- Target: ${data.target_host || ''}:${data.target_port || ''}`,
+    `- API: ${data.api_type || ''}`,
+    `- Model: ${data.model || ''}`,
+    `- GPU: ${`${data.gpu_type || ''} ${data.gpu_info || ''}`.trim()}`,
+    `- Selected GPU: ${selectedGpu}`,
+    `- Elapsed: ${Number(data.response_seconds || 0).toFixed(2)}s`,
     '',
     data.response || ''
   ];
@@ -1391,7 +1463,7 @@ async function compareAllPrompts() {
   }, 100);
   document.getElementById('test_status').textContent = '전체 비교 중';
   document.getElementById('test_response_time').textContent = '-';
-  document.getElementById('test_answer').textContent = '';
+  setAnswer('');
   document.getElementById('test_result').textContent = 'Running comparison...';
   document.getElementById('compareRows').innerHTML = '';
   try {
@@ -1403,7 +1475,7 @@ async function compareAllPrompts() {
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
     document.getElementById('test_selected_target').textContent = `${successCount}/${results.length}개 완료`;
-    document.getElementById('test_answer').textContent = results.map(item => `[${item.target_name} / ${item.model || ''} / ${item.target_host || ''}:${item.target_port || ''} / GPU ${item.selected_gpu || 'auto'}]\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n');
+    setAnswer(results.map(item => `### ${item.target_name} / ${item.model || ''}\\n- Target: ${item.target_host || ''}:${item.target_port || ''}\\n- GPU: ${item.selected_gpu || 'auto'}\\n\\n${item.ok ? (item.response || '') : ('ERROR: ' + (item.error || ''))}`).join('\\n\\n---\\n\\n'));
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
     renderCompareResults(results);
   } catch (err) {
@@ -1412,7 +1484,7 @@ async function compareAllPrompts() {
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = '-';
     document.getElementById('test_selected_target').textContent = '-';
-    document.getElementById('test_answer').textContent = '';
+    setAnswer('');
     document.getElementById('test_result').textContent = String(err);
   } finally {
     window.clearInterval(elapsedTimer);
@@ -1424,7 +1496,7 @@ function clearPromptTest() {
   document.getElementById('test_elapsed').textContent = '-';
   document.getElementById('test_response_time').textContent = '-';
   document.getElementById('test_selected_target').textContent = '-';
-  document.getElementById('test_answer').textContent = '';
+  setAnswer('');
   document.getElementById('test_result').textContent = '';
   document.getElementById('compareRows').innerHTML = '';
 }
