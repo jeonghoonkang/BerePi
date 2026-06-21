@@ -7,6 +7,7 @@ import errno
 import getpass
 import hashlib
 import hmac
+import html
 import json
 import os
 import re
@@ -69,7 +70,7 @@ DEFAULT_CONFIG = {
     "user_id": "",
     "password": "",
     "model": "",
-    "keep_alive": "60m",
+    "keep_alive": "6m",
     "num_ctx": 8192,
     "target_words_per_chapter": 1800,
     "language": "ko",
@@ -1484,6 +1485,9 @@ def title_from_backbone(backbone: str) -> str:
     match = re.search(r"제목은\s*(.+)", backbone)
     if match:
         return match.group(1).strip()
+    match = re.search(r"^#\s+(.+)$", backbone, re.MULTILINE)
+    if match:
+        return match.group(1).strip()
     return "untitled-book"
 
 
@@ -1702,13 +1706,155 @@ def compile_book(title: str, revised_opening: str, chapter_drafts: list[dict[str
 """
 
 
+def inline_markdown_to_html(text: str) -> str:
+    escaped = html.escape(text)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+    return escaped
+
+
+def markdown_table_to_html(lines: list[str]) -> str:
+    rows = [[cell.strip() for cell in line.strip().strip("|").split("|")] for line in lines]
+    if len(rows) < 2:
+        return ""
+    headers = rows[0]
+    body_rows = rows[2:] if len(rows) > 2 else []
+    header_html = "".join(f"<th>{inline_markdown_to_html(cell)}</th>" for cell in headers)
+    body_html = "\n".join(
+        "<tr>" + "".join(f"<td>{inline_markdown_to_html(cell)}</td>" for cell in row) + "</tr>"
+        for row in body_rows
+    )
+    return f"<table><thead><tr>{header_html}</tr></thead><tbody>{body_html}</tbody></table>"
+
+
+def markdown_to_html_document(markdown: str, title: str = "") -> str:
+    body: list[str] = []
+    paragraph: list[str] = []
+    list_items: list[str] = []
+    table_lines: list[str] = []
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            body.append(f"<p>{inline_markdown_to_html(' '.join(paragraph))}</p>")
+            paragraph.clear()
+
+    def flush_list() -> None:
+        if list_items:
+            body.append("<ul>" + "".join(f"<li>{item}</li>" for item in list_items) + "</ul>")
+            list_items.clear()
+
+    def flush_table() -> None:
+        if table_lines:
+            table_html = markdown_table_to_html(table_lines)
+            if table_html:
+                body.append(table_html)
+            else:
+                body.extend(f"<p>{inline_markdown_to_html(line)}</p>" for line in table_lines)
+            table_lines.clear()
+
+    for raw_line in markdown.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if table_lines and not (stripped.startswith("|") and stripped.endswith("|")):
+            flush_table()
+        if not stripped:
+            flush_table()
+            flush_list()
+            flush_paragraph()
+            continue
+        if stripped.startswith("|") and stripped.endswith("|"):
+            flush_paragraph()
+            flush_list()
+            table_lines.append(stripped)
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+        if heading:
+            flush_table()
+            flush_list()
+            flush_paragraph()
+            level = min(6, len(heading.group(1)))
+            body.append(f"<h{level}>{inline_markdown_to_html(heading.group(2))}</h{level}>")
+            continue
+        if stripped in {"---", "***", "___"}:
+            flush_table()
+            flush_list()
+            flush_paragraph()
+            body.append("<hr>")
+            continue
+        if stripped.startswith(">"):
+            flush_table()
+            flush_list()
+            flush_paragraph()
+            body.append(f"<blockquote>{inline_markdown_to_html(stripped.lstrip('> ').strip())}</blockquote>")
+            continue
+        list_match = re.match(r"^(?:[-*+]|\d+[.)])\s+(.+)$", stripped)
+        if list_match:
+            flush_table()
+            flush_paragraph()
+            list_items.append(inline_markdown_to_html(list_match.group(1)))
+            continue
+        flush_table()
+        flush_list()
+        paragraph.append(stripped)
+
+    flush_table()
+    flush_list()
+    flush_paragraph()
+    document_title = html.escape(title or "Writing Mach")
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>{document_title}</title>
+  <style>
+    @page {{ margin: 18mm 16mm; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
+      font-size: 11pt;
+      line-height: 1.72;
+      color: #202124;
+    }}
+    h1 {{ font-size: 24pt; margin: 0 0 18pt; page-break-after: avoid; }}
+    h2 {{ font-size: 17pt; margin: 22pt 0 10pt; border-bottom: 1px solid #d7dce2; padding-bottom: 4pt; page-break-after: avoid; }}
+    h3 {{ font-size: 14pt; margin: 18pt 0 8pt; page-break-after: avoid; }}
+    h4, h5, h6 {{ font-size: 12pt; margin: 14pt 0 6pt; page-break-after: avoid; }}
+    p {{ margin: 0 0 9pt; }}
+    blockquote {{ margin: 0 0 14pt; padding: 8pt 12pt; border-left: 4pt solid #8aa0b8; background: #f3f6f8; color: #4b5563; }}
+    ul {{ margin: 0 0 10pt 18pt; padding: 0; }}
+    li {{ margin: 3pt 0; }}
+    table {{ width: 100%; border-collapse: collapse; margin: 12pt 0 16pt; font-size: 9.5pt; page-break-inside: avoid; }}
+    th, td {{ border: 1px solid #c8d0d9; padding: 5pt 6pt; vertical-align: top; }}
+    th {{ background: #eef2f6; font-weight: 700; }}
+    hr {{ border: 0; border-top: 1px solid #d7dce2; margin: 18pt 0; }}
+    code {{ font-family: Menlo, Consolas, monospace; font-size: 9.5pt; background: #f1f3f4; padding: 1pt 3pt; }}
+  </style>
+</head>
+<body>
+{chr(10).join(body)}
+</body>
+</html>
+"""
+
+
 def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
     errors: list[str] = []
+    if pdf_path.exists():
+        pdf_path.unlink()
+    html_path = markdown_path.with_suffix(".pdf_source.html")
+    try:
+        markdown = markdown_path.read_text(encoding="utf-8")
+        html_path.write_text(
+            markdown_to_html_document(markdown, title=title_from_backbone(markdown)),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        return False, f"failed to prepare HTML for PDF: {exc}"
+
     pandoc = shutil.which("pandoc")
     if pandoc:
         try:
             completed = subprocess.run(
-                [pandoc, str(markdown_path), "-o", str(pdf_path)],
+                [pandoc, str(markdown_path), "-s", "-o", str(pdf_path)],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -1722,11 +1868,23 @@ def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
         except OSError as exc:
             errors.append(str(exc))
 
+    try:
+        from weasyprint import HTML  # type: ignore[import-not-found]
+
+        HTML(filename=str(html_path)).write_pdf(str(pdf_path))
+        if pdf_path.exists() and pdf_path.stat().st_size > 0:
+            return True, str(pdf_path)
+        errors.append("weasyprint produced an empty PDF file.")
+    except ImportError:
+        errors.append("weasyprint is not installed.")
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"weasyprint failed: {exc}")
+
     cupsfilter = shutil.which("cupsfilter")
     if cupsfilter:
         try:
             completed = subprocess.run(
-                [cupsfilter, "-m", "application/pdf", str(markdown_path)],
+                [cupsfilter, "-m", "application/pdf", str(html_path)],
                 check=False,
                 capture_output=True,
             )
@@ -1741,10 +1899,11 @@ def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
         except OSError as exc:
             errors.append(str(exc))
     elif not pandoc:
-        errors.append("PDF converter not found. Install pandoc or use macOS cupsfilter.")
+        errors.append("cupsfilter not found.")
 
     if not errors:
         errors.append("PDF converter produced an empty file.")
+    errors.append(f"HTML preview was saved to {html_path}. Install pandoc or weasyprint for rendered PDF output.")
     return False, " | ".join(error for error in errors if error)
 
 
@@ -2041,6 +2200,106 @@ def run_chapter_with_retry(
         attempt += 1
 
 
+def chapter_queue_key(chapter: dict[str, Any]) -> str:
+    return str(chapter["number"])
+
+
+def make_chapter_queue_state(
+    chapter: dict[str, Any],
+    index: int,
+    worker: dict[str, Any] | None = None,
+    status: str = "pending",
+    detail: str = "",
+) -> dict[str, Any]:
+    return {
+        "index": index,
+        "number": chapter["number"],
+        "title": chapter["title"],
+        "worker": (worker or {}).get("name", ""),
+        "status": status,
+        "detail": detail,
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def update_chapter_queue_state(
+    states: dict[str, dict[str, Any]],
+    chapter: dict[str, Any],
+    *,
+    index: int,
+    worker: dict[str, Any] | None = None,
+    status: str,
+    detail: str = "",
+) -> None:
+    key = chapter_queue_key(chapter)
+    state = states.get(key) or make_chapter_queue_state(chapter, index, worker)
+    state["index"] = index
+    state["number"] = chapter["number"]
+    state["title"] = chapter["title"]
+    if worker is not None:
+        state["worker"] = worker.get("name", "")
+    state["status"] = status
+    state["detail"] = detail
+    state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    states[key] = state
+
+
+def sorted_chapter_queue_states(states: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted((dict(item) for item in states.values()), key=lambda item: int(item.get("index") or 0))
+
+
+def chapter_queue_counts(states: dict[str, dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for state in states.values():
+        status = str(state.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def format_chapter_queue_counts(counts: dict[str, int]) -> str:
+    order = ["pending", "queued", "running", "finishing", "completed", "deferred", "skipped", "failed"]
+    parts = [f"{key}={counts[key]}" for key in order if counts.get(key)]
+    for key in sorted(counts):
+        if key not in order:
+            parts.append(f"{key}={counts[key]}")
+    return " ".join(parts) if parts else "empty"
+
+
+def format_chapter_queue_lines(states: dict[str, dict[str, Any]]) -> str:
+    parts = []
+    for state in sorted_chapter_queue_states(states):
+        worker = state.get("worker") or "-"
+        detail = f" {state.get('detail')}" if state.get("detail") else ""
+        parts.append(f"{state.get('title')}={state.get('status')}@{worker}{detail}")
+    return " | ".join(parts) if parts else "no chapters"
+
+
+def log_chapter_queue_snapshot(
+    states: dict[str, dict[str, Any]],
+    history: list[dict[str, Any]],
+    *,
+    reason: str,
+    started: float,
+) -> None:
+    counts = chapter_queue_counts(states)
+    snapshot = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "reason": reason,
+        "counts": counts,
+        "chapters": sorted_chapter_queue_states(states),
+    }
+    history.append(snapshot)
+    del history[:-300]
+    checkpoint_set_field("chapter_queue", snapshot["chapters"])
+    checkpoint_set_field("chapter_queue_history", history)
+    progress_log(
+        "chapter-queue",
+        f"{reason}: {format_chapter_queue_counts(counts)} | {format_chapter_queue_lines(states)}",
+        "cyan",
+        started,
+    )
+
+
 def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict[str, Any]:
     ensure_dirs()
     backbone_text = (backbone or read_story_backbone()).strip()
@@ -2076,6 +2335,17 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
 
     chapter_drafts: list[dict[str, Any]] = []
     deferred_retries: list[dict[str, Any]] = []
+    chapter_queue_states: dict[str, dict[str, Any]] = {
+        chapter_queue_key(chapter): make_chapter_queue_state(
+            chapter,
+            index,
+            slots[(index - 1) % len(slots)] if slots else None,
+            "pending",
+        )
+        for index, chapter in enumerate(chapters, start=1)
+    }
+    chapter_queue_history: list[dict[str, Any]] = []
+    log_chapter_queue_snapshot(chapter_queue_states, chapter_queue_history, reason="initialized", started=started)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
         for index, chapter in enumerate(chapters, start=1):
@@ -2088,6 +2358,14 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "final": str(saved.get("final") or ""),
             }
             if saved.get("status") == "completed" and saved_outputs["final"]:
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    chapter,
+                    index=index,
+                    worker=worker,
+                    status="skipped",
+                    detail="completed checkpoint",
+                )
                 progress_log(
                     "checkpoint",
                     f"{chapter['title']} already completed in checkpoint; skipping chapter pipeline",
@@ -2109,6 +2387,14 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 continue
             resume_agent = str(saved.get("failed_agent") or "")
             if any(saved_outputs.values()):
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    chapter,
+                    index=index,
+                    worker=worker,
+                    status="queued",
+                    detail=f"resume={resume_agent or 'auto'}",
+                )
                 progress_log(
                     "checkpoint",
                     (
@@ -2117,6 +2403,15 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                     ),
                     "yellow",
                     started,
+                )
+            else:
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    chapter,
+                    index=index,
+                    worker=worker,
+                    status="queued",
+                    detail="waiting for worker",
                 )
             future = executor.submit(
                 run_chapter_with_retry,
@@ -2138,25 +2433,70 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "worker": worker,
             }
 
+        log_chapter_queue_snapshot(chapter_queue_states, chapter_queue_history, reason="submitted", started=started)
         pending_futures = set(futures)
+        total_futures = len(futures)
+        for future in pending_futures:
+            item = futures[future]
+            if future.done():
+                future_status = "finishing"
+                future_detail = "awaiting result collection"
+            elif future.running():
+                future_status = "running"
+                future_detail = "worker active"
+            else:
+                future_status = "queued"
+                future_detail = "waiting for worker"
+            update_chapter_queue_state(
+                chapter_queue_states,
+                item["chapter"],
+                index=int(item["index"]),
+                worker=item["worker"],
+                status=future_status,
+                detail=future_detail,
+            )
         progress_log(
             "parallel",
             f"running {sum(1 for future in pending_futures if future.running())}/{max_workers} chapter worker(s)",
             "cyan",
             started,
         )
+        log_chapter_queue_snapshot(chapter_queue_states, chapter_queue_history, reason="parallel tick", started=started)
         while pending_futures:
             done, pending_futures = wait(pending_futures, timeout=30, return_when=FIRST_COMPLETED)
+            for future in pending_futures:
+                item = futures[future]
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    item["chapter"],
+                    index=int(item["index"]),
+                    worker=item["worker"],
+                    status="running" if future.running() else "queued",
+                    detail="worker active" if future.running() else "waiting for worker",
+                )
+            for future in done:
+                item = futures[future]
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    item["chapter"],
+                    index=int(item["index"]),
+                    worker=item["worker"],
+                    status="finishing",
+                    detail="awaiting result collection",
+                )
             running_count = sum(1 for future in pending_futures if future.running())
+            completed_total = total_futures - len(pending_futures)
             progress_log(
                 "parallel",
                 (
                     f"running {running_count}/{max_workers} chapter worker(s), "
-                    f"pending futures={len(pending_futures)}, completed this tick={len(done)}"
+                    f"pending futures={len(pending_futures)}, completed this tick={len(done)}, "
+                    f"completed total={completed_total}/{total_futures}"
                 ),
                 "cyan",
                 started,
             )
+            log_chapter_queue_snapshot(chapter_queue_states, chapter_queue_history, reason="parallel tick", started=started)
             if not done:
                 continue
             for future in done:
@@ -2164,6 +2504,20 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 chapter = item["chapter"]
                 try:
                     chapter_drafts.append(future.result())
+                    update_chapter_queue_state(
+                        chapter_queue_states,
+                        chapter,
+                        index=int(item["index"]),
+                        worker=item["worker"],
+                        status="completed",
+                        detail="chapter pipeline done",
+                    )
+                    log_chapter_queue_snapshot(
+                        chapter_queue_states,
+                        chapter_queue_history,
+                        reason=f"{chapter['title']} completed",
+                        started=started,
+                    )
                 except ChapterPipelineError as exc:
                     error = str(exc)
                     deferred_retries.append(
@@ -2173,6 +2527,20 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                             "failed_agent": exc.failed_agent,
                             "partial_result": exc.partial_result,
                         }
+                    )
+                    update_chapter_queue_state(
+                        chapter_queue_states,
+                        chapter,
+                        index=int(item["index"]),
+                        worker=item["worker"],
+                        status="deferred",
+                        detail=f"failed_agent={exc.failed_agent or 'unknown'}",
+                    )
+                    log_chapter_queue_snapshot(
+                        chapter_queue_states,
+                        chapter_queue_history,
+                        reason=f"{chapter['title']} deferred",
+                        started=started,
                     )
                     progress_log(
                         "warning",
@@ -2187,6 +2555,20 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 except Exception as exc:
                     error = str(exc)
                     deferred_retries.append({**item, "error": error})
+                    update_chapter_queue_state(
+                        chapter_queue_states,
+                        chapter,
+                        index=int(item["index"]),
+                        worker=item["worker"],
+                        status="deferred",
+                        detail="unexpected failure",
+                    )
+                    log_chapter_queue_snapshot(
+                        chapter_queue_states,
+                        chapter_queue_history,
+                        reason=f"{chapter['title']} deferred",
+                        started=started,
+                    )
                     progress_log(
                         "warning",
                         (
@@ -2217,6 +2599,20 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "final": str(partial_result.get("final") or ""),
             }
             resume_agent = str(item.get("failed_agent") or partial_result.get("failed_agent") or "")
+            update_chapter_queue_state(
+                chapter_queue_states,
+                chapter,
+                index=index,
+                worker=worker,
+                status="running",
+                detail=f"deferred retry resume={resume_agent or 'auto'}",
+            )
+            log_chapter_queue_snapshot(
+                chapter_queue_states,
+                chapter_queue_history,
+                reason=f"{chapter['title']} deferred retry started",
+                started=started,
+            )
             progress_log(
                 "retry",
                 (
@@ -2246,6 +2642,20 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                     "resume_agent": resume_agent,
                 }
                 chapter_drafts.append(result)
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    chapter,
+                    index=index,
+                    worker=worker,
+                    status="completed",
+                    detail="deferred retry succeeded",
+                )
+                log_chapter_queue_snapshot(
+                    chapter_queue_states,
+                    chapter_queue_history,
+                    reason=f"{chapter['title']} deferred retry completed",
+                    started=started,
+                )
                 progress_log(
                     "retry",
                     f"{chapter['title']} deferred retry succeeded",
@@ -2253,6 +2663,20 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                     started,
                 )
             except Exception as exc:
+                update_chapter_queue_state(
+                    chapter_queue_states,
+                    chapter,
+                    index=index,
+                    worker=worker,
+                    status="failed",
+                    detail="deferred retry failed",
+                )
+                log_chapter_queue_snapshot(
+                    chapter_queue_states,
+                    chapter_queue_history,
+                    reason=f"{chapter['title']} failed",
+                    started=started,
+                )
                 checkpoint_mark_status("failed")
                 progress_log(
                     "warning",
@@ -2316,9 +2740,11 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     book = compile_book(title, revised_opening, chapter_drafts, coordinator_notes)
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    output_path = OUTPUT_DIR / f"book_{timestamp}.md"
-    pdf_path = OUTPUT_DIR / f"book_{timestamp}.pdf"
-    log_path = OUTPUT_DIR / f"run_{timestamp}.json"
+    elapsed_minutes = max(1, int(round((time.perf_counter() - started) / 60.0)))
+    elapsed_suffix = f"{elapsed_minutes}min"
+    output_path = OUTPUT_DIR / f"book_{timestamp}_{elapsed_suffix}.md"
+    pdf_path = OUTPUT_DIR / f"book_{timestamp}_{elapsed_suffix}.pdf"
+    log_path = OUTPUT_DIR / f"run_{timestamp}_{elapsed_suffix}.json"
     checkpoint_set_field("output_path", str(output_path))
     checkpoint_set_field("pdf_path", str(pdf_path))
     checkpoint_set_field("log_path", str(log_path))
@@ -2356,6 +2782,8 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 ],
                 "backbone": backbone_text,
                 "chapters": chapter_drafts,
+                "chapter_queue": sorted_chapter_queue_states(chapter_queue_states),
+                "chapter_queue_history": chapter_queue_history,
                 "coordinator_notes": coordinator_notes,
                 "revised_opening": revised_opening,
                 "output_path": str(output_path),
@@ -2397,6 +2825,8 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
             for item in deferred_retries
         ],
         "chapters": chapter_drafts,
+        "chapter_queue": sorted_chapter_queue_states(chapter_queue_states),
+        "chapter_queue_history": chapter_queue_history,
         "coordinator_notes": coordinator_notes,
         "revised_opening": revised_opening,
         "book": book,

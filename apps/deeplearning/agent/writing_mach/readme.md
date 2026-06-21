@@ -150,7 +150,7 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
   "user_id": "id",
   "password": "pass",
   "model": "",
-  "keep_alive": "60m",
+  "keep_alive": "6m",
   "num_ctx": 8192,
   "target_words_per_chapter": 1800,
   "language": "ko",
@@ -186,7 +186,7 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
   "user_id": "id",
   "password": "pass",
   "model": "",
-  "keep_alive": "60m",
+  "keep_alive": "6m",
   "num_ctx": 8192,
   "target_words_per_chapter": 1800,
   "language": "ko",
@@ -292,9 +292,9 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
 
 ```text
 output/service_YYYYMMDD_HHMMSS.log
-output/book_YYYYMMDD_HHMMSS.md
-output/book_YYYYMMDD_HHMMSS.pdf
-output/run_YYYYMMDD_HHMMSS.json
+output/book_YYYYMMDD_HHMMSS_<elapsed>min.md
+output/book_YYYYMMDD_HHMMSS_<elapsed>min.pdf
+output/run_YYYYMMDD_HHMMSS_<elapsed>min.json
 output/llm_trace_YYYYMMDD_HHMMSS/
 output/checkpoints/checkpoint_<backbone_hash>.json
 ```
@@ -307,7 +307,7 @@ output/checkpoints/checkpoint_<backbone_hash>.json
 
 `checkpoints` 폴더에는 실행 중 챕터별 `outline`, `draft`, `review`, `final`, main writer 메모, lead writer 수정본이 단계별로 저장됩니다. 오류로 종료된 실행은 다음 실행에서 이 파일을 읽어 이어서 진행합니다.
 
-PDF 생성은 `pandoc`이 있으면 우선 사용하고, macOS에서는 기본 `cupsfilter`를 사용합니다. 둘 다 없으면 Markdown과 JSON은 정상 저장하고 PDF 실패 사유만 로그에 남깁니다.
+PDF 생성은 `pandoc`이 있으면 우선 사용하고, 없으면 Python `weasyprint`, 마지막으로 macOS `cupsfilter`를 시도합니다. Markdown을 그대로 PDF로 넘기지 않고 `book_*.pdf_source.html`을 먼저 만든 뒤 렌더링하므로 `#`, `>`, 표 구분자 같은 Markdown 기호가 그대로 출력되는 문제를 피합니다. 변환기가 없거나 실패하면 Markdown/JSON/HTML은 정상 저장하고 PDF 실패 사유를 로그에 남깁니다.
 
 ## CLI Progress Log
 
@@ -316,6 +316,8 @@ PDF 생성은 `pandoc`이 있으면 우선 사용하고, macOS에서는 기본 `
 LLM 요청 로그에는 prompt 단어 수, 요청 timeout, 전송 후 응답까지 걸린 시간, 전체 누적 시간이 함께 표시됩니다. 실패나 timeout이 발생해도 동일한 형식으로 attempt별 소요 시간이 기록됩니다.
 
 챕터 병렬 실행 중에는 30초마다 현재 실행 중인 챕터 worker 수가 `running N/M chapter worker(s)` 형식으로 출력됩니다.
+
+챕터별 queue 상태도 `chapter-queue` 로그로 함께 출력됩니다. 각 챕터는 `pending`, `queued`, `running`, `finishing`, `completed`, `deferred`, `skipped`, `failed` 중 하나로 표시되며, 같은 내용은 `service_*.log`, `run_*.json`의 `chapter_queue`/`chapter_queue_history`, checkpoint 파일에도 저장됩니다.
 
 - `model-check`: 서비스 시작 시 LLM `/api/status` 연결 확인. 응답이 없으면 즉시 경고를 출력합니다.
 - `model-request`: LLM 요청 URL, 사용자, 모델, 컨텍스트 설정, 프롬프트 preview

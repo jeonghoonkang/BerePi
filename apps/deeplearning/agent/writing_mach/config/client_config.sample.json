@@ -6,7 +6,7 @@
   "user_id": "",
   "password": "",
   "model": "",
-  "keep_alive": "60m",
+  "keep_alive": "6m",
   "num_ctx": 8192,
   "target_words_per_chapter": 1800,
   "language": "ko",

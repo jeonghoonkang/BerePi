@@ -46,7 +46,7 @@ function applyConfig(config) {
   elements.requestTimeout.value = config?.request_timeout_seconds || 600;
   elements.numCtx.value = config?.num_ctx || 8192;
   elements.targetWords.value = config?.target_words_per_chapter || 1800;
-  elements.keepAlive.value = config?.keep_alive || "60m";
+  elements.keepAlive.value = config?.keep_alive || "6m";
   elements.chapterParallelism.value = config?.chapter_parallelism || 1;
   elements.chapterRetry.value = config?.chapter_retry || 2;
   elements.pipelineAgents.value = (config?.pipeline_agents || ["outline", "writer", "reviewer", "finalizer"]).join(",");
@@ -154,11 +154,24 @@ function formatAgentLog(result) {
     `최종 원고: ${result.output_path || "-"}`,
     `실행 로그: ${result.log_path || "-"}`,
     "",
+    "## 챕터별 Queue 상태",
+  ];
+  (result.chapter_queue || []).forEach((item) => {
+    const title = item.title || `${item.number || item.index || "-"} 챕터`;
+    const worker = item.worker || "-";
+    const detail = item.detail ? ` ${item.detail}` : "";
+    lines.push(`- ${title}: ${item.status || "unknown"} @ ${worker}${detail}`);
+  });
+  if (!(result.chapter_queue || []).length) {
+    lines.push("- queue 기록 없음");
+  }
+  lines.push(
+    "",
     "## 메인 작가 조율 메모",
     result.coordinator_notes || "",
     "",
     "## 챕터 에이전트 출력 요약",
-  ];
+  );
   (result.chapters || []).forEach((item, index) => {
     const title = item.chapter?.title || `${index + 1} 챕터`;
     const finalText = String(item.final || item.draft || "");
