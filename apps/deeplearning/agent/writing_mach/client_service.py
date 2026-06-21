@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
+import base64
+import errno
+import getpass
+import hmac
 import json
 import os
 import re
+import shutil
 import socket
+import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -17,6 +25,10 @@ from typing import Any
 
 HOST = os.getenv("WRITING_MACH_HOST", "127.0.0.1")
 PORT = int(os.getenv("WRITING_MACH_PORT", "8786"))
+WEB_AUTH_USER = os.getenv("WRITING_MACH_WEB_USER", "")
+WEB_AUTH_PASSWORD = os.getenv("WRITING_MACH_WEB_PASSWORD", "")
+PROMPT_SENT = False
+PROMPT_SENT_LOCK = threading.Lock()
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -44,8 +56,8 @@ DEFAULT_CONFIG = {
     "generate_path": "/api/generate",
     "status_path": "/api/status",
     "request_timeout_seconds": 600,
-    "user_id": "admin",
-    "password": "aimodel",
+    "user_id": "",
+    "password": "",
     "model": "",
     "keep_alive": "60m",
     "num_ctx": 8192,
@@ -68,6 +80,59 @@ DEFAULT_CONFIG = {
 }
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Writing Mach client service.")
+    parser.add_argument(
+        "--host",
+        default=HOST,
+        help=f"Server bind address. Defaults to WRITING_MACH_HOST or {HOST}.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=PORT,
+        help=f"Server bind port. Defaults to WRITING_MACH_PORT or {PORT}.",
+    )
+    parser.add_argument(
+        "--backbone",
+        default=str(BACKBONE_PATH),
+        help=f"Story backbone markdown file. Defaults to {BACKBONE_PATH}.",
+    )
+    parser.add_argument(
+        "--config",
+        default=str(CONFIG_PATH),
+        help=f"Client config JSON file. Defaults to {CONFIG_PATH}.",
+    )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Test LLM status and generation using the selected config, then exit without starting the web service.",
+    )
+    parser.add_argument(
+        "--model-check-timeout",
+        type=int,
+        default=int(os.getenv("WRITING_MACH_MODEL_CHECK_TIMEOUT", "5")),
+        help="Seconds to wait for startup LLM status checks. Defaults to WRITING_MACH_MODEL_CHECK_TIMEOUT or 5.",
+    )
+    parser.add_argument(
+        "--web-user",
+        default=os.getenv("WRITING_MACH_WEB_USER"),
+        help="Web login user. If omitted, prompts during startup.",
+    )
+    parser.add_argument(
+        "--web-password",
+        default=os.getenv("WRITING_MACH_WEB_PASSWORD"),
+        help="Web login password. If omitted, prompts during startup. Use an empty value to disable web auth.",
+    )
+    parser.add_argument(
+        "--prompt-warning-seconds",
+        type=int,
+        default=int(os.getenv("WRITING_MACH_PROMPT_WARNING_SECONDS", "10")),
+        help="Seconds to wait after service startup before warning that no LLM prompt was sent.",
+    )
+    return parser.parse_args()
+
+
 def color_text(text: str, color: str) -> str:
     if not USE_COLOR:
         return text
@@ -85,6 +150,46 @@ def progress_log(stage: str, message: str, color: str = "cyan", started: float |
 
 def word_count(text: str) -> int:
     return len(re.findall(r"\S+", text or ""))
+
+
+def preview_text(text: str, limit: int = 700) -> str:
+    compact = re.sub(r"\s+", " ", text or "").strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[:limit].rstrip() + "..."
+
+
+def mark_prompt_sent() -> None:
+    global PROMPT_SENT
+
+    with PROMPT_SENT_LOCK:
+        first_prompt = not PROMPT_SENT
+        PROMPT_SENT = True
+    if first_prompt:
+        progress_log("model-request", "first LLM prompt is being sent", "green")
+
+
+def schedule_prompt_wait_warning(seconds: int, url: str) -> None:
+    wait_seconds = max(1, int(seconds))
+
+    def warn_if_no_prompt() -> None:
+        with PROMPT_SENT_LOCK:
+            prompt_sent = PROMPT_SENT
+        if prompt_sent:
+            return
+        progress_log(
+            "service",
+            (
+                f"No LLM prompt has been sent after {wait_seconds}s. "
+                f"Open {url}, log in, then start book generation. "
+                "If you already clicked run, check the browser error and LLM status."
+            ),
+            "yellow",
+        )
+
+    timer = threading.Timer(wait_seconds, warn_if_no_prompt)
+    timer.daemon = True
+    timer.start()
 
 
 def bool_value(value: Any, default: bool = False) -> bool:
@@ -128,6 +233,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     if not CONFIG_PATH.exists():
         sample = DEFAULT_CONFIG
         if SAMPLE_CONFIG_PATH.exists():
@@ -449,9 +555,22 @@ def extract_response_text(data: dict[str, Any]) -> str:
 def call_model(config: dict[str, Any], prompt: str) -> str:
     generate_url = join_url(config["server_base_url"], config["generate_path"])
     started = time.perf_counter()
+    payload = build_generate_payload(config, prompt)
     progress_log("model", f"request -> {generate_url} ({word_count(prompt)} words prompt)", "blue")
+    progress_log(
+        "model-request",
+        (
+            f"user={payload.get('user_id') or '-'} "
+            f"model={payload.get('model') or config.get('model') or 'server-default'} "
+            f"keep_alive={payload.get('keep_alive')} "
+            f"num_ctx={payload.get('options', {}).get('num_ctx')}"
+        ),
+        "cyan",
+    )
+    progress_log("model-request", f"prompt preview: {preview_text(prompt)}", "dim")
     try:
-        data = request_json(generate_url, build_generate_payload(config, prompt), int(config["request_timeout_seconds"]))
+        mark_prompt_sent()
+        data = request_json(generate_url, payload, int(config["request_timeout_seconds"]))
     except urllib.error.HTTPError as exc:
         if exc.code == HTTPStatus.UNAUTHORIZED:
             raise ValueError("Model endpoint rejected authentication. Check User ID/Password.") from exc
@@ -462,6 +581,7 @@ def call_model(config: dict[str, Any], prompt: str) -> str:
         raise ValueError(str(exc)) from exc
     text = extract_response_text(data).strip()
     progress_log("model", f"response <- {word_count(text)} words", "green", started)
+    progress_log("model-response", f"response preview: {preview_text(text, 1200)}", "dim")
     return text
 
 
@@ -479,6 +599,187 @@ def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
         "port": data.get("port", ""),
         "raw": data,
     }
+
+
+def explain_request_error(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        if exc.code == HTTPStatus.UNAUTHORIZED:
+            return "HTTP 401 Unauthorized. User ID/Password is likely wrong."
+        if exc.code == HTTPStatus.NOT_FOUND:
+            return "HTTP 404 Not Found. Check generate_path/status_path in config."
+        return f"HTTP {exc.code} {exc.reason}."
+    if isinstance(exc, urllib.error.URLError):
+        reason = getattr(exc, "reason", exc)
+        return f"Connection failed: {reason}. Check server_base_url and whether the LLM server is running."
+    if isinstance(exc, TimeoutError):
+        return str(exc)
+    if isinstance(exc, ValueError):
+        return str(exc)
+    return f"{type(exc).__name__}: {exc}"
+
+
+def run_model_diagnostics(timeout_seconds: int) -> bool:
+    config = read_config()
+    targets = startup_model_status_targets(config)
+    timeout = max(1, int(timeout_seconds))
+    all_ok = True
+
+    progress_log("test", f"Config: {CONFIG_PATH}", "cyan")
+    progress_log("test", f"Testing {len(targets)} LLM endpoint(s), timeout={timeout}s", "cyan")
+
+    for target in targets:
+        test_config = dict(target)
+        test_config["request_timeout_seconds"] = timeout
+        name = str(test_config.get("name") or "primary")
+        status_url = join_url(str(test_config.get("server_base_url", "")), str(test_config.get("status_path", "")))
+        generate_url = join_url(str(test_config.get("server_base_url", "")), str(test_config.get("generate_path", "")))
+
+        progress_log("test", f"[{name}] status GET {status_url}", "blue")
+        try:
+            status = fetch_remote_status(test_config)
+            progress_log(
+                "test",
+                f"[{name}] status OK model={status.get('model') or test_config.get('model') or 'unknown'}",
+                "green",
+            )
+        except Exception as exc:
+            all_ok = False
+            progress_log("test", f"[{name}] status FAILED: {explain_request_error(exc)}", "red")
+
+        progress_log("test", f"[{name}] generate POST {generate_url}", "blue")
+        try:
+            prompt = "Reply with exactly: OK"
+            payload = build_generate_payload(test_config, prompt)
+            progress_log(
+                "test",
+                (
+                    f"[{name}] payload user={payload.get('user_id') or '-'} "
+                    f"model={payload.get('model') or test_config.get('model') or 'server-default'} "
+                    f"num_ctx={payload.get('options', {}).get('num_ctx')}"
+                ),
+                "cyan",
+            )
+            data = request_json(generate_url, payload, timeout)
+            text = extract_response_text(data).strip()
+            if not text:
+                raise ValueError(f"Generate response JSON did not contain text. Keys={list(data.keys())}")
+            progress_log("test", f"[{name}] generate OK response preview: {preview_text(text, 300)}", "green")
+        except Exception as exc:
+            all_ok = False
+            progress_log("test", f"[{name}] generate FAILED: {explain_request_error(exc)}", "red")
+
+    if all_ok:
+        progress_log("test", "LLM diagnostic passed.", "green")
+    else:
+        progress_log("test", "LLM diagnostic failed. Fix the errors above and run --test again.", "red")
+    return all_ok
+
+
+def startup_model_status_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
+    targets = [{"name": "primary", **config}]
+    targets.extend(config.get("agent_workers", []))
+
+    unique_targets: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for target in targets:
+        status_url = join_url(str(target.get("server_base_url", "")), str(target.get("status_path", "")))
+        if not status_url or status_url in seen:
+            continue
+        seen.add(status_url)
+        unique_targets.append(target)
+    return unique_targets
+
+
+def check_startup_model_status(timeout_seconds: int) -> bool:
+    config = read_config()
+    targets = startup_model_status_targets(config)
+    timeout = max(1, int(timeout_seconds))
+    progress_log("model-check", f"checking {len(targets)} LLM status endpoint(s), timeout={timeout}s", "cyan")
+
+    ok_count = 0
+    for target in targets:
+        check_config = dict(target)
+        check_config["request_timeout_seconds"] = timeout
+        name = str(check_config.get("name") or "primary")
+        try:
+            status = fetch_remote_status(check_config)
+        except Exception as exc:
+            progress_log(
+                "model-check",
+                f"{name} unavailable: {check_config.get('server_base_url')} ({exc})",
+                "red",
+            )
+            continue
+
+        ok_count += 1
+        model = status.get("model") or check_config.get("model") or "unknown"
+        remote = ""
+        if status.get("host") or status.get("port"):
+            remote = f" remote={status.get('host', '')}:{status.get('port', '')}"
+        progress_log(
+            "model-check",
+            f"{name} OK: {status['status_url']} model={model}{remote}",
+            "green",
+        )
+
+    if ok_count == 0:
+        progress_log(
+            "model-check",
+            "LLM is not responding. Start the model server or update data/client_config.json before running agents.",
+            "red",
+        )
+        return False
+    if ok_count < len(targets):
+        progress_log(
+            "model-check",
+            f"LLM check partially available: {ok_count}/{len(targets)} endpoint(s) responded.",
+            "yellow",
+        )
+    return True
+
+
+def create_http_server(host: str, port: int) -> tuple[ThreadingHTTPServer, str]:
+    try:
+        return ThreadingHTTPServer((host, port), WritingMachHandler), host
+    except OSError as exc:
+        if exc.errno != errno.EADDRNOTAVAIL:
+            raise
+        fallback_host = "0.0.0.0"
+        progress_log(
+            "service",
+            f"cannot bind to {host}:{port}; retrying on {fallback_host}:{port}",
+            "yellow",
+        )
+        return ThreadingHTTPServer((fallback_host, port), WritingMachHandler), fallback_host
+
+
+def valid_web_auth(header: str | None) -> bool:
+    if WEB_AUTH_PASSWORD == "":
+        return True
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(header.split(" ", 1)[1]).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    user, separator, password = decoded.partition(":")
+    if not separator:
+        return False
+    return hmac.compare_digest(user, WEB_AUTH_USER) and hmac.compare_digest(password, WEB_AUTH_PASSWORD)
+
+
+def resolve_web_auth(user: str | None, password: str | None) -> tuple[str, str]:
+    resolved_user = user
+    resolved_password = password
+
+    if resolved_user is None:
+        resolved_user = input("Web login user: ").strip()
+    if resolved_password is None:
+        resolved_password = getpass.getpass("Web login password (empty disables web auth): ")
+
+    if resolved_password and not resolved_user:
+        raise ValueError("Web login user is required when web password is set.")
+    return resolved_user or "", resolved_password or ""
 
 
 def title_from_backbone(backbone: str) -> str:
@@ -669,6 +970,52 @@ def compile_book(title: str, revised_opening: str, chapter_drafts: list[dict[str
 """
 
 
+def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
+    errors: list[str] = []
+    pandoc = shutil.which("pandoc")
+    if pandoc:
+        try:
+            completed = subprocess.run(
+                [pandoc, str(markdown_path), "-o", str(pdf_path)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if completed.returncode != 0:
+                errors.append((completed.stderr or completed.stdout or "pandoc failed").strip())
+            elif pdf_path.exists() and pdf_path.stat().st_size > 0:
+                return True, str(pdf_path)
+            else:
+                errors.append("pandoc produced an empty PDF file.")
+        except OSError as exc:
+            errors.append(str(exc))
+
+    cupsfilter = shutil.which("cupsfilter")
+    if cupsfilter:
+        try:
+            completed = subprocess.run(
+                [cupsfilter, "-m", "application/pdf", str(markdown_path)],
+                check=False,
+                capture_output=True,
+            )
+            if completed.returncode != 0:
+                error = completed.stderr.decode("utf-8", errors="replace").strip()
+                errors.append(error or "cupsfilter failed")
+            else:
+                pdf_path.write_bytes(completed.stdout)
+                if pdf_path.exists() and pdf_path.stat().st_size > 0:
+                    return True, str(pdf_path)
+                errors.append("cupsfilter produced an empty PDF file.")
+        except OSError as exc:
+            errors.append(str(exc))
+    elif not pandoc:
+        errors.append("PDF converter not found. Install pandoc or use macOS cupsfilter.")
+
+    if not errors:
+        errors.append("PDF converter produced an empty file.")
+    return False, " | ".join(error for error in errors if error)
+
+
 def worker_slots(config: dict[str, Any]) -> list[dict[str, Any]]:
     slots: list[dict[str, Any]] = []
     for worker in config["agent_workers"]:
@@ -828,9 +1175,16 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUT_DIR / f"book_{timestamp}.md"
+    pdf_path = OUTPUT_DIR / f"book_{timestamp}.pdf"
     log_path = OUTPUT_DIR / f"run_{timestamp}.json"
     progress_log("save", f"writing book markdown -> {output_path}", "blue", started)
     output_path.write_text(book + "\n", encoding="utf-8")
+    progress_log("save", f"writing book PDF -> {pdf_path}", "blue", started)
+    pdf_ok, pdf_message = write_book_pdf(output_path, pdf_path)
+    if pdf_ok:
+        progress_log("save", f"book PDF written -> {pdf_path}", "green", started)
+    else:
+        progress_log("save", f"book PDF skipped: {pdf_message}", "yellow", started)
     progress_log("save", f"writing run log -> {log_path}", "blue", started)
     log_path.write_text(
         json.dumps(
@@ -844,6 +1198,8 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "coordinator_notes": coordinator_notes,
                 "revised_opening": revised_opening,
                 "output_path": str(output_path),
+                "pdf_path": str(pdf_path) if pdf_ok else "",
+                "pdf_error": "" if pdf_ok else pdf_message,
             },
             ensure_ascii=False,
             indent=2,
@@ -864,6 +1220,8 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         "revised_opening": revised_opening,
         "book": book,
         "output_path": str(output_path),
+        "pdf_path": str(pdf_path) if pdf_ok else "",
+        "pdf_error": "" if pdf_ok else pdf_message,
         "log_path": str(log_path),
     }
 
@@ -878,6 +1236,18 @@ def parse_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
 class WritingMachHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         return
+
+    def require_auth(self) -> bool:
+        if valid_web_auth(self.headers.get("Authorization")):
+            return True
+        body = json.dumps({"error": "authentication required"}, ensure_ascii=False).encode("utf-8")
+        self.send_response(HTTPStatus.UNAUTHORIZED)
+        self.send_header("WWW-Authenticate", 'Basic realm="Writing Mach"')
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
 
     def send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -896,6 +1266,8 @@ class WritingMachHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if not self.require_auth():
+            return
         if self.path in {"/", "/index.html"}:
             self.serve_file(WEB_DIR / "index.html", "text/html; charset=utf-8")
             return
@@ -911,6 +1283,8 @@ class WritingMachHandler(BaseHTTPRequestHandler):
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if not self.require_auth():
+            return
         try:
             incoming = parse_json_body(self)
             request_path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
@@ -933,9 +1307,29 @@ class WritingMachHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    global BACKBONE_PATH, CONFIG_PATH, WEB_AUTH_USER, WEB_AUTH_PASSWORD
+
+    args = parse_args()
+    BACKBONE_PATH = Path(args.backbone).expanduser().resolve()
+    CONFIG_PATH = Path(args.config).expanduser().resolve()
     ensure_dirs()
-    httpd = ThreadingHTTPServer((HOST, PORT), WritingMachHandler)
-    progress_log("service", f"Writing Mach service: http://{HOST}:{PORT}", "green")
+    if args.test:
+        return 0 if run_model_diagnostics(args.model_check_timeout) else 2
+    check_startup_model_status(args.model_check_timeout)
+    WEB_AUTH_USER, WEB_AUTH_PASSWORD = resolve_web_auth(args.web_user, args.web_password)
+    httpd, bind_host = create_http_server(args.host, args.port)
+    progress_log("service", f"Writing Mach service: http://{bind_host}:{args.port}", "green")
+    service_url = f"http://{bind_host}:{args.port}"
+    if bind_host != args.host:
+        service_url = f"http://{args.host}:{args.port}"
+        progress_log("service", f"Public URL: {service_url}", "cyan")
+    if WEB_AUTH_PASSWORD:
+        progress_log("service", f"Web auth enabled: user={WEB_AUTH_USER}", "cyan")
+    else:
+        progress_log("service", "Web auth disabled", "yellow")
+    progress_log("service", f"Story backbone: {BACKBONE_PATH}", "cyan")
+    progress_log("service", f"Client config: {CONFIG_PATH}", "cyan")
+    schedule_prompt_wait_warning(args.prompt_warning_seconds, service_url)
     httpd.serve_forever()
     return 0
 

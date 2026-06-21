@@ -1012,6 +1012,34 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def api_status_payload() -> dict[str, Any]:
+    targets = [target for target in load_targets() if target.enabled]
+    first = targets[0] if targets else None
+    return {
+        "ok": True,
+        "service": "llm-routing",
+        "status": "ready" if targets else "no-enabled-targets",
+        "uptime": seconds_to_uptime(time.time() - STARTED_AT),
+        "model": first.model if first else "",
+        "host": HOST,
+        "port": PORT,
+        "target_count": len(targets),
+        "targets": [
+            {
+                "id": target.id,
+                "name": target.name,
+                "host": target.host,
+                "port": target.port,
+                "model": target.model,
+                "api_type": target.api_type,
+                "selected_gpu": target.selected_gpu,
+                "selected_gpu_label": target.selected_gpu_label,
+            }
+            for target in targets
+        ],
+    }
+
+
 def read_access_log(limit: int = 200) -> list[dict[str, Any]]:
     if not ACCESS_LOG_PATH.exists():
         return []
@@ -2143,9 +2171,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             self.write_json({"ok": True, "uptime": seconds_to_uptime(time.time() - STARTED_AT)})
             return
         if self.path == "/api/status":
-            if not self.require_auth():
-                return
-            self.write_json(status_payload())
+            self.write_json(status_payload() if self.is_authenticated() else api_status_payload())
             return
         self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
@@ -2221,6 +2247,8 @@ class RoutingHandler(BaseHTTPRequestHandler):
             if body:
                 detail = f"{detail}\n{body[:2000]}"
             self.write_json({"ok": False, "error": detail}, HTTPStatus.BAD_GATEWAY)
+        except (RuntimeError, urllib.error.URLError, TimeoutError, OSError) as exc:
+            self.write_json({"ok": False, "error": f"Backend request failed: {exc}"}, HTTPStatus.BAD_GATEWAY)
         except Exception as exc:  # noqa: BLE001
             self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
@@ -2274,10 +2302,14 @@ class RoutingHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    global HOST, PORT
+
     parser = argparse.ArgumentParser(description="Route prompt requests to multiple LLM backends.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()
+    HOST = args.host
+    PORT = args.port
     ensure_default_config()
     ensure_admin_password()
     LOG_DIR.mkdir(parents=True, exist_ok=True)

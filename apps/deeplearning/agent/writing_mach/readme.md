@@ -12,7 +12,7 @@
 3. 서로 다른 챕터는 `Parallel Chapters` 설정에 따라 병렬 실행됩니다.
 4. `main writer agent`가 모든 챕터 최종안을 모아 전체 방향, 반복, 누락, 초반부 수정 방향을 정리합니다.
 5. lead writer가 챕터 에이전트 출력과 main writer 지시를 참고해 도입부와 1챕터 초반을 다시 작성합니다.
-6. 최종 원고를 `output/book_YYYYMMDD_HHMMSS.md`로 저장합니다.
+6. 최종 원고를 `output/book_YYYYMMDD_HHMMSS.md`와 `output/book_YYYYMMDD_HHMMSS.pdf`로 저장합니다.
 
 ## 실행
 
@@ -33,6 +33,38 @@ http://127.0.0.1:8786
 $env:WRITING_MACH_PORT="8790"
 py -3 .\client_service.py
 ```
+
+시작 시 모델 서버 확인 타임아웃 변경:
+
+```powershell
+py -3 .\client_service.py --model-check-timeout 10
+```
+
+설정 파일 경로 지정:
+
+```powershell
+py -3 .\client_service.py --config .\data\my_client_config.json
+```
+
+웹 서버를 띄우지 않고 LLM 연결만 진단:
+
+```powershell
+py -3 .\client_service.py --config .\data\my_client_config.json --test
+```
+
+서비스 시작 후 prompt 미전송 경고 시간 변경:
+
+```powershell
+py -3 .\client_service.py --prompt-warning-seconds 10
+```
+
+웹 로그인 계정 지정:
+
+```powershell
+py -3 .\client_service.py --web-user <user> --web-password <password>
+```
+
+`--web-user`, `--web-password`를 지정하지 않으면 서비스 시작 중 터미널에서 입력을 요청합니다.
 
 ## 시작 전 작성 파일
 
@@ -214,15 +246,22 @@ py -3 .\client_service.py
 
 ```text
 output/book_YYYYMMDD_HHMMSS.md
+output/book_YYYYMMDD_HHMMSS.pdf
 output/run_YYYYMMDD_HHMMSS.json
 ```
 
-`run_*.json`에는 각 챕터 에이전트 출력, main writer 조율 메모, 수정된 초반부가 함께 기록됩니다.
+`run_*.json`에는 각 챕터 에이전트 출력, main writer 조율 메모, 수정된 초반부, PDF 생성 경로 또는 실패 사유가 함께 기록됩니다.
+
+PDF 생성은 `pandoc`이 있으면 우선 사용하고, macOS에서는 기본 `cupsfilter`를 사용합니다. 둘 다 없으면 Markdown과 JSON은 정상 저장하고 PDF 실패 사유만 로그에 남깁니다.
 
 ## CLI Progress Log
 
 에이전트를 실행하면 `client_service.py`를 띄운 터미널에 컬러 진행 로그가 표시됩니다.
 
+- `model-check`: 서비스 시작 시 LLM `/api/status` 연결 확인. 응답이 없으면 즉시 경고를 출력합니다.
+- `model-request`: LLM 요청 URL, 사용자, 모델, 컨텍스트 설정, 프롬프트 preview
+- `model-response`: LLM 회신 단어 수와 응답 preview
+- `service`: 서비스 시작 후 지정 시간 안에 LLM prompt가 전송되지 않으면 접속/실행 안내 출력
 - `dispatch`: 병렬 실행 설정과 worker slot 정보
 - `chapter`: 각 챕터 파이프라인 시작/완료
 - `agent`: outline/writer/reviewer/finalizer 단계 시작/완료
