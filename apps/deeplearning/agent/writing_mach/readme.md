@@ -76,6 +76,18 @@ py -3 .\client_service.py --llm-user <user_id> --llm-password <password>
 py -3 .\client_service.py --prompt-warning-seconds 10
 ```
 
+모델 서버가 살아 있지만 502/timeout이 반복될 때 재시도 대기 시간과 사용자 확인 기준 변경:
+
+```powershell
+py -3 .\client_service.py --model-retry-wait-seconds 30 --model-retry-prompt-after-failures 10
+```
+
+LLM 요청이 실패해 회신을 받지 못하면 같은 prompt를 바로 버리지 않고, 모델 서버의 `/api/status`에서 target/GPU/model queue 상태를 확인합니다. 비어 있는 target이 있으면 같은 prompt를 다시 전송하고, 모든 queue가 busy이면 `model_retry_wait_seconds` 단위로 다시 확인합니다.
+
+deferred retry에서 model queue가 비어 있어 다른 prompt에 큰 영향을 주지 않는다고 판단되면 timeout을 2배, 이후 attempt에서는 최대 3배까지 늘려 실행합니다. 최대 배수는 `model_retry_max_timeout_multiplier`로 조정할 수 있습니다.
+
+실행 중에는 checkpoint가 계속 저장됩니다. 중간 오류나 강제 종료 후 같은 backbone으로 다시 실행하면, 이미 완료된 챕터/agent 단계는 재실행하지 않고 저장된 산출물 다음 단계부터 이어서 실행합니다.
+
 서비스 진행 로그 파일 경로 지정:
 
 ```powershell
@@ -144,6 +156,10 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
   "language": "ko",
   "chapter_parallelism": 1,
   "chapter_retry": 2,
+  "model_retry_wait_seconds": 30,
+  "model_retry_prompt_after_failures": 10,
+  "model_retry_status_timeout_seconds": 10,
+  "model_retry_max_timeout_multiplier": 3,
   "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
   "agent_workers": [],
   "global_review_enabled": true,
@@ -176,6 +192,10 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
   "language": "ko",
   "chapter_parallelism": 4,
   "chapter_retry": 2,
+  "model_retry_wait_seconds": 30,
+  "model_retry_prompt_after_failures": 10,
+  "model_retry_status_timeout_seconds": 10,
+  "model_retry_max_timeout_multiplier": 3,
   "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
   "agent_workers": [
     {
@@ -262,6 +282,8 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
 
 챕터 내부의 단계는 항상 순차 실행됩니다. 예를 들어 한 챕터 안에서는 `outline` 결과를 `writer`가 보고, `writer` 결과를 `reviewer`가 보며, `reviewer` 결과를 `finalizer`가 정리합니다. 병렬화는 챕터 사이에서만 일어나므로 전체 흐름을 통제하기 쉽습니다.
 
+중간 단계에서 실패해 deferred retry로 넘어가면 이미 완료된 앞 단계 산출물을 재사용합니다. 예를 들어 `finalizer`에서 실패한 챕터는 `outline`, `writer`, `reviewer`를 다시 실행하지 않고 `finalizer`부터 재개합니다. 선행 산출물이 없는 단계는 실행하지 않고 필요한 앞 단계부터 다시 진행합니다.
+
 전체 리뷰 에이전트는 모든 챕터 파이프라인이 끝난 뒤 한 번만 실행됩니다. `Global Review Focus`에 넣은 기준으로 원고 전체를 점검하고, `Allow Rewrite`가 꺼져 있으면 원고를 직접 다시 쓰지 않고 수정 지시만 생성합니다.
 
 ## 출력 파일
@@ -274,6 +296,7 @@ output/book_YYYYMMDD_HHMMSS.md
 output/book_YYYYMMDD_HHMMSS.pdf
 output/run_YYYYMMDD_HHMMSS.json
 output/llm_trace_YYYYMMDD_HHMMSS/
+output/checkpoints/checkpoint_<backbone_hash>.json
 ```
 
 `service_*.log`에는 서버 시작, 접속 대기, API 요청, LLM 요청/응답 preview, 오류가 콘솔 출력과 함께 기록됩니다.
@@ -282,11 +305,17 @@ output/llm_trace_YYYYMMDD_HHMMSS/
 
 `llm_trace_*` 폴더에는 각 LLM 호출의 전체 prompt, 전체 response, 요청 URL, worker/model, 소요 시간, 실패 에러가 순번 JSON 파일로 저장됩니다.
 
+`checkpoints` 폴더에는 실행 중 챕터별 `outline`, `draft`, `review`, `final`, main writer 메모, lead writer 수정본이 단계별로 저장됩니다. 오류로 종료된 실행은 다음 실행에서 이 파일을 읽어 이어서 진행합니다.
+
 PDF 생성은 `pandoc`이 있으면 우선 사용하고, macOS에서는 기본 `cupsfilter`를 사용합니다. 둘 다 없으면 Markdown과 JSON은 정상 저장하고 PDF 실패 사유만 로그에 남깁니다.
 
 ## CLI Progress Log
 
 에이전트를 실행하면 `client_service.py`를 띄운 터미널에 컬러 진행 로그가 표시됩니다.
+
+LLM 요청 로그에는 prompt 단어 수, 요청 timeout, 전송 후 응답까지 걸린 시간, 전체 누적 시간이 함께 표시됩니다. 실패나 timeout이 발생해도 동일한 형식으로 attempt별 소요 시간이 기록됩니다.
+
+챕터 병렬 실행 중에는 30초마다 현재 실행 중인 챕터 worker 수가 `running N/M chapter worker(s)` 형식으로 출력됩니다.
 
 - `model-check`: 서비스 시작 시 LLM `/api/status` 연결 확인. 응답이 없으면 즉시 경고를 출력합니다.
 - `model-request`: LLM 요청 URL, 사용자, 모델, 컨텍스트 설정, 프롬프트 preview

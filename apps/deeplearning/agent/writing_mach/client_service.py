@@ -5,6 +5,7 @@ import argparse
 import base64
 import errno
 import getpass
+import hashlib
 import hmac
 import json
 import os
@@ -17,7 +18,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -35,6 +36,9 @@ RUNTIME_CONFIG_OVERRIDES: dict[str, Any] = {}
 LLM_TRACE_DIR: Path | None = None
 LLM_TRACE_LOCK = threading.Lock()
 LLM_TRACE_COUNTER = 0
+CHECKPOINT_LOCK = threading.Lock()
+CHECKPOINT_PATH: Path | None = None
+CHECKPOINT_STATE: dict[str, Any] | None = None
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -71,6 +75,10 @@ DEFAULT_CONFIG = {
     "language": "ko",
     "chapter_parallelism": 1,
     "chapter_retry": 2,
+    "model_retry_wait_seconds": 30,
+    "model_retry_prompt_after_failures": 10,
+    "model_retry_status_timeout_seconds": 10,
+    "model_retry_max_timeout_multiplier": 3,
     "pipeline_agents": ["outline", "writer", "reviewer", "finalizer"],
     "agent_workers": [],
     "global_review_enabled": True,
@@ -157,6 +165,18 @@ def parse_args() -> argparse.Namespace:
         help="Seconds to wait after service startup before warning that no LLM prompt was sent.",
     )
     parser.add_argument(
+        "--model-retry-wait-seconds",
+        type=int,
+        default=None,
+        help="Seconds to wait before retrying a failed chapter while the model server is still alive.",
+    )
+    parser.add_argument(
+        "--model-retry-prompt-after-failures",
+        type=int,
+        default=None,
+        help="Ask whether to stop after this many total model failures. Defaults to 10.",
+    )
+    parser.add_argument(
         "--log-file",
         default=os.getenv("WRITING_MACH_LOG_FILE", ""),
         help="Service progress log file. Defaults to output/service_YYYYMMDD_HHMMSS.log.",
@@ -188,6 +208,45 @@ def progress_log(stage: str, message: str, color: str = "cyan", started: float |
                     handle.write(line)
             except OSError:
                 pass
+
+
+class ChapterPipelineError(Exception):
+    def __init__(
+        self,
+        message: str,
+        *,
+        failed_agent: str = "",
+        partial_result: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.failed_agent = failed_agent
+        self.partial_result = partial_result or {}
+
+
+AGENT_OUTPUT_KEYS = {
+    "outline": "outline",
+    "writer": "draft",
+    "reviewer": "review",
+    "finalizer": "final",
+}
+
+
+AGENT_REQUIRED_KEYS = {
+    "outline": [],
+    "writer": ["outline"],
+    "reviewer": ["outline", "draft"],
+    "finalizer": ["review"],
+}
+
+
+def first_runnable_agent_index(pipeline_agents: list[str], outputs: dict[str, str], requested_agent: str = "") -> int:
+    start_index = pipeline_agents.index(requested_agent) if requested_agent in pipeline_agents else 0
+    for index, agent in enumerate(pipeline_agents[: start_index + 1]):
+        output_key = AGENT_OUTPUT_KEYS.get(agent, "")
+        if output_key and outputs.get(output_key):
+            continue
+        return index
+    return start_index
 
 
 def init_service_log(log_file: str = "") -> Path:
@@ -349,6 +408,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUTPUT_DIR / "checkpoints").mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     if not CONFIG_PATH.exists():
         sample = DEFAULT_CONFIG
@@ -360,6 +420,181 @@ def ensure_dirs() -> None:
         CONFIG_PATH.write_text(json.dumps(sample, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def checkpoint_key(backbone: str) -> str:
+    return hashlib.sha256(backbone.encode("utf-8")).hexdigest()[:16]
+
+
+def checkpoint_file_for(backbone: str) -> Path:
+    return OUTPUT_DIR / "checkpoints" / f"checkpoint_{checkpoint_key(backbone)}.json"
+
+
+def empty_chapter_checkpoint(chapter: dict[str, Any], index: int) -> dict[str, Any]:
+    return {
+        "index": index,
+        "chapter": chapter,
+        "status": "pending",
+        "failed_agent": "",
+        "worker": "",
+        "updated_at": "",
+        "completed_agents": [],
+        "outline": "",
+        "draft": "",
+        "review": "",
+        "final": "",
+    }
+
+
+def init_checkpoint(backbone: str, config: dict[str, Any], chapters: list[dict[str, Any]]) -> tuple[Path, dict[str, Any]]:
+    global CHECKPOINT_PATH, CHECKPOINT_STATE
+
+    path = checkpoint_file_for(backbone)
+    loaded: dict[str, Any] = {}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = {}
+
+    if loaded.get("status") == "completed":
+        loaded = {}
+
+    chapter_map = loaded.get("chapters") if isinstance(loaded.get("chapters"), dict) else {}
+    if not chapter_map:
+        chapter_map = {}
+    for index, chapter in enumerate(chapters, start=1):
+        key = str(chapter["number"])
+        existing = chapter_map.get(key) if isinstance(chapter_map.get(key), dict) else {}
+        base = empty_chapter_checkpoint(chapter, index)
+        base.update(existing)
+        base["chapter"] = chapter
+        base["index"] = index
+        chapter_map[key] = base
+
+    state = {
+        "version": 1,
+        "checkpoint_key": checkpoint_key(backbone),
+        "status": "running",
+        "created_at": loaded.get("created_at") or time.strftime("%Y-%m-%d %H:%M:%S"),
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "title": title_from_backbone(backbone),
+        "backbone_hash": checkpoint_key(backbone),
+        "config": public_config(config),
+        "chapters": chapter_map,
+        "coordinator_notes": loaded.get("coordinator_notes", ""),
+        "revised_opening": loaded.get("revised_opening", ""),
+        "events": loaded.get("events", [])[-300:] if isinstance(loaded.get("events"), list) else [],
+    }
+    with CHECKPOINT_LOCK:
+        CHECKPOINT_PATH = path
+        CHECKPOINT_STATE = state
+        save_checkpoint_locked()
+    return path, state
+
+
+def save_checkpoint_locked() -> None:
+    if CHECKPOINT_PATH is None or CHECKPOINT_STATE is None:
+        return
+    CHECKPOINT_STATE["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CHECKPOINT_PATH.write_text(json.dumps(CHECKPOINT_STATE, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def checkpoint_event(stage: str, message: str) -> None:
+    with CHECKPOINT_LOCK:
+        if CHECKPOINT_STATE is None:
+            return
+        events = CHECKPOINT_STATE.setdefault("events", [])
+        events.append({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "stage": stage, "message": message})
+        del events[:-500]
+        save_checkpoint_locked()
+
+
+def checkpoint_update_chapter(
+    chapter: dict[str, Any],
+    *,
+    index: int,
+    worker: str,
+    status: str,
+    outputs: dict[str, str],
+    completed_agent: str = "",
+    failed_agent: str = "",
+) -> None:
+    with CHECKPOINT_LOCK:
+        if CHECKPOINT_STATE is None:
+            return
+        key = str(chapter["number"])
+        chapters = CHECKPOINT_STATE.setdefault("chapters", {})
+        entry = chapters.get(key) if isinstance(chapters.get(key), dict) else empty_chapter_checkpoint(chapter, index)
+        entry["index"] = index
+        entry["chapter"] = chapter
+        entry["worker"] = worker
+        entry["status"] = status
+        entry["failed_agent"] = failed_agent
+        entry["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        for output_key in ("outline", "draft", "review", "final"):
+            if outputs.get(output_key):
+                entry[output_key] = outputs[output_key]
+        if completed_agent:
+            completed = entry.setdefault("completed_agents", [])
+            if completed_agent not in completed:
+                completed.append(completed_agent)
+            events = CHECKPOINT_STATE.setdefault("events", [])
+            events.append(
+                {
+                    "time": entry["updated_at"],
+                    "stage": f"{chapter['title']}:{completed_agent}",
+                    "message": "agent stage completed and output saved",
+                }
+            )
+            del events[:-500]
+        if failed_agent:
+            events = CHECKPOINT_STATE.setdefault("events", [])
+            events.append(
+                {
+                    "time": entry["updated_at"],
+                    "stage": f"{chapter['title']}:{failed_agent}",
+                    "message": "agent stage failed; partial outputs saved for resume",
+                }
+            )
+            del events[:-500]
+        if status == "completed":
+            events = CHECKPOINT_STATE.setdefault("events", [])
+            events.append(
+                {
+                    "time": entry["updated_at"],
+                    "stage": chapter["title"],
+                    "message": "chapter completed and final output saved",
+                }
+            )
+            del events[:-500]
+        chapters[key] = entry
+        save_checkpoint_locked()
+
+
+def checkpoint_chapter_entry(chapter: dict[str, Any]) -> dict[str, Any]:
+    with CHECKPOINT_LOCK:
+        if CHECKPOINT_STATE is None:
+            return {}
+        entry = CHECKPOINT_STATE.get("chapters", {}).get(str(chapter["number"]), {})
+        return dict(entry) if isinstance(entry, dict) else {}
+
+
+def checkpoint_set_field(key: str, value: Any) -> None:
+    with CHECKPOINT_LOCK:
+        if CHECKPOINT_STATE is None:
+            return
+        CHECKPOINT_STATE[key] = value
+        save_checkpoint_locked()
+
+
+def checkpoint_mark_status(status: str) -> None:
+    with CHECKPOINT_LOCK:
+        if CHECKPOINT_STATE is None:
+            return
+        CHECKPOINT_STATE["status"] = status
+        save_checkpoint_locked()
+
+
 def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     incoming = dict(raw or {})
     timeout = int(incoming.get("request_timeout_seconds") or DEFAULT_CONFIG["request_timeout_seconds"])
@@ -367,6 +602,17 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     target_words = int(incoming.get("target_words_per_chapter") or DEFAULT_CONFIG["target_words_per_chapter"])
     chapter_parallelism = int(incoming.get("chapter_parallelism") or DEFAULT_CONFIG["chapter_parallelism"])
     chapter_retry = int(incoming.get("chapter_retry") or DEFAULT_CONFIG["chapter_retry"])
+    retry_wait = int(incoming.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"])
+    retry_prompt_after = int(
+        incoming.get("model_retry_prompt_after_failures") or DEFAULT_CONFIG["model_retry_prompt_after_failures"]
+    )
+    retry_status_timeout = int(
+        incoming.get("model_retry_status_timeout_seconds") or DEFAULT_CONFIG["model_retry_status_timeout_seconds"]
+    )
+    retry_max_timeout_multiplier = int(
+        incoming.get("model_retry_max_timeout_multiplier")
+        or DEFAULT_CONFIG["model_retry_max_timeout_multiplier"]
+    )
     pipeline_agents = incoming.get("pipeline_agents") or DEFAULT_CONFIG["pipeline_agents"]
     if isinstance(pipeline_agents, str):
         pipeline_agents = [item.strip() for item in pipeline_agents.split(",") if item.strip()]
@@ -389,6 +635,10 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "language": str(incoming.get("language") or DEFAULT_CONFIG["language"]),
         "chapter_parallelism": max(1, chapter_parallelism),
         "chapter_retry": max(1, chapter_retry),
+        "model_retry_wait_seconds": max(1, retry_wait),
+        "model_retry_prompt_after_failures": max(1, retry_prompt_after),
+        "model_retry_status_timeout_seconds": max(1, retry_status_timeout),
+        "model_retry_max_timeout_multiplier": max(1, retry_max_timeout_multiplier),
         "pipeline_agents": pipeline_agents or list(DEFAULT_CONFIG["pipeline_agents"]),
         "agent_workers": incoming.get("agent_workers") if isinstance(incoming.get("agent_workers"), list) else [],
         "global_review_enabled": bool_value(
@@ -669,13 +919,24 @@ def extract_response_text(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def call_model(config: dict[str, Any], prompt: str, label: str = "") -> str:
+def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_multiplier: int = 1) -> str:
     generate_url = join_url(config["server_base_url"], config["generate_path"])
     started = time.perf_counter()
     started_at = time.strftime("%Y-%m-%d %H:%M:%S")
     payload = build_generate_payload(config, prompt)
     label_text = f" [{label}]" if label else ""
-    progress_log("model", f"request{label_text} -> {generate_url} ({word_count(prompt)} words prompt)", "blue")
+    base_timeout_seconds = int(config["request_timeout_seconds"])
+    timeout_scale = max(1, int(timeout_multiplier or 1))
+    timeout_seconds = base_timeout_seconds * timeout_scale
+    prompt_words = word_count(prompt)
+    progress_log(
+        "model",
+        (
+            f"request{label_text} -> {generate_url} prompt_words={prompt_words} "
+            f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x base_timeout={base_timeout_seconds}s"
+        ),
+        "blue",
+    )
     progress_log(
         "model-request",
         (
@@ -687,52 +948,132 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "") -> str:
         "cyan",
     )
     progress_log("model-request", f"prompt preview: {preview_text(prompt)}", "dim")
-    try:
-        mark_prompt_sent()
-        data = request_json(generate_url, payload, int(config["request_timeout_seconds"]))
-    except urllib.error.HTTPError as exc:
-        trace_path = save_llm_trace(
-            url=generate_url,
-            config=config,
-            prompt=prompt,
-            started_at=started_at,
-            elapsed_seconds=time.perf_counter() - started,
-            label=label,
-            error=f"HTTP {exc.code}: {exc.reason}",
+    failure_count = 0
+    while True:
+        send_started = time.perf_counter()
+        attempt_number = failure_count + 1
+        try:
+            mark_prompt_sent()
+            progress_log(
+                "model-request",
+                (
+                    f"{label or 'model'} sending prompt attempt={attempt_number} "
+                    f"prompt_words={prompt_words} timeout={timeout_seconds}s timeout_scale={timeout_scale}x"
+                ),
+                "cyan",
+            )
+            data = request_json(generate_url, payload, timeout_seconds)
+            send_elapsed = time.perf_counter() - send_started
+            progress_log(
+                "model-response",
+                (
+                    f"{label or 'model'} received response attempt={attempt_number} "
+                    f"send_elapsed={send_elapsed:.1f}s total_elapsed={time.perf_counter() - started:.1f}s "
+                    f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x"
+                ),
+                "green",
+            )
+            break
+        except urllib.error.HTTPError as exc:
+            send_elapsed = time.perf_counter() - send_started
+            error = f"Model endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}"
+            trace_path = save_llm_trace(
+                url=generate_url,
+                config=config,
+                prompt=prompt,
+                started_at=started_at,
+                elapsed_seconds=time.perf_counter() - started,
+                label=label,
+                error=f"HTTP {exc.code}: {exc.reason}",
+            )
+            progress_log(
+                "model-response",
+                (
+                    f"{label or 'model'} failed attempt={attempt_number} "
+                    f"send_elapsed={send_elapsed:.1f}s total_elapsed={time.perf_counter() - started:.1f}s "
+                    f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x error=HTTP {exc.code} {exc.reason}"
+                ),
+                "red",
+            )
+            if trace_path:
+                progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
+            if exc.code == HTTPStatus.UNAUTHORIZED:
+                raise ValueError("Model endpoint rejected authentication. Check User ID/Password.") from exc
+        except urllib.error.URLError as exc:
+            send_elapsed = time.perf_counter() - send_started
+            error = f"Could not connect to model endpoint: {generate_url} | {exc}"
+            trace_path = save_llm_trace(
+                url=generate_url,
+                config=config,
+                prompt=prompt,
+                started_at=started_at,
+                elapsed_seconds=time.perf_counter() - started,
+                label=label,
+                error=f"URL error: {exc}",
+            )
+            progress_log(
+                "model-response",
+                (
+                    f"{label or 'model'} failed attempt={attempt_number} "
+                    f"send_elapsed={send_elapsed:.1f}s total_elapsed={time.perf_counter() - started:.1f}s "
+                    f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x error={exc}"
+                ),
+                "red",
+            )
+            if trace_path:
+                progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
+        except TimeoutError as exc:
+            send_elapsed = time.perf_counter() - send_started
+            error = str(exc)
+            trace_path = save_llm_trace(
+                url=generate_url,
+                config=config,
+                prompt=prompt,
+                started_at=started_at,
+                elapsed_seconds=time.perf_counter() - started,
+                label=label,
+                error=error,
+            )
+            progress_log(
+                "model-response",
+                (
+                    f"{label or 'model'} timed out attempt={attempt_number} "
+                    f"send_elapsed={send_elapsed:.1f}s total_elapsed={time.perf_counter() - started:.1f}s "
+                    f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x error={error}"
+                ),
+                "red",
+            )
+            if trace_path:
+                progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
+
+        failure_count += 1
+        if not retryable_model_error(error):
+            raise ValueError(error)
+        progress_log(
+            "model-retry",
+            f"{label or 'model'} request failed without response ({failure_count}): {error}",
+            "yellow",
         )
-        if trace_path:
-            progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
-        if exc.code == HTTPStatus.UNAUTHORIZED:
-            raise ValueError("Model endpoint rejected authentication. Check User ID/Password.") from exc
-        raise ValueError(f"Model endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        trace_path = save_llm_trace(
-            url=generate_url,
-            config=config,
-            prompt=prompt,
-            started_at=started_at,
-            elapsed_seconds=time.perf_counter() - started,
-            label=label,
-            error=f"URL error: {exc}",
+        try:
+            wait_for_model_queue_slot(config, label, failure_count, error)
+        except Exception as retry_exc:
+            raise ValueError(f"{error} | retry_status_failed={retry_exc}") from retry_exc
+        progress_log(
+            "model-retry",
+            f"{label or 'model'} resending prompt after queue check",
+            "cyan",
         )
-        if trace_path:
-            progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
-        raise ValueError(f"Could not connect to model endpoint: {generate_url} | {exc}") from exc
-    except TimeoutError as exc:
-        trace_path = save_llm_trace(
-            url=generate_url,
-            config=config,
-            prompt=prompt,
-            started_at=started_at,
-            elapsed_seconds=time.perf_counter() - started,
-            label=label,
-            error=str(exc),
-        )
-        if trace_path:
-            progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
-        raise ValueError(str(exc)) from exc
     text = extract_response_text(data).strip()
-    progress_log("model", f"response <- {word_count(text)} words", "green", started)
+    progress_log(
+        "model",
+        (
+            f"response{label_text} <- response_words={word_count(text)} "
+            f"prompt_words={prompt_words} total_elapsed={time.perf_counter() - started:.1f}s "
+            f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x"
+        ),
+        "green",
+        started,
+    )
     progress_log("model-response", f"response preview: {preview_text(text, 1200)}", "dim")
     trace_path = save_llm_trace(
         url=generate_url,
@@ -763,6 +1104,199 @@ def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
         "port": data.get("port", ""),
         "raw": data,
     }
+
+
+def retryable_model_error(error: str) -> bool:
+    lowered = (error or "").lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "http 502",
+            "bad gateway",
+            "timed out",
+            "timeout",
+            "could not connect",
+            "connection refused",
+            "temporarily unavailable",
+            "service unavailable",
+            "http 503",
+            "http 504",
+        )
+    )
+
+
+def split_gpu_tokens(value: str) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    if re.fullmatch(r"[0-9,\s]+", text):
+        return [item for item in re.split(r"[,\s]+", text) if item]
+    match = re.search(r"(?:cuda|gpu|device)[^0-9]*([0-9](?:\s*,\s*[0-9])*)", text, re.IGNORECASE)
+    if match:
+        return [item for item in re.split(r"\s*,\s*", match.group(1)) if item]
+    return [text]
+
+
+def model_server_retry_status(config: dict[str, Any]) -> dict[str, Any]:
+    check_config = dict(config)
+    check_config["request_timeout_seconds"] = int(config.get("model_retry_status_timeout_seconds") or 10)
+    status = fetch_remote_status(check_config)
+    raw = status.get("raw") if isinstance(status.get("raw"), dict) else {}
+
+    metrics = raw.get("metrics") if isinstance(raw.get("metrics"), dict) else {}
+    targets = raw.get("targets") if isinstance(raw.get("targets"), list) else []
+    active = 0
+    pending = 0
+    available_targets = 0
+    idle_targets = 0
+    gpu_tokens: set[str] = set()
+    requested_target_id = str(config.get("target_id") or "").strip()
+
+    for target in targets:
+        if not isinstance(target, dict) or not target.get("enabled", True):
+            continue
+        if requested_target_id and str(target.get("id") or "") != requested_target_id:
+            continue
+        metric = metrics.get(str(target.get("id"))) if isinstance(metrics, dict) else {}
+        if not isinstance(metric, dict):
+            metric = {}
+        if metric.get("status") in {"ok", "ready", None, ""}:
+            available_targets += 1
+        target_active = int(metric.get("active_requests") or 0)
+        target_pending = int(metric.get("pending_queue") or 0)
+        active += target_active
+        pending += target_pending
+        if target_active == 0 and target_pending == 0 and metric.get("status") in {"ok", "ready", None, ""}:
+            idle_targets += 1
+        for key in ("selected_gpu_device", "selected_gpu_label", "selected_gpu", "gpu_type"):
+            for token in split_gpu_tokens(str(metric.get(key) or target.get(key) or "")):
+                gpu_tokens.add(token)
+
+    gpus = raw.get("gpus") if isinstance(raw.get("gpus"), list) else []
+    for gpu in gpus:
+        if isinstance(gpu, dict):
+            token = str(gpu.get("id") or gpu.get("index") or gpu.get("uuid") or gpu.get("name") or "").strip()
+            if token:
+                gpu_tokens.add(token)
+
+    queue = raw.get("prompt_queue") if isinstance(raw.get("prompt_queue"), dict) else {}
+    pending += int(queue.get("pending_count") or 0)
+    if not targets and pending == 0 and active == 0:
+        idle_targets = 1
+
+    service_status = str(raw.get("status") or status.get("model") or "ok")
+    return {
+        "live": True,
+        "status": service_status,
+        "model": status.get("model") or "",
+        "gpu_count": len(gpu_tokens) if gpu_tokens else None,
+        "available_targets": available_targets if targets else None,
+        "idle_targets": idle_targets,
+        "queue_empty": idle_targets > 0,
+        "active_requests": active,
+        "pending_prompts": pending,
+        "status_url": status.get("status_url") or "",
+    }
+
+
+def retry_status_text(status: dict[str, Any]) -> str:
+    gpu_count = status.get("gpu_count")
+    gpu_text = str(gpu_count) if gpu_count is not None else "unknown"
+    target_count = status.get("available_targets")
+    target_text = str(target_count) if target_count is not None else "unknown"
+    return (
+        f"status={status.get('status') or 'ok'} "
+        f"model={status.get('model') or '-'} "
+        f"available_gpus={gpu_text} "
+        f"available_targets={target_text} "
+        f"idle_targets={status.get('idle_targets', 0)} "
+        f"active={status.get('active_requests', 0)} "
+        f"pending={status.get('pending_prompts', 0)}"
+    )
+
+
+def ask_continue_after_failures(chapter_title: str, failures: int) -> bool:
+    try:
+        answer = input(
+            f"{chapter_title} has failed {failures} model request attempts. Continue retrying? [y/N]: "
+        ).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        progress_log("retry", "no interactive answer available; stopping retries", "red")
+        return False
+    return answer in {"y", "yes", "c", "continue", "계속", "예", "네"}
+
+
+def wait_for_model_queue_slot(config: dict[str, Any], label: str, failure_count: int, last_error: str) -> None:
+    wait_seconds = int(config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"])
+    prompt_after = int(
+        config.get("model_retry_prompt_after_failures")
+        or DEFAULT_CONFIG["model_retry_prompt_after_failures"]
+    )
+    title = label or str(config.get("name") or "model")
+    asked_at_failure = False
+
+    while True:
+        if failure_count > prompt_after and not asked_at_failure:
+            asked_at_failure = True
+            if not ask_continue_after_failures(title, failure_count):
+                raise ValueError(f"{title} stopped by user after {failure_count} failed model requests: {last_error}")
+
+        status = model_server_retry_status(config)
+        if status.get("queue_empty"):
+            progress_log(
+                "model-retry",
+                (
+                    f"{title} model queue has an empty target; resending prompt now. "
+                    f"{retry_status_text(status)}"
+                ),
+                "green",
+            )
+            return
+
+        progress_log(
+            "model-retry",
+            (
+                f"{title} all model queues are busy; waiting {wait_seconds}s before checking again. "
+                f"{retry_status_text(status)}"
+            ),
+            "yellow",
+        )
+        time.sleep(wait_seconds)
+
+
+def deferred_timeout_multiplier_for_attempt(config: dict[str, Any], attempt: int) -> int:
+    max_multiplier = int(
+        config.get("model_retry_max_timeout_multiplier")
+        or DEFAULT_CONFIG["model_retry_max_timeout_multiplier"]
+    )
+    return max(1, min(max_multiplier, attempt + 1))
+
+
+def wait_for_deferred_queue_slot(worker: dict[str, Any], config: dict[str, Any], chapter_title: str, attempt: int) -> int:
+    wait_seconds = int(config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"])
+    while True:
+        status = model_server_retry_status(worker)
+        if status.get("queue_empty"):
+            multiplier = deferred_timeout_multiplier_for_attempt(config, attempt)
+            progress_log(
+                "deferred",
+                (
+                    f"{chapter_title} model queue is idle enough for deferred prompt; "
+                    f"timeout_scale={multiplier}x. {retry_status_text(status)}"
+                ),
+                "green",
+            )
+            return multiplier
+
+        progress_log(
+            "deferred",
+            (
+                f"{chapter_title} deferred prompt is waiting because all model queues are busy; "
+                f"checking again in {wait_seconds}s. {retry_status_text(status)}"
+            ),
+            "yellow",
+        )
+        time.sleep(wait_seconds)
 
 
 def explain_request_error(exc: Exception) -> str:
@@ -1228,56 +1762,148 @@ def run_chapter_pipeline(
     chapter: dict[str, Any],
     index: int,
     total: int,
+    resume_outputs: dict[str, str] | None = None,
+    resume_agent: str = "",
+    timeout_multiplier: int = 1,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     worker_name = worker.get("name", "worker")
     pipeline_agents = config.get("pipeline_agents") or DEFAULT_CONFIG["pipeline_agents"]
+    outputs: dict[str, str] = dict(resume_outputs or {})
+    start_index = first_runnable_agent_index(pipeline_agents, outputs, resume_agent)
+    skipped_agents = pipeline_agents[:start_index]
     progress_log(
         "chapter",
         f"{index}/{total} {chapter['title']} pipeline started on {worker_name} ({','.join(pipeline_agents)})",
         "yellow",
     )
+    if skipped_agents:
+        progress_log(
+            "chapter",
+            f"{chapter['title']} resuming at {pipeline_agents[start_index]}; skipping completed stages: {','.join(skipped_agents)}",
+            "cyan",
+            started,
+        )
+    if timeout_multiplier > 1:
+        progress_log(
+            "chapter",
+            f"{chapter['title']} using deferred timeout_scale={timeout_multiplier}x for resumed prompt(s)",
+            "yellow",
+            started,
+        )
 
-    outputs: dict[str, str] = {}
-    current_text = ""
-    for agent in pipeline_agents:
+    current_text = (
+        outputs.get("final")
+        or outputs.get("review")
+        or outputs.get("draft")
+        or outputs.get("outline")
+        or ""
+    )
+    for agent in pipeline_agents[start_index:]:
+        missing = [key for key in AGENT_REQUIRED_KEYS.get(agent, []) if not outputs.get(key)]
+        if missing:
+            raise ChapterPipelineError(
+                f"{chapter['title']} cannot run {agent}; missing prerequisite output(s): {', '.join(missing)}",
+                failed_agent=agent,
+                partial_result={
+                    "chapter": chapter,
+                    "worker": worker_name,
+                    "elapsed_seconds": time.perf_counter() - started,
+                    "failed_agent": agent,
+                    "outline": outputs.get("outline", ""),
+                    "draft": outputs.get("draft", ""),
+                    "review": outputs.get("review", ""),
+                    "final": outputs.get("final", ""),
+                },
+            )
         agent_started = time.perf_counter()
         progress_log("agent", f"{chapter['title']}:{agent} -> {worker_name}", "blue")
         label = f"{chapter['title']}:{agent}"
-        if agent == "outline":
-            current_text = call_model(worker, outline_prompt(backbone, chapter, config), label=label)
-            outputs["outline"] = current_text
-        elif agent == "writer":
-            current_text = call_model(worker, writer_prompt(backbone, chapter, config, outputs.get("outline", "")), label=label)
-            outputs["draft"] = current_text
-        elif agent == "reviewer":
-            current_text = call_model(
-                worker,
-                reviewer_prompt(
-                    backbone,
-                    chapter,
-                    config,
-                    outputs.get("outline", ""),
-                    outputs.get("draft", current_text),
-                ),
-                label=label,
+        try:
+            if agent == "outline":
+                current_text = call_model(
+                    worker,
+                    outline_prompt(backbone, chapter, config),
+                    label=label,
+                    timeout_multiplier=timeout_multiplier,
+                )
+                outputs["outline"] = current_text
+            elif agent == "writer":
+                current_text = call_model(
+                    worker,
+                    writer_prompt(backbone, chapter, config, outputs.get("outline", "")),
+                    label=label,
+                    timeout_multiplier=timeout_multiplier,
+                )
+                outputs["draft"] = current_text
+            elif agent == "reviewer":
+                current_text = call_model(
+                    worker,
+                    reviewer_prompt(
+                        backbone,
+                        chapter,
+                        config,
+                        outputs.get("outline", ""),
+                        outputs.get("draft", current_text),
+                    ),
+                    label=label,
+                    timeout_multiplier=timeout_multiplier,
+                )
+                outputs["review"] = current_text
+            elif agent == "finalizer":
+                current_text = call_model(
+                    worker,
+                    finalizer_prompt(backbone, chapter, config, outputs.get("review", current_text)),
+                    label=label,
+                    timeout_multiplier=timeout_multiplier,
+                )
+                outputs["final"] = current_text
+        except Exception as exc:
+            checkpoint_update_chapter(
+                chapter,
+                index=index,
+                worker=worker_name,
+                status="failed",
+                outputs=outputs,
+                failed_agent=agent,
             )
-            outputs["review"] = current_text
-        elif agent == "finalizer":
-            current_text = call_model(
-                worker,
-                finalizer_prompt(backbone, chapter, config, outputs.get("review", current_text)),
-                label=label,
-            )
-            outputs["final"] = current_text
+            raise ChapterPipelineError(
+                f"{chapter['title']}:{agent} failed: {exc}",
+                failed_agent=agent,
+                partial_result={
+                    "chapter": chapter,
+                    "worker": worker_name,
+                    "elapsed_seconds": time.perf_counter() - started,
+                    "failed_agent": agent,
+                    "outline": outputs.get("outline", ""),
+                    "draft": outputs.get("draft", ""),
+                    "review": outputs.get("review", ""),
+                    "final": outputs.get("final", ""),
+                },
+            ) from exc
         progress_log(
             "agent",
             f"{chapter['title']}:{agent} done ({word_count(current_text)} words)",
             "green",
             agent_started,
         )
+        checkpoint_update_chapter(
+            chapter,
+            index=index,
+            worker=worker_name,
+            status="running",
+            outputs=outputs,
+            completed_agent=agent,
+        )
 
     final_text = outputs.get("final") or outputs.get("review") or outputs.get("draft") or outputs.get("outline") or current_text
+    checkpoint_update_chapter(
+        chapter,
+        index=index,
+        worker=worker_name,
+        status="completed",
+        outputs={**outputs, "final": final_text},
+    )
     progress_log(
         "chapter",
         f"{index}/{total} {chapter['title']} pipeline done on {worker_name} ({word_count(final_text)} words)",
@@ -1302,17 +1928,117 @@ def run_chapter_with_retry(
     chapter: dict[str, Any],
     index: int,
     total: int,
+    phase: str = "normal",
+    total_attempt_offset: int = 0,
+    continuous_on_live_model: bool = False,
+    resume_outputs: dict[str, str] | None = None,
+    resume_agent: str = "",
 ) -> dict[str, Any]:
     last_error = ""
-    for attempt in range(1, int(config["chapter_retry"]) + 1):
+    partial_result: dict[str, Any] = {}
+    current_resume_outputs: dict[str, str] = dict(resume_outputs or {})
+    current_resume_agent = resume_agent
+    attempt = 1
+    retry_limit = int(config["chapter_retry"])
+    while True:
+        total_attempt = total_attempt_offset + attempt
+        limit_text = str(retry_limit) if attempt <= retry_limit else "continuous"
         try:
-            if attempt > 1:
-                progress_log("retry", f"{chapter['title']} attempt {attempt}/{config['chapter_retry']}", "yellow")
-            return run_chapter_pipeline(config, worker, backbone, chapter, index, total)
+            if attempt > 1 or phase != "normal":
+                progress_log(
+                    "retry",
+                    (
+                        f"{chapter['title']} {phase} attempt {attempt}/{limit_text} "
+                        f"(total attempt {total_attempt})"
+                    ),
+                    "yellow",
+                )
+            timeout_multiplier = 1
+            if phase == "deferred":
+                timeout_multiplier = wait_for_deferred_queue_slot(worker, config, chapter["title"], attempt)
+            return run_chapter_pipeline(
+                config,
+                worker,
+                backbone,
+                chapter,
+                index,
+                total,
+                resume_outputs=current_resume_outputs,
+                resume_agent=current_resume_agent,
+                timeout_multiplier=timeout_multiplier,
+            )
+        except ChapterPipelineError as exc:
+            last_error = str(exc)
+            partial_result = exc.partial_result
+            current_resume_agent = exc.failed_agent
+            current_resume_outputs = {
+                "outline": str(partial_result.get("outline") or ""),
+                "draft": str(partial_result.get("draft") or ""),
+                "review": str(partial_result.get("review") or ""),
+                "final": str(partial_result.get("final") or ""),
+            }
+            progress_log(
+                "retry",
+                (
+                    f"{chapter['title']} {phase} failed attempt {attempt}/{limit_text} "
+                    f"(total attempt {total_attempt}, failed_agent={current_resume_agent or '-'}): {last_error}"
+                ),
+                "red",
+            )
         except Exception as exc:
             last_error = str(exc)
-            progress_log("retry", f"{chapter['title']} failed attempt {attempt}: {last_error}", "red")
-    raise ValueError(f"{chapter['title']} failed after {config['chapter_retry']} attempts: {last_error}")
+            progress_log(
+                "retry",
+                (
+                    f"{chapter['title']} {phase} failed attempt {attempt}/{limit_text} "
+                    f"(total attempt {total_attempt}): {last_error}"
+                ),
+                "red",
+            )
+
+        if attempt < retry_limit:
+            attempt += 1
+            continue
+
+        if not continuous_on_live_model or not retryable_model_error(last_error):
+            raise ChapterPipelineError(
+                f"{chapter['title']} failed after {attempt} {phase} attempts: {last_error}",
+                failed_agent=current_resume_agent,
+                partial_result=partial_result,
+            )
+
+        try:
+            status = model_server_retry_status(worker)
+        except Exception as status_exc:
+            raise ChapterPipelineError(
+                f"{chapter['title']} failed after {attempt} {phase} attempts and model status is unavailable: "
+                f"{status_exc} | last_error={last_error}",
+                failed_agent=current_resume_agent,
+                partial_result=partial_result,
+            ) from status_exc
+
+        wait_seconds = int(config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"])
+        prompt_after = int(
+            config.get("model_retry_prompt_after_failures")
+            or DEFAULT_CONFIG["model_retry_prompt_after_failures"]
+        )
+        if total_attempt > prompt_after and not ask_continue_after_failures(chapter["title"], total_attempt):
+            raise ChapterPipelineError(
+                f"{chapter['title']} stopped by user after {total_attempt} failed attempts: {last_error}",
+                failed_agent=current_resume_agent,
+                partial_result=partial_result,
+            )
+
+        progress_log(
+            "warning",
+            (
+                f"{chapter['title']} model server is still responding; waiting {wait_seconds}s before retry. "
+                f"{retry_status_text(status)}"
+            ),
+            "yellow",
+        )
+        time.sleep(wait_seconds)
+        attempt += 1
 
 
 def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict[str, Any]:
@@ -1322,9 +2048,13 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     config = apply_backbone_runtime_options(config, backbone_text, len(chapters))
     started = time.perf_counter()
     llm_trace_dir = init_llm_trace_dir()
+    checkpoint_path, checkpoint_state = init_checkpoint(backbone_text, config, chapters)
+    checkpoint_set_field("llm_trace_dir", str(llm_trace_dir))
     progress_log("start", f"book agent run started: {len(chapters)} chapters", "bold", started)
     progress_log("backbone", f"title='{title_from_backbone(backbone_text)}'", "cyan", started)
     progress_log("model-trace", f"saving full prompts/responses -> {llm_trace_dir}", "cyan", started)
+    progress_log("checkpoint", f"saving/resuming checkpoint -> {checkpoint_path}", "cyan", started)
+    checkpoint_event("start", f"book run started with {len(chapters)} chapters")
     if config.get("_backbone_parallel_enabled"):
         for alert in config.get("_backbone_parallel_alerts", []):
             progress_log("parallel-alert", alert, "magenta", started)
@@ -1350,31 +2080,123 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         futures = {}
         for index, chapter in enumerate(chapters, start=1):
             worker = slots[(index - 1) % len(slots)]
-            future = executor.submit(run_chapter_with_retry, config, worker, backbone_text, chapter, index, len(chapters))
+            saved = checkpoint_chapter_entry(chapter)
+            saved_outputs = {
+                "outline": str(saved.get("outline") or ""),
+                "draft": str(saved.get("draft") or ""),
+                "review": str(saved.get("review") or ""),
+                "final": str(saved.get("final") or ""),
+            }
+            if saved.get("status") == "completed" and saved_outputs["final"]:
+                progress_log(
+                    "checkpoint",
+                    f"{chapter['title']} already completed in checkpoint; skipping chapter pipeline",
+                    "green",
+                    started,
+                )
+                chapter_drafts.append(
+                    {
+                        "chapter": chapter,
+                        "worker": saved.get("worker") or worker.get("name", "worker"),
+                        "elapsed_seconds": 0.0,
+                        "outline": saved_outputs["outline"],
+                        "draft": saved_outputs["draft"],
+                        "review": saved_outputs["review"],
+                        "final": saved_outputs["final"],
+                        "resumed_from_checkpoint": True,
+                    }
+                )
+                continue
+            resume_agent = str(saved.get("failed_agent") or "")
+            if any(saved_outputs.values()):
+                progress_log(
+                    "checkpoint",
+                    (
+                        f"{chapter['title']} resuming from checkpoint "
+                        f"(failed_agent={resume_agent or 'auto'})"
+                    ),
+                    "yellow",
+                    started,
+                )
+            future = executor.submit(
+                run_chapter_with_retry,
+                config,
+                worker,
+                backbone_text,
+                chapter,
+                index,
+                len(chapters),
+                "normal",
+                0,
+                False,
+                saved_outputs,
+                resume_agent,
+            )
             futures[future] = {
                 "chapter": chapter,
                 "index": index,
                 "worker": worker,
             }
 
-        for future in as_completed(futures):
-            item = futures[future]
-            chapter = item["chapter"]
-            try:
-                chapter_drafts.append(future.result())
-            except Exception as exc:
-                error = str(exc)
-                deferred_retries.append({**item, "error": error})
-                progress_log(
-                    "warning",
-                    (
-                        f"{chapter['title']} failed after normal retries while other chapters may still be running; "
-                        "will retry after current chapter batch completes. "
-                        f"error={error}"
-                    ),
-                    "yellow",
-                    started,
-                )
+        pending_futures = set(futures)
+        progress_log(
+            "parallel",
+            f"running {sum(1 for future in pending_futures if future.running())}/{max_workers} chapter worker(s)",
+            "cyan",
+            started,
+        )
+        while pending_futures:
+            done, pending_futures = wait(pending_futures, timeout=30, return_when=FIRST_COMPLETED)
+            running_count = sum(1 for future in pending_futures if future.running())
+            progress_log(
+                "parallel",
+                (
+                    f"running {running_count}/{max_workers} chapter worker(s), "
+                    f"pending futures={len(pending_futures)}, completed this tick={len(done)}"
+                ),
+                "cyan",
+                started,
+            )
+            if not done:
+                continue
+            for future in done:
+                item = futures[future]
+                chapter = item["chapter"]
+                try:
+                    chapter_drafts.append(future.result())
+                except ChapterPipelineError as exc:
+                    error = str(exc)
+                    deferred_retries.append(
+                        {
+                            **item,
+                            "error": error,
+                            "failed_agent": exc.failed_agent,
+                            "partial_result": exc.partial_result,
+                        }
+                    )
+                    progress_log(
+                        "warning",
+                        (
+                            f"{chapter['title']} failed after normal retries at {exc.failed_agent or 'unknown'}; "
+                            "will resume from the appropriate stage after current chapter batch completes. "
+                            f"error={error}"
+                        ),
+                        "yellow",
+                        started,
+                    )
+                except Exception as exc:
+                    error = str(exc)
+                    deferred_retries.append({**item, "error": error})
+                    progress_log(
+                        "warning",
+                        (
+                            f"{chapter['title']} failed after normal retries while other chapters may still be running; "
+                            "will retry after current chapter batch completes. "
+                            f"error={error}"
+                        ),
+                        "yellow",
+                        started,
+                    )
 
     if deferred_retries:
         progress_log(
@@ -1387,17 +2209,41 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
             chapter = item["chapter"]
             index = int(item["index"])
             worker = item["worker"]
+            partial_result = item.get("partial_result") if isinstance(item.get("partial_result"), dict) else {}
+            resume_outputs = {
+                "outline": str(partial_result.get("outline") or ""),
+                "draft": str(partial_result.get("draft") or ""),
+                "review": str(partial_result.get("review") or ""),
+                "final": str(partial_result.get("final") or ""),
+            }
+            resume_agent = str(item.get("failed_agent") or partial_result.get("failed_agent") or "")
             progress_log(
                 "retry",
-                f"{chapter['title']} deferred retry started after other chapters completed",
+                (
+                    f"{chapter['title']} deferred retry started after other chapters completed "
+                    f"(resume_agent={resume_agent or 'auto'})"
+                ),
                 "yellow",
                 started,
             )
             try:
-                result = run_chapter_with_retry(config, worker, backbone_text, chapter, index, len(chapters))
+                result = run_chapter_with_retry(
+                    config,
+                    worker,
+                    backbone_text,
+                    chapter,
+                    index,
+                    len(chapters),
+                    "deferred",
+                    int(config["chapter_retry"]),
+                    True,
+                    resume_outputs,
+                    resume_agent,
+                )
                 result["deferred_retry"] = {
                     "used": True,
                     "initial_error": item["error"],
+                    "resume_agent": resume_agent,
                 }
                 chapter_drafts.append(result)
                 progress_log(
@@ -1407,6 +2253,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                     started,
                 )
             except Exception as exc:
+                checkpoint_mark_status("failed")
                 progress_log(
                     "warning",
                     f"{chapter['title']} deferred retry failed: {exc}",
@@ -1418,30 +2265,51 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     chapter_drafts.sort(key=lambda item: int(item["chapter"]["number"]))
 
     if config.get("global_review_enabled"):
-        coordinator_started = time.perf_counter()
-        progress_log("main-writer", "reviewing finalized chapter outputs and preparing direction notes", "magenta", started)
-        coordinator_notes = call_model(
-            config,
-            coordinator_prompt(backbone_text, chapter_drafts, config),
-            label="main-writer:coordinator",
-        )
-        progress_log(
-            "main-writer",
-            f"direction notes done ({word_count(coordinator_notes)} words)",
-            "green",
-            coordinator_started,
-        )
+        if checkpoint_state.get("coordinator_notes"):
+            coordinator_notes = str(checkpoint_state.get("coordinator_notes") or "")
+            progress_log("checkpoint", "main-writer notes restored from checkpoint", "green", started)
+        else:
+            coordinator_started = time.perf_counter()
+            progress_log("main-writer", "reviewing finalized chapter outputs and preparing direction notes", "magenta", started)
+            try:
+                coordinator_notes = call_model(
+                    config,
+                    coordinator_prompt(backbone_text, chapter_drafts, config),
+                    label="main-writer:coordinator",
+                )
+                checkpoint_set_field("coordinator_notes", coordinator_notes)
+                checkpoint_event("main-writer", "coordinator notes completed")
+            except Exception:
+                checkpoint_mark_status("failed")
+                raise
+            progress_log(
+                "main-writer",
+                f"direction notes done ({word_count(coordinator_notes)} words)",
+                "green",
+                coordinator_started,
+            )
     else:
         coordinator_notes = "Global review disabled by config."
+        checkpoint_set_field("coordinator_notes", coordinator_notes)
 
     revise_started = time.perf_counter()
-    progress_log("lead-writer", "rewriting opening and early chapter from chapter-agent outputs", "cyan", started)
-    revised_opening = call_model(
-        config,
-        revise_opening_prompt(backbone_text, chapter_drafts, coordinator_notes),
-        label="lead-writer:revise-opening",
-    )
-    progress_log("lead-writer", f"opening revision done ({word_count(revised_opening)} words)", "green", revise_started)
+    if checkpoint_state.get("revised_opening"):
+        revised_opening = str(checkpoint_state.get("revised_opening") or "")
+        progress_log("checkpoint", "lead-writer revised opening restored from checkpoint", "green", started)
+    else:
+        progress_log("lead-writer", "rewriting opening and early chapter from chapter-agent outputs", "cyan", started)
+        try:
+            revised_opening = call_model(
+                config,
+                revise_opening_prompt(backbone_text, chapter_drafts, coordinator_notes),
+                label="lead-writer:revise-opening",
+            )
+            checkpoint_set_field("revised_opening", revised_opening)
+            checkpoint_event("lead-writer", "revised opening completed")
+        except Exception:
+            checkpoint_mark_status("failed")
+            raise
+        progress_log("lead-writer", f"opening revision done ({word_count(revised_opening)} words)", "green", revise_started)
 
     title = title_from_backbone(backbone_text)
     progress_log("compile", "compiling final manuscript", "blue", started)
@@ -1451,6 +2319,9 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     output_path = OUTPUT_DIR / f"book_{timestamp}.md"
     pdf_path = OUTPUT_DIR / f"book_{timestamp}.pdf"
     log_path = OUTPUT_DIR / f"run_{timestamp}.json"
+    checkpoint_set_field("output_path", str(output_path))
+    checkpoint_set_field("pdf_path", str(pdf_path))
+    checkpoint_set_field("log_path", str(log_path))
     progress_log("save", f"writing book markdown -> {output_path}", "blue", started)
     output_path.write_text(book + "\n", encoding="utf-8")
     progress_log("save", f"writing book PDF -> {pdf_path}", "blue", started)
@@ -1473,6 +2344,13 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                         "index": item["index"],
                         "worker": public_config(item["worker"]),
                         "initial_error": item["error"],
+                        "failed_agent": item.get("failed_agent", ""),
+                        "partial_outputs": {
+                            "outline": bool((item.get("partial_result") or {}).get("outline")),
+                            "draft": bool((item.get("partial_result") or {}).get("draft")),
+                            "review": bool((item.get("partial_result") or {}).get("review")),
+                            "final": bool((item.get("partial_result") or {}).get("final")),
+                        },
                     }
                     for item in deferred_retries
                 ],
@@ -1485,6 +2363,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "pdf_error": "" if pdf_ok else pdf_message,
                 "service_log_path": str(SERVICE_LOG_PATH) if SERVICE_LOG_PATH else "",
                 "llm_trace_dir": str(llm_trace_dir),
+                "checkpoint_path": str(checkpoint_path),
             },
             ensure_ascii=False,
             indent=2,
@@ -1493,6 +2372,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         encoding="utf-8",
     )
     progress_log("done", f"agent run finished ({word_count(book)} words total)", "green", started)
+    checkpoint_mark_status("completed")
     return {
         "ok": True,
         "elapsed_seconds": time.perf_counter() - started,
@@ -1506,6 +2386,13 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "index": item["index"],
                 "worker": public_config(item["worker"]),
                 "initial_error": item["error"],
+                "failed_agent": item.get("failed_agent", ""),
+                "partial_outputs": {
+                    "outline": bool((item.get("partial_result") or {}).get("outline")),
+                    "draft": bool((item.get("partial_result") or {}).get("draft")),
+                    "review": bool((item.get("partial_result") or {}).get("review")),
+                    "final": bool((item.get("partial_result") or {}).get("final")),
+                },
             }
             for item in deferred_retries
         ],
@@ -1518,6 +2405,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         "pdf_error": "" if pdf_ok else pdf_message,
         "service_log_path": str(SERVICE_LOG_PATH) if SERVICE_LOG_PATH else "",
         "llm_trace_dir": str(llm_trace_dir),
+        "checkpoint_path": str(checkpoint_path),
         "log_path": str(log_path),
     }
 
@@ -1637,6 +2525,8 @@ def main() -> int:
         for key, value in {
             "user_id": args.llm_user,
             "password": args.llm_password,
+            "model_retry_wait_seconds": args.model_retry_wait_seconds,
+            "model_retry_prompt_after_failures": args.model_retry_prompt_after_failures,
         }.items()
         if value is not None
     }
