@@ -37,7 +37,8 @@ HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
 QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
-HEALTH_CHECK_INTERVAL_SECONDS = int(os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "30"))
+STATUS_REFRESH_SECONDS = int(os.getenv("LLM_ROUTING_STATUS_REFRESH_SECONDS", os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "10")))
+HEALTH_CHECK_INTERVAL_SECONDS = STATUS_REFRESH_SECONDS
 WEBDAV_DEFAULT_INTERVAL_MINUTES = int(os.getenv("LLM_ROUTING_WEBDAV_INTERVAL_MINUTES", "30"))
 SESSION_COOKIE_NAME = "llm_routing_session"
 SESSION_TTL_SECONDS = int(os.getenv("LLM_ROUTING_SESSION_TTL_SECONDS", "28800"))
@@ -106,6 +107,7 @@ class TargetMetrics:
     status: str = "unknown"
     uptime: str = ""
     queue_state: str = "idle"
+    last_health_probe_at: float = 0.0
     remote_gpu_info: str = ""
     remote_gpu_type: str = ""
     recent_response_seconds: list[float] = field(default_factory=list)
@@ -131,6 +133,14 @@ class PromptJob:
 
 class QueueFullError(Exception):
     pass
+
+
+def queue_state_text(active_requests: int, pending_queue: int) -> str:
+    if active_requests > 0:
+        return "active"
+    if pending_queue > 0:
+        return "pending"
+    return "idle"
 
 
 def now_text() -> str:
@@ -624,7 +634,7 @@ def sync_queue_metric(target_id: str) -> None:
         q = TARGET_QUEUES.get(target_id)
         metric = metric_for(target_id)
         metric.pending_queue = q.qsize() if q else 0
-        metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
+        metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
         store_metric(target_id, metric)
 
 
@@ -755,7 +765,7 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
     with STATE_LOCK:
         metric = metric_for(target.id)
         metric.active_requests += 1
-        metric.queue_state = "running"
+        metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
         store_metric(target.id, metric)
 
     started = time.time()
@@ -780,7 +790,7 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             metric.active_requests = max(0, metric.active_requests - 1)
             q = TARGET_QUEUES.get(target.id)
             metric.pending_queue = q.qsize() if q else metric.pending_queue
-            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else ("running" if metric.active_requests else "pending")
+            metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
             recent = metric.recent_response_seconds
             recent.append(elapsed)
             del recent[:-30]
@@ -820,7 +830,7 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             metric.active_requests = max(0, metric.active_requests - 1)
             q = TARGET_QUEUES.get(target.id)
             metric.pending_queue = q.qsize() if q else max(0, metric.pending_queue)
-            metric.queue_state = "idle" if metric.active_requests == 0 and metric.pending_queue == 0 else ("running" if metric.active_requests else "pending")
+            metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
             store_metric(target.id, metric)
         record_access(
             {
@@ -1431,9 +1441,6 @@ def status_payload() -> dict[str, Any]:
         selected_gpu_health_label = ""
         should_probe_health = (
             target.enabled
-            and metric.active_requests == 0
-            and local_pending == 0
-            and (metric.status in {"unknown", "error"} or not metric.last_seen_at)
             and now - metric.last_health_at >= HEALTH_CHECK_INTERVAL_SECONDS
         )
         if should_probe_health:
@@ -1441,6 +1448,7 @@ def status_payload() -> dict[str, Any]:
             health = target_health(target)
             metric.status = "ok" if health["ok"] else "error"
             metric.last_error = "" if health["ok"] else health.get("error", "")
+            metric.last_health_probe_at = now
             data = health.get("data") if isinstance(health.get("data"), dict) else {}
             if target.api_type in OPENAI_COMPATIBLE_API_TYPES and isinstance(data, dict):
                 running = data.get("num_requests_running")
@@ -1453,7 +1461,7 @@ def status_payload() -> dict[str, Any]:
                     metric.remote_gpu_info = str(data.get("summary"))
                 if data.get("gpu_metric_lines"):
                     metric.remote_gpu_type = target.api_type
-                metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
+                metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
             elif isinstance(data, dict):
                 queue = data.get("prompt_queue") if isinstance(data.get("prompt_queue"), dict) else {}
                 if isinstance(queue.get("pending_count"), int):
@@ -1469,10 +1477,10 @@ def status_payload() -> dict[str, Any]:
                     selected_gpu_health_label = selected_gpu_label_from_health(target, data)
                     selected = selected_gpu_health_label or str(data.get("selected_gpu_label") or "")
                     metric.remote_gpu_type = selected or gpu_names[0]
-                metric.queue_state = "pending" if metric.pending_queue else "idle"
+                metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
             metric.last_seen_at = now_text()
         metric.pending_queue = max(metric.pending_queue, local_pending)
-        metric.queue_state = "running" if metric.active_requests else ("pending" if metric.pending_queue else "idle")
+        metric.queue_state = queue_state_text(metric.active_requests, metric.pending_queue)
         store_metric(target.id, metric)
         health_by_id[target.id] = metric.__dict__ | {
             "average_response_seconds": metric.average_response_seconds,
@@ -1480,9 +1488,9 @@ def status_payload() -> dict[str, Any]:
             "gpu_type": metric.remote_gpu_type or target.gpu_type,
             "selected_gpu_device": selected_gpu_health_label or selected_gpu_device(target),
             "queue_max_per_target": QUEUE_MAX_PER_TARGET,
+            "activity_state": metric.queue_state,
         }
 
-    now = time.time()
     clients = []
     for stats in CLIENT_STATS.values():
         recent = [stamp for stamp in stats.get("recent_times", []) if now - stamp <= 60]
@@ -1498,6 +1506,7 @@ def status_payload() -> dict[str, Any]:
     return {
         "started_at": dt.datetime.fromtimestamp(STARTED_AT).astimezone().isoformat(),
         "uptime": seconds_to_uptime(time.time() - STARTED_AT),
+        "status_refresh_seconds": STATUS_REFRESH_SECONDS,
         "targets": [target.__dict__ for target in targets],
         "metrics": health_by_id,
         "service": {
@@ -1663,6 +1672,14 @@ INDEX_HTML = """<!doctype html>
   </section>
   <section id="service">
     <div class="grid" id="serviceMetrics"></div>
+    <h3>모델 동작 상태</h3>
+    <table>
+      <thead>
+        <tr><th>LLM</th><th>주소</th><th>모델</th><th>동작 상태</th><th>Active</th><th>Pending prompts</th><th>최근 응답</th><th>최근 확인</th></tr>
+      </thead>
+      <tbody id="serviceTargetRows"></tbody>
+    </table>
+    <h3>클라이언트 요청 상태</h3>
     <table><thead><tr><th>클라이언트</th><th>요청 prompt 수</th><th>초당 질의</th><th>최근 응답</th><th>최근 접속</th></tr></thead><tbody id="clientRows"></tbody></table>
   </section>
   <section id="local">
@@ -1832,12 +1849,36 @@ function renderTargets() {
 function renderService() {
   const service = state.service || {};
   const clients = service.clients || [];
+  const targets = state.targets || [];
+  const metrics = state.metrics || {};
+  const totalPending = targets.reduce((n,t)=>n+(metrics[t.id]?.pending_queue||0),0);
+  const totalActive = targets.reduce((n,t)=>n+(metrics[t.id]?.active_requests||0),0);
   document.getElementById('serviceMetrics').innerHTML = [
     metric('접속 prompt 클라이언트', service.client_count || 0),
     metric('전체 클라이언트 요청', clients.reduce((n,c)=>n+(c.prompt_count||0),0)),
+    metric('Active 요청', totalActive),
+    metric('Pending prompts', totalPending),
     metric('총 QPS', clients.reduce((n,c)=>n+(c.qps||0),0).toFixed(3)),
+    metric('상태 갱신 주기', `${state.status_refresh_seconds || 10}s`),
     metric('라우터 uptime', state.uptime || '')
   ].join('');
+  document.getElementById('serviceTargetRows').innerHTML = targets.map(t => {
+    const m = metrics[t.id] || {};
+    const stateText = m.activity_state || m.queue_state || 'idle';
+    const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
+    const stateCls = stateText === 'active' ? 'ok' : (stateText === 'pending' ? 'warn' : '');
+    const probeText = m.last_health_probe_at ? new Date(Number(m.last_health_probe_at) * 1000).toLocaleTimeString() : '-';
+    return `<tr>
+      <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
+      <td>${esc(t.model || 'server-default')}</td>
+      <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br><span class="${stateCls}">${esc(stateText)}</span></td>
+      <td>${m.active_requests || 0}</td>
+      <td>${m.pending_queue || 0}/${m.queue_max_per_target || 10}</td>
+      <td>${Number(m.last_response_seconds || 0).toFixed(2)}s<br><small>${esc(m.last_error || '')}</small></td>
+      <td>${esc(probeText)}<br><small>${esc(m.last_seen_at || '')}</small></td>
+    </tr>`;
+  }).join('');
   document.getElementById('clientRows').innerHTML = clients.map(c => `<tr><td>${esc(c.client)}</td><td>${c.prompt_count}</td><td>${c.qps}</td><td>${c.last_response_seconds}s</td><td>${esc(c.last_seen)}</td></tr>`).join('');
 }
 function renderLocal() {
@@ -2087,7 +2128,7 @@ function clearPromptTest() {
   document.getElementById('compareRows').innerHTML = '';
 }
 refresh();
-setInterval(refresh, 5000);
+setInterval(refresh, 10000);
 document.getElementById('test_target').addEventListener('change', (event) => {
   selectedTestTargetId = event.target.value;
   if (selectedTestTargetId) {

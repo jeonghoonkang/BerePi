@@ -273,11 +273,14 @@ output/service_YYYYMMDD_HHMMSS.log
 output/book_YYYYMMDD_HHMMSS.md
 output/book_YYYYMMDD_HHMMSS.pdf
 output/run_YYYYMMDD_HHMMSS.json
+output/llm_trace_YYYYMMDD_HHMMSS/
 ```
 
 `service_*.log`에는 서버 시작, 접속 대기, API 요청, LLM 요청/응답 preview, 오류가 콘솔 출력과 함께 기록됩니다.
 
 `run_*.json`에는 각 챕터 에이전트 출력, main writer 조율 메모, 수정된 초반부, PDF 생성 경로 또는 실패 사유가 함께 기록됩니다.
+
+`llm_trace_*` 폴더에는 각 LLM 호출의 전체 prompt, 전체 response, 요청 URL, worker/model, 소요 시간, 실패 에러가 순번 JSON 파일로 저장됩니다.
 
 PDF 생성은 `pandoc`이 있으면 우선 사용하고, macOS에서는 기본 `cupsfilter`를 사용합니다. 둘 다 없으면 Markdown과 JSON은 정상 저장하고 PDF 실패 사유만 로그에 남깁니다.
 

@@ -32,6 +32,9 @@ PROMPT_SENT_LOCK = threading.Lock()
 SERVICE_LOG_PATH: Path | None = None
 SERVICE_LOG_LOCK = threading.Lock()
 RUNTIME_CONFIG_OVERRIDES: dict[str, Any] = {}
+LLM_TRACE_DIR: Path | None = None
+LLM_TRACE_LOCK = threading.Lock()
+LLM_TRACE_COUNTER = 0
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -208,6 +211,68 @@ def preview_text(text: str, limit: int = 700) -> str:
     if len(compact) <= limit:
         return compact
     return compact[:limit].rstrip() + "..."
+
+
+def init_llm_trace_dir() -> Path:
+    global LLM_TRACE_DIR, LLM_TRACE_COUNTER
+
+    trace_dir = OUTPUT_DIR / f"llm_trace_{time.strftime('%Y%m%d_%H%M%S')}"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    with LLM_TRACE_LOCK:
+        LLM_TRACE_DIR = trace_dir
+        LLM_TRACE_COUNTER = 0
+    return trace_dir
+
+
+def safe_trace_name(value: str) -> str:
+    name = re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", value or "").strip("_")
+    return (name or "model")[:80]
+
+
+def save_llm_trace(
+    *,
+    url: str,
+    config: dict[str, Any],
+    prompt: str,
+    started_at: str,
+    elapsed_seconds: float,
+    label: str = "",
+    response: str = "",
+    error: str = "",
+    raw_response: dict[str, Any] | None = None,
+) -> str:
+    trace_dir = LLM_TRACE_DIR
+    if trace_dir is None:
+        return ""
+
+    with LLM_TRACE_LOCK:
+        global LLM_TRACE_COUNTER
+        LLM_TRACE_COUNTER += 1
+        trace_number = LLM_TRACE_COUNTER
+
+    worker_name = safe_trace_name(str(config.get("name") or config.get("model") or "model"))
+    path = trace_dir / f"{trace_number:04d}_{worker_name}.json"
+    payload = {
+        "sequence": trace_number,
+        "created_at": started_at,
+        "elapsed_seconds": elapsed_seconds,
+        "label": label,
+        "url": url,
+        "worker": config.get("name", ""),
+        "model": config.get("model", ""),
+        "prompt_word_count": word_count(prompt),
+        "response_word_count": word_count(response),
+        "prompt": prompt,
+        "response": response,
+        "error": error,
+        "raw_response": raw_response or {},
+    }
+    try:
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        progress_log("warning", f"failed to write LLM trace {path}: {exc}", "yellow")
+        return ""
+    return str(path)
 
 
 def mark_prompt_sent() -> None:
@@ -604,11 +669,13 @@ def extract_response_text(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def call_model(config: dict[str, Any], prompt: str) -> str:
+def call_model(config: dict[str, Any], prompt: str, label: str = "") -> str:
     generate_url = join_url(config["server_base_url"], config["generate_path"])
     started = time.perf_counter()
+    started_at = time.strftime("%Y-%m-%d %H:%M:%S")
     payload = build_generate_payload(config, prompt)
-    progress_log("model", f"request -> {generate_url} ({word_count(prompt)} words prompt)", "blue")
+    label_text = f" [{label}]" if label else ""
+    progress_log("model", f"request{label_text} -> {generate_url} ({word_count(prompt)} words prompt)", "blue")
     progress_log(
         "model-request",
         (
@@ -624,16 +691,61 @@ def call_model(config: dict[str, Any], prompt: str) -> str:
         mark_prompt_sent()
         data = request_json(generate_url, payload, int(config["request_timeout_seconds"]))
     except urllib.error.HTTPError as exc:
+        trace_path = save_llm_trace(
+            url=generate_url,
+            config=config,
+            prompt=prompt,
+            started_at=started_at,
+            elapsed_seconds=time.perf_counter() - started,
+            label=label,
+            error=f"HTTP {exc.code}: {exc.reason}",
+        )
+        if trace_path:
+            progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
         if exc.code == HTTPStatus.UNAUTHORIZED:
             raise ValueError("Model endpoint rejected authentication. Check User ID/Password.") from exc
         raise ValueError(f"Model endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}") from exc
     except urllib.error.URLError as exc:
+        trace_path = save_llm_trace(
+            url=generate_url,
+            config=config,
+            prompt=prompt,
+            started_at=started_at,
+            elapsed_seconds=time.perf_counter() - started,
+            label=label,
+            error=f"URL error: {exc}",
+        )
+        if trace_path:
+            progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
         raise ValueError(f"Could not connect to model endpoint: {generate_url} | {exc}") from exc
     except TimeoutError as exc:
+        trace_path = save_llm_trace(
+            url=generate_url,
+            config=config,
+            prompt=prompt,
+            started_at=started_at,
+            elapsed_seconds=time.perf_counter() - started,
+            label=label,
+            error=str(exc),
+        )
+        if trace_path:
+            progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
         raise ValueError(str(exc)) from exc
     text = extract_response_text(data).strip()
     progress_log("model", f"response <- {word_count(text)} words", "green", started)
     progress_log("model-response", f"response preview: {preview_text(text, 1200)}", "dim")
+    trace_path = save_llm_trace(
+        url=generate_url,
+        config=config,
+        prompt=prompt,
+        started_at=started_at,
+        elapsed_seconds=time.perf_counter() - started,
+        label=label,
+        response=text,
+        raw_response=data,
+    )
+    if trace_path:
+        progress_log("model-trace", f"saved prompt/response trace -> {trace_path}", "cyan")
     return text
 
 
@@ -841,19 +953,53 @@ def title_from_backbone(backbone: str) -> str:
     return "untitled-book"
 
 
-def chapter_context(backbone: str, chapter: dict[str, Any], config: dict[str, Any]) -> str:
-    bullets = "\n".join(f"- {item}" for item in chapter["bullets"])
-    return f"""책 전체 기획:
-{backbone}
+def book_brief(backbone: str) -> str:
+    chapters = parse_chapters(backbone)
+    chapter_lines = "\n".join(f"- {item['title']}" for item in chapters)
+    return f"""제목: {title_from_backbone(backbone)}
+챕터 구성:
+{chapter_lines}"""
 
-담당 챕터:
-{chapter['title']}
-{bullets}
+
+def chapter_source_section(backbone: str, chapter: dict[str, Any]) -> str:
+    number = int(chapter["number"])
+    lines = backbone.splitlines()
+    section: list[str] = []
+    in_section = False
+    marker_pattern = re.compile(r"\s*-\s*(\d+)\s*챕터\s*$")
+
+    for line in lines:
+        marker = marker_pattern.match(line)
+        if marker:
+            marker_number = int(marker.group(1))
+            if marker_number == number:
+                in_section = True
+                section.append(line)
+                continue
+            if in_section:
+                break
+        if in_section:
+            section.append(line)
+
+    text = "\n".join(section).strip()
+    if text:
+        return text
+
+    bullets = "\n".join(f"- {item}" for item in chapter["bullets"])
+    return f"{chapter['title']}\n{bullets}".strip()
+
+
+def chapter_context(backbone: str, chapter: dict[str, Any], config: dict[str, Any]) -> str:
+    return f"""책 전체 개요:
+{book_brief(backbone)}
+
+담당 챕터 상세 기획:
+{chapter_source_section(backbone, chapter)}
 
 공통 작성 지침:
 - 한국어로 작성합니다.
 - 목표 분량은 약 {config['target_words_per_chapter']} 단어입니다.
-- 사실 설명, 시대적 맥락, 핵심 앨범/뮤지션 목록, 해설을 균형 있게 넣습니다.
+- 사실 설명, 시대적 맥락, 핵심 사례/기관/산업 항목, 해설을 균형 있게 넣습니다.
 - 책 전체의 일부가 되도록 독립된 챕터 제목과 절 구성을 포함합니다.
 - 메타 설명 없이 원고 또는 편집 산출물만 출력합니다.
 """
@@ -1097,11 +1243,12 @@ def run_chapter_pipeline(
     for agent in pipeline_agents:
         agent_started = time.perf_counter()
         progress_log("agent", f"{chapter['title']}:{agent} -> {worker_name}", "blue")
+        label = f"{chapter['title']}:{agent}"
         if agent == "outline":
-            current_text = call_model(worker, outline_prompt(backbone, chapter, config))
+            current_text = call_model(worker, outline_prompt(backbone, chapter, config), label=label)
             outputs["outline"] = current_text
         elif agent == "writer":
-            current_text = call_model(worker, writer_prompt(backbone, chapter, config, outputs.get("outline", "")))
+            current_text = call_model(worker, writer_prompt(backbone, chapter, config, outputs.get("outline", "")), label=label)
             outputs["draft"] = current_text
         elif agent == "reviewer":
             current_text = call_model(
@@ -1113,10 +1260,15 @@ def run_chapter_pipeline(
                     outputs.get("outline", ""),
                     outputs.get("draft", current_text),
                 ),
+                label=label,
             )
             outputs["review"] = current_text
         elif agent == "finalizer":
-            current_text = call_model(worker, finalizer_prompt(backbone, chapter, config, outputs.get("review", current_text)))
+            current_text = call_model(
+                worker,
+                finalizer_prompt(backbone, chapter, config, outputs.get("review", current_text)),
+                label=label,
+            )
             outputs["final"] = current_text
         progress_log(
             "agent",
@@ -1169,8 +1321,10 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     chapters = parse_chapters(backbone_text)
     config = apply_backbone_runtime_options(config, backbone_text, len(chapters))
     started = time.perf_counter()
+    llm_trace_dir = init_llm_trace_dir()
     progress_log("start", f"book agent run started: {len(chapters)} chapters", "bold", started)
     progress_log("backbone", f"title='{title_from_backbone(backbone_text)}'", "cyan", started)
+    progress_log("model-trace", f"saving full prompts/responses -> {llm_trace_dir}", "cyan", started)
     if config.get("_backbone_parallel_enabled"):
         for alert in config.get("_backbone_parallel_alerts", []):
             progress_log("parallel-alert", alert, "magenta", started)
@@ -1191,22 +1345,86 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     )
 
     chapter_drafts: list[dict[str, Any]] = []
+    deferred_retries: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
         for index, chapter in enumerate(chapters, start=1):
             worker = slots[(index - 1) % len(slots)]
             future = executor.submit(run_chapter_with_retry, config, worker, backbone_text, chapter, index, len(chapters))
-            futures[future] = chapter
+            futures[future] = {
+                "chapter": chapter,
+                "index": index,
+                "worker": worker,
+            }
 
         for future in as_completed(futures):
-            chapter_drafts.append(future.result())
+            item = futures[future]
+            chapter = item["chapter"]
+            try:
+                chapter_drafts.append(future.result())
+            except Exception as exc:
+                error = str(exc)
+                deferred_retries.append({**item, "error": error})
+                progress_log(
+                    "warning",
+                    (
+                        f"{chapter['title']} failed after normal retries while other chapters may still be running; "
+                        "will retry after current chapter batch completes. "
+                        f"error={error}"
+                    ),
+                    "yellow",
+                    started,
+                )
+
+    if deferred_retries:
+        progress_log(
+            "warning",
+            f"{len(deferred_retries)} chapter(s) queued for deferred retry after parallel batch completion",
+            "yellow",
+            started,
+        )
+        for item in deferred_retries:
+            chapter = item["chapter"]
+            index = int(item["index"])
+            worker = item["worker"]
+            progress_log(
+                "retry",
+                f"{chapter['title']} deferred retry started after other chapters completed",
+                "yellow",
+                started,
+            )
+            try:
+                result = run_chapter_with_retry(config, worker, backbone_text, chapter, index, len(chapters))
+                result["deferred_retry"] = {
+                    "used": True,
+                    "initial_error": item["error"],
+                }
+                chapter_drafts.append(result)
+                progress_log(
+                    "retry",
+                    f"{chapter['title']} deferred retry succeeded",
+                    "green",
+                    started,
+                )
+            except Exception as exc:
+                progress_log(
+                    "warning",
+                    f"{chapter['title']} deferred retry failed: {exc}",
+                    "red",
+                    started,
+                )
+                raise
 
     chapter_drafts.sort(key=lambda item: int(item["chapter"]["number"]))
 
     if config.get("global_review_enabled"):
         coordinator_started = time.perf_counter()
         progress_log("main-writer", "reviewing finalized chapter outputs and preparing direction notes", "magenta", started)
-        coordinator_notes = call_model(config, coordinator_prompt(backbone_text, chapter_drafts, config))
+        coordinator_notes = call_model(
+            config,
+            coordinator_prompt(backbone_text, chapter_drafts, config),
+            label="main-writer:coordinator",
+        )
         progress_log(
             "main-writer",
             f"direction notes done ({word_count(coordinator_notes)} words)",
@@ -1218,7 +1436,11 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
 
     revise_started = time.perf_counter()
     progress_log("lead-writer", "rewriting opening and early chapter from chapter-agent outputs", "cyan", started)
-    revised_opening = call_model(config, revise_opening_prompt(backbone_text, chapter_drafts, coordinator_notes))
+    revised_opening = call_model(
+        config,
+        revise_opening_prompt(backbone_text, chapter_drafts, coordinator_notes),
+        label="lead-writer:revise-opening",
+    )
     progress_log("lead-writer", f"opening revision done ({word_count(revised_opening)} words)", "green", revise_started)
 
     title = title_from_backbone(backbone_text)
@@ -1245,6 +1467,15 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "config": public_config(config),
                 "backbone_parallel_enabled": bool(config.get("_backbone_parallel_enabled")),
                 "backbone_parallel_alerts": config.get("_backbone_parallel_alerts", []),
+                "deferred_retries": [
+                    {
+                        "chapter": item["chapter"],
+                        "index": item["index"],
+                        "worker": public_config(item["worker"]),
+                        "initial_error": item["error"],
+                    }
+                    for item in deferred_retries
+                ],
                 "backbone": backbone_text,
                 "chapters": chapter_drafts,
                 "coordinator_notes": coordinator_notes,
@@ -1253,6 +1484,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "pdf_path": str(pdf_path) if pdf_ok else "",
                 "pdf_error": "" if pdf_ok else pdf_message,
                 "service_log_path": str(SERVICE_LOG_PATH) if SERVICE_LOG_PATH else "",
+                "llm_trace_dir": str(llm_trace_dir),
             },
             ensure_ascii=False,
             indent=2,
@@ -1268,6 +1500,15 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         "chapter_count": len(chapters),
         "backbone_parallel_enabled": bool(config.get("_backbone_parallel_enabled")),
         "backbone_parallel_alerts": config.get("_backbone_parallel_alerts", []),
+        "deferred_retries": [
+            {
+                "chapter": item["chapter"],
+                "index": item["index"],
+                "worker": public_config(item["worker"]),
+                "initial_error": item["error"],
+            }
+            for item in deferred_retries
+        ],
         "chapters": chapter_drafts,
         "coordinator_notes": coordinator_notes,
         "revised_opening": revised_opening,
@@ -1276,6 +1517,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         "pdf_path": str(pdf_path) if pdf_ok else "",
         "pdf_error": "" if pdf_ok else pdf_message,
         "service_log_path": str(SERVICE_LOG_PATH) if SERVICE_LOG_PATH else "",
+        "llm_trace_dir": str(llm_trace_dir),
         "log_path": str(log_path),
     }
 
