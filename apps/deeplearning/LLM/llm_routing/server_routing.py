@@ -37,6 +37,7 @@ HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
 QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
+HEALTH_CHECK_INTERVAL_SECONDS = int(os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "30"))
 WEBDAV_DEFAULT_INTERVAL_MINUTES = int(os.getenv("LLM_ROUTING_WEBDAV_INTERVAL_MINUTES", "30"))
 SESSION_COOKIE_NAME = "llm_routing_session"
 SESSION_TTL_SECONDS = int(os.getenv("LLM_ROUTING_SESSION_TTL_SECONDS", "28800"))
@@ -101,6 +102,7 @@ class TargetMetrics:
     last_response_seconds: float = 0.0
     last_error: str = ""
     last_seen_at: str = ""
+    last_health_at: float = 0.0
     status: str = "unknown"
     uptime: str = ""
     queue_state: str = "idle"
@@ -1421,12 +1423,21 @@ def status_payload() -> dict[str, Any]:
     targets = load_targets()
     ensure_target_queues(targets)
     health_by_id: dict[str, dict[str, Any]] = {}
+    now = time.time()
     for target in targets:
         metric = metric_for(target.id)
         q = TARGET_QUEUES.get(target.id)
         local_pending = q.qsize() if q else 0
         selected_gpu_health_label = ""
-        if target.enabled and (not metric.last_seen_at or metric.status == "unknown"):
+        should_probe_health = (
+            target.enabled
+            and metric.active_requests == 0
+            and local_pending == 0
+            and (metric.status in {"unknown", "error"} or not metric.last_seen_at)
+            and now - metric.last_health_at >= HEALTH_CHECK_INTERVAL_SECONDS
+        )
+        if should_probe_health:
+            metric.last_health_at = now
             health = target_health(target)
             metric.status = "ok" if health["ok"] else "error"
             metric.last_error = "" if health["ok"] else health.get("error", "")
