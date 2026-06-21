@@ -148,6 +148,26 @@ py -3 .\client_service.py
 
 `chapter_parallelism`은 동시에 실행할 챕터 수입니다. `agent_workers[].max_parallel`의 합보다 크게 설정해도 실제 병렬 실행 수는 worker slot 수를 넘지 않습니다.
 
+`story_backbone.md`에 병렬 실행을 직접 명시할 수도 있습니다. 이 값은 실행 시 `data/client_config.json`보다 우선 적용되며, 시작 로그에 `parallel-alert`가 출력됩니다.
+
+```markdown
+- 작성방법
+  - 병렬실행: true
+  - 병렬 챕터: 3
+```
+
+여러 모델 worker를 backbone에 직접 지정할 때는 다음 형식을 사용할 수 있습니다.
+
+```markdown
+- 실행옵션
+  - 병렬실행: true
+  - 병렬 챕터: 4
+  - 모델 worker: name=gpu-1, url=http://10.0.0.11:8082, model=gemma4:31b, max_parallel=2
+  - 모델 worker: name=gpu-2, url=http://10.0.0.12:8082, model=qwen2.5:32b, max_parallel=2
+```
+
+챕터 내부의 `outline -> writer -> reviewer -> finalizer` 단계는 순서를 지키고, 서로 다른 챕터가 worker slot에 분산되어 병렬 실행됩니다.
+
 ## 모델 연결
 
 좌측 **생성형 AI 연결** 패널에서 모델 서버 주소를 입력합니다.

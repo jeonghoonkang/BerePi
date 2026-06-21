@@ -95,8 +95,28 @@ def bool_value(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def backbone_bool_value(value: str) -> bool:
+    return str(value or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+        "enable",
+        "enabled",
+        "parallel",
+        "사용",
+        "사용함",
+        "켜기",
+        "활성",
+        "활성화",
+        "병렬",
+        "병렬실행",
+    }
+
+
 def public_config(config: dict[str, Any]) -> dict[str, Any]:
-    redacted = dict(config)
+    redacted = {key: value for key, value in config.items() if not key.startswith("_")}
     redacted.pop("password", None)
     redacted["agent_workers"] = [
         {key: value for key, value in worker.items() if key not in {"password", "agent_workers"}}
@@ -255,6 +275,112 @@ def parse_chapters(backbone: str) -> list[dict[str, Any]]:
     if not chapters:
         chapters = [{"number": 1, "title": "1 챕터", "bullets": [backbone]}]
     return chapters
+
+
+def split_backbone_option_items(value: str) -> list[str]:
+    return [item.strip() for item in re.split(r"[,;]", value or "") if item.strip()]
+
+
+def parse_backbone_key_values(value: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in split_backbone_option_items(value):
+        if "=" in item:
+            key, raw_value = item.split("=", 1)
+        elif ":" in item and not re.match(r"^https?://", item.strip(), re.IGNORECASE):
+            key, raw_value = item.split(":", 1)
+        else:
+            continue
+        parsed[key.strip().lower().replace("-", "_")] = raw_value.strip()
+    return parsed
+
+
+def normalize_backbone_worker(value: str, index: int, base_config: dict[str, Any]) -> dict[str, Any] | None:
+    values = parse_backbone_key_values(value)
+    if not values and re.search(r"https?://", value, re.IGNORECASE):
+        parts = value.split()
+        values = {"server_base_url": parts[0]}
+        if len(parts) > 1:
+            values["name"] = parts[1]
+
+    url = values.get("url") or values.get("server") or values.get("server_base_url") or values.get("base_url")
+    if not url:
+        return None
+
+    worker = {
+        "name": values.get("name") or values.get("이름") or f"backbone-worker-{index}",
+        "server_base_url": url.rstrip("/"),
+        "generate_path": values.get("generate_path") or values.get("path") or base_config["generate_path"],
+        "status_path": values.get("status_path") or base_config["status_path"],
+        "request_timeout_seconds": int(values.get("timeout") or values.get("request_timeout_seconds") or base_config["request_timeout_seconds"]),
+        "user_id": values.get("user_id") or values.get("id") or base_config["user_id"],
+        "password": values.get("password") or values.get("pass") or base_config["password"],
+        "model": values.get("model") or values.get("모델") or base_config["model"],
+        "keep_alive": values.get("keep_alive") or base_config["keep_alive"],
+        "num_ctx": int(values.get("num_ctx") or base_config["num_ctx"]),
+        "max_parallel": max(1, int(values.get("max_parallel") or values.get("parallel") or values.get("병렬") or 1)),
+    }
+    return worker
+
+
+def parse_backbone_runtime_options(backbone: str, base_config: dict[str, Any], chapter_count: int) -> tuple[dict[str, Any], list[str]]:
+    options: dict[str, Any] = {}
+    alerts: list[str] = []
+    workers: list[dict[str, Any]] = []
+    parallel_requested = False
+    parallelism_explicit = False
+
+    for raw_line in backbone.splitlines():
+        line = re.sub(r"^\s*[-*]\s*", "", raw_line).strip()
+        if not line:
+            continue
+
+        match = re.match(r"^(?:병렬\s*실행|parallel(?:_run|_enabled)?|parallel)\s*[:=]\s*(.+)$", line, re.IGNORECASE)
+        if match:
+            parallel_requested = backbone_bool_value(match.group(1))
+            alerts.append(f"story_backbone.md 병렬실행={parallel_requested}")
+            continue
+
+        match = re.match(r"^(?:병렬\s*챕터|동시\s*챕터|parallel\s*chapters|chapter_parallelism|parallelism)\s*[:=]\s*(\d+)", line, re.IGNORECASE)
+        if match:
+            options["chapter_parallelism"] = max(1, int(match.group(1)))
+            parallel_requested = True
+            parallelism_explicit = True
+            alerts.append(f"story_backbone.md chapter_parallelism={options['chapter_parallelism']}")
+            continue
+
+        match = re.match(r"^(?:모델\s*worker|모델\s*워커|agent\s*worker|worker)\s*[:=]\s*(.+)$", line, re.IGNORECASE)
+        if match:
+            worker = normalize_backbone_worker(match.group(1), len(workers) + 1, base_config)
+            if worker:
+                workers.append(worker)
+                parallel_requested = True
+                alerts.append(f"story_backbone.md worker={worker['name']} {worker['server_base_url']} model={worker.get('model') or 'default'}")
+            continue
+
+    if workers:
+        options["agent_workers"] = workers
+    if parallel_requested:
+        slot_count = sum(max(1, int(worker.get("max_parallel") or 1)) for worker in (workers or base_config.get("agent_workers") or []))
+        default_parallelism = max(1, min(chapter_count, slot_count or int(base_config.get("chapter_parallelism") or 1)))
+        if not parallelism_explicit:
+            options["chapter_parallelism"] = max(int(base_config.get("chapter_parallelism") or 1), default_parallelism)
+        options["_backbone_parallel_enabled"] = True
+        options["_backbone_parallel_alerts"] = alerts
+    return options, alerts
+
+
+def apply_backbone_runtime_options(config: dict[str, Any], backbone: str, chapter_count: int) -> dict[str, Any]:
+    options, _ = parse_backbone_runtime_options(backbone, config, chapter_count)
+    if not options:
+        return config
+    merged = dict(config)
+    private_alerts = options.pop("_backbone_parallel_alerts", [])
+    parallel_enabled = bool(options.pop("_backbone_parallel_enabled", False))
+    merged.update(options)
+    normalized = normalize_config(merged)
+    normalized["_backbone_parallel_enabled"] = parallel_enabled
+    normalized["_backbone_parallel_alerts"] = private_alerts
+    return normalized
 
 
 def join_url(base_url: str, path: str) -> str:
@@ -642,9 +768,19 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     ensure_dirs()
     backbone_text = (backbone or read_story_backbone()).strip()
     chapters = parse_chapters(backbone_text)
+    config = apply_backbone_runtime_options(config, backbone_text, len(chapters))
     started = time.perf_counter()
     progress_log("start", f"book agent run started: {len(chapters)} chapters", "bold", started)
     progress_log("backbone", f"title='{title_from_backbone(backbone_text)}'", "cyan", started)
+    if config.get("_backbone_parallel_enabled"):
+        for alert in config.get("_backbone_parallel_alerts", []):
+            progress_log("parallel-alert", alert, "magenta", started)
+        progress_log(
+            "parallel-alert",
+            "story_backbone.md requested parallel chapter execution",
+            "magenta",
+            started,
+        )
 
     slots = worker_slots(config)
     max_workers = min(len(chapters), int(config["chapter_parallelism"]), len(slots))
@@ -701,6 +837,8 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
             {
                 "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "config": public_config(config),
+                "backbone_parallel_enabled": bool(config.get("_backbone_parallel_enabled")),
+                "backbone_parallel_alerts": config.get("_backbone_parallel_alerts", []),
                 "backbone": backbone_text,
                 "chapters": chapter_drafts,
                 "coordinator_notes": coordinator_notes,
@@ -719,6 +857,8 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         "elapsed_seconds": time.perf_counter() - started,
         "title": title,
         "chapter_count": len(chapters),
+        "backbone_parallel_enabled": bool(config.get("_backbone_parallel_enabled")),
+        "backbone_parallel_alerts": config.get("_backbone_parallel_alerts", []),
         "chapters": chapter_drafts,
         "coordinator_notes": coordinator_notes,
         "revised_opening": revised_opening,
