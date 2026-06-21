@@ -29,6 +29,9 @@ WEB_AUTH_USER = os.getenv("WRITING_MACH_WEB_USER", "")
 WEB_AUTH_PASSWORD = os.getenv("WRITING_MACH_WEB_PASSWORD", "")
 PROMPT_SENT = False
 PROMPT_SENT_LOCK = threading.Lock()
+SERVICE_LOG_PATH: Path | None = None
+SERVICE_LOG_LOCK = threading.Lock()
+RUNTIME_CONFIG_OVERRIDES: dict[str, Any] = {}
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -109,6 +112,16 @@ def parse_args() -> argparse.Namespace:
         help="Test LLM status and generation using the selected config, then exit without starting the web service.",
     )
     parser.add_argument(
+        "--run-on-start",
+        action="store_true",
+        help="Start book generation immediately after the service starts, without waiting for the web button.",
+    )
+    parser.add_argument(
+        "--exit-after-run",
+        action="store_true",
+        help="Exit the service after --run-on-start completes.",
+    )
+    parser.add_argument(
         "--model-check-timeout",
         type=int,
         default=int(os.getenv("WRITING_MACH_MODEL_CHECK_TIMEOUT", "5")),
@@ -125,10 +138,25 @@ def parse_args() -> argparse.Namespace:
         help="Web login password. If omitted, prompts during startup. Use an empty value to disable web auth.",
     )
     parser.add_argument(
+        "--llm-user",
+        default=os.getenv("WRITING_MACH_LLM_USER"),
+        help="LLM API user_id override. Does not write to the config file.",
+    )
+    parser.add_argument(
+        "--llm-password",
+        default=os.getenv("WRITING_MACH_LLM_PASSWORD"),
+        help="LLM API password override. Does not write to the config file.",
+    )
+    parser.add_argument(
         "--prompt-warning-seconds",
         type=int,
         default=int(os.getenv("WRITING_MACH_PROMPT_WARNING_SECONDS", "10")),
         help="Seconds to wait after service startup before warning that no LLM prompt was sent.",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=os.getenv("WRITING_MACH_LOG_FILE", ""),
+        help="Service progress log file. Defaults to output/service_YYYYMMDD_HHMMSS.log.",
     )
     return parser.parse_args()
 
@@ -141,11 +169,34 @@ def color_text(text: str, color: str) -> str:
 
 def progress_log(stage: str, message: str, color: str = "cyan", started: float | None = None) -> None:
     elapsed = ""
+    plain_elapsed = ""
     if started is not None:
-        elapsed = color_text(f" +{time.perf_counter() - started:.1f}s", "dim")
+        plain_elapsed = f" +{time.perf_counter() - started:.1f}s"
+        elapsed = color_text(plain_elapsed, "dim")
     stamp = time.strftime("%H:%M:%S")
     prefix = color_text(f"[{stamp}] [{stage}]", color)
     print(f"{prefix}{elapsed} {message}", flush=True)
+    if SERVICE_LOG_PATH is not None:
+        line = f"[{stamp}] [{stage}]{plain_elapsed} {message}\n"
+        with SERVICE_LOG_LOCK:
+            try:
+                SERVICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                with SERVICE_LOG_PATH.open("a", encoding="utf-8") as handle:
+                    handle.write(line)
+            except OSError:
+                pass
+
+
+def init_service_log(log_file: str = "") -> Path:
+    global SERVICE_LOG_PATH
+
+    if log_file.strip():
+        SERVICE_LOG_PATH = Path(log_file).expanduser().resolve()
+    else:
+        SERVICE_LOG_PATH = OUTPUT_DIR / f"service_{time.strftime('%Y%m%d_%H%M%S')}.log"
+    SERVICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SERVICE_LOG_PATH.write_text("", encoding="utf-8")
+    return SERVICE_LOG_PATH
 
 
 def word_count(text: str) -> int:
@@ -356,6 +407,7 @@ def runtime_config(override: dict[str, Any] | None = None) -> dict[str, Any]:
             if key in {"user_id", "password"} and value == "" and merged.get(key):
                 continue
             merged[key] = value
+    merged.update(RUNTIME_CONFIG_OVERRIDES)
     return normalize_config(merged)
 
 
@@ -619,7 +671,7 @@ def explain_request_error(exc: Exception) -> str:
 
 
 def run_model_diagnostics(timeout_seconds: int) -> bool:
-    config = read_config()
+    config = runtime_config()
     targets = startup_model_status_targets(config)
     timeout = max(1, int(timeout_seconds))
     all_ok = True
@@ -691,7 +743,7 @@ def startup_model_status_targets(config: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def check_startup_model_status(timeout_seconds: int) -> bool:
-    config = read_config()
+    config = runtime_config()
     targets = startup_model_status_targets(config)
     timeout = max(1, int(timeout_seconds))
     progress_log("model-check", f"checking {len(targets)} LLM status endpoint(s), timeout={timeout}s", "cyan")
@@ -725,7 +777,7 @@ def check_startup_model_status(timeout_seconds: int) -> bool:
     if ok_count == 0:
         progress_log(
             "model-check",
-            "LLM is not responding. Start the model server or update data/client_config.json before running agents.",
+            f"LLM is not responding. Start the model server or update {CONFIG_PATH} before running agents.",
             "red",
         )
         return False
@@ -1200,6 +1252,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 "output_path": str(output_path),
                 "pdf_path": str(pdf_path) if pdf_ok else "",
                 "pdf_error": "" if pdf_ok else pdf_message,
+                "service_log_path": str(SERVICE_LOG_PATH) if SERVICE_LOG_PATH else "",
             },
             ensure_ascii=False,
             indent=2,
@@ -1222,6 +1275,7 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
         "output_path": str(output_path),
         "pdf_path": str(pdf_path) if pdf_ok else "",
         "pdf_error": "" if pdf_ok else pdf_message,
+        "service_log_path": str(SERVICE_LOG_PATH) if SERVICE_LOG_PATH else "",
         "log_path": str(log_path),
     }
 
@@ -1288,6 +1342,7 @@ class WritingMachHandler(BaseHTTPRequestHandler):
         try:
             incoming = parse_json_body(self)
             request_path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+            progress_log("api", f"POST {request_path}", "cyan")
             if request_path == "/api/config":
                 self.send_json({"config": write_config(incoming.get("config") or {})})
                 return
@@ -1301,18 +1356,51 @@ class WritingMachHandler(BaseHTTPRequestHandler):
                 return
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except ValueError as exc:
+            progress_log("api-error", f"{self.path}: {exc}", "red")
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except (json.JSONDecodeError, OSError, TimeoutError, urllib.error.URLError) as exc:
+            progress_log("api-error", f"{self.path}: {exc}", "red")
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
 
 
+def start_run_on_start(exit_after_run: bool, httpd: ThreadingHTTPServer) -> None:
+    def auto_run() -> None:
+        try:
+            progress_log("auto-run", "starting book generation from CLI --run-on-start", "magenta")
+            result = run_book_agents(runtime_config())
+            progress_log(
+                "auto-run",
+                f"finished: output={result.get('output_path')} pdf={result.get('pdf_path') or '-'}",
+                "green",
+            )
+        except Exception as exc:  # noqa: BLE001
+            progress_log("auto-run", f"failed: {exc}", "red")
+        finally:
+            if exit_after_run:
+                progress_log("auto-run", "exit-after-run requested; shutting down service", "yellow")
+                httpd.shutdown()
+
+    thread = threading.Thread(target=auto_run, daemon=True, name="writing-mach-auto-run")
+    thread.start()
+
+
 def main() -> int:
-    global BACKBONE_PATH, CONFIG_PATH, WEB_AUTH_USER, WEB_AUTH_PASSWORD
+    global BACKBONE_PATH, CONFIG_PATH, WEB_AUTH_USER, WEB_AUTH_PASSWORD, RUNTIME_CONFIG_OVERRIDES
 
     args = parse_args()
     BACKBONE_PATH = Path(args.backbone).expanduser().resolve()
     CONFIG_PATH = Path(args.config).expanduser().resolve()
+    RUNTIME_CONFIG_OVERRIDES = {
+        key: value
+        for key, value in {
+            "user_id": args.llm_user,
+            "password": args.llm_password,
+        }.items()
+        if value is not None
+    }
     ensure_dirs()
+    log_path = init_service_log(args.log_file)
+    progress_log("service", f"Client config: {CONFIG_PATH}", "cyan")
     if args.test:
         return 0 if run_model_diagnostics(args.model_check_timeout) else 2
     check_startup_model_status(args.model_check_timeout)
@@ -1328,8 +1416,10 @@ def main() -> int:
     else:
         progress_log("service", "Web auth disabled", "yellow")
     progress_log("service", f"Story backbone: {BACKBONE_PATH}", "cyan")
-    progress_log("service", f"Client config: {CONFIG_PATH}", "cyan")
+    progress_log("service", f"Service log: {log_path}", "cyan")
     schedule_prompt_wait_warning(args.prompt_warning_seconds, service_url)
+    if args.run_on_start:
+        start_run_on_start(args.exit_after_run, httpd)
     httpd.serve_forever()
     return 0
 

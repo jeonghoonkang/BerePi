@@ -52,10 +52,34 @@ py -3 .\client_service.py --config .\data\my_client_config.json
 py -3 .\client_service.py --config .\data\my_client_config.json --test
 ```
 
+웹 버튼 클릭 없이 서비스 시작과 동시에 책 생성:
+
+```powershell
+py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start
+```
+
+생성 완료 후 프로세스까지 종료:
+
+```powershell
+py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start --exit-after-run
+```
+
+설정 파일에 저장하지 않고 LLM API 인증값 지정:
+
+```powershell
+py -3 .\client_service.py --llm-user <user_id> --llm-password <password>
+```
+
 서비스 시작 후 prompt 미전송 경고 시간 변경:
 
 ```powershell
 py -3 .\client_service.py --prompt-warning-seconds 10
+```
+
+서비스 진행 로그 파일 경로 지정:
+
+```powershell
+py -3 .\client_service.py --log-file .\output\writing_mach_service.log
 ```
 
 웹 로그인 계정 지정:
@@ -245,10 +269,13 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
 실행 결과는 `output` 폴더에 저장됩니다.
 
 ```text
+output/service_YYYYMMDD_HHMMSS.log
 output/book_YYYYMMDD_HHMMSS.md
 output/book_YYYYMMDD_HHMMSS.pdf
 output/run_YYYYMMDD_HHMMSS.json
 ```
+
+`service_*.log`에는 서버 시작, 접속 대기, API 요청, LLM 요청/응답 preview, 오류가 콘솔 출력과 함께 기록됩니다.
 
 `run_*.json`에는 각 챕터 에이전트 출력, main writer 조율 메모, 수정된 초반부, PDF 생성 경로 또는 실패 사유가 함께 기록됩니다.
 
