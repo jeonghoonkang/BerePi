@@ -181,15 +181,26 @@ def ensure_admin_password() -> None:
         pass
 
 
-def admin_password() -> str:
+def parse_admin_passwords(value: str) -> list[str]:
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def admin_passwords() -> list[str]:
     value = os.getenv("LLM_ROUTING_ADMIN_PASSWORD", "").strip()
     if value:
-        return value
+        return parse_admin_passwords(value)
     ensure_admin_password()
     try:
-        return ADMIN_PASSWORD_PATH.read_text(encoding="utf-8").strip()
+        passwords = parse_admin_passwords(ADMIN_PASSWORD_PATH.read_text(encoding="utf-8"))
     except OSError:
-        return "change-me-now"
+        passwords = []
+    return passwords or ["change-me-now"]
+
+
+def valid_admin_password(supplied: str) -> bool:
+    if not supplied:
+        return False
+    return any(secrets.compare_digest(supplied, password) for password in admin_passwords())
 
 
 def create_session() -> str:
@@ -233,7 +244,7 @@ def prompt_api_authenticated(handler: BaseHTTPRequestHandler, payload: dict[str,
     if valid_session(getattr(handler, "session_token")()):
         return True
     supplied = prompt_api_password(handler, payload)
-    return bool(supplied) and secrets.compare_digest(supplied, admin_password())
+    return valid_admin_password(supplied)
 
 
 def load_targets() -> list[LLMTarget]:
@@ -2238,7 +2249,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         try:
             payload = self.read_json()
             if self.path == "/api/login":
-                if secrets.compare_digest(str(payload.get("password") or ""), admin_password()):
+                if valid_admin_password(str(payload.get("password") or "")):
                     body = json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
                     self.send_response(HTTPStatus.OK)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
