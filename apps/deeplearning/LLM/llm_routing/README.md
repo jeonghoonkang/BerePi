@@ -287,6 +287,7 @@ LLM 대상 목록은 `llm_targets.json`에 저장됩니다. 처음 실행하면 
       "name": "Local Ollama",
       "host": "127.0.0.1",
       "port": 11434,
+      "proxy_port": 4011,
       "model": "llama3.1",
       "api_type": "ollama",
       "gpu_info": "RTX 5090",
@@ -301,6 +302,18 @@ LLM 대상 목록은 `llm_targets.json`에 저장됩니다. 처음 실행하면 
 ```
 
 `api_type`은 `ollama`, `openai`, `vllm`을 지원합니다.
+
+`ollama` target에 `proxy_port`를 지정하면 LLM Routing 서버가 별도 Ollama 호환 reverse proxy 포트를 엽니다. 예를 들어 위 설정은 `http://LLM_ROUTING_SERVER_IP:4011/api/tags`, `http://LLM_ROUTING_SERVER_IP:4011/api/generate`, `http://LLM_ROUTING_SERVER_IP:4011/api/chat` 요청을 `http://127.0.0.1:11434`로 전달합니다. `proxy_port`가 `0`이거나 비어 있으면 프록시 포트를 열지 않습니다.
+
+```bash
+curl http://LLM_ROUTING_SERVER_IP:4011/api/tags
+
+curl -X POST http://LLM_ROUTING_SERVER_IP:4011/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"llama3.1","prompt":"hello","stream":false}'
+```
+
+프록시 bind 주소는 기본적으로 `LLM_ROUTING_HOST`와 같으며, `LLM_ROUTING_PROXY_HOST` 환경 변수로 따로 지정할 수 있습니다. 프록시 backend 요청 timeout은 `LLM_ROUTING_PROXY_TIMEOUT`으로 조정합니다.
 
 ## Backend Type
 

@@ -35,7 +35,9 @@ ADMIN_PASSWORD_PATH = Path(os.getenv("LLM_ROUTING_ADMIN_PASSWORD_FILE", APP_DIR 
 WEBDAV_CONFIG_PATH = Path(os.getenv("LLM_ROUTING_WEBDAV_CONFIG", APP_DIR / "webdav_settings.json"))
 HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
+PROXY_HOST = os.getenv("LLM_ROUTING_PROXY_HOST", HOST)
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
+PROXY_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_PROXY_TIMEOUT", "180"))
 QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
 STATUS_REFRESH_SECONDS = int(os.getenv("LLM_ROUTING_STATUS_REFRESH_SECONDS", os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "10")))
 HEALTH_CHECK_INTERVAL_SECONDS = STATUS_REFRESH_SECONDS
@@ -51,6 +53,7 @@ RECENT_ACCESS: list[dict[str, Any]] = []
 AUTH_SESSIONS: dict[str, float] = {}
 TARGET_QUEUES: dict[str, queue.Queue["PromptJob"]] = {}
 TARGET_WORKERS: dict[str, threading.Thread] = {}
+PROXY_SERVERS: dict[str, tuple[ThreadingHTTPServer, threading.Thread, int]] = {}
 WEBDAV_REPORT_STATE: dict[str, Any] = {
     "enabled": False,
     "status": "disabled",
@@ -61,6 +64,16 @@ WEBDAV_REPORT_STATE: dict[str, Any] = {
 }
 MAX_RECENT_ACCESS = 300
 OPENAI_COMPATIBLE_API_TYPES = {"openai", "vllm"}
+HOP_BY_HOP_HEADERS = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+}
 GPU_METRIC_KEYWORDS = (
     "gpu",
     "cuda",
@@ -77,6 +90,7 @@ class LLMTarget:
     name: str
     host: str
     port: int
+    proxy_port: int = 0
     model: str = ""
     api_type: str = "ollama"
     gpu_info: str = ""
@@ -260,6 +274,7 @@ def load_targets() -> list[LLMTarget]:
                     name=str(item.get("name") or item.get("model") or "LLM"),
                     host=str(item.get("host") or "127.0.0.1"),
                     port=int(item.get("port") or 11434),
+                    proxy_port=int(item.get("proxy_port") or 0),
                     model=str(item.get("model") or ""),
                     api_type=str(item.get("api_type") or "ollama"),
                     gpu_info=str(item.get("gpu_info") or ""),
@@ -292,6 +307,7 @@ def ensure_default_config() -> None:
                 name="Local Ollama",
                 host="127.0.0.1",
                 port=11434,
+                proxy_port=0,
                 model="llama3.1",
                 api_type="ollama",
                 gpu_info="local GPU",
@@ -355,6 +371,153 @@ def request_text(url: str, timeout: int = 5, headers: dict[str, str] | None = No
     with urllib.request.urlopen(req, timeout=timeout) as response:
         body = response.read().decode("utf-8", errors="replace")
         return response.status, response.headers.get("Content-Type", ""), body
+
+
+def target_by_id(target_id: str) -> LLMTarget | None:
+    for target in load_targets():
+        if target.id == target_id:
+            return target
+    return None
+
+
+def proxy_request(
+    target: LLMTarget,
+    method: str,
+    path: str,
+    body: bytes | None,
+    incoming_headers: dict[str, str],
+) -> tuple[int, dict[str, str], bytes]:
+    url = f"{target.base_url}{path}"
+    headers: dict[str, str] = {}
+    for key, value in incoming_headers.items():
+        lowered = key.lower()
+        if lowered in HOP_BY_HOP_HEADERS or lowered in {"host", "content-length"}:
+            continue
+        headers[key] = value
+    headers.update(target_auth_headers(target))
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=PROXY_TIMEOUT_SECONDS) as response:
+            response_body = response.read()
+            response_headers = {
+                key: value
+                for key, value in response.headers.items()
+                if key.lower() not in HOP_BY_HOP_HEADERS and key.lower() != "content-length"
+            }
+            return response.status, response_headers, response_body
+    except urllib.error.HTTPError as exc:
+        response_body = exc.read()
+        response_headers = {
+            key: value
+            for key, value in exc.headers.items()
+            if key.lower() not in HOP_BY_HOP_HEADERS and key.lower() != "content-length"
+        }
+        return exc.code, response_headers, response_body
+
+
+def proxy_handler_for(target_id: str) -> type[BaseHTTPRequestHandler]:
+    class OllamaProxyHandler(BaseHTTPRequestHandler):
+        server_version = "LLMRoutingOllamaProxy/0.1"
+
+        def log_message(self, fmt: str, *args: Any) -> None:
+            return
+
+        def send_proxy_response(self, status: int, headers: dict[str, str], body: bytes) -> None:
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, HEAD, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-LLM-Routing-Password, X-API-Key")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+
+        def proxy_any(self) -> None:
+            target = target_by_id(target_id)
+            if target is None or not target.enabled:
+                self.send_proxy_response(HTTPStatus.NOT_FOUND, {"Content-Type": "application/json; charset=utf-8"}, b'{"error":"target not found"}')
+                return
+            if target.api_type != "ollama":
+                self.send_proxy_response(HTTPStatus.BAD_REQUEST, {"Content-Type": "application/json; charset=utf-8"}, b'{"error":"proxy_port is only supported for ollama targets"}')
+                return
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            body = self.rfile.read(length) if length > 0 else None
+            try:
+                status, headers, response_body = proxy_request(target, self.command, self.path, body, dict(self.headers.items()))
+                record_access(
+                    {
+                        "client": self.client_address[0] if self.client_address else "unknown",
+                        "status": "proxy",
+                        "method": self.command,
+                        "path": self.path,
+                        "proxy_port": target.proxy_port,
+                        **access_target_fields(target),
+                    }
+                )
+                self.send_proxy_response(status, headers, response_body)
+            except Exception as exc:  # noqa: BLE001
+                payload = json.dumps({"ok": False, "error": f"Proxy request failed: {exc}"}, ensure_ascii=False).encode("utf-8")
+                self.send_proxy_response(HTTPStatus.BAD_GATEWAY, {"Content-Type": "application/json; charset=utf-8"}, payload)
+
+        def do_GET(self) -> None:
+            self.proxy_any()
+
+        def do_POST(self) -> None:
+            self.proxy_any()
+
+        def do_PUT(self) -> None:
+            self.proxy_any()
+
+        def do_DELETE(self) -> None:
+            self.proxy_any()
+
+        def do_HEAD(self) -> None:
+            self.proxy_any()
+
+        def do_OPTIONS(self) -> None:
+            self.send_proxy_response(HTTPStatus.NO_CONTENT, {}, b"")
+
+    return OllamaProxyHandler
+
+
+def sync_ollama_proxy_servers() -> None:
+    targets = load_targets()
+    desired = {
+        target.id: target
+        for target in targets
+        if target.enabled and target.api_type == "ollama" and target.proxy_port > 0
+    }
+    to_stop: list[ThreadingHTTPServer] = []
+    with STATE_LOCK:
+        for target_id, (server, thread, port) in list(PROXY_SERVERS.items()):
+            target = desired.get(target_id)
+            if target is None or target.proxy_port != port or not thread.is_alive():
+                to_stop.append(server)
+                PROXY_SERVERS.pop(target_id, None)
+        for target_id, target in desired.items():
+            if target_id in PROXY_SERVERS:
+                continue
+            try:
+                server = ThreadingHTTPServer((PROXY_HOST, target.proxy_port), proxy_handler_for(target_id))
+            except OSError as exc:
+                print(f"Ollama proxy for {target.name} failed on {PROXY_HOST}:{target.proxy_port}: {exc}", flush=True)
+                continue
+            thread = threading.Thread(
+                target=server.serve_forever,
+                daemon=True,
+                name=f"llm-routing-ollama-proxy-{target_id}",
+            )
+            PROXY_SERVERS[target_id] = (server, thread, target.proxy_port)
+            thread.start()
+            print(
+                f"Ollama proxy for {target.name} listening on http://{PROXY_HOST}:{target.proxy_port} -> {target.base_url}",
+                flush=True,
+            )
+    for server in to_stop:
+        server.shutdown()
+        server.server_close()
 
 
 def interesting_metric_lines(metrics_text: str) -> list[str]:
@@ -545,6 +708,7 @@ def target_from_lookup_payload(payload: dict[str, Any]) -> LLMTarget:
         name=str(payload.get("name") or "lookup"),
         host=host,
         port=port,
+        proxy_port=int(payload.get("proxy_port") or 0),
         model=str(payload.get("model") or ""),
         api_type=str(payload.get("api_type") or "ollama").strip(),
         selected_gpu=str(payload.get("selected_gpu") or "").strip(),
@@ -1053,6 +1217,7 @@ def api_status_payload() -> dict[str, Any]:
                 "name": target.name,
                 "host": target.host,
                 "port": target.port,
+                "proxy_port": target.proxy_port,
                 "model": target.model,
                 "api_type": target.api_type,
                 "selected_gpu": target.selected_gpu,
@@ -1660,6 +1825,7 @@ INDEX_HTML = """<!doctype html>
         <input id="name" placeholder="이름">
         <input id="host" placeholder="IP 주소">
         <input id="port" placeholder="PORT" type="number">
+        <input id="proxy_port" placeholder="PROXY PORT" type="number">
         <select id="api_type"><option value="ollama">ollama</option><option value="openai">openai</option><option value="vllm">vllm</option></select>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
@@ -1847,7 +2013,7 @@ function renderTargets() {
     return `<tr>
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}</td>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
-      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small></td>
       <td>${esc(t.model)}</td>
       <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(selectedGpuDevice)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
@@ -1881,7 +2047,7 @@ function renderService() {
     const probeText = m.last_health_probe_at ? new Date(Number(m.last_health_probe_at) * 1000).toLocaleTimeString() : '-';
     return `<tr>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
-      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small></td>
       <td>${esc(t.model || 'server-default')}</td>
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br><span class="${stateCls}">${esc(stateText)}</span></td>
       <td>${m.active_requests || 0}</td>
@@ -1943,7 +2109,7 @@ function renderAutoTargetRows(enabledTargets) {
     const gpuInfo = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '';
     return `<tr>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
-      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small></td>
       <td>${esc(t.model || '')}</td>
       <td>${esc(gpuType)}<br><small>${esc(t.selected_gpu_label || gpuInfo)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests || 0}, pending ${m.pending_queue || 0}/${m.queue_max_per_target || 10}</td>
@@ -1970,7 +2136,7 @@ function setGpuOptions(gpus, selectedGpu = '') {
   }
 }
 function editTarget(t) {
-  for (const key of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','selected_gpu_label','access_id','password','notes']) {
+  for (const key of ['target_id','name','host','port','proxy_port','model','api_type','gpu_type','gpu_info','selected_gpu','selected_gpu_label','access_id','password','notes']) {
     const id = key === 'target_id' ? 'target_id' : key;
     const value = key === 'target_id' ? t.id : t[key];
     document.getElementById(id).value = value || '';
@@ -1980,7 +2146,7 @@ function editTarget(t) {
   document.getElementById('model_status').textContent = '';
 }
 function clearForm() {
-  for (const id of ['target_id','name','host','port','model','gpu_type','gpu_info','selected_gpu_label','access_id','password','notes']) document.getElementById(id).value = '';
+  for (const id of ['target_id','name','host','port','proxy_port','model','gpu_type','gpu_info','selected_gpu_label','access_id','password','notes']) document.getElementById(id).value = '';
   document.getElementById('api_type').value = 'ollama';
   setModelOptions([]);
   setGpuOptions([]);
@@ -2005,7 +2171,7 @@ async function loadModels() {
 }
 async function saveTarget() {
   const payload = {};
-  for (const id of ['target_id','name','host','port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
+  for (const id of ['target_id','name','host','port','proxy_port','model','api_type','gpu_type','gpu_info','selected_gpu','access_id','password','notes']) payload[id === 'target_id' ? 'id' : id] = document.getElementById(id).value;
   const gpuSelect = document.getElementById('selected_gpu');
   payload.selected_gpu_label = gpuSelect.value ? (gpuSelect.options[gpuSelect.selectedIndex]?.textContent || '') : '';
   const selectedMatch = payload.selected_gpu_label.match(/^\\s*GPU\\s+([^:\\s]+)/i);
@@ -2329,6 +2495,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             name=name,
             host=host,
             port=port,
+            proxy_port=int(payload.get("proxy_port") or 0),
             model=str(payload.get("model") or "").strip(),
             api_type=str(payload.get("api_type") or "ollama").strip(),
             gpu_info=str(payload.get("gpu_info") or "").strip(),
@@ -2351,6 +2518,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         if not replaced:
             targets.append(new_target)
         save_targets(targets)
+        sync_ollama_proxy_servers()
         return new_target.__dict__
 
     def delete_target(self, target_id: str) -> bool:
@@ -2361,6 +2529,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         save_targets(filtered)
         with STATE_LOCK:
             TARGET_RUNTIME.pop(target_id, None)
+        sync_ollama_proxy_servers()
         return len(filtered) != len(targets)
 
 
@@ -2378,12 +2547,19 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     start_webdav_reporter()
     httpd = ThreadingHTTPServer((args.host, args.port), RoutingHandler)
+    sync_ollama_proxy_servers()
     print(f"LLM Routing listening on http://{args.host}:{args.port}", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("Stopping LLM Routing", flush=True)
     finally:
+        with STATE_LOCK:
+            proxy_servers = [server for server, _, _ in PROXY_SERVERS.values()]
+            PROXY_SERVERS.clear()
+        for server in proxy_servers:
+            server.shutdown()
+            server.server_close()
         httpd.server_close()
     return 0
 
