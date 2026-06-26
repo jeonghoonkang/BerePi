@@ -183,6 +183,22 @@ def save_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def bool_value(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on", "enabled"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off", "disabled"}:
+            return False
+    return bool(value)
+
+
 def ensure_admin_password() -> None:
     if os.getenv("LLM_ROUTING_ADMIN_PASSWORD"):
         return
@@ -283,7 +299,7 @@ def load_targets() -> list[LLMTarget]:
                     selected_gpu_label=str(item.get("selected_gpu_label") or ""),
                     access_id=str(item.get("access_id") or ""),
                     password=str(item.get("password") or ""),
-                    enabled=bool(item.get("enabled", True)),
+                    enabled=bool_value(item.get("enabled"), True),
                     weight=max(1, int(item.get("weight") or 1)),
                     notes=str(item.get("notes") or ""),
                 )
@@ -1775,8 +1791,10 @@ INDEX_HTML = """<!doctype html>
     th, td { border-bottom:1px solid var(--line); padding:9px; text-align:left; vertical-align:top; }
     th { color:var(--muted); font-size:12px; text-transform:uppercase; }
     input, select, textarea { width:100%; min-height:36px; border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; background:#fff; }
+    input[type="checkbox"] { width:auto; min-height:0; }
     textarea { min-height:76px; resize:vertical; }
     .form-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:end; }
+    .check-row { display:flex; gap:8px; align-items:center; min-height:36px; color:var(--muted); font-weight:700; }
     .model-row { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto; gap:10px; margin-top:10px; align-items:end; }
     .model-status { color:var(--muted); font-size:13px; align-self:center; min-height:20px; }
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
@@ -1827,6 +1845,7 @@ INDEX_HTML = """<!doctype html>
         <input id="port" placeholder="PORT" type="number">
         <input id="proxy_port" placeholder="PROXY PORT" type="number">
         <select id="api_type"><option value="ollama">ollama</option><option value="openai">openai</option><option value="vllm">vllm</option></select>
+        <label class="check-row"><input id="enabled" type="checkbox" checked> 사용</label>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
         <input id="gpu_info" placeholder="GPU 정보">
@@ -2019,7 +2038,7 @@ function renderTargets() {
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
       <td>${m.total_prompts||0}</td>
       <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
-      <td><button onclick='editTarget(${JSON.stringify(t)})'>편집</button> <button class="danger" onclick="deleteTarget('${t.id}')">삭제</button></td>
+      <td><button onclick='editTarget(${JSON.stringify(t)})'>편집</button> <button onclick="setTargetEnabled('${t.id}', ${t.enabled ? 'false' : 'true'})">${t.enabled ? '사용 안함' : '사용'}</button> <button class="danger" onclick="deleteTarget('${t.id}')">삭제</button></td>
     </tr>`;
   }).join('');
 }
@@ -2141,6 +2160,7 @@ function editTarget(t) {
     const value = key === 'target_id' ? t.id : t[key];
     document.getElementById(id).value = value || '';
   }
+  document.getElementById('enabled').checked = Boolean(t.enabled);
   setModelOptions([], t.model || '');
   setGpuOptions([], t.selected_gpu || '');
   document.getElementById('model_status').textContent = '';
@@ -2148,6 +2168,7 @@ function editTarget(t) {
 function clearForm() {
   for (const id of ['target_id','name','host','port','proxy_port','model','gpu_type','gpu_info','selected_gpu_label','access_id','password','notes']) document.getElementById(id).value = '';
   document.getElementById('api_type').value = 'ollama';
+  document.getElementById('enabled').checked = true;
   setModelOptions([]);
   setGpuOptions([]);
   document.getElementById('model_status').textContent = '';
@@ -2178,9 +2199,13 @@ async function saveTarget() {
   if (payload.selected_gpu && selectedMatch && selectedMatch[1] !== payload.selected_gpu) {
     payload.selected_gpu_label = '';
   }
-  payload.enabled = true;
+  payload.enabled = document.getElementById('enabled').checked;
   await api('/api/targets', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
   clearForm(); await refresh();
+}
+async function setTargetEnabled(id, enabled) {
+  await api('/api/target-enabled', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled})});
+  await refresh();
 }
 async function deleteTarget(id) {
   await api('/api/delete-target', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
@@ -2458,6 +2483,9 @@ class RoutingHandler(BaseHTTPRequestHandler):
             if self.path == "/api/targets":
                 self.write_json({"ok": True, "target": self.upsert_target(payload)})
                 return
+            if self.path == "/api/target-enabled":
+                self.write_json({"ok": True, "target": self.set_target_enabled(payload)})
+                return
             if self.path == "/api/delete-target":
                 self.write_json({"ok": True, "deleted": self.delete_target(str(payload.get("id") or ""))})
                 return
@@ -2504,7 +2532,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             selected_gpu_label=str(payload.get("selected_gpu_label") or "").strip(),
             access_id=str(payload.get("access_id") or "").strip(),
             password=str(payload.get("password") or ""),
-            enabled=bool(payload.get("enabled", True)),
+            enabled=bool_value(payload.get("enabled"), True),
             weight=max(1, int(payload.get("weight") or 1)),
             notes=str(payload.get("notes") or "").strip(),
         )
@@ -2520,6 +2548,20 @@ class RoutingHandler(BaseHTTPRequestHandler):
         save_targets(targets)
         sync_ollama_proxy_servers()
         return new_target.__dict__
+
+    def set_target_enabled(self, payload: dict[str, Any]) -> dict[str, Any]:
+        target_id = str(payload.get("id") or "").strip()
+        if not target_id:
+            raise ValueError("id is required.")
+        targets = load_targets()
+        for target in targets:
+            if target.id == target_id:
+                target.enabled = bool_value(payload.get("enabled"), target.enabled)
+                save_targets(targets)
+                if not target.enabled:
+                    sync_queue_metric(target.id)
+                return target.__dict__
+        raise ValueError(f"target not found: {target_id}")
 
     def delete_target(self, target_id: str) -> bool:
         if not target_id:
