@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import concurrent.futures
 import configparser
 import fcntl
 import hashlib
@@ -45,14 +46,18 @@ NO_DETECTION_RESET_RUNS = 6
 
 @dataclass
 class ModelConfig:
+    server_url: str
     endpoint_url: str
     result_url: str
+    status_url: str
     model_name: str
     prompt: str
     user_id: str
     user_pw: str
     timeout_seconds: int
     poll_interval_seconds: float
+    auto_parallel_requests: bool
+    max_parallel_requests: int
 
 
 @dataclass
@@ -155,6 +160,9 @@ def load_config(config_path: Path) -> AppConfig:
         endpoint_url = f"{server_url.rstrip('/')}/api/enqueue-generate"
     if not result_url:
         result_url = f"{server_url.rstrip('/')}/api/prompt-result"
+    status_url = get_config_value(model_section, "status_url", "")
+    if not status_url:
+        status_url = f"{server_url.rstrip('/')}/api/status"
 
     telegram_token = get_config_value(telegram_section, "bot_token") or get_config_value(telegram_section, "token")
     telegram_chat_id = get_config_value(telegram_section, "chat_id")
@@ -182,14 +190,18 @@ def load_config(config_path: Path) -> AppConfig:
 
     return AppConfig(
         model=ModelConfig(
+            server_url=server_url,
             endpoint_url=endpoint_url,
             result_url=result_url,
+            status_url=status_url,
             model_name=get_config_value(model_section, "model_name", "gemma4:31b"),
             prompt=get_config_value(model_section, "prompt"),
             user_id=get_config_value(model_section, "user_id"),
             user_pw=get_config_value(model_section, "user_pw") or get_config_value(model_section, "password"),
             timeout_seconds=get_config_int(model_section, "timeout_seconds", 600),
             poll_interval_seconds=max(0.2, get_config_float(model_section, "poll_interval_seconds", 1.0)),
+            auto_parallel_requests=get_config_bool(model_section, "auto_parallel_requests", True),
+            max_parallel_requests=max(1, get_config_int(model_section, "max_parallel_requests", 4)),
         ),
         telegram=TelegramConfig(
             token=telegram_token,
@@ -526,6 +538,175 @@ def get_requests_module() -> Any:
         import requests
 
     return requests
+
+
+def _coerce_positive_int(value: Any) -> int | None:
+    try:
+        number = int(float(str(value)))
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _extract_remote_status_capacity(payload: Any, model_name: str) -> tuple[int | None, bool | None, str]:
+    capacity_keys = {
+        "available_gpus",
+        "available_gpu_count",
+        "concurrency",
+        "free_gpus",
+        "free_gpu_count",
+        "gpu_count",
+        "gpu_available",
+        "max_concurrency",
+        "max_concurrent",
+        "max_concurrent_requests",
+        "num_workers",
+        "parallelism",
+        "slots",
+        "target_count",
+        "total_gpus",
+        "worker_count",
+        "workers",
+    }
+    gpu_list_keys = {"gpus", "gpu_list", "devices", "cuda_devices", "targets"}
+    model_list_keys = {"models", "available_models", "model_list", "loaded_models"}
+    found_capacities: list[int] = []
+    gpu_counts: list[int] = []
+    model_names: set[str] = set()
+
+    def visit(value: Any, key_hint: str = "") -> None:
+        if isinstance(value, dict):
+            for key, nested_value in value.items():
+                lowered_key = str(key).lower()
+                if lowered_key in capacity_keys:
+                    number = _coerce_positive_int(nested_value)
+                    if number is not None:
+                        found_capacities.append(number)
+                if lowered_key in gpu_list_keys and isinstance(nested_value, list):
+                    enabled_gpus = [
+                        item
+                        for item in nested_value
+                        if not isinstance(item, dict)
+                        or (
+                            item.get("enabled") is not False
+                            and item.get("available") is not False
+                            and item.get("busy") is not True
+                            and item.get("in_use") is not True
+                        )
+                    ]
+                    if enabled_gpus:
+                        gpu_counts.append(len(enabled_gpus))
+                if lowered_key in model_list_keys:
+                    collect_models(nested_value)
+                visit(nested_value, lowered_key)
+        elif isinstance(value, list):
+            if key_hint in gpu_list_keys and value:
+                enabled_gpus = [
+                    item
+                    for item in value
+                    if not isinstance(item, dict)
+                    or (
+                        item.get("enabled") is not False
+                        and item.get("available") is not False
+                        and item.get("busy") is not True
+                        and item.get("in_use") is not True
+                    )
+                ]
+                if enabled_gpus:
+                    gpu_counts.append(len(enabled_gpus))
+            for item in value:
+                visit(item, key_hint)
+
+    def collect_models(value: Any) -> None:
+        if isinstance(value, str):
+            if value.strip():
+                model_names.add(value.strip())
+            return
+        if isinstance(value, dict):
+            for key in ("name", "model", "id"):
+                item = value.get(key)
+                if isinstance(item, str) and item.strip():
+                    model_names.add(item.strip())
+            for nested_value in value.values():
+                collect_models(nested_value)
+            return
+        if isinstance(value, list):
+            for item in value:
+                collect_models(item)
+
+    visit(payload)
+    capacity_values = found_capacities + gpu_counts
+    capacity = max(capacity_values) if capacity_values else None
+
+    model_available: bool | None
+    if model_names:
+        model_available = (not model_name) or model_name in model_names
+    else:
+        model_available = None
+
+    details: list[str] = []
+    if found_capacities:
+        details.append(f"capacity={max(found_capacities)}")
+    if gpu_counts:
+        details.append(f"gpu_count={max(gpu_counts)}")
+    if model_names:
+        details.append(f"models={', '.join(sorted(model_names)[:5])}")
+    if not details:
+        details.append("capacity/model 필드를 찾지 못함")
+    return capacity, model_available, " · ".join(details)
+
+
+def determine_remote_model_workers(config: ModelConfig, total_images: int, requests_module: Any) -> int:
+    configured_limit = max(1, min(total_images, config.max_parallel_requests))
+    if total_images <= 1:
+        return 1
+    if not config.auto_parallel_requests:
+        print(f"remote parallel auto check disabled; workers={configured_limit}", flush=True)
+        return configured_limit
+
+    try:
+        response = requests_module.get(
+            config.status_url,
+            headers=build_model_headers(config),
+            timeout=min(10, max(1, config.timeout_seconds)),
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(
+            f"remote status check failed; fallback to single worker: {config.status_url}: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    capacity, model_available, detail = _extract_remote_status_capacity(payload, config.model_name)
+    if model_available is False:
+        print(
+            f"remote status model warning: requested model not listed ({config.model_name}). {detail}",
+            file=sys.stderr,
+        )
+    elif model_available is True:
+        print(f"remote status model available: {config.model_name}", flush=True)
+    else:
+        print(f"remote status model availability unknown: {config.model_name or '(empty)'}", flush=True)
+
+    if capacity is None:
+        print(f"remote parallel capacity unknown; fallback to single worker. {detail}", flush=True)
+        return 1
+
+    workers = max(1, min(total_images, configured_limit, capacity))
+    print(
+        f"remote status parallel capacity confirmed: {detail} · "
+        f"configured_limit={configured_limit} · workers={workers}",
+        flush=True,
+    )
+    return workers
+
+
+def model_server_is_local(config: ModelConfig) -> bool:
+    parsed = urllib.parse.urlparse(config.server_url or config.endpoint_url)
+    hostname = (parsed.hostname or "").lower()
+    return hostname in {"", "127.0.0.1", "localhost", "::1"}
 
 
 def query_gpu_utilizations() -> list[int]:
@@ -1079,26 +1260,69 @@ def process_recent_images(
         nonlocal overflow_text_events
         nonlocal remaining_batch_budget
 
-        for image_path in batch_images:
-            if remaining_batch_budget is not None and remaining_batch_budget <= 0:
+        selected_images = batch_images
+        if remaining_batch_budget is not None:
+            if remaining_batch_budget <= 0:
                 print(f"batch image limit reached for run: {max_batch_images}")
-                break
+                return
+            selected_images = batch_images[:remaining_batch_budget]
+        if not selected_images:
+            return
+
+        print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
+        if model_server_is_local(config.model):
+            gpu_ready = wait_for_gpu_idle(config.gpu)
+        else:
+            gpu_ready = True
+            if config.gpu.enabled:
+                print(
+                    f"local gpu idle check skipped for remote model server: {config.model.server_url}",
+                    flush=True,
+                )
+        if not gpu_ready:
+            gpu_wait_timed_out = True
+            return
+
+        workers = determine_remote_model_workers(config.model, len(selected_images), requests_module)
+        print(
+            f"remote_model_dispatch batch={batch_name} images={len(selected_images)} workers={workers}",
+            flush=True,
+        )
+
+        def request_model(image_path: Path) -> tuple[Path, str]:
             print(f"detecting: {image_path}")
             print(f"processing_batch={batch_name}")
-            print("2. 수집 파일을 AI 모델에 전송하여 detection 실행", flush=True)
-            if not wait_for_gpu_idle(config.gpu):
-                gpu_wait_timed_out = True
-                break
-            try:
-                model_response = detect_person_via_model(image_path, config.model)
-            except (requests_module.RequestException, RuntimeError, TimeoutError, ValueError) as exc:
-                print(f"model request failed: {image_path.name}: {exc}", file=sys.stderr)
-                notify_model_failure(config, image_path, exc, dry_run=dry_run)
-                continue
-            except OSError as exc:
-                print(f"image read failed: {image_path.name}: {exc}", file=sys.stderr)
+            return image_path, detect_person_via_model(image_path, config.model)
+
+        def iter_model_results() -> Any:
+            if workers <= 1:
+                for image_path in selected_images:
+                    try:
+                        yield request_model(image_path)
+                    except Exception as exc:
+                        yield image_path, exc
+                return
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                future_to_image = {executor.submit(request_model, image_path): image_path for image_path in selected_images}
+                for future in concurrent.futures.as_completed(future_to_image):
+                    image_path = future_to_image[future]
+                    try:
+                        yield future.result()
+                    except Exception as exc:
+                        yield image_path, exc
+
+        for image_path, model_result in iter_model_results():
+            if isinstance(model_result, OSError):
+                print(f"image read failed: {image_path.name}: {model_result}", file=sys.stderr)
                 remove_pending_image(image_path)
                 continue
+            if isinstance(model_result, Exception):
+                print(f"model request failed: {image_path.name}: {model_result}", file=sys.stderr)
+                notify_model_failure(config, image_path, model_result, dry_run=dry_run)
+                continue
+
+            model_response = model_result
 
             detected, person_count = parse_model_response(model_response)
             processed_pending_images += 1

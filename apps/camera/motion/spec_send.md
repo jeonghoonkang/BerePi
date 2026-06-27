@@ -52,15 +52,19 @@
 server_url = http://127.0.0.1:8082
 endpoint_url =
 result_url =
+status_url =
 model_name = gemma4:31b
 user_id =
 user_pw =
 timeout_seconds = 600
 poll_interval_seconds = 1.0
+auto_parallel_requests = true
+max_parallel_requests = 4
 ```
 
 - `endpoint_url`이 비어 있으면 `{server_url}/api/enqueue-generate`를 사용한다.
 - `result_url`이 비어 있으면 `{server_url}/api/prompt-result`를 사용한다.
+- `status_url`이 비어 있으면 `{server_url}/api/status`를 사용한다.
 - 실행 중 설정 파일을 변경해도 현재 프로세스에는 반영되지 않는다.
 - 변경된 서버 URL은 다음 실행 또는 프로세스 재시작부터 적용된다.
 
@@ -71,12 +75,13 @@ poll_interval_seconds = 1.0
 3. 이미 pending queue에 같은 항목이 있으면 중복 enqueue하지 않는다.
 4. pending queue 여유가 있으면 `shutil.copy2()`로 사진을 `pending_model_images`에 복사한다.
 5. pending queue 파일 목록을 오래된 순서로 정렬한다.
-6. 각 pending 파일을 하나씩 읽어 base64로 인코딩한다.
-7. 모델 서버 `endpoint_url`에 JSON으로 POST한다.
-8. 응답에서 `prompt_queue_id`를 받는다.
-9. `result_url?id={prompt_queue_id}`를 주기적으로 GET polling한다.
-10. 모델 결과를 파싱해 사람 감지 여부와 인원수를 판단한다.
-11. 처리 완료된 pending 파일을 삭제한다.
+6. 모델 서버 `status_url`(`/api/status`)을 조회해 사용 가능한 모델/GPU/worker 용량을 확인한다.
+7. 확인된 용량과 `max_parallel_requests` 중 작은 값만큼 병렬 worker를 만든다. 상태 확인 실패 또는 용량 확인 불가 시 worker 1개로 처리한다.
+8. 각 pending 파일을 읽어 base64로 인코딩하고 모델 서버 `endpoint_url`에 JSON으로 POST한다.
+9. 응답에서 `prompt_queue_id`를 받는다.
+10. `result_url?id={prompt_queue_id}`를 주기적으로 GET polling한다.
+11. 모델 결과를 파싱해 사람 감지 여부와 인원수를 판단한다.
+12. 처리 완료된 pending 파일을 삭제한다.
 
 모델 서버 POST payload 형식:
 
@@ -152,6 +157,8 @@ pending 파일명은 다음 값으로 만든다.
 
 `[gpu] enabled = true`이면 모델 서버 전송 전 `nvidia-smi`로 GPU 사용률을 확인한다.
 
+- 이 검사는 모델 서버가 로컬(`localhost`, `127.0.0.1`)일 때만 적용한다.
+- 원격 모델 서버이면 로컬 GPU 검사는 건너뛰고 `status_url`(`/api/status`)의 원격 GPU/worker 용량을 사용한다.
 - GPU 사용률이 `max_utilization_percent` 이하이면 모델 전송을 시작한다.
 - GPU가 busy이면 `poll_interval_seconds`마다 재확인한다.
 - `wait_timeout_seconds`를 넘으면 해당 실행에서는 pending 파일을 유지하고 다음 실행으로 넘긴다.
