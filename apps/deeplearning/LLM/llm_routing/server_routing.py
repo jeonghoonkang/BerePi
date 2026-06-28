@@ -82,6 +82,7 @@ GPU_METRIC_KEYWORDS = (
     "vllm:num_requests_running",
     "vllm:num_requests_waiting",
 )
+TARGET_HISTORY_LIMIT = 100
 
 
 @dataclass
@@ -309,8 +310,78 @@ def load_targets() -> list[LLMTarget]:
     return targets
 
 
+def target_identity_key(target: LLMTarget | dict[str, Any]) -> str:
+    if isinstance(target, LLMTarget):
+        api_type = target.api_type
+        host = target.host
+        port = target.port
+        model = target.model
+        selected_gpu = target.selected_gpu
+    else:
+        api_type = str(target.get("api_type") or "ollama")
+        host = str(target.get("host") or "")
+        port = str(target.get("port") or "")
+        model = str(target.get("model") or "")
+        selected_gpu = str(target.get("selected_gpu") or "")
+    return "|".join(
+        [
+            api_type.strip().lower(),
+            host.strip().lower(),
+            str(port).strip(),
+            model.strip().lower(),
+            selected_gpu.strip().lower(),
+        ]
+    )
+
+
+def target_history_item(target: LLMTarget) -> dict[str, Any]:
+    item = dict(target.__dict__)
+    item.pop("id", None)
+    item["history_key"] = target_identity_key(target)
+    item["saved_at"] = now_text()
+    return item
+
+
+def load_target_history() -> list[dict[str, Any]]:
+    raw = load_json(CONFIG_PATH, {"targets": [], "target_history": []})
+    history = raw.get("target_history", [])
+    if not isinstance(history, list):
+        return []
+    return [item for item in history if isinstance(item, dict)]
+
+
+def duplicate_target_ids(targets: list[LLMTarget]) -> set[str]:
+    ids_by_key: dict[str, list[str]] = {}
+    for target in targets:
+        key = target_identity_key(target)
+        ids_by_key.setdefault(key, []).append(target.id)
+    return {target_id for ids in ids_by_key.values() if len(ids) > 1 for target_id in ids}
+
+
 def save_targets(targets: list[LLMTarget]) -> None:
-    save_json(CONFIG_PATH, {"targets": [target.__dict__ for target in targets]})
+    raw = load_json(CONFIG_PATH, {"targets": [], "target_history": []})
+    history = raw.get("target_history", [])
+    if not isinstance(history, list):
+        history = []
+    save_json(CONFIG_PATH, {"targets": [target.__dict__ for target in targets], "target_history": history})
+
+
+def remember_target_history(target: LLMTarget) -> None:
+    raw = load_json(CONFIG_PATH, {"targets": [], "target_history": []})
+    targets_raw = raw.get("targets", [])
+    if not isinstance(targets_raw, list):
+        targets_raw = []
+    history = raw.get("target_history", [])
+    if not isinstance(history, list):
+        history = []
+    new_item = target_history_item(target)
+    history = [
+        item
+        for item in history
+        if isinstance(item, dict) and target_identity_key(item) != new_item["history_key"]
+    ]
+    history.insert(0, new_item)
+    save_json(CONFIG_PATH, {"targets": targets_raw, "target_history": history[:TARGET_HISTORY_LIMIT]})
 
 
 def ensure_default_config() -> None:
@@ -1700,6 +1771,8 @@ def status_payload() -> dict[str, Any]:
         "uptime": seconds_to_uptime(time.time() - STARTED_AT),
         "status_refresh_seconds": STATUS_REFRESH_SECONDS,
         "targets": [target.__dict__ for target in targets],
+        "target_history": load_target_history(),
+        "duplicate_target_ids": sorted(duplicate_target_ids(targets)),
         "metrics": health_by_id,
         "service": {
             "client_count": len(CLIENT_STATS),
@@ -1797,6 +1870,11 @@ INDEX_HTML = """<!doctype html>
     .check-row { display:flex; gap:8px; align-items:center; min-height:36px; color:var(--muted); font-weight:700; }
     .model-row { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto; gap:10px; margin-top:10px; align-items:end; }
     .model-status { color:var(--muted); font-size:13px; align-self:center; min-height:20px; }
+    .history-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; margin-top:10px; align-items:end; }
+    .notice { margin-top:12px; border:1px solid #f2c94c; border-radius:8px; background:#fff8db; color:#7a4f00; padding:10px 12px; font-weight:700; }
+    .notice:empty { display:none; }
+    .duplicate-row { background:#fff4e5; }
+    .duplicate-badge { display:inline-block; margin-top:4px; color:#7a4f00; font-weight:800; }
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
     .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
     .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
@@ -1856,6 +1934,10 @@ INDEX_HTML = """<!doctype html>
         <input id="notes" placeholder="메모">
         <button onclick="clearForm()">신규 입력</button>
       </div>
+      <div class="history-row">
+        <select id="target_history"><option value="">저장된 입력 히스토리</option></select>
+        <button onclick="applyTargetHistory()">히스토리 적용</button>
+      </div>
       <div class="model-row">
         <input id="model" placeholder="모델 이름">
         <select id="model_select"><option value="">모델 목록</option></select>
@@ -1864,6 +1946,7 @@ INDEX_HTML = """<!doctype html>
       <div id="model_status" class="model-status"></div>
       <input id="target_id" type="hidden">
     </div>
+    <div id="duplicateNotice" class="notice"></div>
     <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>평균 응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
   </section>
   <section id="service">
@@ -2014,23 +2097,30 @@ async function logout() {
 }
 async function refresh() {
   state = await api('/api/status');
-  renderTargets(); renderService(); renderLocal(); renderTestTargets();
+  renderTargets(); renderTargetHistory(); renderService(); renderLocal(); renderTestTargets();
 }
 function renderTargets() {
   const targets = state.targets || [];
   const metrics = state.metrics || {};
+  const duplicateIds = new Set(state.duplicate_target_ids || []);
+  const duplicateCount = duplicateIds.size;
   document.getElementById('targetMetrics').innerHTML = [
     metric('등록 LLM', targets.length),
     metric('활성 LLM', targets.filter(t => t.enabled).length),
+    metric('중복 항목', duplicateCount),
     metric('전체 pending queue', targets.reduce((n,t)=>n+(metrics[t.id]?.pending_queue||0),0)),
     metric('전체 처리 prompt', targets.reduce((n,t)=>n+(metrics[t.id]?.total_prompts||0),0))
   ].join('');
+  document.getElementById('duplicateNotice').textContent = duplicateCount
+    ? `중복된 LLM 서버 항목 ${duplicateCount}개가 있습니다. 같은 API/IP/PORT/모델/GPU 조합은 노란색으로 표시됩니다.`
+    : '';
   document.getElementById('targetRows').innerHTML = targets.map(t => {
     const m = metrics[t.id] || {};
     const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
     const selectedGpuDevice = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '';
-    return `<tr>
-      <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}</td>
+    const duplicateBadge = duplicateIds.has(t.id) ? '<br><span class="duplicate-badge">중복</span>' : '';
+    return `<tr class="${duplicateIds.has(t.id) ? 'duplicate-row' : ''}">
+      <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}${duplicateBadge}</td>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small></td>
       <td>${esc(t.model)}</td>
@@ -2041,6 +2131,25 @@ function renderTargets() {
       <td><button onclick='editTarget(${JSON.stringify(t)})'>편집</button> <button onclick="setTargetEnabled('${t.id}', ${t.enabled ? 'false' : 'true'})">${t.enabled ? '사용 안함' : '사용'}</button> <button class="danger" onclick="deleteTarget('${t.id}')">삭제</button></td>
     </tr>`;
   }).join('');
+}
+function historyLabel(item) {
+  const title = item.name || item.model || 'LLM';
+  const address = `${item.host || ''}:${item.port || ''}`;
+  const model = item.model ? ` / ${item.model}` : '';
+  const gpu = item.selected_gpu ? ` / GPU ${item.selected_gpu}` : '';
+  return `${title} - ${address}${model}${gpu}`;
+}
+function renderTargetHistory() {
+  const select = document.getElementById('target_history');
+  const currentValue = select.value;
+  const history = state.target_history || [];
+  select.innerHTML = '<option value="">저장된 입력 히스토리</option>' + history.map((item, index) => {
+    const savedAt = item.saved_at ? ` (${item.saved_at})` : '';
+    return `<option value="${index}">${esc(historyLabel(item) + savedAt)}</option>`;
+  }).join('');
+  if (currentValue && Number(currentValue) < history.length) {
+    select.value = currentValue;
+  }
 }
 function renderService() {
   const service = state.service || {};
@@ -2164,6 +2273,20 @@ function editTarget(t) {
   setModelOptions([], t.model || '');
   setGpuOptions([], t.selected_gpu || '');
   document.getElementById('model_status').textContent = '';
+}
+function applyTargetHistory() {
+  const select = document.getElementById('target_history');
+  const item = (state.target_history || [])[Number(select.value)];
+  if (!item) return;
+  const keepTargetId = document.getElementById('target_id').value;
+  for (const key of ['name','host','port','proxy_port','model','api_type','gpu_type','gpu_info','selected_gpu','selected_gpu_label','access_id','password','notes']) {
+    document.getElementById(key).value = item[key] || '';
+  }
+  document.getElementById('target_id').value = keepTargetId;
+  document.getElementById('enabled').checked = item.enabled !== false;
+  setModelOptions([], item.model || '');
+  setGpuOptions([], item.selected_gpu || '');
+  document.getElementById('model_status').textContent = '히스토리 입력값을 적용했습니다.';
 }
 function clearForm() {
   for (const id of ['target_id','name','host','port','proxy_port','model','gpu_type','gpu_info','selected_gpu_label','access_id','password','notes']) document.getElementById(id).value = '';
@@ -2546,6 +2669,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         if not replaced:
             targets.append(new_target)
         save_targets(targets)
+        remember_target_history(new_target)
         sync_ollama_proxy_servers()
         return new_target.__dict__
 
