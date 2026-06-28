@@ -42,6 +42,8 @@ DEFAULT_GPU_POLL_INTERVAL_SECONDS = 5.0
 TELEGRAM_PHOTO_LIMIT_SEQUENCE = (20, 10, 5, 1)
 TELEGRAM_TEXT_BATCH_SIZE = 20
 NO_DETECTION_RESET_RUNS = 6
+CRON_INTERVAL_SECONDS = 5 * 60
+NEXT_SEND_MINIMUM_REMAINING_SECONDS = 2 * 60
 
 
 @dataclass
@@ -901,6 +903,25 @@ def format_time(value: datetime) -> str:
     return value.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
+def seconds_until_next_cron_run(now: datetime | None = None) -> int:
+    current = now or datetime.now().astimezone()
+    elapsed = int(current.timestamp()) % CRON_INTERVAL_SECONDS
+    return CRON_INTERVAL_SECONDS if elapsed == 0 else CRON_INTERVAL_SECONDS - elapsed
+
+
+def enough_time_for_next_send(now: datetime | None = None) -> bool:
+    remaining_seconds = seconds_until_next_cron_run(now)
+    enough_time = remaining_seconds >= NEXT_SEND_MINIMUM_REMAINING_SECONDS
+    print(
+        "next_send_time_check="
+        f"remaining_seconds:{remaining_seconds} "
+        f"minimum_seconds:{NEXT_SEND_MINIMUM_REMAINING_SECONDS} "
+        f"continue_next:{enough_time}",
+        flush=True,
+    )
+    return enough_time
+
+
 def build_detection_event(image_path: Path, person_count: int, model_response: str) -> dict[str, Any]:
     captured_at = image_captured_at(image_path).astimezone()
     detected_at = datetime.now().astimezone()
@@ -1246,6 +1267,7 @@ def process_recent_images(
     photo_alerts_sent = 0
     overflow_text_events: list[dict[str, Any]] = []
     gpu_wait_timed_out = False
+    next_send_time_too_close = False
     remaining_batch_budget = max_batch_images if max_batch_images is None else max(0, max_batch_images)
 
     requests_module = get_requests_module()
@@ -1257,6 +1279,7 @@ def process_recent_images(
         nonlocal processed_realtime_pending_images
         nonlocal photo_alerts_sent
         nonlocal gpu_wait_timed_out
+        nonlocal next_send_time_too_close
         nonlocal overflow_text_events
         nonlocal remaining_batch_budget
 
@@ -1335,6 +1358,9 @@ def process_recent_images(
             print(f"detected={detected} person_count={person_count}")
             if not detected:
                 remove_pending_image(image_path)
+                if not enough_time_for_next_send():
+                    next_send_time_too_close = True
+                    break
                 continue
 
             detected_events += 1
@@ -1355,12 +1381,18 @@ def process_recent_images(
                     overflow_text_events.append(event)
                     print(f"dry-run: telegram text batch queued for {image_path.name}")
                 remove_pending_image(image_path)
+                if not enough_time_for_next_send():
+                    next_send_time_too_close = True
+                    break
                 continue
 
             if photo_alerts_sent >= photo_limit_for_run:
                 overflow_text_events.append(event)
                 print(f"telegram photo limit reached; queued text alert: {image_path.name}")
                 remove_pending_image(image_path)
+                if not enough_time_for_next_send():
+                    next_send_time_too_close = True
+                    break
                 continue
 
             try:
@@ -1368,11 +1400,17 @@ def process_recent_images(
             except (requests_module.RequestException, OSError, ValueError) as exc:
                 print(f"telegram send failed: {image_path.name}: {exc}", file=sys.stderr)
                 remove_pending_image(image_path)
+                if not enough_time_for_next_send():
+                    next_send_time_too_close = True
+                    break
                 continue
             photo_alerts_sent += 1
             alerts_sent += 1
             print(f"telegram sent: {image_path.name}")
             remove_pending_image(image_path)
+            if not enough_time_for_next_send():
+                next_send_time_too_close = True
+                break
 
     def persist_telegram_alert_throttle_state(run_evaluated: bool, detected_in_run: bool) -> None:
         if not run_evaluated:
@@ -1443,7 +1481,7 @@ def process_recent_images(
 
     process_pending_batch(pending_images, batch_name="realtime")
 
-    if not gpu_wait_timed_out:
+    if not gpu_wait_timed_out and not next_send_time_too_close:
         skipped_images = list_skipped_images(config)
         if skipped_images and gpu_is_idle(config.gpu):
             pending_capacity = max(0, config.max_pending_files - len(list_pending_images(config)))
@@ -1491,12 +1529,15 @@ def process_recent_images(
         persist_telegram_alert_throttle_state(run_evaluated=False, detected_in_run=False)
         return alerts_sent
 
+    if next_send_time_too_close:
+        print("next cron run is too close; remaining pending images will be processed in the next run")
+
     persist_telegram_alert_throttle_state(
         run_evaluated=(not pending_images or processed_pending_images > 0),
         detected_in_run=(detected_events > 0),
     )
 
-    if processed_realtime_pending_images > 0 and detected_events == 0:
+    if processed_realtime_pending_images > 0 and detected_events == 0 and not next_send_time_too_close:
         reference_images = get_reference_images(config.motion_dir, config.recursive)
         print(f"no person detected; reference_images={len(reference_images)}")
         if not reference_images:
