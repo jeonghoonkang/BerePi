@@ -1289,6 +1289,7 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
 def api_status_payload() -> dict[str, Any]:
     targets = [target for target in load_targets() if target.enabled]
     first = targets[0] if targets else None
+    network = local_network_info()
     return {
         "ok": True,
         "service": "llm-routing",
@@ -1297,6 +1298,10 @@ def api_status_payload() -> dict[str, Any]:
         "model": first.model if first else "",
         "host": HOST,
         "port": PORT,
+        "ip_address": network["primary_ip"],
+        "ipv4_addresses": network["ipv4_addresses"],
+        "service_url": network["service_url"],
+        "network": network,
         "target_count": len(targets),
         "targets": [
             {
@@ -1337,6 +1342,37 @@ def run_command(command: list[str], timeout: int = 5) -> str:
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         return str(exc)
     return (completed.stdout or completed.stderr or "").strip()
+
+
+def local_network_info() -> dict[str, Any]:
+    hostname = socket.gethostname()
+    primary_ip = ""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            primary_ip = sock.getsockname()[0]
+    except OSError:
+        primary_ip = ""
+
+    addresses: list[str] = []
+    try:
+        for item in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip_address = str(item[4][0])
+            if ip_address and ip_address not in addresses:
+                addresses.append(ip_address)
+    except OSError:
+        pass
+    if primary_ip and primary_ip not in addresses:
+        addresses.insert(0, primary_ip)
+
+    return {
+        "hostname": hostname,
+        "primary_ip": primary_ip,
+        "ipv4_addresses": addresses,
+        "listen_host": HOST,
+        "listen_port": PORT,
+        "service_url": f"http://{primary_ip or hostname}:{PORT}",
+    }
 
 
 def load_webdav_settings() -> dict[str, Any]:
@@ -1450,10 +1486,15 @@ def snapshot_metrics() -> dict[str, dict[str, Any]]:
 def llm_selection_markdown() -> str:
     targets = load_targets()
     metrics = snapshot_metrics()
+    network = local_network_info()
     lines = [
         f"# LLM Routing Status - {socket.gethostname()}",
         "",
         f"- 생성 시각: {now_text()}",
+        f"- 호스트명: {network['hostname']}",
+        f"- 대표 IP: {network['primary_ip'] or '-'}",
+        f"- IPv4 목록: {', '.join(network['ipv4_addresses']) if network['ipv4_addresses'] else '-'}",
+        f"- 서비스 URL: {network['service_url']}",
         f"- 서비스 uptime: {seconds_to_uptime(time.time() - STARTED_AT)}",
         f"- 등록 LLM: {len(targets)}",
         f"- 활성 LLM: {sum(1 for target in targets if target.enabled)}",
@@ -1614,7 +1655,15 @@ def test_webdav_settings() -> dict[str, Any]:
     file_name = f"llm_routing_webdav_test_{int(time.time())}.txt"
     remote_dirs = webdav_remote_dirs(settings)
     remote_paths = [posixpath.join(remote_dir, file_name).strip("/") for remote_dir in remote_dirs]
-    payload = f"LLM Routing WebDAV test\nhost={socket.gethostname()}\ntime={now_text()}\n".encode("utf-8")
+    network = local_network_info()
+    payload = (
+        "LLM Routing WebDAV test\n"
+        f"host={network['hostname']}\n"
+        f"primary_ip={network['primary_ip']}\n"
+        f"ipv4_addresses={', '.join(network['ipv4_addresses'])}\n"
+        f"service_url={network['service_url']}\n"
+        f"time={now_text()}\n"
+    ).encode("utf-8")
     uploaded: list[dict[str, str]] = []
     try:
         for remote_dir, remote_path in zip(remote_dirs, remote_paths):

@@ -273,7 +273,7 @@ cp webdav_settings.example.json webdav_settings.json
 ./start.sh
 ```
 
-저장 경로는 PulseDAV와 동일하게 `tinyGW/<sub>/<호스트명>/llm_routing_status.md` 형식입니다. `webdav.sub`가 배열이면 각 `sub` 경로마다 같은 상태 파일을 업로드합니다. 로컬머신 탭의 `LLM Routing WebDAV 전송` 영역에서 마지막 전송 시각, 저장 경로, 오류 메시지를 확인할 수 있습니다.
+저장 경로는 PulseDAV와 동일하게 `tinyGW/<sub>/<호스트명>/llm_routing_status.md` 형식입니다. `webdav.sub`가 배열이면 각 `sub` 경로마다 같은 상태 파일을 업로드합니다. 업로드되는 상태 파일에는 호스트명, 대표 IP, IPv4 목록, 서비스 URL이 함께 기록됩니다. 로컬머신 탭의 `LLM Routing WebDAV 전송` 영역에서 마지막 전송 시각, 저장 경로, 오류 메시지를 확인할 수 있습니다.
 
 ## 설정 파일
 
