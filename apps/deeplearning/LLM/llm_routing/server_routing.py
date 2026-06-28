@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import email.utils
 import html
 import json
 import os
@@ -20,6 +21,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,6 +44,8 @@ QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
 STATUS_REFRESH_SECONDS = int(os.getenv("LLM_ROUTING_STATUS_REFRESH_SECONDS", os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "10")))
 HEALTH_CHECK_INTERVAL_SECONDS = STATUS_REFRESH_SECONDS
 WEBDAV_DEFAULT_INTERVAL_MINUTES = int(os.getenv("LLM_ROUTING_WEBDAV_INTERVAL_MINUTES", "30"))
+WEBDAV_MAX_INTERVAL_MINUTES = 24 * 60
+WEBDAV_RETENTION_DAYS = int(os.getenv("LLM_ROUTING_WEBDAV_RETENTION_DAYS", "90"))
 SESSION_COOKIE_NAME = "llm_routing_session"
 SESSION_TTL_SECONDS = int(os.getenv("LLM_ROUTING_SESSION_TTL_SECONDS", "28800"))
 STARTED_AT = time.time()
@@ -1434,7 +1438,8 @@ def webdav_request(
     remote_path: str,
     data: bytes | None = None,
     content_type: str = "text/markdown; charset=utf-8",
-) -> None:
+    extra_headers: dict[str, str] | None = None,
+) -> bytes:
     webdav = settings.get("webdav", {})
     username = str(webdav.get("username") or "")
     password = str(webdav.get("password") or "")
@@ -1444,16 +1449,20 @@ def webdav_request(
         headers["Authorization"] = f"Basic {token}"
     if data is not None:
         headers["Content-Type"] = content_type
+    if extra_headers:
+        headers.update(extra_headers)
     context = None
     if not bool(webdav.get("verify_ssl", True)):
         context = ssl._create_unverified_context()  # noqa: SLF001
     req = urllib.request.Request(webdav_url(settings, remote_path), data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=20, context=context) as response:
-            response.read()
+            return response.read()
     except urllib.error.HTTPError as exc:
         if method == "MKCOL" and exc.code in {405, 409}:
-            return
+            return b""
+        if method == "DELETE" and exc.code == 404:
+            return b""
         body = exc.read().decode("utf-8", errors="replace").strip()
         detail = body[:300] if body else exc.reason
         raise RuntimeError(f"WebDAV {method} failed: HTTP {exc.code} {detail}") from exc
@@ -1466,6 +1475,127 @@ def ensure_webdav_remote_dirs(settings: dict[str, Any], remote_dir: str) -> None
             continue
         current = posixpath.join(current, part).strip("/")
         webdav_request(settings, "MKCOL", current)
+
+
+def timestamped_webdav_filename(file_name: str, timestamp: dt.datetime | None = None) -> str:
+    normalized = normalize_webdav_path(file_name) or "llm_routing_status.md"
+    parent, name = posixpath.split(normalized)
+    stem, ext = posixpath.splitext(name)
+    if not stem:
+        stem = "llm_routing_status"
+    if not ext:
+        ext = ".md"
+    created_at = timestamp or dt.datetime.now().astimezone()
+    stamped_name = f"{stem}_{created_at.strftime('%Y%m%d_%H%M%S')}{ext}"
+    return posixpath.join(parent, stamped_name).strip("/") if parent else stamped_name
+
+
+def webdav_report_file_pattern(file_name: str) -> tuple[str, str, str]:
+    normalized = normalize_webdav_path(file_name) or "llm_routing_status.md"
+    parent, name = posixpath.split(normalized)
+    stem, ext = posixpath.splitext(name)
+    return parent, stem or "llm_routing_status", ext or ".md"
+
+
+def webdav_href_to_remote_path(settings: dict[str, Any], href: str) -> str:
+    parsed_href = urllib.parse.urlparse(href)
+    href_path = urllib.parse.unquote(parsed_href.path or href).strip("/")
+    root_url = webdav_url(settings, "")
+    root_path = urllib.parse.unquote(urllib.parse.urlparse(root_url).path).strip("/")
+    if root_path and href_path.startswith(root_path):
+        return href_path[len(root_path) :].strip("/")
+    return href_path
+
+
+def parse_webdav_datetime(value: str) -> dt.datetime | None:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return None
+    try:
+        parsed = email.utils.parsedate_to_datetime(cleaned)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def list_webdav_directory(settings: dict[str, Any], remote_dir: str) -> list[dict[str, Any]]:
+    body = webdav_request(
+        settings,
+        "PROPFIND",
+        remote_dir,
+        data=b"""<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:getlastmodified />
+    <d:resourcetype />
+  </d:prop>
+</d:propfind>
+""",
+        content_type="application/xml; charset=utf-8",
+        extra_headers={"Depth": "1"},
+    )
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError:
+        return []
+
+    entries: list[dict[str, Any]] = []
+    for response in root.findall("{DAV:}response"):
+        href = response.findtext("{DAV:}href") or ""
+        remote_path = webdav_href_to_remote_path(settings, href)
+        if not remote_path or normalize_webdav_path(remote_path) == normalize_webdav_path(remote_dir):
+            continue
+        resource_type = response.find(".//{DAV:}resourcetype")
+        is_collection = resource_type is not None and resource_type.find("{DAV:}collection") is not None
+        if is_collection:
+            continue
+        last_modified = response.findtext(".//{DAV:}getlastmodified") or ""
+        entries.append(
+            {
+                "remote_path": normalize_webdav_path(remote_path),
+                "name": posixpath.basename(remote_path),
+                "last_modified": parse_webdav_datetime(last_modified),
+            }
+        )
+    return entries
+
+
+def delete_old_webdav_report_files(settings: dict[str, Any], remote_dir: str, file_name: str) -> list[str]:
+    file_parent, stem, ext = webdav_report_file_pattern(file_name)
+    cleanup_dir = posixpath.join(remote_dir, file_parent).strip("/") if file_parent else remote_dir
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=WEBDAV_RETENTION_DAYS)
+    deleted: list[str] = []
+    try:
+        entries = list_webdav_directory(settings, cleanup_dir)
+    except Exception:
+        return deleted
+    legacy_name = f"{stem}{ext}"
+    pattern = re.compile(rf"^{re.escape(stem)}_(\d{{8}}_\d{{6}}){re.escape(ext)}$")
+    for entry in entries:
+        name = str(entry.get("name") or "")
+        match = pattern.match(name)
+        file_time = None
+        if match:
+            try:
+                file_time = dt.datetime.strptime(match.group(1), "%Y%m%d_%H%M%S").replace(tzinfo=dt.timezone.utc)
+            except ValueError:
+                file_time = None
+        elif name == legacy_name:
+            last_modified = entry.get("last_modified")
+            if isinstance(last_modified, dt.datetime):
+                file_time = last_modified
+        else:
+            continue
+        if file_time is None or file_time >= cutoff:
+            continue
+        remote_path = str(entry.get("remote_path") or "")
+        if not remote_path:
+            continue
+        webdav_request(settings, "DELETE", remote_path)
+        deleted.append(remote_path)
+    return deleted
 
 
 def webdav_settings_error(settings: dict[str, Any]) -> str:
@@ -1628,16 +1758,21 @@ def send_webdav_status_once(settings: dict[str, Any]) -> dict[str, Any]:
     if error:
         raise ValueError(error)
     report = settings.get("report", {}) if isinstance(settings.get("report"), dict) else {}
-    file_name = normalize_webdav_path(str(report.get("filename") or "llm_routing_status.md")) or "llm_routing_status.md"
+    base_file_name = normalize_webdav_path(str(report.get("filename") or "llm_routing_status.md")) or "llm_routing_status.md"
+    file_name = timestamped_webdav_filename(base_file_name)
     markdown = llm_selection_markdown().encode("utf-8")
     remote_dirs = webdav_remote_dirs(settings)
     remote_paths = [posixpath.join(remote_dir, file_name).strip("/") for remote_dir in remote_dirs]
+    deleted_paths: list[str] = []
     for remote_dir, remote_path in zip(remote_dirs, remote_paths):
-        ensure_webdav_remote_dirs(settings, remote_dir)
+        deleted_paths.extend(delete_old_webdav_report_files(settings, remote_dir, base_file_name))
+        remote_parent = posixpath.dirname(remote_path)
+        ensure_webdav_remote_dirs(settings, remote_parent or remote_dir)
         webdav_request(settings, "PUT", remote_path, data=markdown)
     return {
         "remote_paths": remote_paths,
         "destination_urls": [webdav_url(settings, remote_path) for remote_path in remote_paths],
+        "deleted_paths": deleted_paths,
     }
 
 
@@ -1700,7 +1835,7 @@ def webdav_report_loop() -> None:
         update_webdav_report_state(enabled=True, status="error", last_error=error)
         return
     interval = int(settings.get("schedule", {}).get("interval_minutes") or WEBDAV_DEFAULT_INTERVAL_MINUTES)
-    interval = max(1, interval)
+    interval = min(WEBDAV_MAX_INTERVAL_MINUTES, max(1, interval))
     update_webdav_report_state(enabled=True, status="waiting", interval_minutes=interval)
     while True:
         try:
@@ -1711,6 +1846,7 @@ def webdav_report_loop() -> None:
                 last_error="",
                 remote_paths=result["remote_paths"],
                 destination_urls=result["destination_urls"],
+                deleted_paths=result.get("deleted_paths", []),
             )
         except Exception as exc:  # noqa: BLE001
             update_webdav_report_state(status="error", last_error=str(exc))
