@@ -308,7 +308,8 @@ launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 - `GEMMA4_SAMPLE_DIR`: default `sample` in this directory
 - `GEMMA4_SERVER_WORKSPACE_DIR`: default `workspace` in this directory
 - `GEMMA4_MACH_STATS_DIR`: default `mach_stats` in this directory
-- `GEMMA4_REQUEST_TIMEOUT`: default `120`
+- `GEMMA4_PROMPT_PROCESS_COUNT_FILE`: default `mach_stats/prompt_process_count.txt`
+- `GEMMA4_REQUEST_TIMEOUT`: default `600`
 - `GEMMA4_SESSION_TTL_SECONDS`: default `28800`
 - `GEMMA4_SELECTED_MODEL`: runtime override for selected model
 - `GEMMA4_SELECTED_GPU`: runtime override for selected GPU

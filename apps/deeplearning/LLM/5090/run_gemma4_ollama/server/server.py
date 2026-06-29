@@ -51,6 +51,9 @@ WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).res
 MACH_STATS_DIR = Path(os.getenv("GEMMA4_MACH_STATS_DIR", Path(__file__).resolve().with_name("mach_stats")))
 MODEL_LOAD_EVENTS_FILE = Path(os.getenv("GEMMA4_MODEL_LOAD_EVENTS_FILE", MACH_STATS_DIR / "model_load_events.jsonl"))
 MODEL_LOAD_STATE_FILE = Path(os.getenv("GEMMA4_MODEL_LOAD_STATE_FILE", MACH_STATS_DIR / "model_load_state.json"))
+PROMPT_PROCESS_COUNT_FILE = Path(
+  os.getenv("GEMMA4_PROMPT_PROCESS_COUNT_FILE", MACH_STATS_DIR / "prompt_process_count.txt")
+)
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "600"))
 STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
@@ -1760,15 +1763,17 @@ if __name__ == "__main__":
         const activeJobCount = Number(queue.active_job_count ?? (queue.active ? 1 : 0));
         const totalUnfinishedJobCount = Number(queue.total_unfinished_job_count ?? (waitingJobCount + activeJobCount));
         const queueText = [
-          `대기 작업: ${waitingJobCount}개`,
-          `처리 중: ${activeJobCount}개`,
-          `총 미완료: ${totalUnfinishedJobCount}개`,
+          `Waiting jobs: ${waitingJobCount}`,
+          `Processing: ${activeJobCount}`,
+          `Unfinished: ${totalUnfinishedJobCount}`,
         ].join("<br>");
+        const lifetimeProcessCount = Number(data.lifetime_process_count || 0);
         metrics.innerHTML = [
           metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
           metric("Queue", queueText, waitingJobCount > 0 ? "warn" : "ok"),
+          metric("Processed", `${lifetimeProcessCount}<br>${escapeHtml(data.prompt_process_count_file || "")}`, "ok"),
           metric("Today Model Load", formatLoadMetric(modelLoad.today), "ok"),
           metric("Weekly Model Load", formatLoadMetric(modelLoad.week), "ok"),
           metric("Lifetime Model Load", formatLoadMetric(lifetimeLoad), "ok"),
@@ -2757,6 +2762,47 @@ def average_prompt_processing_seconds() -> float:
             return 0.0
 
 
+def read_latest_prompt_process_count() -> int:
+    try:
+        lines = PROMPT_PROCESS_COUNT_FILE.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return 0
+
+    for raw_line in reversed(lines):
+        line = raw_line.strip()
+        if not line or line.startswith("process_count\t"):
+            continue
+        first_field = line.split("\t", 1)[0].strip()
+        try:
+            return max(0, int(first_field))
+        except ValueError:
+            continue
+    return 0
+
+
+def append_prompt_process_count(processed_at: float, elapsed_seconds: float, model: str) -> dict[str, Any]:
+    PROMPT_PROCESS_COUNT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    process_count = read_latest_prompt_process_count() + 1
+    if not PROMPT_PROCESS_COUNT_FILE.exists() or PROMPT_PROCESS_COUNT_FILE.stat().st_size == 0:
+        PROMPT_PROCESS_COUNT_FILE.write_text(
+            "process_count\tprocessed_at_text\tprocessed_at_epoch\tmodel\telapsed_seconds\n",
+            encoding="utf-8",
+        )
+
+    processed_at_text = access_log_timestamp(processed_at)
+    line = (
+        f"{process_count}\t{processed_at_text}\t{processed_at:.3f}\t"
+        f"{str(model or 'unknown')}\t{max(0.0, float(elapsed_seconds)):.3f}\n"
+    )
+    with PROMPT_PROCESS_COUNT_FILE.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+    return {
+        "process_count": process_count,
+        "processed_at_text": processed_at_text,
+        "process_count_file": str(PROMPT_PROCESS_COUNT_FILE),
+    }
+
+
 def record_prompt_processing_time(elapsed_seconds: float, model: str) -> dict[str, Any]:
   with PROMPT_SPEED_STATS_LOCK:
     MACH_STATS_DIR.mkdir(parents=True, exist_ok=True)
@@ -2797,6 +2843,10 @@ def record_prompt_processing_time(elapsed_seconds: float, model: str) -> dict[st
     temp_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temp_path.replace(path)
     append_model_load_event(processed_at, elapsed, model_key)
+    process_count_entry = append_prompt_process_count(processed_at, elapsed, model_key)
+    stats["lifetime_process_count"] = process_count_entry["process_count"]
+    stats["process_count_file"] = process_count_entry["process_count_file"]
+    stats["latest_process_count_at_text"] = process_count_entry["processed_at_text"]
     stats["stats_path"] = str(path)
     return stats
 
@@ -3033,8 +3083,11 @@ def prompt_worker_loop() -> None:
                     "stats_path": stats.get("stats_path"),
                     "week_start_date": stats.get("week_start_date"),
                     "sample_count": stats.get("sample_count"),
+                    "lifetime_process_count": stats.get("lifetime_process_count"),
                     "average_processing_seconds": stats.get("average_processing_seconds"),
                     "last_processing_seconds": stats.get("last_processing_seconds"),
+                    "process_count_file": stats.get("process_count_file"),
+                    "latest_process_count_at_text": stats.get("latest_process_count_at_text"),
                 }
                 job.result = result
         except Exception as exc:
@@ -3507,6 +3560,8 @@ def status_payload() -> dict[str, Any]:
         "models": models,
         "model_load": model_load,
         "prompt_queue": prompt_queue_status(),
+        "lifetime_process_count": read_latest_prompt_process_count(),
+        "prompt_process_count_file": str(PROMPT_PROCESS_COUNT_FILE),
         "uptime_seconds": uptime_seconds,
         "uptime_human": format_uptime_dhm(uptime_seconds),
     }
