@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
     "password": "",
     "model": "",
     "keep_alive": "6m",
-    "num_ctx": 8192,
+    "num_ctx": 4096,
     "target_words_per_chapter": 1800,
     "language": "ko",
     "chapter_parallelism": 1,
