@@ -863,13 +863,34 @@ def join_url(base_url: str, path: str) -> str:
     return urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
 
 
+def http_error_preview(exc: urllib.error.HTTPError, limit: int = 500) -> str:
+    try:
+        body = exc.read().decode("utf-8", errors="replace").strip()
+    except OSError:
+        body = ""
+    if not body:
+        return ""
+    return body.replace("\n", " ")[:limit]
+
+
+def request_headers(payload: dict[str, Any] | None) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if payload is None:
+        return headers
+
+    headers["Content-Type"] = "application/json"
+    api_key = str(payload.get("api_key") or payload.get("password") or "").strip()
+    if api_key:
+        headers["X-API-Key"] = api_key
+    return headers
+
+
 def request_json(url: str, payload: dict[str, Any] | None, timeout: int) -> dict[str, Any]:
     data = None
-    headers = {"Accept": "application/json"}
+    headers = request_headers(payload)
     method = "GET"
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers["Content-Type"] = "application/json"
         method = "POST"
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
@@ -977,7 +998,9 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_mul
             break
         except urllib.error.HTTPError as exc:
             send_elapsed = time.perf_counter() - send_started
-            error = f"Model endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}"
+            body_preview = http_error_preview(exc)
+            detail = f" | body={body_preview}" if body_preview else ""
+            error = f"Model endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}{detail}"
             trace_path = save_llm_trace(
                 url=generate_url,
                 config=config,
@@ -985,14 +1008,15 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_mul
                 started_at=started_at,
                 elapsed_seconds=time.perf_counter() - started,
                 label=label,
-                error=f"HTTP {exc.code}: {exc.reason}",
+                error=f"HTTP {exc.code}: {exc.reason}{detail}",
             )
             progress_log(
                 "model-response",
                 (
                     f"{label or 'model'} failed attempt={attempt_number} "
                     f"send_elapsed={send_elapsed:.1f}s total_elapsed={time.perf_counter() - started:.1f}s "
-                    f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x error=HTTP {exc.code} {exc.reason}"
+                    f"timeout={timeout_seconds}s timeout_scale={timeout_scale}x "
+                    f"error=HTTP {exc.code} {exc.reason}{detail}"
                 ),
                 "red",
             )
@@ -1302,11 +1326,13 @@ def wait_for_deferred_queue_slot(worker: dict[str, Any], config: dict[str, Any],
 
 def explain_request_error(exc: Exception) -> str:
     if isinstance(exc, urllib.error.HTTPError):
+        body_preview = http_error_preview(exc)
+        detail = f" Body: {body_preview}" if body_preview else ""
         if exc.code == HTTPStatus.UNAUTHORIZED:
-            return "HTTP 401 Unauthorized. User ID/Password is likely wrong."
+            return f"HTTP 401 Unauthorized. User ID/Password is likely wrong.{detail}"
         if exc.code == HTTPStatus.NOT_FOUND:
-            return "HTTP 404 Not Found. Check generate_path/status_path in config."
-        return f"HTTP {exc.code} {exc.reason}."
+            return f"HTTP 404 Not Found. Check generate_path/status_path in config.{detail}"
+        return f"HTTP {exc.code} {exc.reason}.{detail}"
     if isinstance(exc, urllib.error.URLError):
         reason = getattr(exc, "reason", exc)
         return f"Connection failed: {reason}. Check server_base_url and whether the LLM server is running."
