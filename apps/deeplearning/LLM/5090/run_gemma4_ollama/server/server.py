@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -1545,7 +1546,7 @@ if __name__ == "__main__":
     async function runVisionTask({input, promptInput, clipboardInput, output, status, label, afterResult}) {
       const startedAt = performance.now();
       let requestStartedAt = 0;
-      let queueSnapshot = {text: "대기중인 답변: 확인 중"};
+      let queueSnapshot = {text: "Waiting answers: checking"};
       let requestTimer = null;
       status.textContent = `${label} preparing...`;
       output.textContent = `${label} preparing...`;
@@ -1705,13 +1706,13 @@ if __name__ == "__main__":
         return {
           waitingAnswers,
           estimatedWait,
-          text: `대기중인 답변: ${waitingAnswers}개${estimatedWait > 0 ? ` | 예상 대기: ${estimatedWait.toFixed(2)}s` : ""}`,
+          text: `Waiting answers: ${waitingAnswers}${estimatedWait > 0 ? ` | estimated wait: ${estimatedWait.toFixed(2)}s` : ""}`,
         };
       } catch (err) {
         return {
           waitingAnswers: 0,
           estimatedWait: 0,
-          text: "대기중인 답변: 확인 불가",
+          text: "Waiting answers: unavailable",
         };
       }
     }
@@ -1793,7 +1794,7 @@ if __name__ == "__main__":
       const startedAt = performance.now();
       const startedDate = new Date();
       const sendButtonLabel = sendButton.textContent;
-      let queueSnapshot = {text: "대기중인 답변: 확인 중"};
+      let queueSnapshot = {text: "Waiting answers: checking"};
       let busyTimer = null;
       function updateBusy() {
         const elapsedSeconds = Math.floor((performance.now() - startedAt) / 1000);
@@ -2690,8 +2691,19 @@ def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int 
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(f"{OLLAMA_BASE_URL}{path}", data=data, headers=headers)
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace").strip()
+        message = body
+        try:
+            parsed = json.loads(body)
+            if isinstance(parsed, dict) and parsed.get("error"):
+                message = str(parsed["error"])
+        except json.JSONDecodeError:
+            pass
+        raise RuntimeError(f"Ollama {path} HTTP {exc.code}: {message}") from exc
 
 
 def prompt_processing_week_start(today: dt.date | None = None) -> dt.date:
@@ -4106,6 +4118,8 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
+            print(f"[Send Prompt Error] {exc}", flush=True)
+            traceback.print_exc()
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
 
 
