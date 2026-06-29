@@ -51,7 +51,7 @@ WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).res
 MACH_STATS_DIR = Path(os.getenv("GEMMA4_MACH_STATS_DIR", Path(__file__).resolve().with_name("mach_stats")))
 MODEL_LOAD_EVENTS_FILE = Path(os.getenv("GEMMA4_MODEL_LOAD_EVENTS_FILE", MACH_STATS_DIR / "model_load_events.jsonl"))
 MODEL_LOAD_STATE_FILE = Path(os.getenv("GEMMA4_MODEL_LOAD_STATE_FILE", MACH_STATS_DIR / "model_load_state.json"))
-REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "120"))
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "600"))
 STARTED_AT = time.time()
 PUBLIC_IP_URL = os.getenv("PUBLIC_IP_URL", "https://api.ipify.org")
 PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"))
@@ -2694,6 +2694,8 @@ def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int 
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
+    except TimeoutError as exc:
+        raise RuntimeError(f"Ollama {path} timed out after {timeout}s") from exc
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace").strip()
         message = body
