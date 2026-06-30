@@ -61,8 +61,9 @@ PUBLIC_IP_CACHE_TTL_SECONDS = int(os.getenv("PUBLIC_IP_CACHE_TTL_SECONDS", "300"
 PUBLIC_IP_CACHE: dict[str, Any] = {"value": "", "checked_at": 0.0}
 AI_SERVER_LIST_URL = os.getenv(
     "AI_SERVER_LIST_URL",
-    "https://github.com/KETI-IISRC-AX/keti-sw-docs/blob/main/devel_info/ai_server_list.md",
+    "https://raw.githubusercontent.com/KETI-IISRC-AX/keti-sw-docs/main/devel_info/ai_server_list.md",
 )
+AI_SERVER_LIST_LABEL = os.getenv("AI_SERVER_LIST_LABEL", "KETI-SW-AI-List")
 AI_SERVER_LIST_TIMEOUT_SECONDS = float(os.getenv("AI_SERVER_LIST_TIMEOUT_SECONDS", "3"))
 AI_SERVER_LIST_TOKEN = os.getenv("AI_SERVER_LIST_TOKEN", "").strip() or os.getenv("GITHUB_TOKEN", "").strip()
 PROMPT_HISTORY_LIMIT = 100
@@ -3407,7 +3408,8 @@ def ai_server_list_text() -> str:
     try:
         raw_text = read_url_text(AI_SERVER_LIST_URL, AI_SERVER_LIST_TIMEOUT_SECONDS)
     except (OSError, urllib.error.URLError, TimeoutError, ValueError) as exc:
-        return f"AI servers: unavailable ({exc})"
+        message = str(exc).replace(AI_SERVER_LIST_URL, AI_SERVER_LIST_LABEL)
+        return f"AI servers: unavailable ({message})"
 
     servers: list[str] = []
     for line in raw_text.splitlines():
@@ -3416,6 +3418,7 @@ def ai_server_list_text() -> str:
             continue
         text = re.sub(r"^\d+[.)]\s*", "", text).strip()
         text = text.strip("-* ")
+        text = text.replace(AI_SERVER_LIST_URL, AI_SERVER_LIST_LABEL)
         if text:
             servers.append(text)
     return "AI servers: " + " / ".join(servers) if servers else "AI servers: none listed"
