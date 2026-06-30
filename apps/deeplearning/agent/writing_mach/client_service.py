@@ -88,10 +88,13 @@ DEFAULT_CONFIG = {
         "전체 논지 일관성",
         "챕터 간 반복 제거",
         "용어 통일",
-        "시대 흐름 점검",
+        "기술 유사도 점검",
         "도입부와 결론의 연결",
     ],
     "allow_global_rewrite": False,
+    "progress_pdf_enabled": True,
+    "progress_pdf_interval_minutes": 30,
+    "progress_pdf_output_dir": r"E:\sync_dir\nc_keties_22080\devel",
 }
 
 
@@ -181,6 +184,17 @@ def parse_args() -> argparse.Namespace:
         "--log-file",
         default=os.getenv("WRITING_MACH_LOG_FILE", ""),
         help="Service progress log file. Defaults to output/service_YYYYMMDD_HHMMSS.log.",
+    )
+    parser.add_argument(
+        "--progress-pdf-output-dir",
+        default=os.getenv("WRITING_MACH_PROGRESS_PDF_OUTPUT_DIR"),
+        help="Directory for periodic progress PDF exports. Defaults to E:\\sync_dir\\nc_keties_22080\\devel.",
+    )
+    parser.add_argument(
+        "--progress-pdf-interval-minutes",
+        type=int,
+        default=None,
+        help="Minutes between periodic progress PDF exports. Defaults to 30.",
     )
     return parser.parse_args()
 
@@ -614,6 +628,9 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         incoming.get("model_retry_max_timeout_multiplier")
         or DEFAULT_CONFIG["model_retry_max_timeout_multiplier"]
     )
+    progress_pdf_interval = int(
+        incoming.get("progress_pdf_interval_minutes") or DEFAULT_CONFIG["progress_pdf_interval_minutes"]
+    )
     pipeline_agents = incoming.get("pipeline_agents") or DEFAULT_CONFIG["pipeline_agents"]
     if isinstance(pipeline_agents, str):
         pipeline_agents = [item.strip() for item in pipeline_agents.split(",") if item.strip()]
@@ -651,6 +668,14 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "allow_global_rewrite": bool_value(
             incoming.get("allow_global_rewrite"),
             bool(DEFAULT_CONFIG["allow_global_rewrite"]),
+        ),
+        "progress_pdf_enabled": bool_value(
+            incoming.get("progress_pdf_enabled"),
+            bool(DEFAULT_CONFIG["progress_pdf_enabled"]),
+        ),
+        "progress_pdf_interval_minutes": max(1, progress_pdf_interval),
+        "progress_pdf_output_dir": str(
+            incoming.get("progress_pdf_output_dir") or DEFAULT_CONFIG["progress_pdf_output_dir"]
         ),
     }
     normalized["agent_workers"] = normalize_agent_workers(normalized)
@@ -1563,7 +1588,7 @@ def chapter_context(backbone: str, chapter: dict[str, Any], config: dict[str, An
 공통 작성 지침:
 - 한국어로 작성합니다.
 - 목표 분량은 약 {config['target_words_per_chapter']} 단어입니다.
-- 사실 설명, 시대적 맥락, 핵심 사례/기관/산업 항목, 해설을 균형 있게 넣습니다.
+- 사실 설명, 시간, 관련기술 맥락, 핵심 사례/기관/산업 항목, 해설을 균형 있게 넣습니다.
 - 책 전체의 일부가 되도록 독립된 챕터 제목과 절 구성을 포함합니다.
 - 메타 설명 없이 원고 또는 편집 산출물만 출력합니다.
 """
@@ -1601,11 +1626,11 @@ outline agent 산출물:
 
 작업:
 - outline의 구조를 따라 완성도 있는 챕터 초안을 작성합니다.
-- bullet 위주가 아니라 출판 원고에 가까운 문단 중심 산문으로 작성합니다.
+- bullet 위주로 2~3줄 분량으로 작성합니다. 
 - 제목은 Markdown heading으로 시작합니다.
 - 아직 reviewer와 finalizer가 보기 전의 초안이므로, 내용 누락 없이 충분히 씁니다.
 """
-
+# 출판 원고에 가까운 문단 중심 산문으로 작성합니다.
 
 def reviewer_prompt(
     backbone: str,
@@ -1669,7 +1694,7 @@ def coordinator_prompt(backbone: str, chapter_drafts: list[dict[str, Any]], conf
 {draft_text}
 
 작업:
-1. 전체 책의 논지, 시대 흐름, 용어, 반복/누락을 점검합니다.
+1. 전체 책의 논지, 기술 연관성, 용어, 반복/누락을 점검합니다.
 2. 1챕터 초반부와 책의 도입부가 뒤 챕터의 방향과 어긋나는 부분을 찾아 수정 방향을 제시합니다.
 3. 최종 원고에서 초반부가 어떤 관점을 깔아야 하는지 구체적인 편집 지시를 작성합니다.
 4. {rewrite_policy}
@@ -1707,7 +1732,7 @@ main writer agent의 조율 메모:
 
 작업:
 - 책의 도입부와 1챕터 초반부를 다시 작성합니다.
-- 뒤 챕터에서 다루는 주제와 자연스럽게 이어지도록 관점, 문제의식, 시대 흐름을 조정합니다.
+- 뒤 챕터에서 다루는 주제와 자연스럽게 이어지도록 관점, 문제의식, 시간 흐름, 관련 기술 연결을 조정합니다.
 - 출력은 수정된 도입부와 1챕터 전체 원고로 작성합니다.
 """
 
@@ -1862,6 +1887,158 @@ def markdown_to_html_document(markdown: str, title: str = "") -> str:
 """
 
 
+BOOK_WRITER_PDF_CSS = """
+@page {
+  size: A4;
+  margin: 22mm 18mm;
+  @bottom-center { content: counter(page); font-size: 9pt; color: #666; }
+}
+body {
+  font-family: "DejaVu Serif", "Noto Serif CJK KR", Georgia, "Times New Roman", serif;
+  font-size: 11pt;
+  line-height: 1.68;
+  color: #1f2328;
+}
+.title-page {
+  text-align: center;
+  padding-top: 28%;
+  page-break-after: always;
+}
+.title-page h1 { font-size: 30pt; margin: 0 0 12pt; }
+.title-page .meta { color: #697386; font-size: 11pt; margin-top: 18pt; }
+.toc-page { page-break-after: always; }
+.toc-page h2 { text-align: center; font-size: 20pt; margin-bottom: 18pt; }
+.toc-page ul { list-style: none; margin: 0; padding: 0; }
+.toc-page li { display: flex; align-items: baseline; margin: 0 0 7pt; }
+.toc-page a { color: #1f2328; text-decoration: none; }
+.toc-page .dots { flex: 1; border-bottom: 1px dotted #999; margin: 0 8pt; }
+.toc-page .page::after { content: target-counter(attr(href), page); }
+.chapter { page-break-before: always; }
+h1 { font-size: 22pt; margin: 0 0 16pt; }
+h2 { font-size: 16pt; margin: 20pt 0 9pt; }
+h3 { font-size: 13pt; margin: 16pt 0 7pt; }
+p { margin: 0 0 9pt; }
+blockquote {
+  border-left: 3pt solid #bcc6d2;
+  color: #4b5563;
+  margin: 0 0 14pt;
+  padding: 7pt 12pt;
+  background: #f6f8fa;
+}
+pre {
+  background: #f6f8fa;
+  border-radius: 4pt;
+  font-size: 9pt;
+  overflow-x: auto;
+  padding: 10pt;
+}
+code { font-family: "DejaVu Sans Mono", Consolas, monospace; font-size: 9.5pt; }
+table { width: 100%; border-collapse: collapse; margin: 12pt 0 16pt; font-size: 9.5pt; }
+th, td { border: 1px solid #c8d0d9; padding: 5pt 7pt; vertical-align: top; }
+th { background: #eef2f6; font-weight: 700; }
+tr:nth-child(even) { background: #fafafa; }
+"""
+
+
+HEADING_HTML_RE = re.compile(r"<h([1-2])([^>]*)>(.*?)</h\1>", re.IGNORECASE | re.DOTALL)
+ID_ATTR_RE = re.compile(r'\sid=["\']([^"\']+)["\']', re.IGNORECASE)
+DISPLAY_MATH_RE = re.compile(r"\$\$(.+?)\$\$", re.DOTALL)
+INLINE_MATH_RE = re.compile(r"(?<!\$)\$(?!\$|\d)([^$\n]+?)(?<!\$)\$(?!\$)")
+
+
+def strip_front_matter(text: str) -> str:
+    return re.sub(r"^---\n.*?\n---\n*", "", text, count=1, flags=re.DOTALL)
+
+
+def optional_latex_math_to_mathml(rendered_html: str) -> str:
+    try:
+        from latex2mathml.converter import convert as latex_to_mathml  # type: ignore[import-not-found]
+    except ImportError:
+        return rendered_html
+
+    def replace_display(match: re.Match[str]) -> str:
+        try:
+            return f'<div class="math-block">{latex_to_mathml(match.group(1).strip())}</div>'
+        except Exception:
+            return match.group(0)
+
+    def replace_inline(match: re.Match[str]) -> str:
+        try:
+            return latex_to_mathml(match.group(1).strip())
+        except Exception:
+            return match.group(0)
+
+    rendered_html = DISPLAY_MATH_RE.sub(replace_display, rendered_html)
+    return INLINE_MATH_RE.sub(replace_inline, rendered_html)
+
+
+def book_writer_style_html_document(markdown: str, title: str = "") -> str:
+    import markdown as md  # type: ignore[import-not-found]
+
+    try:
+        from pygments.formatters import HtmlFormatter  # type: ignore[import-not-found]
+
+        pygments_css = HtmlFormatter(style="friendly").get_style_defs(".highlight")
+    except ImportError:
+        pygments_css = ""
+
+    document_title = title or title_from_backbone(markdown) or "Writing Mach"
+    rendered = md.markdown(
+        strip_front_matter(markdown),
+        extensions=["extra", "toc", "codehilite"],
+        extension_configs={"codehilite": {"css_class": "highlight", "guess_lang": True}},
+    )
+    rendered = optional_latex_math_to_mathml(rendered)
+
+    toc_entries: list[tuple[str, str]] = []
+
+    def wrap_heading(match: re.Match[str]) -> str:
+        level, attrs, body = match.groups()
+        id_match = ID_ATTR_RE.search(attrs or "")
+        heading_id = id_match.group(1) if id_match else f"section-{len(toc_entries) + 1}"
+        clean_title = re.sub(r"<[^>]+>", "", body).strip()
+        if int(level) <= 2:
+            toc_entries.append((heading_id, clean_title or f"Section {len(toc_entries) + 1}"))
+        chapter_class = ' class="chapter"' if level == "1" else ""
+        if id_match:
+            return f'<section{chapter_class}><h{level}{attrs}>{body}</h{level}>'
+        return f'<section{chapter_class}><h{level}{attrs} id="{html.escape(heading_id, quote=True)}">{body}</h{level}>'
+
+    rendered = HEADING_HTML_RE.sub(wrap_heading, rendered)
+    rendered += "</section>" * rendered.count("<section")
+    toc_items = "\n".join(
+        (
+            f'<li><a class="toc-title" href="#{html.escape(anchor, quote=True)}">{html.escape(label)}</a>'
+            f'<span class="dots"></span><a class="page" href="#{html.escape(anchor, quote=True)}"></a></li>'
+        )
+        for anchor, label in toc_entries
+    )
+    toc_html = (
+        '<div class="toc-page"><h2>Table of Contents</h2>'
+        f"<ul>{toc_items or '<li>No headings detected</li>'}</ul></div>"
+    )
+    generated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>{html.escape(document_title)}</title>
+  <style>{BOOK_WRITER_PDF_CSS}
+{pygments_css}</style>
+</head>
+<body>
+  <div class="title-page">
+    <h1>{html.escape(document_title)}</h1>
+    <p class="meta">generated by writing_mach</p>
+    <p class="meta">{html.escape(generated_at)}</p>
+  </div>
+  {toc_html}
+  {rendered}
+</body>
+</html>
+"""
+
+
 def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
     errors: list[str] = []
     if pdf_path.exists():
@@ -1869,12 +2046,33 @@ def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
     html_path = markdown_path.with_suffix(".pdf_source.html")
     try:
         markdown = markdown_path.read_text(encoding="utf-8")
-        html_path.write_text(
-            markdown_to_html_document(markdown, title=title_from_backbone(markdown)),
-            encoding="utf-8",
-        )
+        html_document = markdown_to_html_document(markdown, title=title_from_backbone(markdown))
     except OSError as exc:
         return False, f"failed to prepare HTML for PDF: {exc}"
+
+    try:
+        html_document = book_writer_style_html_document(markdown, title=title_from_backbone(markdown))
+    except ImportError as exc:
+        errors.append(f"book-writer PDF dependency missing: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"book-writer HTML rendering failed: {exc}")
+
+    try:
+        html_path.write_text(html_document, encoding="utf-8")
+    except OSError as exc:
+        return False, f"failed to prepare HTML for PDF: {exc}"
+
+    try:
+        from weasyprint import HTML  # type: ignore[import-not-found]
+
+        HTML(string=html_document, base_url=str(markdown_path.parent)).write_pdf(str(pdf_path))
+        if pdf_path.exists() and pdf_path.stat().st_size > 0:
+            return True, str(pdf_path)
+        errors.append("book-writer/WeasyPrint produced an empty PDF file.")
+    except ImportError:
+        errors.append("weasyprint is not installed.")
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"book-writer/WeasyPrint failed: {exc}")
 
     pandoc = shutil.which("pandoc")
     if pandoc:
@@ -1893,18 +2091,6 @@ def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
                 errors.append("pandoc produced an empty PDF file.")
         except OSError as exc:
             errors.append(str(exc))
-
-    try:
-        from weasyprint import HTML  # type: ignore[import-not-found]
-
-        HTML(filename=str(html_path)).write_pdf(str(pdf_path))
-        if pdf_path.exists() and pdf_path.stat().st_size > 0:
-            return True, str(pdf_path)
-        errors.append("weasyprint produced an empty PDF file.")
-    except ImportError:
-        errors.append("weasyprint is not installed.")
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"weasyprint failed: {exc}")
 
     cupsfilter = shutil.which("cupsfilter")
     if cupsfilter:
@@ -1931,6 +2117,171 @@ def write_book_pdf(markdown_path: Path, pdf_path: Path) -> tuple[bool, str]:
         errors.append("PDF converter produced an empty file.")
     errors.append(f"HTML preview was saved to {html_path}. Install pandoc or weasyprint for rendered PDF output.")
     return False, " | ".join(error for error in errors if error)
+
+
+def local_path_from_config(path_value: str) -> Path:
+    value = str(path_value or "").strip()
+    match = re.match(r"^([A-Za-z]):[\\/](.*)$", value)
+    if match and os.name != "nt":
+        drive = match.group(1).lower()
+        rest = match.group(2).replace("\\", "/")
+        return Path("/mnt") / drive / rest
+    return Path(value).expanduser()
+
+
+def checkpoint_snapshot() -> dict[str, Any]:
+    with CHECKPOINT_LOCK:
+        if CHECKPOINT_STATE is None:
+            return {}
+        return json.loads(json.dumps(CHECKPOINT_STATE, ensure_ascii=False))
+
+
+def progress_chapter_drafts_from_checkpoint(state: dict[str, Any]) -> list[dict[str, Any]]:
+    chapters = state.get("chapters") if isinstance(state.get("chapters"), dict) else {}
+    drafts: list[dict[str, Any]] = []
+    for entry in chapters.values():
+        if not isinstance(entry, dict):
+            continue
+        chapter = entry.get("chapter") if isinstance(entry.get("chapter"), dict) else {}
+        text = str(entry.get("final") or entry.get("review") or entry.get("draft") or entry.get("outline") or "")
+        if not text:
+            continue
+        drafts.append(
+            {
+                "chapter": chapter,
+                "worker": entry.get("worker", ""),
+                "elapsed_seconds": 0.0,
+                "outline": str(entry.get("outline") or ""),
+                "draft": str(entry.get("draft") or ""),
+                "review": str(entry.get("review") or ""),
+                "final": str(entry.get("final") or text),
+                "status": str(entry.get("status") or ""),
+            }
+        )
+    drafts.sort(key=lambda item: int(item.get("chapter", {}).get("number") or 0))
+    return drafts
+
+
+def progress_markdown(
+    *,
+    title: str,
+    backbone_text: str,
+    state: dict[str, Any],
+    chapter_queue_states: dict[str, dict[str, Any]],
+    chapter_queue_history: list[dict[str, Any]],
+    started: float,
+) -> str:
+    elapsed_minutes = max(0, int((time.perf_counter() - started) / 60.0))
+    drafts = progress_chapter_drafts_from_checkpoint(state)
+    queue_rows = sorted_chapter_queue_states(chapter_queue_states)
+    completed_count = sum(1 for item in drafts if item.get("status") == "completed")
+    lines = [
+        f"# {title} - Progress Snapshot",
+        "",
+        f"- Created at: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- Elapsed: {elapsed_minutes} minutes",
+        f"- Checkpoint: {state.get('checkpoint_key', '')}",
+        f"- Completed chapters: {completed_count}/{len(state.get('chapters', {}) or {})}",
+        "",
+        "## Chapter Queue",
+        "",
+        "| # | Chapter | Status | Worker | Detail | Updated |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for item in queue_rows:
+        lines.append(
+            "| {index} | {title} | {status} | {worker} | {detail} | {updated_at} |".format(
+                index=item.get("index", ""),
+                title=str(item.get("title", "")).replace("|", "\\|"),
+                status=str(item.get("status", "")).replace("|", "\\|"),
+                worker=str(item.get("worker", "")).replace("|", "\\|"),
+                detail=str(item.get("detail", "")).replace("|", "\\|"),
+                updated_at=str(item.get("updated_at", "")).replace("|", "\\|"),
+            )
+        )
+    lines.extend(["", "## Recent Events", ""])
+    for event in (state.get("events") or [])[-20:]:
+        if isinstance(event, dict):
+            lines.append(f"- {event.get('time', '')} [{event.get('stage', '')}] {event.get('message', '')}")
+    if chapter_queue_history:
+        lines.extend(["", "## Queue Snapshot Count", "", f"- {len(chapter_queue_history)} snapshot(s) recorded."])
+    lines.extend(["", "## Draft Content", ""])
+    if drafts:
+        for item in drafts:
+            chapter = item.get("chapter", {})
+            lines.extend(
+                [
+                    f"### {chapter.get('number', '')}. {chapter.get('title', 'Chapter')}",
+                    "",
+                    str(item.get("final") or item.get("draft") or item.get("outline") or ""),
+                    "",
+                ]
+            )
+    else:
+        lines.append("_No chapter draft has been saved yet._")
+    lines.extend(["", "## Story Backbone", "", backbone_text])
+    return "\n".join(lines).strip() + "\n"
+
+
+def maybe_write_progress_pdf(
+    *,
+    config: dict[str, Any],
+    backbone_text: str,
+    chapter_queue_states: dict[str, dict[str, Any]],
+    chapter_queue_history: list[dict[str, Any]],
+    started: float,
+    export_state: dict[str, Any],
+    force: bool = False,
+) -> None:
+    if not config.get("progress_pdf_enabled", True):
+        return
+    interval_seconds = max(60, int(config.get("progress_pdf_interval_minutes") or 30) * 60)
+    now = time.perf_counter()
+    next_at = float(export_state.get("next_at") or (started + interval_seconds))
+    if not force and now < next_at:
+        return
+
+    state = checkpoint_snapshot()
+    if not state:
+        return
+    output_dir = local_path_from_config(str(config.get("progress_pdf_output_dir") or ""))
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        progress_log("progress-pdf", f"failed to create progress PDF directory {output_dir}: {exc}", "yellow", started)
+        export_state["next_at"] = now + interval_seconds
+        return
+
+    export_state["count"] = int(export_state.get("count") or 0) + 1
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    elapsed_minutes = max(0, int((now - started) / 60.0))
+    key = str(state.get("checkpoint_key") or "run")
+    stem = f"writing_mach_progress_{key}_{timestamp}_{elapsed_minutes}min"
+    markdown_path = output_dir / f"{stem}.md"
+    pdf_path = output_dir / f"{stem}.pdf"
+    markdown = progress_markdown(
+        title=str(state.get("title") or title_from_backbone(backbone_text)),
+        backbone_text=backbone_text,
+        state=state,
+        chapter_queue_states=chapter_queue_states,
+        chapter_queue_history=chapter_queue_history,
+        started=started,
+    )
+    try:
+        markdown_path.write_text(markdown, encoding="utf-8")
+    except OSError as exc:
+        progress_log("progress-pdf", f"failed to write progress markdown -> {markdown_path}: {exc}", "yellow", started)
+        export_state["next_at"] = now + interval_seconds
+        return
+
+    pdf_ok, pdf_message = write_book_pdf(markdown_path, pdf_path)
+    if pdf_ok:
+        progress_log("progress-pdf", f"progress PDF written -> {pdf_path}", "green", started)
+    else:
+        progress_log("progress-pdf", f"progress PDF skipped: {pdf_message}", "yellow", started)
+    checkpoint_set_field("latest_progress_pdf_path", str(pdf_path) if pdf_ok else "")
+    checkpoint_set_field("latest_progress_markdown_path", str(markdown_path))
+    export_state["next_at"] = now + interval_seconds
 
 
 def worker_slots(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2372,6 +2723,21 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     }
     chapter_queue_history: list[dict[str, Any]] = []
     log_chapter_queue_snapshot(chapter_queue_states, chapter_queue_history, reason="initialized", started=started)
+    progress_pdf_state = {
+        "next_at": started + max(60, int(config.get("progress_pdf_interval_minutes") or 30) * 60),
+        "count": 0,
+    }
+    if config.get("progress_pdf_enabled", True):
+        checkpoint_set_field("progress_pdf_output_dir", str(config.get("progress_pdf_output_dir") or ""))
+        progress_log(
+            "progress-pdf",
+            (
+                f"progress PDF export every {config.get('progress_pdf_interval_minutes')} minute(s) "
+                f"-> {config.get('progress_pdf_output_dir')}"
+            ),
+            "cyan",
+            started,
+        )
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
         for index, chapter in enumerate(chapters, start=1):
@@ -2523,6 +2889,14 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                 started,
             )
             log_chapter_queue_snapshot(chapter_queue_states, chapter_queue_history, reason="parallel tick", started=started)
+            maybe_write_progress_pdf(
+                config=config,
+                backbone_text=backbone_text,
+                chapter_queue_states=chapter_queue_states,
+                chapter_queue_history=chapter_queue_history,
+                started=started,
+                export_state=progress_pdf_state,
+            )
             if not done:
                 continue
             for future in done:
@@ -2688,6 +3062,14 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
                     "green",
                     started,
                 )
+                maybe_write_progress_pdf(
+                    config=config,
+                    backbone_text=backbone_text,
+                    chapter_queue_states=chapter_queue_states,
+                    chapter_queue_history=chapter_queue_history,
+                    started=started,
+                    export_state=progress_pdf_state,
+                )
             except Exception as exc:
                 update_chapter_queue_state(
                     chapter_queue_states,
@@ -2764,6 +3146,15 @@ def run_book_agents(config: dict[str, Any], backbone: str | None = None) -> dict
     title = title_from_backbone(backbone_text)
     progress_log("compile", "compiling final manuscript", "blue", started)
     book = compile_book(title, revised_opening, chapter_drafts, coordinator_notes)
+    maybe_write_progress_pdf(
+        config=config,
+        backbone_text=backbone_text,
+        chapter_queue_states=chapter_queue_states,
+        chapter_queue_history=chapter_queue_history,
+        started=started,
+        export_state=progress_pdf_state,
+        force=True,
+    )
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     elapsed_minutes = max(1, int(round((time.perf_counter() - started) / 60.0)))
@@ -2983,6 +3374,8 @@ def main() -> int:
             "password": args.llm_password,
             "model_retry_wait_seconds": args.model_retry_wait_seconds,
             "model_retry_prompt_after_failures": args.model_retry_prompt_after_failures,
+            "progress_pdf_output_dir": args.progress_pdf_output_dir,
+            "progress_pdf_interval_minutes": args.progress_pdf_interval_minutes,
         }.items()
         if value is not None
     }

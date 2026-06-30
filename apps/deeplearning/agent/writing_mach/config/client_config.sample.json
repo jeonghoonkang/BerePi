@@ -29,5 +29,8 @@
     "시대 흐름 점검",
     "도입부와 결론의 연결"
   ],
-  "allow_global_rewrite": false
+  "allow_global_rewrite": false,
+  "progress_pdf_enabled": true,
+  "progress_pdf_interval_minutes": 30,
+  "progress_pdf_output_dir": "E:\\sync_dir\\nc_keties_22080\\devel"
 }

@@ -3424,6 +3424,12 @@ def ai_server_list_text() -> str:
     return "AI servers: " + " / ".join(servers) if servers else "AI servers: none listed"
 
 
+def ai_server_list_link_html() -> str:
+    url = html.escape(AI_SERVER_LIST_URL, quote=True)
+    label = html.escape(AI_SERVER_LIST_LABEL)
+    return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{label}</a>'
+
+
 def render_index_html() -> str:
     gpus, _ = list_gpus()
     selected = read_selected_gpu()
@@ -3432,7 +3438,7 @@ def render_index_html() -> str:
         '            <option value="cpu">CPU only</option>'
     )
     page = INDEX_HTML.replace(default_gpu_options, gpu_options_html(gpus, selected), 1)
-    return page.replace("__AI_SERVER_LIST__", html.escape(ai_server_list_text()), 1)
+    return page.replace("__AI_SERVER_LIST__", ai_server_list_link_html(), 1)
 
 
 
