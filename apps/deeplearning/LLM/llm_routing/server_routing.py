@@ -129,6 +129,7 @@ class TargetMetrics:
     last_health_probe_at: float = 0.0
     remote_gpu_info: str = ""
     remote_gpu_type: str = ""
+    remote_ifconfig_ips: str = ""
     recent_response_seconds: list[float] = field(default_factory=list)
 
     @property
@@ -1918,6 +1919,18 @@ def status_payload() -> dict[str, Any]:
                     metric.last_response_seconds = float(queue.get("average_prompt_processing_seconds", 0.0))
                 if data.get("uptime_human"):
                     metric.uptime = str(data.get("uptime_human"))
+                ifconfig_values = data.get("ifconfig_ipv4_addresses")
+                if isinstance(ifconfig_values, list):
+                    labels = []
+                    for item in ifconfig_values:
+                        if isinstance(item, dict) and item.get("ip"):
+                            interface = str(item.get("interface") or "-")
+                            labels.append(f"{interface}: {item.get('ip')}")
+                        elif isinstance(item, str) and item:
+                            labels.append(item)
+                    metric.remote_ifconfig_ips = ", ".join(dict.fromkeys(labels))
+                elif isinstance(data.get("ifconfig_ips"), list):
+                    metric.remote_ifconfig_ips = ", ".join(dict.fromkeys(str(item) for item in data.get("ifconfig_ips", []) if item))
                 gpus = data.get("gpus") if isinstance(data.get("gpus"), list) else []
                 gpu_names = [str(gpu.get("name")) for gpu in gpus if isinstance(gpu, dict) and gpu.get("name")]
                 if gpu_names:
@@ -1934,6 +1947,7 @@ def status_payload() -> dict[str, Any]:
             "average_response_seconds": metric.average_response_seconds,
             "gpu_info": metric.remote_gpu_info or target.gpu_info,
             "gpu_type": metric.remote_gpu_type or target.gpu_type,
+            "ifconfig_ips": metric.remote_ifconfig_ips,
             "selected_gpu_device": selected_gpu_health_label or selected_gpu_device(target),
             "queue_max_per_target": QUEUE_MAX_PER_TARGET,
             "activity_state": metric.queue_state,
@@ -2303,11 +2317,12 @@ function renderTargets() {
     const m = metrics[t.id] || {};
     const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
     const selectedGpuDevice = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '';
+    const ifconfigIps = m.ifconfig_ips ? `<br><small>ifconfig: ${esc(m.ifconfig_ips)}</small>` : '';
     const duplicateBadge = duplicateIds.has(t.id) ? '<br><span class="duplicate-badge">중복</span>' : '';
     return `<tr class="${duplicateIds.has(t.id) ? 'duplicate-row' : ''}">
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}${duplicateBadge}</td>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
-      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small>${ifconfigIps}</td>
       <td>${esc(t.model)}</td>
       <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(selectedGpuDevice)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
@@ -2358,9 +2373,10 @@ function renderService() {
     const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
     const stateCls = stateText === 'active' ? 'ok' : (stateText === 'pending' ? 'warn' : '');
     const probeText = m.last_health_probe_at ? new Date(Number(m.last_health_probe_at) * 1000).toLocaleTimeString() : '-';
+    const ifconfigIps = m.ifconfig_ips ? `<br><small>ifconfig: ${esc(m.ifconfig_ips)}</small>` : '';
     return `<tr>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
-      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small></td>
+      <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small>${ifconfigIps}</td>
       <td>${esc(t.model || 'server-default')}</td>
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br><span class="${stateCls}">${esc(stateText)}</span></td>
       <td>${m.active_requests || 0}</td>

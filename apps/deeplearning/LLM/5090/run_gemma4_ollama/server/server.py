@@ -1768,8 +1768,12 @@ if __name__ == "__main__":
           `Unfinished: ${totalUnfinishedJobCount}`,
         ].join("<br>");
         const lifetimeProcessCount = Number(data.lifetime_process_count || 0);
+        const ifconfigEntries = Array.isArray(data.ifconfig_ipv4_addresses) ? data.ifconfig_ipv4_addresses : [];
+        const ifconfigText = ifconfigEntries.length
+          ? ifconfigEntries.map(item => `${escapeHtml(item.interface || "-")}: ${escapeHtml(item.ip || "")}`).join("<br>")
+          : "Unknown";
         metrics.innerHTML = [
-          metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}`, "ok"),
+          metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}<br>Ifconfig IP:<br>${ifconfigText}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
           metric("Queue", queueText, waitingJobCount > 0 ? "warn" : "ok"),
@@ -3521,6 +3525,29 @@ def server_ip() -> str:
         return HOST
 
 
+def ifconfig_ipv4_addresses() -> list[dict[str, str]]:
+    try:
+        output = subprocess.check_output(["ifconfig"], stderr=subprocess.DEVNULL, text=True, timeout=3)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return []
+
+    addresses: list[dict[str, str]] = []
+    current_interface = ""
+    for line in output.splitlines():
+        if line and not line[0].isspace() and ":" in line:
+            current_interface = line.split(":", 1)[0].strip()
+        match = re.search(r"\binet\s+(?:addr:)?(\d+\.\d+\.\d+\.\d+)", line)
+        if not match:
+            continue
+        ip_address = match.group(1)
+        if not ip_address or ip_address.startswith("127."):
+            continue
+        entry = {"interface": current_interface, "ip": ip_address}
+        if entry not in addresses:
+            addresses.append(entry)
+    return addresses
+
+
 def model_matches(name: str, target: str) -> bool:
     return name == target or name == f"{target}:latest"
 
@@ -3534,6 +3561,7 @@ def status_payload() -> dict[str, Any]:
     selected_gpu = read_selected_gpu()
     selected_model = read_selected_model()
     model_load = read_model_load_summary()
+    ifconfig_addresses = ifconfig_ipv4_addresses()
     try:
         models = list_ollama_models()
         ollama_reachable = True
@@ -3545,6 +3573,8 @@ def status_payload() -> dict[str, Any]:
         "port": PORT,
         "hostname": socket.gethostname(),
         "public_ip": public_ip(),
+        "ifconfig_ipv4_addresses": ifconfig_addresses,
+        "ifconfig_ips": [entry["ip"] for entry in ifconfig_addresses],
         "gpus": gpus,
         "gpu_detection_error": gpu_detection_error,
         "selected_gpu": selected_gpu,
