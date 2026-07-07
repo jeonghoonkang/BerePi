@@ -60,6 +60,7 @@ COLORS = {
     "magenta": "\033[35m",
     "red": "\033[31m",
     "bold": "\033[1m",
+    "underline": "\033[4m",
 }
 
 DEFAULT_CONFIG = {
@@ -205,6 +206,22 @@ def color_text(text: str, color: str) -> str:
     return f"{COLORS.get(color, '')}{text}{COLORS['reset']}"
 
 
+def style_text(text: str, *styles: str) -> str:
+    if not USE_COLOR:
+        return text
+    prefix = "".join(COLORS.get(style, "") for style in styles)
+    return f"{prefix}{text}{COLORS['reset']}" if prefix else text
+
+
+def underline_text(text: str) -> str:
+    return style_text(text, "underline")
+
+
+def is_error_log(stage: str, color: str) -> bool:
+    lowered_stage = stage.lower()
+    return color == "red" or "error" in lowered_stage or lowered_stage.endswith("failed")
+
+
 def progress_log(stage: str, message: str, color: str = "cyan", started: float | None = None) -> None:
     elapsed = ""
     plain_elapsed = ""
@@ -212,8 +229,10 @@ def progress_log(stage: str, message: str, color: str = "cyan", started: float |
         plain_elapsed = f" +{time.perf_counter() - started:.1f}s"
         elapsed = color_text(plain_elapsed, "dim")
     stamp = time.strftime("%H:%M:%S")
-    prefix = color_text(f"[{stamp}] [{stage}]", color)
-    print(f"{prefix}{elapsed} {message}", flush=True)
+    error_line = is_error_log(stage, color)
+    prefix = style_text(f"[{stamp}] [{stage}]", color, "underline") if error_line else color_text(f"[{stamp}] [{stage}]", color)
+    visible_message = underline_text(message) if error_line else message
+    print(f"{prefix}{elapsed} {visible_message}", flush=True)
     if SERVICE_LOG_PATH is not None:
         line = f"[{stamp}] [{stage}]{plain_elapsed} {message}\n"
         with SERVICE_LOG_LOCK:
