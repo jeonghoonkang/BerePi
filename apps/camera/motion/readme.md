@@ -244,7 +244,7 @@ Telegram 에서 Bot 에게 아래 키워드 중 하나를 포함한 메시지를
 capture_dir = /tmp/berepi_telegram_bot
 # Example:
 # capture_command = rpicam-still -n --timeout 1000 -o {output}
-capture_command = sh -c 'curl -fsS http://localhost:8080/0/action/snapshot >/dev/null && sleep 1 && cp /var/lib/motion/lastsnap.jpg "$1"' sh {output}
+capture_command = sh -c 'curl -fsS http://localhost:8080/0/action/snapshot >/dev/null && for i in 1 2 3 4 5 6 7 8 9 10; do test -s /var/lib/motion/lastsnap.jpg && cp /var/lib/motion/lastsnap.jpg "$1" && exit 0; sleep 0.2; done; echo "motion snapshot did not create /var/lib/motion/lastsnap.jpg" >&2; exit 1' sh {output}
 capture_timeout_seconds = 20
 ```
 

@@ -45,6 +45,11 @@ DEFAULT_MOTION_DIR = Path("/var/lib/motion")
 DEFAULT_PENDING_DIR = APP_DIR / "pending_model_images"
 DEFAULT_CAPTURE_DIR = Path("/tmp/berepi_telegram_bot")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+VALID_IMAGE_MAGIC = (
+    b"\xff\xd8\xff",  # JPEG
+    b"\x89PNG\r\n\x1a\n",
+    b"RIFF",  # WebP starts with RIFF....WEBP
+)
 
 # Telegram long-polling timeout (seconds) — must be > 0
 TELEGRAM_POLL_TIMEOUT = 30
@@ -318,10 +323,54 @@ def _build_configured_capture_command(command_template: str, output_path: Path) 
     return [*shlex.split(command_template), output]
 
 
+def _is_valid_image_file(path: Path) -> bool:
+    """Return True when path exists, is non-empty, and looks like an image."""
+    try:
+        if not path.is_file() or path.stat().st_size == 0:
+            return False
+        with path.open("rb") as image_file:
+            header = image_file.read(12)
+    except OSError:
+        return False
+
+    if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return True
+    return any(header.startswith(magic) for magic in VALID_IMAGE_MAGIC if magic != b"RIFF")
+
+
+def _wait_for_valid_image(path: Path, timeout_seconds: float = 3.0) -> bool:
+    """Wait briefly for capture tools that return before the file is flushed."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if _is_valid_image_file(path):
+            return True
+        time.sleep(0.2)
+    return _is_valid_image_file(path)
+
+
+def _capture_failure_detail(output_path: Path, result: subprocess.CompletedProcess[str]) -> str:
+    parts: list[str] = [f"output={output_path}"]
+    try:
+        if output_path.exists():
+            parts.append(f"size={output_path.stat().st_size}")
+        else:
+            parts.append("missing")
+    except OSError as exc:
+        parts.append(f"stat_error={exc}")
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    if stdout:
+        parts.append(f"stdout={stdout[-500:]}")
+    if stderr:
+        parts.append(f"stderr={stderr[-500:]}")
+    return "; ".join(parts)
+
+
 def capture_current_image(config: CameraCaptureConfig) -> Path:
     """Capture a live camera image and return the written JPG path."""
     config.capture_dir.mkdir(parents=True, exist_ok=True)
-    output_path = config.capture_dir / f"telegram_live_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+    output_path = config.capture_dir / f"telegram_live_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
 
     command = (
         _build_configured_capture_command(config.capture_command, output_path)
@@ -335,18 +384,25 @@ def capture_current_image(config: CameraCaptureConfig) -> Path:
         )
 
     log.info("capturing live camera image: %s", " ".join(shlex.quote(part) for part in command))
-    result = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=config.capture_timeout_seconds,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=config.capture_timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        detail = ((exc.stderr or exc.stdout or "") if isinstance(exc.stderr or exc.stdout, str) else "").strip()
+        raise RuntimeError(
+            f"camera capture timed out after {config.capture_timeout_seconds}s: {detail}"
+        ) from exc
+
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(f"camera capture failed with exit code {result.returncode}: {detail}")
-    if not output_path.exists() or output_path.stat().st_size == 0:
-        raise RuntimeError(f"camera capture did not create a valid image: {output_path}")
+    if not _wait_for_valid_image(output_path):
+        raise RuntimeError(f"camera capture did not create a valid image: {_capture_failure_detail(output_path, result)}")
     return output_path
 
 
