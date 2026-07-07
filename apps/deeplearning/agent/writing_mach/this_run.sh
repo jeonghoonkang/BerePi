@@ -1,1 +1,1 @@
-python3 client_service.py --config ./config/client_config.json --run-on-start --llm-user admin --llm-password aimodel --backbone this_story_backbone.md  --exit-after-run  
+python3 client_service.py --config ./config/client_config.json --run-on-start --llm-user admin --llm-password aimodel --backbone backbone/this_bci_backbone.md  --exit-after-run --progress-pdf-output-dir 'E:\sync_dir\nc_keties_22080\devel' --progress-pdf-interval-minutes 30
