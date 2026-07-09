@@ -2059,6 +2059,12 @@ INDEX_HTML = """<!doctype html>
     .metric, .panel { border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:14px; }
     .metric .label { color:var(--muted); font-size:13px; margin-bottom:6px; }
     .metric .value { font-size:18px; font-weight:800; overflow-wrap:anywhere; }
+    .runtime-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:14px; }
+    .runtime-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:14px; }
+    .runtime-card h3 { margin:0 0 10px; font-size:15px; line-height:1.25; overflow-wrap:anywhere; }
+    .runtime-card dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 10px; margin:0; font-size:13px; }
+    .runtime-card dt { color:var(--muted); }
+    .runtime-card dd { margin:0; font-weight:700; overflow-wrap:anywhere; text-align:right; }
     table { width:100%; border-collapse:collapse; margin-top:12px; font-size:14px; }
     th, td { border-bottom:1px solid var(--line); padding:9px; text-align:left; vertical-align:top; }
     th { color:var(--muted); font-size:12px; text-transform:uppercase; }
@@ -2115,6 +2121,7 @@ INDEX_HTML = """<!doctype html>
   </nav>
   <section id="llms" class="active">
     <div class="grid" id="targetMetrics"></div>
+    <div class="runtime-cards" id="runtimeCards"></div>
     <div class="panel" style="margin-top:14px">
       <div class="form-grid">
         <input id="name" placeholder="이름">
@@ -2146,7 +2153,7 @@ INDEX_HTML = """<!doctype html>
       <input id="target_id" type="hidden">
     </div>
     <div id="duplicateNotice" class="notice"></div>
-    <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>평균 응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
+    <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>동작시간</th><th>응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
   </section>
   <section id="service">
     <div class="grid" id="serviceMetrics"></div>
@@ -2280,6 +2287,40 @@ function setAnswer(text) {
   document.getElementById('test_answer').innerHTML = renderMarkdown(text);
 }
 function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds || 0)));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (days) return `${days}D ${hours}H ${minutes}M`;
+  if (hours) return `${hours}H ${minutes}M ${secs}S`;
+  if (minutes) return `${minutes}M ${secs}S`;
+  return `${secs}S`;
+}
+function formatSeconds(seconds) {
+  const value = Number(seconds || 0);
+  return value > 0 ? `${value.toFixed(2)}s` : '-';
+}
+function latestTargetActivity(targets, metrics) {
+  return targets
+    .map(t => metrics[t.id] || {})
+    .filter(m => m.last_seen_at)
+    .map(m => m.last_seen_at)
+    .sort()
+    .pop() || '-';
+}
+function latestTargetMetric(targets, metrics) {
+  return targets
+    .map(t => metrics[t.id] || {})
+    .filter(m => m.last_seen_at)
+    .sort((a,b) => String(a.last_seen_at).localeCompare(String(b.last_seen_at)))
+    .pop() || {};
+}
+function routerRunningSeconds() {
+  const startedMs = Date.parse(state.started_at || '');
+  return Number.isFinite(startedMs) ? (Date.now() - startedMs) / 1000 : 0;
+}
 async function api(path, options) {
   const res = await fetch(path, options);
   if (res.status === 401) {
@@ -2303,12 +2344,45 @@ function renderTargets() {
   const metrics = state.metrics || {};
   const duplicateIds = new Set(state.duplicate_target_ids || []);
   const duplicateCount = duplicateIds.size;
+  const totalProcessingSeconds = targets.reduce((n,t)=>n+Number(metrics[t.id]?.total_response_seconds||0),0);
+  const latestResponseSeconds = Number(latestTargetMetric(targets, metrics).last_response_seconds || 0);
   document.getElementById('targetMetrics').innerHTML = [
     metric('등록 LLM', targets.length),
     metric('활성 LLM', targets.filter(t => t.enabled).length),
+    metric('라우터 uptime', state.uptime || ''),
+    metric('라우터 시작', state.started_at ? new Date(state.started_at).toLocaleString() : '-'),
     metric('중복 항목', duplicateCount),
     metric('전체 pending queue', targets.reduce((n,t)=>n+(metrics[t.id]?.pending_queue||0),0)),
-    metric('전체 처리 prompt', targets.reduce((n,t)=>n+(metrics[t.id]?.total_prompts||0),0))
+    metric('전체 처리 prompt', targets.reduce((n,t)=>n+(metrics[t.id]?.total_prompts||0),0)),
+    metric('누적 LLM 동작시간', formatDuration(totalProcessingSeconds)),
+    metric('최근 LLM 동작시간', formatSeconds(latestResponseSeconds)),
+    metric('최근 LLM 동작시각', latestTargetActivity(targets, metrics))
+  ].join('');
+  document.getElementById('runtimeCards').innerHTML = [
+    `<div class="runtime-card">
+      <h3>LLM Router</h3>
+      <dl>
+        <dt>uptime</dt><dd>${esc(state.uptime || '-')}</dd>
+        <dt>동작시간</dt><dd>${esc(formatDuration(routerRunningSeconds()))}</dd>
+        <dt>시작 시각</dt><dd>${esc(state.started_at ? new Date(state.started_at).toLocaleString() : '-')}</dd>
+        <dt>최근 LLM 동작</dt><dd>${esc(latestTargetActivity(targets, metrics))}</dd>
+      </dl>
+    </div>`,
+    ...targets.map(t => {
+      const m = metrics[t.id] || {};
+      const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
+      return `<div class="runtime-card">
+        <h3>${esc(t.name || t.model || t.id)}</h3>
+        <dl>
+          <dt>상태</dt><dd><span class="${cls}">${esc(m.status || 'unknown')}</span></dd>
+          <dt>서비스 uptime</dt><dd>${esc(m.uptime || '-')}</dd>
+          <dt>누적 동작시간</dt><dd>${esc(formatDuration(m.total_response_seconds || 0))}</dd>
+          <dt>최근 동작시간</dt><dd>${esc(formatSeconds(m.last_response_seconds || 0))}</dd>
+          <dt>최근 동작시각</dt><dd>${esc(m.last_seen_at || '-')}</dd>
+          <dt>Queue</dt><dd>${esc(m.queue_state || 'idle')} ${m.active_requests||0}/${m.pending_queue||0}</dd>
+        </dl>
+      </div>`;
+    })
   ].join('');
   document.getElementById('duplicateNotice').textContent = duplicateCount
     ? `중복된 LLM 서버 항목 ${duplicateCount}개가 있습니다. 같은 API/IP/PORT/모델/GPU 조합은 노란색으로 표시됩니다.`
@@ -2327,7 +2401,8 @@ function renderTargets() {
       <td>${esc(m.gpu_type || t.gpu_type)}<br><small>${esc(selectedGpuDevice)}</small><br><small>selected: ${esc(t.selected_gpu || 'auto')}</small></td>
       <td>${esc(m.queue_state || 'idle')}<br>active ${m.active_requests||0}, pending ${m.pending_queue||0}/${m.queue_max_per_target||10}</td>
       <td>${m.total_prompts||0}</td>
-      <td>${Number(m.average_response_seconds||0).toFixed(2)}s<br><small>${esc(m.last_error||'')}</small></td>
+      <td>누적 ${esc(formatDuration(m.total_response_seconds||0))}<br><small>최근 ${esc(formatSeconds(m.last_response_seconds||0))}</small><br><small>${esc(m.last_seen_at||'-')}</small></td>
+      <td>평균 ${esc(formatSeconds(m.average_response_seconds||0))}<br><small>${esc(m.last_error||'')}</small></td>
       <td><button onclick='editTarget(${JSON.stringify(t)})'>편집</button> <button onclick="setTargetEnabled('${t.id}', ${t.enabled ? 'false' : 'true'})">${t.enabled ? '사용 안함' : '사용'}</button> <button class="danger" onclick="deleteTarget('${t.id}')">삭제</button></td>
     </tr>`;
   }).join('');
