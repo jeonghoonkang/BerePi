@@ -42,8 +42,9 @@ sudo docker run --rm -it \
     --port "${PORT}" \
     --trust-remote-code \
     --gpu-memory-utilization 0.85 \
-    --max-model-len 8192
-
+    --max-model-len 8192 \
+    --max-num-seqs 16 \
+    --kv-cache-dtype fp8
 
 # MSI spark
 #sudo  docker run --rm -it   --gpus all   -p 2****:2****   -v ~/.cache/huggingface:/root/.cache/huggingface   vllm/vllm-openai:gemma4-cu130   google/gemma-4-31b-it   --host 0.0.0.0   --port 2*****   --trust-remote-code --max-num-seqs 16 --kv-cache-dtype fp8
