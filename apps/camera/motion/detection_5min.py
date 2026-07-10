@@ -311,7 +311,10 @@ def pending_image_name(source_path: Path) -> str:
 
 def list_pending_images(config: AppConfig) -> list[Path]:
     pending_images = iter_image_files(config.pending_dir, recursive=False)
-    pending_images.sort(key=lambda path: (image_modified_at(path), path.name))
+    # 최신 파일이 먼저 처리되도록 수정 시각의 내림차순으로 정렬한다.
+    pending_images.sort(
+        key=lambda path: (image_modified_at(path), path.name), reverse=True
+    )
     return pending_images
 
 
