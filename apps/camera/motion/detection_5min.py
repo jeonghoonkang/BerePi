@@ -11,6 +11,7 @@ import configparser
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -39,6 +40,8 @@ DEFAULT_MAX_PENDING_FILES = 200
 DEFAULT_GPU_MAX_UTILIZATION_PERCENT = 5
 DEFAULT_GPU_WAIT_TIMEOUT_SECONDS = 240
 DEFAULT_GPU_POLL_INTERVAL_SECONDS = 5.0
+DEFAULT_MODEL_CAPACITY_USAGE_RATIO = 0.60
+DEFAULT_MAX_PARALLEL_REQUESTS = 100
 TELEGRAM_PHOTO_LIMIT_SEQUENCE = (20, 10, 5, 1)
 TELEGRAM_TEXT_BATCH_SIZE = 20
 NO_DETECTION_RESET_RUNS = 6
@@ -60,6 +63,7 @@ class ModelConfig:
     poll_interval_seconds: float
     auto_parallel_requests: bool
     max_parallel_requests: int
+    capacity_usage_ratio: float
 
 
 @dataclass
@@ -203,7 +207,21 @@ def load_config(config_path: Path) -> AppConfig:
             timeout_seconds=get_config_int(model_section, "timeout_seconds", 600),
             poll_interval_seconds=max(0.2, get_config_float(model_section, "poll_interval_seconds", 1.0)),
             auto_parallel_requests=get_config_bool(model_section, "auto_parallel_requests", True),
-            max_parallel_requests=max(1, get_config_int(model_section, "max_parallel_requests", 4)),
+            max_parallel_requests=max(
+                1,
+                get_config_int(model_section, "max_parallel_requests", DEFAULT_MAX_PARALLEL_REQUESTS),
+            ),
+            capacity_usage_ratio=min(
+                1.0,
+                max(
+                    0.01,
+                    get_config_float(
+                        model_section,
+                        "capacity_usage_ratio",
+                        DEFAULT_MODEL_CAPACITY_USAGE_RATIO,
+                    ),
+                ),
+            ),
         ),
         telegram=TelegramConfig(
             token=telegram_token,
@@ -574,7 +592,20 @@ def _extract_remote_status_capacity(payload: Any, model_name: str) -> tuple[int 
     model_list_keys = {"models", "available_models", "model_list", "loaded_models"}
     found_capacities: list[int] = []
     gpu_counts: list[int] = []
+    model_counts: list[int] = []
     model_names: set[str] = set()
+
+    def is_available_item(item: Any) -> bool:
+        if not isinstance(item, dict):
+            return True
+        if item.get("enabled") is False or item.get("available") is False:
+            return False
+        if item.get("busy") is True or item.get("in_use") is True:
+            return False
+        status = str(item.get("status") or item.get("state") or "").strip().lower()
+        if status in {"busy", "running", "loading", "disabled", "unavailable", "error"}:
+            return False
+        return True
 
     def visit(value: Any, key_hint: str = "") -> None:
         if isinstance(value, dict):
@@ -585,37 +616,25 @@ def _extract_remote_status_capacity(payload: Any, model_name: str) -> tuple[int 
                     if number is not None:
                         found_capacities.append(number)
                 if lowered_key in gpu_list_keys and isinstance(nested_value, list):
-                    enabled_gpus = [
-                        item
-                        for item in nested_value
-                        if not isinstance(item, dict)
-                        or (
-                            item.get("enabled") is not False
-                            and item.get("available") is not False
-                            and item.get("busy") is not True
-                            and item.get("in_use") is not True
-                        )
-                    ]
+                    enabled_gpus = [item for item in nested_value if is_available_item(item)]
                     if enabled_gpus:
                         gpu_counts.append(len(enabled_gpus))
                 if lowered_key in model_list_keys:
                     collect_models(nested_value)
+                    if isinstance(nested_value, list):
+                        available_models = [item for item in nested_value if is_available_item(item)]
+                        if available_models:
+                            model_counts.append(len(available_models))
                 visit(nested_value, lowered_key)
         elif isinstance(value, list):
             if key_hint in gpu_list_keys and value:
-                enabled_gpus = [
-                    item
-                    for item in value
-                    if not isinstance(item, dict)
-                    or (
-                        item.get("enabled") is not False
-                        and item.get("available") is not False
-                        and item.get("busy") is not True
-                        and item.get("in_use") is not True
-                    )
-                ]
+                enabled_gpus = [item for item in value if is_available_item(item)]
                 if enabled_gpus:
                     gpu_counts.append(len(enabled_gpus))
+            if key_hint in model_list_keys and value:
+                available_models = [item for item in value if is_available_item(item)]
+                if available_models:
+                    model_counts.append(len(available_models))
             for item in value:
                 visit(item, key_hint)
 
@@ -637,7 +656,7 @@ def _extract_remote_status_capacity(payload: Any, model_name: str) -> tuple[int 
                 collect_models(item)
 
     visit(payload)
-    capacity_values = found_capacities + gpu_counts
+    capacity_values = found_capacities + gpu_counts + model_counts
     capacity = max(capacity_values) if capacity_values else None
 
     model_available: bool | None
@@ -651,6 +670,8 @@ def _extract_remote_status_capacity(payload: Any, model_name: str) -> tuple[int 
         details.append(f"capacity={max(found_capacities)}")
     if gpu_counts:
         details.append(f"gpu_count={max(gpu_counts)}")
+    if model_counts:
+        details.append(f"available_model_count={max(model_counts)}")
     if model_names:
         details.append(f"models={', '.join(sorted(model_names)[:5])}")
     if not details:
@@ -696,9 +717,12 @@ def determine_remote_model_workers(config: ModelConfig, total_images: int, reque
         print(f"remote parallel capacity unknown; fallback to single worker. {detail}", flush=True)
         return 1
 
-    workers = max(1, min(total_images, configured_limit, capacity))
+    ratio = config.capacity_usage_ratio
+    ratio_capacity = max(1, math.floor(capacity * ratio))
+    workers = max(1, min(total_images, configured_limit, ratio_capacity))
     print(
         f"remote status parallel capacity confirmed: {detail} · "
+        f"capacity_usage_ratio={ratio:.2f} · ratio_capacity={ratio_capacity} · "
         f"configured_limit={configured_limit} · workers={workers}",
         flush=True,
     )

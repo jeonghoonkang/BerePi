@@ -2375,7 +2375,6 @@ function renderTargets() {
         <h3>${esc(t.name || t.model || t.id)}</h3>
         <dl>
           <dt>상태</dt><dd><span class="${cls}">${esc(m.status || 'unknown')}</span></dd>
-          <dt>실행선택</dt><dd>${esc(t.enabled ? '선택됨' : '제외됨')}</dd>
           <dt>서비스 uptime</dt><dd>${esc(m.uptime || '-')}</dd>
           <dt>누적 동작시간</dt><dd>${esc(formatDuration(m.total_response_seconds || 0))}</dd>
           <dt>최근 동작시간</dt><dd>${esc(formatSeconds(m.last_response_seconds || 0))}</dd>
