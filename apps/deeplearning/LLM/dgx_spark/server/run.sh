@@ -42,7 +42,7 @@ sudo docker run --rm -it \
     --port "${PORT}" \
     --trust-remote-code \
     --gpu-memory-utilization 0.85 \
-    --max-model-len 4096
+    --max-model-len 8192
 
 
 # MSI spark
