@@ -1,1 +1,0 @@
-sudo  docker run --rm -it   --gpus all   -p 26000:26000   -v ~/.cache/huggingface:/root/.cache/huggingface   vllm/vllm-openai:gemma4-cu130   google/gemma-4-31b-it   --host 0.0.0.0   --port 26000   --trust-remote-code --max-num-seqs 16 --kv-cache-dtype fp8
