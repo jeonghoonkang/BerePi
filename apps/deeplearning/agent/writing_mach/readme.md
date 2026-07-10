@@ -139,6 +139,73 @@ py -3 .\client_service.py --web-user <user> --web-password <password>
   - main writer agent는 챕터 간 반복, 용어 통일, 시대 흐름을 중점 검토
 ```
 
+## Writing 실행 전 입력과 프롬프트 구조
+
+Writing Mach에서 사용자가 직접 작성하는 핵심 입력은 `story_backbone.md` 또는 웹 화면의 **Story Backbone** 입력칸입니다. 웹 실행에서는 `web/index.html`의 `Story Backbone` textarea에 입력한 내용이 `web/app.js`를 통해 `/api/write-book` 요청의 `backbone` 값으로 전달됩니다.
+
+사용자는 주제와 제목에 따라 아래 항목을 채웁니다.
+
+- `제목`: `- 제목은 ...` 형식으로 책의 주제와 산출물 제목을 적습니다. 이 값이 없으면 첫 번째 Markdown `# 제목`을 사용하고, 둘 다 없으면 `untitled-book`으로 처리합니다.
+- `챕터 구성`: `- 1 챕터`, `- 2 챕터` 형식으로 챕터를 나눕니다.
+- `챕터별 상세 bullet`: 각 챕터 아래에 반드시 다룰 개념, 비교 대상, 사례, 기술 범위, 독자 관점 등을 적습니다.
+- `작성방법`: 독자 대상, 문체, 분량, 병렬 실행, main writer agent가 중점적으로 볼 기준을 적습니다.
+- `실행 설정`: 모델 서버, `num_ctx`, `Chapter Words`, `Parallel Chapters`, `Global Review Focus`, `Agent Workers JSON` 등은 웹 좌측 설정 패널 또는 `data/client_config.json`에서 조정합니다.
+
+최소 입력 템플릿:
+
+```markdown
+- 제목은 {책 제목 또는 주제}
+
+  - 1 챕터
+    - 이 챕터에서 반드시 다룰 항목
+    - 핵심 질문, 비교 대상, 사례, 기술 범위
+
+  - 2 챕터
+    - 다음 챕터에서 다룰 항목
+    - 앞 챕터와 이어질 관점
+
+- 작성방법
+  - 독자 대상은 {독자층}
+  - 문체는 {기술 설명형/대중서형/보고서형}
+  - 병렬실행: true
+  - 병렬 챕터: 3
+  - main writer agent는 전체 논지, 반복, 용어 통일, 도입부 방향을 중점 검토
+```
+
+개발자가 agent에게 미리 주는 시스템 프롬프트 성격의 가이드라인은 `client_service.py`의 prompt builder 함수에 들어 있습니다. 현재 구현은 별도 `system` role을 보내지 않고, 역할 지시와 사용자 `backbone`을 하나의 `prompt` 문자열로 합쳐 모델에 전달합니다.
+
+관련 함수:
+
+- `chapter_context()`: 모든 챕터 agent가 공유하는 공통 지침입니다. 책 전체 개요, 담당 챕터 상세 기획, 한국어 작성, 목표 분량, 사실/기술 맥락, 챕터 제목과 절 구성, 메타 설명 제거 지시를 포함합니다.
+- `outline_prompt()`: `outline agent`에게 챕터 도입 hook, 3~6개 절 구성, 핵심 논점, 사례, 연결 문장, 전환 메모를 설계하도록 지시합니다.
+- `writer_prompt()`: `writer agent`에게 outline 산출물을 바탕으로 챕터 초안을 작성하도록 지시합니다.
+- `reviewer_prompt()`: `reviewer agent`에게 명확성, 흐름, 완성도, 용어 일관성, 흥미도 기준으로 초안을 개선하도록 지시합니다.
+- `finalizer_prompt()`: `finalizer agent`에게 Markdown heading 계층 정리, 반복/TODO/메타 코멘트 제거, 최종 원고만 출력하도록 지시합니다.
+- `coordinator_prompt()`: `main writer agent`에게 모든 챕터 최종안을 보고 전체 논지, 기술 연관성, 용어, 반복/누락, 초반부 방향을 점검하도록 지시합니다.
+- `revise_opening_prompt()`: `lead writer`에게 main writer 조율 메모와 뒤 챕터 내용을 참고해 도입부와 1챕터 초반부를 다시 작성하도록 지시합니다.
+
+프롬프트 누적 흐름:
+
+```text
+outline:
+backbone + 현재 챕터 지시 + 공통 작성 지침
+
+writer:
+backbone + 현재 챕터 지시 + 공통 작성 지침 + outline 결과
+
+reviewer:
+backbone + 현재 챕터 지시 + 공통 작성 지침 + outline 결과 + writer 초안
+
+finalizer:
+backbone + 현재 챕터 지시 + 공통 작성 지침 + reviewer 개선 원고
+
+main-writer:
+backbone + 모든 챕터 final 결과 + Global Review Focus
+
+lead-writer:
+backbone + main writer 조율 메모 + 1챕터 기존 초안 + 뒤 챕터 참고 내용
+```
+
 `data/client_config.json` 단일 서버 작성 예:
 
 ```json
