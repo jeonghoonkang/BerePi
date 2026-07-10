@@ -1863,10 +1863,17 @@ def local_system_stats() -> dict[str, Any]:
     load_avg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
     cpu_count = os.cpu_count() or 0
     gpu = local_gpu_info()
+    network = local_network_info()
     with STATE_LOCK:
         webdav_report = dict(WEBDAV_REPORT_STATE)
     return {
         "hostname": socket.gethostname(),
+        "primary_ip": network["primary_ip"],
+        "ipv4_addresses": network["ipv4_addresses"],
+        "listen_host": network["listen_host"],
+        "listen_port": network["listen_port"],
+        "service_url": network["service_url"],
+        "network": network,
         "service_uptime": seconds_to_uptime(time.time() - STARTED_AT),
         "cpu_count": cpu_count,
         "load_average": [round(value, 2) for value in load_avg],
@@ -2342,6 +2349,7 @@ async function refresh() {
 function renderTargets() {
   const targets = state.targets || [];
   const metrics = state.metrics || {};
+  const local = state.local || {};
   const duplicateIds = new Set(state.duplicate_target_ids || []);
   const duplicateCount = duplicateIds.size;
   const totalProcessingSeconds = targets.reduce((n,t)=>n+Number(metrics[t.id]?.total_response_seconds||0),0);
@@ -2349,6 +2357,7 @@ function renderTargets() {
   document.getElementById('targetMetrics').innerHTML = [
     metric('등록 LLM', targets.length),
     metric('활성 LLM', targets.filter(t => t.enabled).length),
+    metric('로컬 IP', local.primary_ip || '-'),
     metric('라우터 uptime', state.uptime || ''),
     metric('라우터 시작', state.started_at ? new Date(state.started_at).toLocaleString() : '-'),
     metric('중복 항목', duplicateCount),
@@ -2363,6 +2372,8 @@ function renderTargets() {
       <h3>LLM Router</h3>
       <dl>
         <dt>uptime</dt><dd>${esc(state.uptime || '-')}</dd>
+        <dt>로컬 IP</dt><dd>${esc(local.primary_ip || '-')}</dd>
+        <dt>서비스 URL</dt><dd>${esc(local.service_url || '-')}</dd>
         <dt>동작시간</dt><dd>${esc(formatDuration(routerRunningSeconds()))}</dd>
         <dt>시작 시각</dt><dd>${esc(state.started_at ? new Date(state.started_at).toLocaleString() : '-')}</dd>
         <dt>최근 LLM 동작</dt><dd>${esc(latestTargetActivity(targets, metrics))}</dd>
@@ -2468,6 +2479,9 @@ function renderLocal() {
   const webdav = local.webdav_report || {};
   document.getElementById('localMetrics').innerHTML = [
     metric('호스트', local.hostname || ''),
+    metric('로컬 IP', local.primary_ip || '-'),
+    metric('IPv4 주소', (local.ipv4_addresses || []).join(', ') || '-'),
+    metric('서비스 URL', local.service_url || '-'),
     metric('CPU cores', local.cpu_count || 0),
     metric('Load avg', (local.load_average || []).join(', ')),
     metric('로컬 GPU', local.gpu_summary || ''),
