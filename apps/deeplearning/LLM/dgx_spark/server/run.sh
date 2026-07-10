@@ -37,7 +37,7 @@ sudo docker run --rm -it \
   --ipc=host \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   vllm/vllm-openai:gemma4-cu130 \
-  vllm serve google/gemma-4-31b-it \
+  google/gemma-4-31b-it \
     --host 0.0.0.0 \
     --port "${PORT}" \
     --trust-remote-code \
