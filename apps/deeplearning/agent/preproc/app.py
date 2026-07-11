@@ -14,6 +14,7 @@ from agent_google import generate_enhanced_prompt
 from agent_local import generate_enhanced_prompt_local
 
 DEFAULT_OLLAMA_MODEL = "gemma4:31b"
+DEFAULT_OPENAI_MODEL = "gpt-4.1"
 NO_PERSONA_FILE = "no_persona_config.json"
 NO_PERSONA_CONFIG = {
     "persona": "",
@@ -156,6 +157,155 @@ def save_prompt_history(history):
     except Exception:
         pass
 
+def generate_openai_response(user_input: str, model_name: str, api_key: str = None, config_data: dict = None) -> str:
+    resolved_api_key = api_key or os.environ.get("OPENAI_API_KEY")
+    if resolved_api_key:
+        resolved_api_key = resolved_api_key.strip()
+
+    if not resolved_api_key:
+        return "오류: OPENAI_API_KEY 환경변수가 설정되지 않았습니다. 터미널에서 API 키를 설정하거나 UI에서 입력해주세요."
+
+    config_data = config_data or {}
+    persona = config_data.get("persona", "")
+    guidelines = "\n- ".join(config_data.get("guidelines", []))
+    output_format = config_data.get("output_format", "")
+    system_instruction = f"""역할(Persona):
+{persona}
+
+지침 및 규칙(Guidelines & Rules):
+- {guidelines}
+
+출력 방식(Output Format):
+{output_format}
+""".strip()
+
+    payload = {
+        "model": model_name,
+        "input": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_input}
+        ]
+    }
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={
+                "Authorization": f"Bearer {resolved_api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=120
+        )
+        if response.status_code != 200:
+            return f"OpenAI API 에러 ({response.status_code}): {response.text}"
+
+        data = response.json()
+        if data.get("output_text"):
+            return data["output_text"]
+
+        output_parts = []
+        for item in data.get("output", []):
+            for content in item.get("content", []):
+                if content.get("type") in ("output_text", "text"):
+                    output_parts.append(content.get("text", ""))
+        return "\n".join(part for part in output_parts if part).strip()
+    except requests.exceptions.ConnectionError:
+        return "OpenAI API 통신 오류: 인터넷 연결 또는 API 엔드포인트 접근 상태를 확인해주세요."
+    except Exception as e:
+        return f"OpenAI 응답 생성 중 오류가 발생했습니다: {str(e)}"
+
+def build_coding_compare_prompt(original_prompt: str, openai_result: str, gemma_result: str) -> str:
+    return f"""
+아래는 동일한 사용자 프롬프트에 대한 OpenAI 응답과 Gemma4 응답입니다.
+특히 코딩 산출물의 품질을 중심으로 비교 평가해 주세요.
+
+[사용자 프롬프트]
+{original_prompt}
+
+[OpenAI 결과]
+{openai_result}
+
+[Gemma4 결과]
+{gemma_result}
+
+[비교 요청]
+1. 전체 응답 품질 요약
+2. 코딩 산출물이 있다면 정확성, 실행 가능성, 예외 처리, 라이브러리 선택, 보안/안전성, 유지보수성을 비교
+3. 누락된 요구사항 또는 위험한 코드 패턴 지적
+4. 더 나은 답변 선택 및 이유
+5. 두 응답을 합쳐 개선한 최종 코딩 출력 또는 개선 방향 제안
+""".strip()
+
+def get_python_code_blocks(content: str):
+    return re.findall(r"```\s*(?:python|py|python3)?\s*(.*?)\s*```", content, re.DOTALL)
+
+def run_python_code_in_workspace(code_to_run: str, run_name: str):
+    lines = code_to_run.split("\n")
+    clean_lines = []
+    pip_packages = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("pip install") or stripped.startswith("!pip install") or stripped.startswith("! pip install"):
+            pkg_part = stripped.replace("!pip install", "").replace("! pip install", "").replace("pip install", "").strip()
+            if pkg_part:
+                pip_packages.append(pkg_part)
+        elif stripped.startswith("!") or stripped.startswith("$"):
+            continue
+        elif (stripped in ("bash", "sh", "python", "python3", "node", "cmd", "powershell") or
+              stripped.startswith("bash ") or
+              stripped.startswith("sh ") or
+              stripped.startswith("python ") or
+              stripped.startswith("python3 ") or
+              stripped.startswith("node ") or
+              stripped.startswith("cmd ") or
+              stripped.startswith("powershell ")):
+            continue
+        else:
+            clean_lines.append(line)
+
+    for pkgs in pip_packages:
+        try:
+            pkg_list = [p for p in pkgs.split(" ") if p.strip()]
+            if pkg_list:
+                subprocess.run(["pip3", "install"] + pkg_list, capture_output=True, text=True, timeout=90)
+        except Exception:
+            pass
+
+    run_file = WORKSPACE_DIR / f"{run_name}.py"
+    try:
+        with open(run_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(clean_lines).strip())
+
+        res = subprocess.run(
+            ["python3", str(run_file)],
+            capture_output=True,
+            text=True,
+            cwd=str(WORKSPACE_DIR),
+            timeout=30
+        )
+        return {
+            "stdout": res.stdout,
+            "stderr": res.stderr,
+            "returncode": res.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "stdout": "",
+            "stderr": "오류: 코드 실행 시간이 30초를 초과하여 강제 종료되었습니다.",
+            "returncode": -1
+        }
+    except Exception as e:
+        return {
+            "stdout": "",
+            "stderr": f"코드 실행 실패: {e}",
+            "returncode": -1
+        }
+    finally:
+        if run_file.exists():
+            run_file.unlink()
+
 # pulsedav 모듈 로드 함수 (동적 경로 지원)
 def get_pulsedav_module(path_str):
     if not path_str:
@@ -275,12 +425,34 @@ if "prompt_history" not in st.session_state:
 if "gemma_thinking_history" not in st.session_state:
     st.session_state.gemma_thinking_history = []
 
+if "openai_gemma_compare_history" not in st.session_state:
+    st.session_state.openai_gemma_compare_history = []
+
+ollama_target_model = DEFAULT_OLLAMA_MODEL
+
 # 사이드바 구성
 with st.sidebar:
     st.header("⚙️ 설정 (Settings)")
     
     # 모델 제공자 선택
     provider = st.radio("AI 모델 제공자 선택", ["Google Gemini", "Local (Ollama)"], index=1)
+    st.subheader("🔁 OpenAI/Gemma 비교 탭")
+    openai_api_key = st.text_input(
+        "OpenAI API Key",
+        type="password",
+        placeholder="sk-...",
+        help="비교 탭에서 OpenAI 응답을 생성할 때 사용합니다. 비워두면 OPENAI_API_KEY 환경변수를 사용합니다."
+    )
+    openai_target_model = st.text_input(
+        "OpenAI 모델명",
+        value=DEFAULT_OPENAI_MODEL,
+        help="예: gpt-4.1, gpt-4.1-mini"
+    )
+    compare_gemma_model = st.text_input(
+        "비교용 Gemma/Ollama 모델명",
+        value=DEFAULT_OLLAMA_MODEL,
+        help="OpenAI vs Gemma 비교 탭에서 사용할 로컬 Ollama 모델명입니다."
+    )
     st.divider()
     
     if provider == "Google Gemini":
@@ -487,7 +659,7 @@ else:
     prompt = ""
 
 # 전체 탭 구성
-tab_chat, tab_thinking, tab_system = st.tabs(["💬 프롬프트 보강", "💭 Gemma4 Think", "🖥️ 시스템 상태"])
+tab_chat, tab_compare, tab_thinking, tab_system = st.tabs(["💬 프롬프트 보강", "🔁 OpenAI vs Gemma4", "💭 Gemma4 Think", "🖥️ 시스템 상태"])
 
 with tab_chat:
     def render_message(role, content):
@@ -1028,6 +1200,182 @@ with tab_chat:
             render_action_buttons(new_message, new_idx)
             
         st.session_state.messages.append(new_message)
+
+
+with tab_compare:
+    st.subheader("🔁 OpenAI Prompt Input Result vs Gemma4 Prompt Input Result")
+    st.caption("같은 프롬프트를 OpenAI와 로컬 Gemma4/Ollama에 보내고, 코딩 출력 중심으로 비교합니다.")
+
+    with st.form("openai_gemma_compare_form"):
+        compare_prompt = st.text_area(
+            "비교할 프롬프트",
+            height=160,
+            placeholder="예: FastAPI로 파일 업로드 API를 만들고 테스트 코드까지 작성해줘.",
+            key="openai_gemma_compare_prompt"
+        )
+        run_compare = st.form_submit_button("OpenAI/Gemma4 비교 실행", use_container_width=True)
+
+    if run_compare:
+        compare_prompt = compare_prompt.strip()
+        if not compare_prompt:
+            st.warning("비교할 프롬프트를 입력해주세요.")
+        else:
+            for result_key in ("compare_openai_run_result", "compare_gemma_run_result"):
+                if result_key in st.session_state:
+                    del st.session_state[result_key]
+
+            with st.spinner("OpenAI와 Gemma4 응답을 생성하고 비교 중입니다..."):
+                openai_start = time.time()
+                openai_result = generate_openai_response(
+                    user_input=compare_prompt,
+                    model_name=openai_target_model,
+                    api_key=openai_api_key,
+                    config_data=config_data
+                )
+                openai_elapsed = time.time() - openai_start
+
+                gemma_start = time.time()
+                gemma_local_result = generate_enhanced_prompt_local(
+                    user_input=compare_prompt,
+                    model_name=compare_gemma_model,
+                    config_data=config_data,
+                    include_thinking=compare_gemma_model.startswith("gemma4")
+                )
+                gemma_elapsed = time.time() - gemma_start
+                if isinstance(gemma_local_result, dict):
+                    gemma_result = gemma_local_result.get("response", "")
+                    gemma_thinking = gemma_local_result.get("thinking", "")
+                else:
+                    gemma_result = gemma_local_result
+                    gemma_thinking = ""
+
+                compare_analysis_prompt = build_coding_compare_prompt(
+                    compare_prompt,
+                    openai_result,
+                    gemma_result
+                )
+                compare_start = time.time()
+                if openai_api_key or os.environ.get("OPENAI_API_KEY"):
+                    compare_result = generate_openai_response(
+                        user_input=compare_analysis_prompt,
+                        model_name=openai_target_model,
+                        api_key=openai_api_key,
+                        config_data={
+                            "persona": "시니어 소프트웨어 엔지니어이자 코드 리뷰어",
+                            "guidelines": [
+                                "근거를 들어 간결하게 비교한다.",
+                                "코딩 산출물은 실행 가능성, 정확성, 보안, 유지보수성을 우선 평가한다.",
+                                "필요하면 개선된 최종 코드를 제안한다."
+                            ],
+                            "output_format": "마크다운 비교 리포트",
+                            "examples": []
+                        }
+                    )
+                    compare_model = openai_target_model
+                else:
+                    compare_result = generate_enhanced_prompt_local(
+                        user_input=compare_analysis_prompt,
+                        model_name=compare_gemma_model,
+                        config_data={
+                            "persona": "시니어 소프트웨어 엔지니어이자 코드 리뷰어",
+                            "guidelines": [
+                                "근거를 들어 간결하게 비교한다.",
+                                "코딩 산출물은 실행 가능성, 정확성, 보안, 유지보수성을 우선 평가한다.",
+                                "필요하면 개선된 최종 코드를 제안한다."
+                            ],
+                            "output_format": "마크다운 비교 리포트",
+                            "examples": []
+                        }
+                    )
+                    if isinstance(compare_result, dict):
+                        compare_result = compare_result.get("response", "")
+                    compare_model = compare_gemma_model
+                compare_elapsed = time.time() - compare_start
+
+            st.session_state.openai_gemma_compare_history.append({
+                "prompt": compare_prompt,
+                "openai_model": openai_target_model,
+                "openai_elapsed": openai_elapsed,
+                "openai_result": openai_result,
+                "gemma_model": compare_gemma_model,
+                "gemma_elapsed": gemma_elapsed,
+                "gemma_result": gemma_result,
+                "gemma_thinking": gemma_thinking,
+                "compare_model": compare_model,
+                "compare_elapsed": compare_elapsed,
+                "compare_result": compare_result
+            })
+            st.session_state.openai_gemma_compare_history = st.session_state.openai_gemma_compare_history[-20:]
+            safe_rerun()
+
+    if not st.session_state.openai_gemma_compare_history:
+        st.info("아직 비교 실행 결과가 없습니다. 위 프롬프트 입력창에서 OpenAI/Gemma4 비교를 실행해 주세요.")
+    else:
+        latest = st.session_state.openai_gemma_compare_history[-1]
+        st.markdown("### Compare Result")
+        st.caption(f"비교 모델: {latest['compare_model']} · ⏱️ {latest['compare_elapsed']:.2f}s")
+        st.markdown(latest["compare_result"])
+
+        st.divider()
+        st.markdown("### Prompt Input Results")
+        col_openai, col_gemma = st.columns(2)
+        with col_openai:
+            st.markdown(f"#### OpenAI Result")
+            st.caption(f"{latest['openai_model']} · ⏱️ {latest['openai_elapsed']:.2f}s")
+            st.markdown(latest["openai_result"])
+        with col_gemma:
+            st.markdown(f"#### Gemma4/Ollama Result")
+            st.caption(f"{latest['gemma_model']} · ⏱️ {latest['gemma_elapsed']:.2f}s")
+            st.markdown(latest["gemma_result"])
+
+        st.divider()
+        st.markdown("### Coding Output")
+        openai_blocks = get_python_code_blocks(latest["openai_result"])
+        gemma_blocks = get_python_code_blocks(latest["gemma_result"])
+        code_col_openai, code_col_gemma = st.columns(2)
+
+        with code_col_openai:
+            st.markdown("#### OpenAI Code")
+            if openai_blocks:
+                openai_code = "\n\n".join(openai_blocks).strip()
+                st.code(openai_code, language="python")
+                if st.button("OpenAI 코드 Workspace 실행", key="run_compare_openai_code", use_container_width=True):
+                    st.session_state.compare_openai_run_result = run_python_code_in_workspace(openai_code, "compare_openai_temp")
+                    safe_rerun()
+            else:
+                st.info("OpenAI 응답에서 Python 코드 블록을 찾지 못했습니다.")
+
+            if "compare_openai_run_result" in st.session_state:
+                run_res = st.session_state.compare_openai_run_result
+                st.caption(f"Exit Code: {run_res['returncode']}")
+                if run_res["stdout"].strip():
+                    st.code(run_res["stdout"], language="text")
+                if run_res["stderr"].strip():
+                    st.code(run_res["stderr"], language="text")
+
+        with code_col_gemma:
+            st.markdown("#### Gemma4 Code")
+            if gemma_blocks:
+                gemma_code = "\n\n".join(gemma_blocks).strip()
+                st.code(gemma_code, language="python")
+                if st.button("Gemma4 코드 Workspace 실행", key="run_compare_gemma_code", use_container_width=True):
+                    st.session_state.compare_gemma_run_result = run_python_code_in_workspace(gemma_code, "compare_gemma_temp")
+                    safe_rerun()
+            else:
+                st.info("Gemma4 응답에서 Python 코드 블록을 찾지 못했습니다.")
+
+            if "compare_gemma_run_result" in st.session_state:
+                run_res = st.session_state.compare_gemma_run_result
+                st.caption(f"Exit Code: {run_res['returncode']}")
+                if run_res["stdout"].strip():
+                    st.code(run_res["stdout"], language="text")
+                if run_res["stderr"].strip():
+                    st.code(run_res["stderr"], language="text")
+
+        with st.expander("이전 비교 기록", expanded=False):
+            for idx, item in enumerate(reversed(st.session_state.openai_gemma_compare_history[:-1]), 1):
+                st.markdown(f"**{idx}. {item['prompt'][:120]}**")
+                st.caption(f"OpenAI: {item['openai_model']} · Gemma: {item['gemma_model']} · Compare: {item['compare_model']}")
 
 
 with tab_thinking:
