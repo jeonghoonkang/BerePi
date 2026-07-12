@@ -15,6 +15,7 @@ from agent_local import generate_enhanced_prompt_local
 
 DEFAULT_OLLAMA_MODEL = "gemma4:31b"
 DEFAULT_OPENAI_MODEL = "gpt-4.1"
+DEFAULT_REMOTE_MODEL_URL = "http://keties.iptime.org:4004"
 NO_PERSONA_FILE = "no_persona_config.json"
 NO_PERSONA_CONFIG = {
     "persona": "",
@@ -215,9 +216,9 @@ def generate_openai_response(user_input: str, model_name: str, api_key: str = No
     except Exception as e:
         return f"OpenAI 응답 생성 중 오류가 발생했습니다: {str(e)}"
 
-def build_coding_compare_prompt(original_prompt: str, openai_result: str, gemma_result: str) -> str:
+def build_coding_compare_prompt(original_prompt: str, openai_result: str, comparison_result: str, comparison_label: str) -> str:
     return f"""
-아래는 동일한 사용자 프롬프트에 대한 OpenAI 응답과 Gemma4 응답입니다.
+아래는 동일한 사용자 프롬프트에 대한 OpenAI 응답과 {comparison_label} 응답입니다.
 특히 코딩 산출물의 품질을 중심으로 비교 평가해 주세요.
 
 [사용자 프롬프트]
@@ -226,8 +227,8 @@ def build_coding_compare_prompt(original_prompt: str, openai_result: str, gemma_
 [OpenAI 결과]
 {openai_result}
 
-[Gemma4 결과]
-{gemma_result}
+[{comparison_label} 결과]
+{comparison_result}
 
 [비교 요청]
 1. 전체 응답 품질 요약
@@ -429,14 +430,45 @@ if "openai_gemma_compare_history" not in st.session_state:
     st.session_state.openai_gemma_compare_history = []
 
 ollama_target_model = DEFAULT_OLLAMA_MODEL
+remote_target_model = DEFAULT_OLLAMA_MODEL
+remote_model_url = DEFAULT_REMOTE_MODEL_URL
+remote_api_password = ""
+ollama_exec_path = "ollama"
 
 # 사이드바 구성
 with st.sidebar:
     st.header("⚙️ 설정 (Settings)")
     
     # 모델 제공자 선택
-    provider = st.radio("AI 모델 제공자 선택", ["Google Gemini", "Local (Ollama)"], index=1)
-    st.subheader("🔁 OpenAI/Gemma 비교 탭")
+    provider = st.radio("AI 모델 제공자 선택", ["Google Gemini", "Local (Ollama)", "Remote Model"], index=1)
+
+    with st.expander("🌐 원격 모델 설정", expanded=provider == "Remote Model"):
+        remote_model_url = st.text_input(
+            "원격 모델 서버 URL",
+            value=DEFAULT_REMOTE_MODEL_URL,
+            help="LLMRouting/Ollama 호환 서버의 기본 URL입니다. /api/generate는 자동으로 붙습니다."
+        ).strip().rstrip("/")
+        remote_api_password = st.text_input(
+            "원격 모델 API Password",
+            type="password",
+            help="서버 인증이 필요한 경우 입력하세요. X-LLM-Routing-Password 헤더로 전달됩니다."
+        )
+        remote_target_model = st.text_input(
+            "사용할 원격 모델명",
+            value=DEFAULT_OLLAMA_MODEL,
+            help="원격 라우팅 서버에 등록된 모델명을 입력하세요."
+        )
+        if st.button("원격 모델 서버 연결 테스트"):
+            try:
+                health_response = requests.get(f"{remote_model_url}/health", timeout=5)
+                if health_response.ok:
+                    st.success(f"원격 서버 연결 성공: {health_response.text}")
+                else:
+                    st.error(f"원격 서버 응답 오류 ({health_response.status_code}): {health_response.text}")
+            except Exception as e:
+                st.error(f"원격 서버 연결 실패: {e}")
+
+    st.subheader("🔁 OpenAI/모델 비교 탭")
     openai_api_key = st.text_input(
         "OpenAI API Key",
         type="password",
@@ -448,10 +480,15 @@ with st.sidebar:
         value=DEFAULT_OPENAI_MODEL,
         help="예: gpt-4.1, gpt-4.1-mini"
     )
+    compare_model_source = st.radio(
+        "OpenAI와 비교할 모델 위치",
+        ["Local (Ollama)", "Remote Model"],
+        horizontal=True
+    )
     compare_gemma_model = st.text_input(
-        "비교용 Gemma/Ollama 모델명",
+        "비교 대상 모델명",
         value=DEFAULT_OLLAMA_MODEL,
-        help="OpenAI vs Gemma 비교 탭에서 사용할 로컬 Ollama 모델명입니다."
+        help="OpenAI와 비교할 로컬 또는 원격 모델명입니다."
     )
     st.divider()
     
@@ -470,7 +507,7 @@ with st.sidebar:
                         st.success("API 키가 정상적으로 동작합니다! ✅")
                     except Exception as e:
                         st.error(f"유효하지 않은 API 키입니다 ❌\n{e}")
-    else:
+    elif provider == "Local (Ollama)":
         # 로컬 모델 다운로드 및 설정
         st.subheader("📥 로컬 모델 관리")
         
@@ -824,10 +861,11 @@ with tab_chat:
                                     }
                                 )
                             else:
-                                code_model_name = ollama_target_model
+                                is_remote = provider == "Remote Model"
+                                code_model_name = remote_target_model if is_remote else ollama_target_model
                                 py_reply = generate_enhanced_prompt_local(
                                     user_input=code_prompt,
-                                    model_name=ollama_target_model,
+                                    model_name=code_model_name,
                                     config_data={
                                         "persona": "Python 소프트웨어 개발 전문가", 
                                         "guidelines": [
@@ -836,7 +874,9 @@ with tab_chat:
                                         ], 
                                         "output_format": "마크다운 파이썬 코드 및 실행 방법 가이드", 
                                         "examples": []
-                                    }
+                                    },
+                                    server_url=remote_model_url if is_remote else "http://localhost:11434",
+                                    api_password=remote_api_password if is_remote else None
                                 )
 
                             code_elapsed_time = time.time() - code_start_time
@@ -1097,13 +1137,16 @@ with tab_chat:
                         config_data=config_data
                     )
                 else:
-                    target_model = ollama_target_model
+                    is_remote = provider == "Remote Model"
+                    target_model = remote_target_model if is_remote else ollama_target_model
                     include_gemma_thinking = target_model.startswith("gemma4")
                     local_result = generate_enhanced_prompt_local(
                         user_input=actual_prompt,
-                        model_name=ollama_target_model,
+                        model_name=target_model,
                         config_data=config_data,
-                        include_thinking=include_gemma_thinking
+                        include_thinking=include_gemma_thinking,
+                        server_url=remote_model_url if is_remote else "http://localhost:11434",
+                        api_password=remote_api_password if is_remote else None
                     )
                     if isinstance(local_result, dict):
                         actual_reply = local_result.get("response", "")
@@ -1187,7 +1230,7 @@ with tab_chat:
                 "elapsed_time": elapsed_time,
                 "model_name": target_model
             }
-            if provider == "Local (Ollama)" and target_model.startswith("gemma4"):
+            if provider in ("Local (Ollama)", "Remote Model") and target_model.startswith("gemma4"):
                 new_message["gemma_thinking"] = gemma_thinking
                 st.session_state.gemma_thinking_history.append({
                     "prompt": prompt,
@@ -1203,8 +1246,11 @@ with tab_chat:
 
 
 with tab_compare:
-    st.subheader("🔁 OpenAI Prompt Input Result vs Gemma4 Prompt Input Result")
-    st.caption("같은 프롬프트를 OpenAI와 로컬 Gemma4/Ollama에 보내고, 코딩 출력 중심으로 비교합니다.")
+    comparison_label = "원격 모델" if compare_model_source == "Remote Model" else "로컬 Ollama"
+    comparison_server_url = remote_model_url if compare_model_source == "Remote Model" else "http://localhost:11434"
+    comparison_api_password = remote_api_password if compare_model_source == "Remote Model" else None
+    st.subheader(f"🔁 OpenAI vs {comparison_label}")
+    st.caption(f"같은 프롬프트를 OpenAI와 {comparison_label}에 보내고, 코딩 출력 중심으로 비교합니다.")
 
     with st.form("openai_gemma_compare_form"):
         compare_prompt = st.text_area(
@@ -1213,7 +1259,7 @@ with tab_compare:
             placeholder="예: FastAPI로 파일 업로드 API를 만들고 테스트 코드까지 작성해줘.",
             key="openai_gemma_compare_prompt"
         )
-        run_compare = st.form_submit_button("OpenAI/Gemma4 비교 실행", use_container_width=True)
+        run_compare = st.form_submit_button(f"OpenAI/{comparison_label} 비교 실행", use_container_width=True)
 
     if run_compare:
         compare_prompt = compare_prompt.strip()
@@ -1224,7 +1270,7 @@ with tab_compare:
                 if result_key in st.session_state:
                     del st.session_state[result_key]
 
-            with st.spinner("OpenAI와 Gemma4 응답을 생성하고 비교 중입니다..."):
+            with st.spinner(f"OpenAI와 {comparison_label} 응답을 생성하고 비교 중입니다..."):
                 openai_start = time.time()
                 openai_result = generate_openai_response(
                     user_input=compare_prompt,
@@ -1239,7 +1285,9 @@ with tab_compare:
                     user_input=compare_prompt,
                     model_name=compare_gemma_model,
                     config_data=config_data,
-                    include_thinking=compare_gemma_model.startswith("gemma4")
+                    include_thinking=compare_gemma_model.startswith("gemma4"),
+                    server_url=comparison_server_url,
+                    api_password=comparison_api_password
                 )
                 gemma_elapsed = time.time() - gemma_start
                 if isinstance(gemma_local_result, dict):
@@ -1252,7 +1300,8 @@ with tab_compare:
                 compare_analysis_prompt = build_coding_compare_prompt(
                     compare_prompt,
                     openai_result,
-                    gemma_result
+                    gemma_result,
+                    comparison_label
                 )
                 compare_start = time.time()
                 if openai_api_key or os.environ.get("OPENAI_API_KEY"):
@@ -1285,7 +1334,9 @@ with tab_compare:
                             ],
                             "output_format": "마크다운 비교 리포트",
                             "examples": []
-                        }
+                        },
+                        server_url=comparison_server_url,
+                        api_password=comparison_api_password
                     )
                     if isinstance(compare_result, dict):
                         compare_result = compare_result.get("response", "")
@@ -1298,6 +1349,7 @@ with tab_compare:
                 "openai_elapsed": openai_elapsed,
                 "openai_result": openai_result,
                 "gemma_model": compare_gemma_model,
+                "comparison_label": comparison_label,
                 "gemma_elapsed": gemma_elapsed,
                 "gemma_result": gemma_result,
                 "gemma_thinking": gemma_thinking,
@@ -1309,7 +1361,7 @@ with tab_compare:
             safe_rerun()
 
     if not st.session_state.openai_gemma_compare_history:
-        st.info("아직 비교 실행 결과가 없습니다. 위 프롬프트 입력창에서 OpenAI/Gemma4 비교를 실행해 주세요.")
+        st.info("아직 비교 실행 결과가 없습니다. 위 프롬프트 입력창에서 비교를 실행해 주세요.")
     else:
         latest = st.session_state.openai_gemma_compare_history[-1]
         st.markdown("### Compare Result")
@@ -1324,7 +1376,7 @@ with tab_compare:
             st.caption(f"{latest['openai_model']} · ⏱️ {latest['openai_elapsed']:.2f}s")
             st.markdown(latest["openai_result"])
         with col_gemma:
-            st.markdown(f"#### Gemma4/Ollama Result")
+            st.markdown(f"#### {latest.get('comparison_label', 'Gemma4/Ollama')} Result")
             st.caption(f"{latest['gemma_model']} · ⏱️ {latest['gemma_elapsed']:.2f}s")
             st.markdown(latest["gemma_result"])
 
@@ -1354,15 +1406,16 @@ with tab_compare:
                     st.code(run_res["stderr"], language="text")
 
         with code_col_gemma:
-            st.markdown("#### Gemma4 Code")
+            comparison_history_label = latest.get("comparison_label", "Gemma4")
+            st.markdown(f"#### {comparison_history_label} Code")
             if gemma_blocks:
                 gemma_code = "\n\n".join(gemma_blocks).strip()
                 st.code(gemma_code, language="python")
-                if st.button("Gemma4 코드 Workspace 실행", key="run_compare_gemma_code", use_container_width=True):
+                if st.button(f"{comparison_history_label} 코드 Workspace 실행", key="run_compare_gemma_code", use_container_width=True):
                     st.session_state.compare_gemma_run_result = run_python_code_in_workspace(gemma_code, "compare_gemma_temp")
                     safe_rerun()
             else:
-                st.info("Gemma4 응답에서 Python 코드 블록을 찾지 못했습니다.")
+                st.info(f"{comparison_history_label} 응답에서 Python 코드 블록을 찾지 못했습니다.")
 
             if "compare_gemma_run_result" in st.session_state:
                 run_res = st.session_state.compare_gemma_run_result

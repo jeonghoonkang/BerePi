@@ -1,6 +1,31 @@
 import requests
 
-def generate_enhanced_prompt_local(user_input: str, model_name: str, config_data: dict, include_thinking: bool = False):
+
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+
+
+def _normalize_server_url(server_url: str) -> str:
+    return (server_url or DEFAULT_OLLAMA_URL).strip().rstrip("/")
+
+
+def _build_auth_headers(api_password: str = None) -> dict:
+    password = (api_password or "").strip()
+    if not password:
+        return {}
+    return {
+        "X-LLM-Routing-Password": password,
+        "X-API-Key": password,
+        "Authorization": f"Bearer {password}",
+    }
+
+def generate_enhanced_prompt_local(
+    user_input: str,
+    model_name: str,
+    config_data: dict,
+    include_thinking: bool = False,
+    server_url: str = DEFAULT_OLLAMA_URL,
+    api_password: str = None,
+):
     persona = config_data.get("persona", "")
     guidelines = "\n- ".join(config_data.get("guidelines", []))
     output_format = config_data.get("output_format", "")
@@ -23,21 +48,32 @@ def generate_enhanced_prompt_local(user_input: str, model_name: str, config_data
             payload["think"] = True
 
         response = requests.post(
-            "http://localhost:11434/api/generate",
+            f"{_normalize_server_url(server_url)}/api/generate",
+            headers=_build_auth_headers(api_password),
             json=payload,
             timeout=120
         )
         if response.status_code == 200:
             data = response.json()
+            # Ollama generate, OpenAI-compatible, and LLMRouting wrapper responses.
+            generated_text = data.get("response") or data.get("output_text") or data.get("text")
+            if not generated_text and data.get("choices"):
+                choice = data["choices"][0]
+                generated_text = choice.get("text") or choice.get("message", {}).get("content", "")
+            if not generated_text and isinstance(data.get("data"), dict):
+                nested = data["data"]
+                generated_text = nested.get("response") or nested.get("output_text") or nested.get("text")
             if include_thinking:
                 return {
-                    "response": data.get("response", ""),
+                    "response": generated_text or "",
                     "thinking": data.get("thinking", "")
                 }
-            return data.get("response", "")
+            return generated_text or ""
         else:
-            return f"Ollama API 에러 ({response.status_code}): {response.text}"
+            return f"모델 API 에러 ({response.status_code}): {response.text}"
     except requests.exceptions.ConnectionError:
-        return "로컬 모델 통신 오류: Ollama 데몬이 실행 중인지 확인해주세요 (http://localhost:11434 접속 불가)."
+        return f"모델 서버 통신 오류: {_normalize_server_url(server_url)} 접속 상태를 확인해주세요."
+    except requests.exceptions.Timeout:
+        return f"모델 서버 응답 시간 초과: {_normalize_server_url(server_url)}"
     except Exception as e:
         return f"오류 발생: {str(e)}"
