@@ -1159,6 +1159,11 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
     if not prompt_text(payload).strip():
         raise ValueError("prompt or messages is required.")
     target = choose_target(payload)
+    # Freeze the routing metadata as soon as the target is selected.  The
+    # configured target list may be edited while a long-running LLM request is
+    # in flight, but the response must describe the model that was actually
+    # selected for this dispatch.
+    dispatch_metadata = dispatch_target_fields(target)
     client = client_key(handler, payload)
     q = target_queue(target.id)
     job = PromptJob(target=target, payload=dict(payload), client=client)
@@ -1184,7 +1189,7 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
         raise PromptDispatchError(f"Backend request failed: {job.error}", dispatch_count, target) from job.error
     result = dict(job.result or {})
     result.update(dispatch_count_fields(int(result.get("llm_dispatch_count") or 1)))
-    result.update(dispatch_target_fields(target))
+    result.update(dispatch_metadata)
     result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
     result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET
     return result
