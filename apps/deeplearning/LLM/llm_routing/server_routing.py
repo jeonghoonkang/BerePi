@@ -155,6 +155,20 @@ class QueueFullError(Exception):
     pass
 
 
+class PromptDispatchError(Exception):
+    def __init__(self, message: str, dispatch_count: int = 0) -> None:
+        super().__init__(message)
+        self.dispatch_count = max(0, int(dispatch_count))
+
+
+def dispatch_count_fields(count: int) -> dict[str, int]:
+    normalized = max(0, int(count))
+    return {
+        "llm_dispatch_count": normalized,
+        "prompt_forward_count": normalized,
+    }
+
+
 def queue_state_text(active_requests: int, pending_queue: int) -> str:
     if active_requests > 0:
         return "active"
@@ -1085,6 +1099,7 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             "selected_gpu": target.selected_gpu,
             "selected_gpu_label": target.selected_gpu_label,
             "selected_gpu_device": selected_gpu_device(target),
+            **dispatch_count_fields(1),
             "response_seconds": elapsed,
             **normalized,
         }
@@ -1129,10 +1144,16 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
     backend_timeout = int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS)
     wait_timeout = int(payload.get("request_timeout") or (backend_timeout * max(1, queued_count) + 10))
     if not job.done.wait(wait_timeout):
-        raise TimeoutError(f"Queued prompt timed out after {wait_timeout}s for target {target.name}.")
+        dispatch_count = 1 if job.started_at else 0
+        raise PromptDispatchError(
+            f"Queued prompt timed out after {wait_timeout}s for target {target.name}.",
+            dispatch_count,
+        )
     if job.error is not None:
-        raise job.error
+        dispatch_count = 1 if job.started_at else 0
+        raise PromptDispatchError(f"Backend request failed: {job.error}", dispatch_count) from job.error
     result = dict(job.result or {})
+    result.update(dispatch_count_fields(int(result.get("llm_dispatch_count") or 1)))
     result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
     result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET
     return result
@@ -1175,6 +1196,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "selected_gpu": target.selected_gpu,
                     "selected_gpu_label": target.selected_gpu_label,
                     "selected_gpu_device": selected_gpu_device(target),
+                    **dispatch_count_fields(0),
                     "response_seconds": 0.0,
                     "error": f"Queue is full for target {target.name}. max_per_target={QUEUE_MAX_PER_TARGET}",
                 }
@@ -1185,6 +1207,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
     for job in jobs:
         target = job.target
         if not job.done.wait(wait_timeout):
+            dispatch_count = 1 if job.started_at else 0
             results.append(
                 {
                     "ok": False,
@@ -1200,6 +1223,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "selected_gpu": target.selected_gpu,
                     "selected_gpu_label": target.selected_gpu_label,
                     "selected_gpu_device": selected_gpu_device(target),
+                    **dispatch_count_fields(dispatch_count),
                     "response_seconds": time.time() - job.enqueued_at,
                     "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
                     "error": f"Queued comparison prompt timed out after {wait_timeout}s for target {target.name}.",
@@ -1207,6 +1231,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
             )
             continue
         if job.error is not None:
+            dispatch_count = 1 if job.started_at else 0
             results.append(
                 {
                     "ok": False,
@@ -1222,6 +1247,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "selected_gpu": target.selected_gpu,
                     "selected_gpu_label": target.selected_gpu_label,
                     "selected_gpu_device": selected_gpu_device(target),
+                    **dispatch_count_fields(dispatch_count),
                     "response_seconds": time.time() - job.enqueued_at,
                     "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
                     "error": str(job.error),
@@ -1229,6 +1255,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
             )
             continue
         data = job.result or {}
+        dispatch_count = int(data.get("llm_dispatch_count") or 1)
         results.append(
             {
                 "ok": True,
@@ -1244,6 +1271,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                 "selected_gpu": target.selected_gpu,
                 "selected_gpu_label": target.selected_gpu_label,
                 "selected_gpu_device": selected_gpu_device(target),
+                **dispatch_count_fields(dispatch_count),
                 "response_seconds": data.get("response_seconds", time.time() - job.enqueued_at),
                 "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
                 "response": data.get("response", ""),
@@ -1251,9 +1279,11 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
             }
         )
 
+    total_dispatch_count = sum(int(item.get("llm_dispatch_count") or 0) for item in results)
     return {
         "ok": any(item.get("ok") for item in results),
         "target_count": len(targets),
+        **dispatch_count_fields(total_dispatch_count),
         "response_seconds": time.time() - started,
         "results": results,
     }
@@ -1274,6 +1304,7 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             }
         ],
         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        **dispatch_count_fields(int(data.get("llm_dispatch_count") or 0)),
         "routing": {
             "target_id": data.get("target_id"),
             "target_name": data.get("target_name"),
@@ -1286,6 +1317,7 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             "selected_gpu": data.get("selected_gpu"),
             "selected_gpu_label": data.get("selected_gpu_label"),
             "selected_gpu_device": data.get("selected_gpu_device"),
+            **dispatch_count_fields(int(data.get("llm_dispatch_count") or 0)),
             "response_seconds": data.get("response_seconds"),
         },
     }
@@ -2908,20 +2940,32 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 self.write_json({"ok": True, **fetch_target_options(target)})
                 return
             self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        except PromptDispatchError as exc:
+            self.write_json(
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    **dispatch_count_fields(exc.dispatch_count),
+                },
+                HTTPStatus.BAD_GATEWAY,
+            )
         except QueueFullError as exc:
-            self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.TOO_MANY_REQUESTS)
+            self.write_json({"ok": False, "error": str(exc), **dispatch_count_fields(0)}, HTTPStatus.TOO_MANY_REQUESTS)
         except ValueError as exc:
-            self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            self.write_json({"ok": False, "error": str(exc), **dispatch_count_fields(0)}, HTTPStatus.BAD_REQUEST)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace").strip()
             detail = f"Backend HTTP {exc.code}: {exc.reason}"
             if body:
                 detail = f"{detail}\n{body[:2000]}"
-            self.write_json({"ok": False, "error": detail}, HTTPStatus.BAD_GATEWAY)
+            self.write_json({"ok": False, "error": detail, **dispatch_count_fields(1)}, HTTPStatus.BAD_GATEWAY)
         except (RuntimeError, urllib.error.URLError, TimeoutError, OSError) as exc:
-            self.write_json({"ok": False, "error": f"Backend request failed: {exc}"}, HTTPStatus.BAD_GATEWAY)
+            self.write_json(
+                {"ok": False, "error": f"Backend request failed: {exc}", **dispatch_count_fields(1)},
+                HTTPStatus.BAD_GATEWAY,
+            )
         except Exception as exc:  # noqa: BLE001
-            self.write_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.write_json({"ok": False, "error": str(exc), **dispatch_count_fields(0)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def upsert_target(self, payload: dict[str, Any]) -> dict[str, Any]:
         target_id = str(payload.get("id") or uuid.uuid4().hex)
