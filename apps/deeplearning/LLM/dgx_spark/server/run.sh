@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+
+
+# 1. 스크립트의 현재 위치를 기준으로 hf_key.txt 경로 지정
+KEY_FILE="$(dirname "$0")/hf_key.txt"
+
+
+# # 2. 키 파일 존재 여부 검증 및 로드
+if [ -f "$KEY_FILE" ]; then
+   # 파일에서 토큰을 읽어오고 앞뒤 공백 제거(tr -d)
+    export HF_TOKEN=$(cat "$KEY_FILE" | tr -d '\r\n ')
+    echo "[INFO] hf_key.txt에서 Hugging Face 토큰을 성공적으로 로드했습니다."
+else
+    echo "[ERROR] hf_key.txt 파일을 찾을 수 없습니다. (경로: $KEY_FILE)"
+    exit 1
+fi
+
 set -euo pipefail
 
 usage() {
@@ -35,6 +51,7 @@ sudo docker run --rm -it \
   --gpus all \
   --network host \
   --ipc=host \
+  -e HF_TOKEN="${HF_TOKEN}" \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   vllm/vllm-openai:gemma4-cu130 \
   google/gemma-4-31b-it \
