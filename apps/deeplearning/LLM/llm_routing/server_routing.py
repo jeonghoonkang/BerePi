@@ -156,9 +156,10 @@ class QueueFullError(Exception):
 
 
 class PromptDispatchError(Exception):
-    def __init__(self, message: str, dispatch_count: int = 0) -> None:
+    def __init__(self, message: str, dispatch_count: int = 0, target: LLMTarget | None = None) -> None:
         super().__init__(message)
         self.dispatch_count = max(0, int(dispatch_count))
+        self.target = target
 
 
 def dispatch_count_fields(count: int) -> dict[str, int]:
@@ -166,6 +167,33 @@ def dispatch_count_fields(count: int) -> dict[str, int]:
     return {
         "llm_dispatch_count": normalized,
         "prompt_forward_count": normalized,
+    }
+
+
+def dispatch_target_fields(target: LLMTarget | None) -> dict[str, Any]:
+    if target is None:
+        return {
+            "llm_dispatch_model_number": None,
+            "llm_dispatch_target": None,
+        }
+    enabled_targets = [item for item in load_targets() if item.enabled]
+    number = next((index + 1 for index, item in enumerate(enabled_targets) if item.id == target.id), None)
+    target_info = {
+        "number": number,
+        "target_id": target.id,
+        "target_name": target.name,
+        "target_host": target.host,
+        "target_port": target.port,
+        "target_url": target.base_url,
+        "api_type": target.api_type,
+        "model": target.model,
+        "selected_gpu": target.selected_gpu,
+        "selected_gpu_label": target.selected_gpu_label,
+        "selected_gpu_device": selected_gpu_device(target),
+    }
+    return {
+        "llm_dispatch_model_number": number,
+        "llm_dispatch_target": target_info,
     }
 
 
@@ -1100,6 +1128,7 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             "selected_gpu_label": target.selected_gpu_label,
             "selected_gpu_device": selected_gpu_device(target),
             **dispatch_count_fields(1),
+            **dispatch_target_fields(target),
             "response_seconds": elapsed,
             **normalized,
         }
@@ -1148,12 +1177,14 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
         raise PromptDispatchError(
             f"Queued prompt timed out after {wait_timeout}s for target {target.name}.",
             dispatch_count,
+            target,
         )
     if job.error is not None:
         dispatch_count = 1 if job.started_at else 0
-        raise PromptDispatchError(f"Backend request failed: {job.error}", dispatch_count) from job.error
+        raise PromptDispatchError(f"Backend request failed: {job.error}", dispatch_count, target) from job.error
     result = dict(job.result or {})
     result.update(dispatch_count_fields(int(result.get("llm_dispatch_count") or 1)))
+    result.update(dispatch_target_fields(target))
     result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
     result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET
     return result
@@ -1197,6 +1228,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "selected_gpu_label": target.selected_gpu_label,
                     "selected_gpu_device": selected_gpu_device(target),
                     **dispatch_count_fields(0),
+                    **dispatch_target_fields(target),
                     "response_seconds": 0.0,
                     "error": f"Queue is full for target {target.name}. max_per_target={QUEUE_MAX_PER_TARGET}",
                 }
@@ -1224,6 +1256,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "selected_gpu_label": target.selected_gpu_label,
                     "selected_gpu_device": selected_gpu_device(target),
                     **dispatch_count_fields(dispatch_count),
+                    **dispatch_target_fields(target),
                     "response_seconds": time.time() - job.enqueued_at,
                     "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
                     "error": f"Queued comparison prompt timed out after {wait_timeout}s for target {target.name}.",
@@ -1248,6 +1281,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                     "selected_gpu_label": target.selected_gpu_label,
                     "selected_gpu_device": selected_gpu_device(target),
                     **dispatch_count_fields(dispatch_count),
+                    **dispatch_target_fields(target),
                     "response_seconds": time.time() - job.enqueued_at,
                     "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
                     "error": str(job.error),
@@ -1272,6 +1306,7 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
                 "selected_gpu_label": target.selected_gpu_label,
                 "selected_gpu_device": selected_gpu_device(target),
                 **dispatch_count_fields(dispatch_count),
+                **dispatch_target_fields(target),
                 "response_seconds": data.get("response_seconds", time.time() - job.enqueued_at),
                 "queue_wait_seconds": max(0.0, (job.started_at or time.time()) - job.enqueued_at),
                 "response": data.get("response", ""),
@@ -1280,10 +1315,17 @@ def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> 
         )
 
     total_dispatch_count = sum(int(item.get("llm_dispatch_count") or 0) for item in results)
+    dispatched_targets = [
+        item.get("llm_dispatch_target")
+        for item in results
+        if int(item.get("llm_dispatch_count") or 0) > 0 and isinstance(item.get("llm_dispatch_target"), dict)
+    ]
     return {
         "ok": any(item.get("ok") for item in results),
         "target_count": len(targets),
         **dispatch_count_fields(total_dispatch_count),
+        "llm_dispatch_model_numbers": [item.get("number") for item in dispatched_targets],
+        "llm_dispatch_targets": dispatched_targets,
         "response_seconds": time.time() - started,
         "results": results,
     }
@@ -1305,6 +1347,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
         ],
         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
         **dispatch_count_fields(int(data.get("llm_dispatch_count") or 0)),
+        "llm_dispatch_model_number": data.get("llm_dispatch_model_number"),
+        "llm_dispatch_target": data.get("llm_dispatch_target"),
         "routing": {
             "target_id": data.get("target_id"),
             "target_name": data.get("target_name"),
@@ -1318,6 +1362,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             "selected_gpu_label": data.get("selected_gpu_label"),
             "selected_gpu_device": data.get("selected_gpu_device"),
             **dispatch_count_fields(int(data.get("llm_dispatch_count") or 0)),
+            "llm_dispatch_model_number": data.get("llm_dispatch_model_number"),
+            "llm_dispatch_target": data.get("llm_dispatch_target"),
             "response_seconds": data.get("response_seconds"),
         },
     }
@@ -2946,6 +2992,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     "ok": False,
                     "error": str(exc),
                     **dispatch_count_fields(exc.dispatch_count),
+                    **dispatch_target_fields(exc.target),
                 },
                 HTTPStatus.BAD_GATEWAY,
             )
