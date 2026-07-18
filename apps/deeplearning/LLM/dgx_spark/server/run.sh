@@ -55,7 +55,7 @@ sudo docker run --rm -it \
   --ipc=host \
   -e HF_TOKEN="${HF_TOKEN}" \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
-  vllm/vllm-openai:gemma4-cu130 \
+  vllm/vllm-openai:latest \
   google/gemma-4-31b-it \
     --host 0.0.0.0 \
     --port "${PORT}" \
@@ -64,9 +64,10 @@ sudo docker run --rm -it \
     --max-model-len 8192 \
     --max-num-seqs 16 \
     --dtype bfloat16
-
- # vllm/vllm-openai:latest \
- # google/gemma-4-26b-a4b-it \
+  
+# vllm/vllm-openai:gemma4-cu130 \
+# vllm/vllm-openai:latest \
+# google/gemma-4-26b-a4b-it \
 
 # MSI spark
 #sudo  docker run --rm -it   --gpus all   -p 2****:2****   -v ~/.cache/huggingface:/root/.cache/huggingface   vllm/vllm-openai:gemma4-cu130   google/gemma-4-31b-it   --host 0.0.0.0   --port 2*****   --trust-remote-code --max-num-seqs 16 --kv-cache-dtype fp8
