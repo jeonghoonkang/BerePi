@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+SCRIPT_VERSION="1.0.0"
+echo "[INFO] $(basename "$0") version ${SCRIPT_VERSION}"
 
 # 1. 스크립트의 현재 위치를 기준으로 hf_key.txt 경로 지정
 KEY_FILE="$(dirname "$0")/hf_key.txt"
