@@ -199,6 +199,26 @@ def dispatch_target_fields(target: LLMTarget | None) -> dict[str, Any]:
     }
 
 
+def dispatch_info_fields(
+    target: LLMTarget | None,
+    target_fields: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the routing decision included in the first response."""
+    selected_fields = target_fields if target_fields is not None else dispatch_target_fields(target)
+    return {
+        "dispatch_info": {
+            "status": "selected" if target is not None else "not_selected",
+            "model_number": selected_fields["llm_dispatch_model_number"],
+            "target": selected_fields["llm_dispatch_target"],
+        }
+    }
+
+
+def sse_event_bytes(event: str, data: dict[str, Any]) -> bytes:
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+
+
 def queue_state_text(active_requests: int, pending_queue: int) -> str:
     if active_requests > 0:
         return "active"
@@ -1160,15 +1180,20 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         raise
 
 
-def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
+def route_prompt(
+    handler: BaseHTTPRequestHandler,
+    payload: dict[str, Any],
+    selected_target: LLMTarget | None = None,
+) -> dict[str, Any]:
     if not prompt_text(payload).strip():
         raise ValueError("prompt or messages is required.")
-    target = choose_target(payload)
+    target = selected_target or choose_target(payload)
     # Freeze the routing metadata as soon as the target is selected.  The
     # configured target list may be edited while a long-running LLM request is
     # in flight, but the response must describe the model that was actually
     # selected for this dispatch.
     dispatch_metadata = dispatch_target_fields(target)
+    dispatch_info = dispatch_info_fields(target, dispatch_metadata)
     client = client_key(handler, payload)
     q = target_queue(target.id)
     backend_timeout = int(
@@ -1213,6 +1238,7 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
     result = dict(job.result or {})
     result.update(dispatch_count_fields(int(result.get("llm_dispatch_count") or 1)))
     result.update(dispatch_metadata)
+    result.update(dispatch_info)
     result["dispatch_metadata_status"] = "complete"
     result["backend_timeout_seconds"] = backend_timeout
     result["request_timeout_seconds"] = wait_timeout
@@ -1380,6 +1406,7 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
         **dispatch_count_fields(int(data.get("llm_dispatch_count") or 0)),
         "llm_dispatch_model_number": data.get("llm_dispatch_model_number"),
         "llm_dispatch_target": data.get("llm_dispatch_target"),
+        "dispatch_info": data.get("dispatch_info"),
         "routing": {
             "target_id": data.get("target_id"),
             "target_name": data.get("target_name"),
@@ -1395,6 +1422,7 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             **dispatch_count_fields(int(data.get("llm_dispatch_count") or 0)),
             "llm_dispatch_model_number": data.get("llm_dispatch_model_number"),
             "llm_dispatch_target": data.get("llm_dispatch_target"),
+            "dispatch_info": data.get("dispatch_info"),
             "response_seconds": data.get("response_seconds"),
         },
     }
@@ -2927,6 +2955,73 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def start_sse(self) -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+    def write_sse_event(self, event: str, data: dict[str, Any]) -> None:
+        self.wfile.write(sse_event_bytes(event, data))
+        self.wfile.flush()
+
+    def write_prompt_sse(self, payload: dict[str, Any], openai_compatible: bool = False) -> None:
+        if not prompt_text(payload).strip():
+            raise ValueError("prompt or messages is required.")
+        target = choose_target(payload)
+        dispatch_metadata = dispatch_target_fields(target)
+        dispatch_info = dispatch_info_fields(target, dispatch_metadata)
+
+        self.start_sse()
+        try:
+            # This is deliberately flushed before queueing or waiting for the
+            # backend so clients receive the routing decision immediately.
+            self.write_sse_event("dispatch_info", dispatch_info)
+            result = route_prompt(self, payload, selected_target=target)
+            response = openai_chat_response(result) if openai_compatible else result
+            self.write_sse_event("response", response)
+            self.write_sse_event("done", {"ok": True})
+        except PromptDispatchError as exc:
+            self.write_sse_event(
+                "error",
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    **dispatch_count_fields(exc.dispatch_count),
+                    **dispatch_metadata,
+                    **dispatch_info,
+                },
+            )
+        except QueueFullError as exc:
+            self.write_sse_event(
+                "error",
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    **dispatch_count_fields(0),
+                    **dispatch_metadata,
+                    **dispatch_info,
+                },
+            )
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception as exc:  # noqa: BLE001
+            self.write_sse_event(
+                "error",
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    **dispatch_count_fields(0),
+                    **dispatch_metadata,
+                    **dispatch_info,
+                },
+            )
+        finally:
+            self.close_connection = True
+
     def write_login_cookie(self, token: str) -> None:
         self.send_header(
             "Set-Cookie",
@@ -2991,15 +3086,28 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            if self.path in {"/api/generate", "/generate", "/api/chat"}:
+            if self.path in {
+                "/api/generate",
+                "/generate",
+                "/api/chat",
+                "/api/generate/stream",
+                "/generate/stream",
+                "/api/chat/stream",
+            }:
                 if not prompt_api_authenticated(self, payload):
                     self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
+                    return
+                if self.path.endswith("/stream") or payload.get("stream") is True:
+                    self.write_prompt_sse(payload)
                     return
                 self.write_json(route_prompt(self, payload))
                 return
             if self.path == "/v1/chat/completions":
                 if not prompt_api_authenticated(self, payload):
                     self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
+                    return
+                if payload.get("stream") is True:
+                    self.write_prompt_sse(payload, openai_compatible=True)
                     return
                 self.write_json(openai_chat_response(route_prompt(self, payload)))
                 return
@@ -3032,6 +3140,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     "error": str(exc),
                     **dispatch_count_fields(exc.dispatch_count),
                     **dispatch_target_fields(exc.target),
+                    **dispatch_info_fields(exc.target),
                 },
                 HTTPStatus.BAD_GATEWAY,
             )
@@ -3042,6 +3151,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     "error": str(exc),
                     **dispatch_count_fields(0),
                     **dispatch_target_fields(exc.target),
+                    **dispatch_info_fields(exc.target),
                 },
                 HTTPStatus.TOO_MANY_REQUESTS,
             )

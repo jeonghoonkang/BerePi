@@ -91,6 +91,29 @@ LLM_ROUTING_ADMIN_PASSWORD='my-secret-password' ./start.sh
 - `POST /generate`: `/api/generate`와 동일한 alias
 - `POST /api/chat`: chat 클라이언트용 alias
 - `POST /v1/chat/completions`: OpenAI 호환 chat completions API
+- `POST /api/generate/stream`: `dispatch_info`를 먼저 보내는 SSE API
+
+기존 prompt endpoint에 `"stream": true`를 보내도 SSE로 응답합니다. 첫 이벤트는 라우팅
+대상을 확정한 `dispatch_info`, 두 번째 이벤트는 LLM의 `response`, 마지막 이벤트는
+`done`입니다. 실패한 경우 `response` 대신 `error` 이벤트를 보냅니다.
+
+```bash
+curl -N -X POST http://127.0.0.1:4004/api/generate/stream \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","prompt":"hello"}'
+```
+
+```text
+event: dispatch_info
+data: {"dispatch_info":{"status":"selected","model_number":1,"target":{...}}}
+
+event: response
+data: {"ok":true,"response":"...",...}
+
+event: done
+data: {"ok":true}
+```
 
 자동 대상 선택:
 
@@ -154,11 +177,16 @@ response = requests.post(
 response.raise_for_status()
 data = response.json()
 
+print("dispatch:", data.get("dispatch_info"))
 print("target:", data.get("target_name"))
 print("model:", data.get("model"))
 print("seconds:", data.get("response_seconds"))
 print("answer:", data.get("response"))
 ```
+
+라우팅 대상은 요청을 받은 직후 결정되며, 첫 JSON 응답의 `dispatch_info`에 선택 상태,
+활성 모델 번호와 대상 상세 정보가 포함됩니다. 기존 `llm_dispatch_model_number` 및
+`llm_dispatch_target` 필드도 호환성을 위해 함께 제공됩니다.
 
 JavaScript fetch 예제:
 
