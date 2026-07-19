@@ -152,7 +152,9 @@ class PromptJob:
 
 
 class QueueFullError(Exception):
-    pass
+    def __init__(self, message: str, target: LLMTarget | None = None) -> None:
+        super().__init__(message)
+        self.target = target
 
 
 class PromptDispatchError(Exception):
@@ -906,6 +908,9 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
     payload.pop("user_id", None)
     payload.pop("password", None)
     payload.pop("api_password", None)
+    # Routing timeouts control this server and are not Ollama generation options.
+    payload.pop("timeout", None)
+    payload.pop("request_timeout", None)
     return f"{target.base_url}/api/generate", payload
 
 
@@ -1166,17 +1171,35 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
     dispatch_metadata = dispatch_target_fields(target)
     client = client_key(handler, payload)
     q = target_queue(target.id)
-    job = PromptJob(target=target, payload=dict(payload), client=client)
+    backend_timeout = int(
+        payload.get("timeout")
+        or handler.headers.get("X-LLM-Routing-Timeout")
+        or DEFAULT_TIMEOUT_SECONDS
+    )
+    if backend_timeout < 1:
+        raise ValueError("timeout must be at least 1 second.")
+    expected_queue_depth = q.qsize() + 1
+    wait_timeout = int(
+        payload.get("request_timeout")
+        or handler.headers.get("X-LLM-Routing-Request-Timeout")
+        or (backend_timeout * max(1, expected_queue_depth) + 10)
+    )
+    if wait_timeout < backend_timeout:
+        raise ValueError("request_timeout must be greater than or equal to timeout.")
+    job_payload = dict(payload)
+    job_payload["timeout"] = backend_timeout
+    job_payload["request_timeout"] = wait_timeout
+    job = PromptJob(target=target, payload=job_payload, client=client)
     try:
         q.put_nowait(job)
     except queue.Full as exc:
         sync_queue_metric(target.id)
-        raise QueueFullError(f"Queue is full for target {target.name}. max_per_target={QUEUE_MAX_PER_TARGET}") from exc
+        raise QueueFullError(
+            f"Queue is full for target {target.name}. max_per_target={QUEUE_MAX_PER_TARGET}",
+            target,
+        ) from exc
 
     sync_queue_metric(target.id)
-    queued_count = q.qsize()
-    backend_timeout = int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS)
-    wait_timeout = int(payload.get("request_timeout") or (backend_timeout * max(1, queued_count) + 10))
     if not job.done.wait(wait_timeout):
         dispatch_count = 1 if job.started_at else 0
         raise PromptDispatchError(
@@ -1190,6 +1213,9 @@ def route_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> di
     result = dict(job.result or {})
     result.update(dispatch_count_fields(int(result.get("llm_dispatch_count") or 1)))
     result.update(dispatch_metadata)
+    result["dispatch_metadata_status"] = "complete"
+    result["backend_timeout_seconds"] = backend_timeout
+    result["request_timeout_seconds"] = wait_timeout
     result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
     result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET
     return result
@@ -2892,7 +2918,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-LLM-Routing-Password, X-API-Key")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-LLM-Routing-Password, X-LLM-Routing-Timeout, "
+            "X-LLM-Routing-Request-Timeout, X-API-Key",
+        )
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -2930,7 +2960,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.NO_CONTENT)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-LLM-Routing-Password, X-API-Key")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-LLM-Routing-Password, X-LLM-Routing-Timeout, "
+            "X-LLM-Routing-Request-Timeout, X-API-Key",
+        )
         self.end_headers()
 
     def do_POST(self) -> None:
@@ -3002,7 +3036,15 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 HTTPStatus.BAD_GATEWAY,
             )
         except QueueFullError as exc:
-            self.write_json({"ok": False, "error": str(exc), **dispatch_count_fields(0)}, HTTPStatus.TOO_MANY_REQUESTS)
+            self.write_json(
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    **dispatch_count_fields(0),
+                    **dispatch_target_fields(exc.target),
+                },
+                HTTPStatus.TOO_MANY_REQUESTS,
+            )
         except ValueError as exc:
             self.write_json({"ok": False, "error": str(exc), **dispatch_count_fields(0)}, HTTPStatus.BAD_REQUEST)
         except urllib.error.HTTPError as exc:
