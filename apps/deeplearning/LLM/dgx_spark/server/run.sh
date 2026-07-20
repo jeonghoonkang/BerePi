@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#Author : Jeonghooon Kang (https://github.com/jeonghoonkang)
 
 SCRIPT_VERSION="1.0.0"
 echo "[INFO] $(basename "$0") version ${SCRIPT_VERSION}"
