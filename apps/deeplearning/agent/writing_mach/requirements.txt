@@ -3,6 +3,6 @@
 # Ubuntu 18.04 ships an older Pango library, so WeasyPrint is pinned below 53
 # to avoid pango_context_set_round_glyph_positions runtime errors.
 markdown>=3.6
-weasyprint==52.5
+weasyprint==68.0
 pygments>=2.17
 latex2mathml>=3.77
