@@ -1,4 +1,4 @@
-# DGX Spark 2-node vLLM 실행 노트
+# DGX Spark 2-node vLLM 실행 
 
 이 디렉터리의 스크립트는 두 대의 DGX Spark를 CX-7 Ethernet/RoCE로 연결하고, Ray cluster 위에서 vLLM을 실행한다. Node 1은 Ray Head와 vLLM API 서버를 담당하고 Node 2는 Ray Worker로 조인한다.
 
