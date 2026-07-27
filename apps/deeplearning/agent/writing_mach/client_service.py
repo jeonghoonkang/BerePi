@@ -197,6 +197,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Minutes between periodic progress PDF exports. Defaults to 30.",
     )
+    parser.add_argument(
+        "--tech_report",
+        "--tech-report",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="PDF",
+        help=(
+            "Create a Korean engineering report from PDF and exit. "
+            "When PDF is omitted, uses the newest PDF in the backbone directory."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -775,6 +787,155 @@ def read_story_backbone() -> str:
     if not BACKBONE_PATH.exists():
         raise ValueError(f"story_backbone.md not found: {BACKBONE_PATH}")
     return BACKBONE_PATH.read_text(encoding="utf-8").strip()
+
+
+TECH_REPORT_REQUEST = """[역할]
+너는 수석 시스템 아키텍트(System Architect)야.
+
+[목적]
+첨부된 PDF 문서의 기술 구조와 작동 원리를 분석하여 엔지니어링 보고서를 작성해 줘.
+
+[가이드라인]
+- 작성 언어: 한국어 (단, 주요 기술 용어 및 코드는 영문 병행 표기)
+- 분량: A4 2~3페이지 수준
+- 가독성을 위해 목차 구분을 명확히 하고 표와 텍스트를 적절히 배분할 것.
+- 제공된 PDF 원문에서 확인할 수 없는 사실은 추측하지 말고, 필요한 경우 '문서에서 확인되지 않음'으로 표시할 것.
+- 결과에는 안내 문구, 작업 설명, 코드 펜스 없이 완성된 Markdown 보고서만 포함할 것.
+
+[목차]
+## 1. 개요 (Background & Objectives)
+## 2. 핵심 아키텍처 및 데이터 흐름 (Core Architecture & Workflow)
+## 3. 주요 모듈 / 기술 사양 (Technical Specifications - 표 형식 활용)
+## 4. 기존 기술 대비 차별점 및 제약사항 (Comparison & Limitations)
+## 5. 결론 및 적용/고려 사항 (Key Takeaways)
+"""
+
+
+def resolve_tech_report_pdf(value: str) -> Path:
+    if value.strip():
+        path = Path(value).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(f"Tech report PDF not found: {path}")
+        if path.suffix.lower() != ".pdf":
+            raise ValueError(f"--tech_report input must be a PDF file: {path}")
+        return path
+
+    search_dirs = [BACKBONE_PATH.parent, BASE_DIR / "backbone", BASE_DIR]
+    candidates: list[Path] = []
+    for directory in search_dirs:
+        if directory.exists():
+            candidates.extend(directory.glob("*.pdf"))
+    unique_candidates = list({path.resolve(): path.resolve() for path in candidates}.values())
+    if not unique_candidates:
+        raise FileNotFoundError(
+            "--tech_report could not find a PDF. Pass one explicitly, for example: "
+            "--tech_report .\\backbone\\technical_document.pdf"
+        )
+    return max(unique_candidates, key=lambda path: path.stat().st_mtime)
+
+
+def extract_pdf_text(pdf_path: Path) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise RuntimeError(
+            "PDF text extraction requires pypdf. Install dependencies with: "
+            "py -3 -m pip install -r requirements.txt"
+        ) from exc
+
+    reader = PdfReader(str(pdf_path))
+    page_texts: list[str] = []
+    for page_number, page in enumerate(reader.pages, start=1):
+        text = (page.extract_text() or "").strip()
+        if text:
+            page_texts.append(f"[PDF page {page_number}]\n{text}")
+    extracted = "\n\n".join(page_texts).strip()
+    if not extracted:
+        raise ValueError(
+            f"No selectable text was found in {pdf_path}. "
+            "Run OCR on an image-only PDF before using --tech_report."
+        )
+    return extracted
+
+
+def build_tech_report_prompt(pdf_path: Path, pdf_text: str) -> str:
+    return f"""{TECH_REPORT_REQUEST}
+
+[입력 PDF]
+- 파일명: {pdf_path.name}
+- 총 원문 분량: {len(pdf_text):,} characters
+
+[PDF 추출 원문 시작]
+{pdf_text}
+[PDF 추출 원문 끝]
+
+지금 바로 위 PDF 원문을 바탕으로 작성을 시작해 줘.
+"""
+
+
+def normalize_tech_report(markdown: str, pdf_path: Path) -> str:
+    text = markdown.strip()
+    text = re.sub(r"^```(?:markdown)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```\s*$", "", text)
+    if not re.search(r"^#\s+", text, re.MULTILINE):
+        text = f"# {pdf_path.stem} 기술 보고서\n\n{text}"
+    required_sections = [
+        "## 1. 개요 (Background & Objectives)",
+        "## 2. 핵심 아키텍처 및 데이터 흐름 (Core Architecture & Workflow)",
+        "## 3. 주요 모듈 / 기술 사양 (Technical Specifications - 표 형식 활용)",
+        "## 4. 기존 기술 대비 차별점 및 제약사항 (Comparison & Limitations)",
+        "## 5. 결론 및 적용/고려 사항 (Key Takeaways)",
+    ]
+    missing: list[str] = []
+    for section_number, canonical_heading in enumerate(required_sections, start=1):
+        pattern = rf"^##\s*{section_number}\s*[.)．]?\s*.*$"
+        if re.search(pattern, text, flags=re.MULTILINE):
+            text = re.sub(
+                pattern,
+                lambda _match, heading=canonical_heading: heading,
+                text,
+                count=1,
+                flags=re.MULTILINE,
+            )
+        else:
+            missing.append(canonical_heading)
+    if missing:
+        raise ValueError("Model response is missing required tech report sections: " + ", ".join(missing))
+    return text
+
+
+def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
+    ensure_dirs()
+    started = time.perf_counter()
+    pdf_path = resolve_tech_report_pdf(pdf_value)
+    progress_log("tech-report", f"reading PDF -> {pdf_path}", "cyan", started)
+    pdf_text = extract_pdf_text(pdf_path)
+    prompt = build_tech_report_prompt(pdf_path, pdf_text)
+    progress_log(
+        "tech-report",
+        f"requesting report from {len(pdf_text):,} extracted characters",
+        "magenta",
+        started,
+    )
+    report = normalize_tech_report(call_model(config, prompt, label="tech-report"), pdf_path)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    markdown_path = OUTPUT_DIR / f"tech_report_{timestamp}.md"
+    report_pdf_path = OUTPUT_DIR / f"tech_report_{timestamp}.pdf"
+    markdown_path.write_text(report + "\n", encoding="utf-8")
+    pdf_ok, pdf_message = write_book_pdf(markdown_path, report_pdf_path)
+    if not pdf_ok:
+        progress_log("tech-report", f"PDF export failed: {pdf_message}", "yellow", started)
+    progress_log("tech-report", f"Markdown written -> {markdown_path}", "green", started)
+    if pdf_ok:
+        progress_log("tech-report", f"PDF written -> {report_pdf_path}", "green", started)
+    return {
+        "ok": True,
+        "source_pdf": str(pdf_path),
+        "output_path": str(markdown_path),
+        "pdf_path": str(report_pdf_path) if pdf_ok else "",
+        "pdf_error": "" if pdf_ok else pdf_message,
+        "elapsed_seconds": time.perf_counter() - started,
+    }
 
 
 def parse_chapters(backbone: str) -> list[dict[str, Any]]:
@@ -3403,6 +3564,18 @@ def main() -> int:
     progress_log("service", f"Client config: {CONFIG_PATH}", "cyan")
     if args.test:
         return 0 if run_model_diagnostics(args.model_check_timeout) else 2
+    if args.tech_report is not None:
+        try:
+            result = run_tech_report(runtime_config(), args.tech_report)
+            progress_log(
+                "tech-report",
+                f"finished: output={result['output_path']} pdf={result.get('pdf_path') or '-'}",
+                "green",
+            )
+            return 0
+        except Exception as exc:  # noqa: BLE001
+            progress_log("tech-report", f"failed: {exc}", "red")
+            return 1
     check_startup_model_status(args.model_check_timeout)
     WEB_AUTH_USER, WEB_AUTH_PASSWORD = resolve_web_auth(args.web_user, args.web_password)
     httpd, bind_host = create_http_server(args.host, args.port)

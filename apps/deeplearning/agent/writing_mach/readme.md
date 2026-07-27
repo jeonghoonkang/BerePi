@@ -64,6 +64,22 @@ py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start
 py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start --exit-after-run
 ```
 
+## PDF 기술 보고서 생성 (`--tech_report`)
+
+PDF의 기술 구조와 작동 원리를 분석한 한국어 엔지니어링 보고서를 생성하려면 다음과 같이 실행합니다. 이 모드는 웹 서비스를 시작하지 않고 보고서를 생성한 뒤 종료합니다.
+
+```powershell
+py -3 .\client_service.py --config .\data\client_config.json --tech_report .\backbone\기술자료.pdf
+```
+
+PDF 경로를 생략하면 `--backbone` 파일이 있는 폴더와 프로젝트의 `backbone` 폴더에서 가장 최근 PDF를 자동 선택합니다.
+
+```powershell
+py -3 .\client_service.py --tech_report
+```
+
+결과는 `output/tech_report_YYYYMMDD_HHMMSS.md`와 `output/tech_report_YYYYMMDD_HHMMSS.pdf`에 저장됩니다. 스캔 이미지로만 된 PDF는 먼저 OCR을 적용해야 합니다.
+
 설정 파일에 저장하지 않고 LLM API 인증값 지정:
 
 ```powershell
