@@ -265,6 +265,14 @@ echo gemma4:31b > model-selection
 
 Use `cpu` or `none` in `gpu-selection` to force `CUDA_VISIBLE_DEVICES=-1`.
 
+If an Ollama daemon is already listening, `run_service.sh` unloads its active
+models with `ollama stop`, verifies the PID listening on the Ollama port, and
+restarts only that verified Ollama daemon so the selected GPU environment is
+actually applied. It never uses a broad `pgrep` kill. If the selected numeric
+GPU index is unavailable and exactly one GPU is installed, startup warns and
+uses that GPU. With multiple installed GPUs, an invalid index stops startup
+with the available indexes instead of silently selecting the wrong device.
+
 ## systemd user service
 
 ```bash

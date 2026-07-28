@@ -186,16 +186,74 @@ trap cleanup EXIT
 
 stop_ollama_pid() {
   local pid="$1"
-  if kill -0 "${pid}" 2>/dev/null; then
-    kill "${pid}" 2>/dev/null || true
-    for _ in {1..10}; do
-      if ! kill -0 "${pid}" 2>/dev/null; then
-        return 0
-      fi
-      sleep 1
-    done
-    kill -9 "${pid}" 2>/dev/null || true
+  if [[ ! "${pid}" =~ ^[0-9]+$ ]] || ! kill -0 "${pid}" 2>/dev/null; then
+    return 0
   fi
+
+  local command_name
+  command_name="$(ps -p "${pid}" -o comm= 2>/dev/null | xargs || true)"
+  if [[ "$(basename "${command_name}")" != "ollama" ]]; then
+    echo "Refusing to stop PID ${pid}: process is '${command_name:-unknown}', not ollama." >&2
+    return 1
+  fi
+
+  echo "Stopping Ollama daemon PID ${pid}..."
+  kill "${pid}" 2>/dev/null || true
+  for _ in {1..10}; do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Ollama PID ${pid} did not stop after 10 seconds; sending SIGKILL." >&2
+  kill -9 "${pid}" 2>/dev/null || true
+  for _ in {1..5}; do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Ollama PID ${pid} is still running." >&2
+  return 1
+}
+
+stop_loaded_ollama_models() {
+  local model_name
+  local found=0
+  while read -r model_name; do
+    [[ -z "${model_name}" || "${model_name}" == "NAME" ]] && continue
+    found=1
+    echo "Unloading Ollama model ${model_name}..."
+    "${OLLAMA_BIN}" stop "${model_name}" >/dev/null 2>&1 || {
+      echo "Warning: ollama stop ${model_name} failed; continuing with daemon shutdown." >&2
+    }
+  done < <("${OLLAMA_BIN}" ps 2>/dev/null | awk 'NR > 1 {print $1}' || true)
+
+  if (( found == 0 )); then
+    "${OLLAMA_BIN}" stop "${OLLAMA_MODEL}" >/dev/null 2>&1 || true
+  fi
+}
+
+ollama_listener_pids() {
+  local host_port="${OLLAMA_BASE_URL#*://}"
+  host_port="${host_port%%/*}"
+  local port="${host_port##*:}"
+  [[ "${port}" =~ ^[0-9]+$ ]] || port="11434"
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -t -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "sport = :${port}" 2>/dev/null \
+      | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' \
+      | sort -u
+    return 0
+  fi
+
+  echo "Cannot identify the Ollama listener safely: install lsof or iproute2 (ss)." >&2
+  return 1
 }
 
 wait_until_ollama_stops() {
@@ -211,23 +269,34 @@ wait_until_ollama_stops() {
 }
 
 stop_all_ollama_processes() {
+  local -a candidate_pids=()
+  local pid
+
+  if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+    stop_loaded_ollama_models
+  fi
+
   if [[ -n "${OLLAMA_PID}" ]]; then
-    stop_ollama_pid "${OLLAMA_PID}"
+    candidate_pids+=("${OLLAMA_PID}")
     OLLAMA_PID=""
   fi
 
   if [[ -f "${OLLAMA_PID_FILE}" ]]; then
-    local pid
     pid="$(cat "${OLLAMA_PID_FILE}")"
-    stop_ollama_pid "${pid}"
+    [[ -n "${pid}" ]] && candidate_pids+=("${pid}")
     rm -f "${OLLAMA_PID_FILE}"
   fi
 
-  if command -v pgrep >/dev/null 2>&1; then
-    local pid
+  if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+    while read -r pid; do
+      [[ -n "${pid}" ]] && candidate_pids+=("${pid}")
+    done < <(ollama_listener_pids)
+  fi
+
+  if (( ${#candidate_pids[@]} > 0 )); then
     while read -r pid; do
       [[ -n "${pid}" ]] && stop_ollama_pid "${pid}"
-    done < <(pgrep -x ollama 2>/dev/null || true)
+    done < <(printf '%s\n' "${candidate_pids[@]}" | sort -nu)
   fi
 
   wait_until_ollama_stops
@@ -253,14 +322,30 @@ cuda_device_for_gpu_selection() {
   fi
 
   local index uuid
+  local -a gpu_indexes=()
+  local -a gpu_uuids=()
   while IFS=, read -r index uuid; do
     index="$(echo "${index}" | xargs)"
     uuid="$(echo "${uuid}" | xargs)"
+    [[ -z "${index}" || -z "${uuid}" ]] && continue
+    gpu_indexes+=("${index}")
+    gpu_uuids+=("${uuid}")
     if [[ "${index}" == "${selected}" && -n "${uuid}" ]]; then
       printf '%s\n' "${uuid}"
       return 0
     fi
   done < <(nvidia-smi --query-gpu=index,uuid --format=csv,noheader,nounits 2>/dev/null || true)
+
+  if [[ "${selected}" =~ ^[0-9]+$ ]] && (( ${#gpu_indexes[@]} == 1 )); then
+    echo "Warning: gpu-selection=${selected} is unavailable; using the only installed GPU index ${gpu_indexes[0]}." >&2
+    printf '%s\n' "${gpu_uuids[0]}"
+    return 0
+  fi
+
+  if [[ "${selected}" =~ ^[0-9]+$ ]]; then
+    echo "Invalid gpu-selection=${selected}. Available GPU indexes: ${gpu_indexes[*]:-none}" >&2
+    return 1
+  fi
 
   printf '%s\n' "${selected}"
 }
@@ -279,7 +364,9 @@ apply_gpu_selection() {
       export CUDA_VISIBLE_DEVICES="-1"
       ;;
     *)
-      export CUDA_VISIBLE_DEVICES="$(cuda_device_for_gpu_selection "${selected}")"
+      local cuda_device
+      cuda_device="$(cuda_device_for_gpu_selection "${selected}")" || return 1
+      export CUDA_VISIBLE_DEVICES="${cuda_device}"
       ;;
   esac
 }
@@ -296,7 +383,9 @@ apply_model_selection() {
 
 start_ollama_if_needed() {
   if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
-    return 0
+    echo "Existing Ollama is running at ${OLLAMA_BASE_URL}; restarting it to apply gpu-selection."
+    restart_started_ollama
+    return
   fi
 
   apply_gpu_selection
