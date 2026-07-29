@@ -3586,7 +3586,7 @@ def status_payload() -> dict[str, Any]:
     try:
         models = list_ollama_models()
         ollama_reachable = True
-    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
         error = str(exc)
 
     return {
@@ -3625,7 +3625,7 @@ def unload_model() -> dict[str, Any]:
 def ollama_is_reachable() -> bool:
     try:
         list_ollama_models()
-    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError):
         return False
     return True
 
@@ -3984,7 +3984,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/unload-model":
             try:
                 result = unload_model()
-            except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
                 return
             self.send_json({"message": f"Model {read_selected_model()} stopped", "ollama": result})
@@ -3994,7 +3994,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             try:
                 try:
                     unload_model()
-                except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError):
                     pass
                 result = stop_ollama_server()
             except OSError as exc:

@@ -42,6 +42,19 @@ class OllamaCompatibilityTests(unittest.TestCase):
         ):
             server.request_json("/api/tags", timeout=1)
 
+    def test_status_payload_reports_backend_connection_failure(self) -> None:
+        error = RuntimeError(
+            "Ollama /api/tags connection failed: [Errno 111] Connection refused"
+        )
+
+        with patch.object(server, "list_ollama_models", side_effect=error):
+            status = server.status_payload()
+
+        self.assertFalse(status["ollama_reachable"])
+        self.assertFalse(status["model_available"])
+        self.assertEqual(status["models"], [])
+        self.assertIn("Connection refused", status["ollama_error"])
+
 
 if __name__ == "__main__":
     unittest.main()
