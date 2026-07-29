@@ -208,6 +208,16 @@ restore_managed_ollama_services() {
         echo "Warning: run 'sudo systemctl start ollama.service' to restore the service." >&2
       }
       ;;
+    sudo-interactive)
+      echo "Restoring previously active system Ollama service..."
+      if [[ -t 0 ]]; then
+        sudo systemctl start ollama.service || {
+          echo "Warning: run 'sudo systemctl start ollama.service' to restore the service." >&2
+        }
+      else
+        echo "Warning: run 'sudo systemctl start ollama.service' to restore the service." >&2
+      fi
+      ;;
   esac
 }
 
@@ -280,14 +290,22 @@ stop_managed_ollama_services() {
     echo "Stopping active system ollama.service to prevent automatic restart..."
     if systemctl --no-ask-password stop ollama.service 2>/dev/null; then
       OLLAMA_SYSTEM_SERVICE_STOP_MODE="direct"
-    elif command -v sudo >/dev/null 2>&1 && sudo -n systemctl stop ollama.service; then
+    elif command -v sudo >/dev/null 2>&1 && sudo -n systemctl stop ollama.service 2>/dev/null; then
       OLLAMA_SYSTEM_SERVICE_STOP_MODE="sudo"
+    elif command -v sudo >/dev/null 2>&1 && [[ -t 0 && -t 1 ]]; then
+      echo "Administrator permission is required to restart Ollama with the selected GPU."
+      if sudo systemctl stop ollama.service; then
+        OLLAMA_SYSTEM_SERVICE_STOP_MODE="sudo-interactive"
+      else
+        echo "Could not stop system ollama.service." >&2
+        return 1
+      fi
     else
       cat >&2 <<'EOF'
 Cannot stop the system-managed ollama.service without permission.
 Run this once, then retry run_service.sh:
   sudo systemctl stop ollama.service
-Or allow non-interactive service control for this deployment user.
+For unattended execution, allow non-interactive service control for this deployment user.
 EOF
       return 1
     fi

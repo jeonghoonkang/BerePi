@@ -276,10 +276,11 @@ with the available indexes instead of silently selecting the wrong device.
 When Ollama is managed by a user or system `ollama.service`, the script stops
 that service before terminating the listener so systemd cannot immediately
 restart it with the old GPU environment. A system service is controlled only
-with non-interactive permission (`systemctl --no-ask-password` or `sudo -n`).
-If permission is unavailable, startup stops with an explicit command instead
-of hanging on a password prompt. Services that the script stopped are restored
-when the foreground Gemma4 service exits.
+directly, with cached/non-interactive sudo, or through one sudo password prompt
+when `run_service.sh` is launched from an interactive terminal. In unattended
+execution it never waits for a password and instead stops with an explicit
+command. Services that the script stopped are restored when the foreground
+Gemma4 service exits.
 
 ## systemd user service
 
