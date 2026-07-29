@@ -271,7 +271,10 @@ restarts only that verified Ollama daemon so the selected GPU environment is
 actually applied. It never uses a broad `pgrep` kill. If the selected numeric
 GPU index is unavailable and exactly one GPU is installed, startup warns and
 uses that GPU. With multiple installed GPUs, an invalid index stops startup
-with the available indexes instead of silently selecting the wrong device.
+with the available indexes instead of silently selecting the wrong device. If
+`nvidia-smi` is installed but temporarily returns no GPU rows, the configured
+selection is applied directly to `CUDA_VISIBLE_DEVICES` with a warning rather
+than incorrectly reporting that the selection is invalid.
 
 When Ollama is managed by a user or system `ollama.service`, the script stops
 that service before terminating the listener so systemd cannot immediately

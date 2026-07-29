@@ -414,6 +414,12 @@ cuda_device_for_gpu_selection() {
     fi
   done < <(nvidia-smi --query-gpu=index,uuid --format=csv,noheader,nounits 2>/dev/null || true)
 
+  if (( ${#gpu_indexes[@]} == 0 )); then
+    echo "Warning: nvidia-smi did not return a GPU list; using gpu-selection=${selected} as CUDA_VISIBLE_DEVICES." >&2
+    printf '%s\n' "${selected}"
+    return 0
+  fi
+
   if [[ "${selected}" =~ ^[0-9]+$ ]] && (( ${#gpu_indexes[@]} == 1 )); then
     echo "Warning: gpu-selection=${selected} is unavailable; using the only installed GPU index ${gpu_indexes[0]}." >&2
     printf '%s\n' "${gpu_uuids[0]}"
