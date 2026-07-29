@@ -168,6 +168,7 @@ Health and status:
 
 ```text
 GET /health
+GET /api/tags
 GET /api/status
 ```
 

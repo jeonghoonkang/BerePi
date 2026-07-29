@@ -3177,6 +3177,15 @@ def list_ollama_models() -> list[str]:
     return sorted(model.get("name", "") for model in data.get("models", []) if model.get("name"))
 
 
+def ollama_tags_payload() -> dict[str, Any]:
+    """Return the local Ollama model list for Ollama-compatible clients."""
+    data = request_json("/api/tags", timeout=5)
+    models = data.get("models")
+    if not isinstance(models, list):
+        raise RuntimeError("Ollama /api/tags response does not contain a models list")
+    return data
+
+
 def normalize_model_selection(value: str) -> str:
     value = value.strip()
     if not value:
@@ -3912,6 +3921,13 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/health":
             self.send_json({"ok": True, **status_payload()})
+            return
+        if self.path == "/api/tags":
+            try:
+                self.send_json(ollama_tags_payload())
+            except RuntimeError as exc:
+                print(f"[Ollama Tags Error] {exc}", flush=True)
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
             return
         if self.path == "/api/status":
             self.send_json(status_payload())
