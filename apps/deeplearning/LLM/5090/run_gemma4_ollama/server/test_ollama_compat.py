@@ -1,4 +1,5 @@
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 import server
@@ -28,6 +29,18 @@ class OllamaCompatibilityTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "models list"),
         ):
             server.ollama_tags_payload()
+
+    def test_request_json_wraps_connection_refused(self) -> None:
+        error = urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+
+        with (
+            patch.object(server.urllib.request, "urlopen", side_effect=error),
+            self.assertRaisesRegex(
+                RuntimeError,
+                r"Ollama /api/tags connection failed:.*Connection refused",
+            ),
+        ):
+            server.request_json("/api/tags", timeout=1)
 
 
 if __name__ == "__main__":

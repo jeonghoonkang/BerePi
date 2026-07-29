@@ -2716,6 +2716,9 @@ def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int 
         except json.JSONDecodeError:
             pass
         raise RuntimeError(f"Ollama {path} HTTP {exc.code}: {message}") from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        raise RuntimeError(f"Ollama {path} connection failed: {reason}") from exc
 
 
 def prompt_processing_week_start(today: dt.date | None = None) -> dt.date:
