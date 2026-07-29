@@ -2325,7 +2325,7 @@ INDEX_HTML = """<!doctype html>
     <div class="panel">
       <select id="test_target"></select>
       <div id="autoTargetSummary" class="model-status"></div>
-      <textarea id="test_prompt" placeholder="전송할 prompt"></textarea>
+      <textarea id="test_prompt" placeholder="전송할 prompt">다른 내용 없이 ok 만 회신</textarea>
       <div class="test-toolbar">
         <button class="primary" onclick="sendPrompt()">전송</button>
         <button onclick="compareAllPrompts()">전체 모델 비교</button>

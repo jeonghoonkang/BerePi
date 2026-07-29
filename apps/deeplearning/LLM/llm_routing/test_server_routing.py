@@ -6,6 +6,13 @@ import server_routing
 
 
 class DispatchInfoTests(unittest.TestCase):
+    def test_prompt_input_has_default_smoke_test_text(self) -> None:
+        self.assertIn(
+            '<textarea id="test_prompt" placeholder="전송할 prompt">'
+            "다른 내용 없이 ok 만 회신</textarea>",
+            server_routing.INDEX_HTML,
+        )
+
     def test_sse_event_format(self) -> None:
         encoded = server_routing.sse_event_bytes("dispatch_info", {"value": "한글"})
 
