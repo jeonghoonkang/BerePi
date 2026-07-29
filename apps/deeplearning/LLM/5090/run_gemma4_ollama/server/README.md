@@ -273,6 +273,14 @@ GPU index is unavailable and exactly one GPU is installed, startup warns and
 uses that GPU. With multiple installed GPUs, an invalid index stops startup
 with the available indexes instead of silently selecting the wrong device.
 
+When Ollama is managed by a user or system `ollama.service`, the script stops
+that service before terminating the listener so systemd cannot immediately
+restart it with the old GPU environment. A system service is controlled only
+with non-interactive permission (`systemctl --no-ask-password` or `sudo -n`).
+If permission is unavailable, startup stops with an explicit command instead
+of hanging on a password prompt. Services that the script stopped are restored
+when the foreground Gemma4 service exits.
+
 ## systemd user service
 
 ```bash

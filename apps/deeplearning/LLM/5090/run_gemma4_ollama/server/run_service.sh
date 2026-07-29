@@ -84,6 +84,8 @@ export GPU_SELECTION_FILE
 export MODEL_SELECTION_FILE
 
 OLLAMA_PID=""
+OLLAMA_USER_SERVICE_WAS_ACTIVE=0
+OLLAMA_SYSTEM_SERVICE_STOP_MODE=""
 
 port_is_open() {
   python3 - "$1" <<'PY'
@@ -181,8 +183,33 @@ cleanup() {
     kill "${OLLAMA_PID}" 2>/dev/null || true
   fi
   rm -f "${OLLAMA_PID_FILE}"
+  restore_managed_ollama_services
 }
 trap cleanup EXIT
+
+restore_managed_ollama_services() {
+  if (( OLLAMA_USER_SERVICE_WAS_ACTIVE == 1 )); then
+    echo "Restoring previously active user Ollama service..."
+    systemctl --user start ollama.service >/dev/null 2>&1 || {
+      echo "Warning: could not restore user ollama.service." >&2
+    }
+  fi
+
+  case "${OLLAMA_SYSTEM_SERVICE_STOP_MODE}" in
+    direct)
+      echo "Restoring previously active system Ollama service..."
+      systemctl --no-ask-password start ollama.service >/dev/null 2>&1 || {
+        echo "Warning: could not restore system ollama.service." >&2
+      }
+      ;;
+    sudo)
+      echo "Restoring previously active system Ollama service..."
+      sudo -n systemctl start ollama.service >/dev/null 2>&1 || {
+        echo "Warning: run 'sudo systemctl start ollama.service' to restore the service." >&2
+      }
+      ;;
+  esac
+}
 
 stop_ollama_pid() {
   local pid="$1"
@@ -235,6 +262,38 @@ stop_loaded_ollama_models() {
   fi
 }
 
+stop_managed_ollama_services() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if systemctl --user is-active --quiet ollama.service 2>/dev/null; then
+    echo "Stopping active user ollama.service to prevent automatic restart..."
+    if ! systemctl --user stop ollama.service; then
+      echo "Could not stop user ollama.service." >&2
+      return 1
+    fi
+    OLLAMA_USER_SERVICE_WAS_ACTIVE=1
+  fi
+
+  if systemctl is-active --quiet ollama.service 2>/dev/null; then
+    echo "Stopping active system ollama.service to prevent automatic restart..."
+    if systemctl --no-ask-password stop ollama.service 2>/dev/null; then
+      OLLAMA_SYSTEM_SERVICE_STOP_MODE="direct"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n systemctl stop ollama.service; then
+      OLLAMA_SYSTEM_SERVICE_STOP_MODE="sudo"
+    else
+      cat >&2 <<'EOF'
+Cannot stop the system-managed ollama.service without permission.
+Run this once, then retry run_service.sh:
+  sudo systemctl stop ollama.service
+Or allow non-interactive service control for this deployment user.
+EOF
+      return 1
+    fi
+  fi
+}
+
 ollama_listener_pids() {
   local host_port="${OLLAMA_BASE_URL#*://}"
   host_port="${host_port%%/*}"
@@ -274,6 +333,7 @@ stop_all_ollama_processes() {
 
   if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
     stop_loaded_ollama_models
+    stop_managed_ollama_services
   fi
 
   if [[ -n "${OLLAMA_PID}" ]]; then
@@ -466,4 +526,4 @@ SERVER_ARGS=()
 if [[ -n "${AI_SERVER_LIST_TOKEN_ARG}" ]]; then
   SERVER_ARGS+=(--ai-server-list-token "${AI_SERVER_LIST_TOKEN_ARG}")
 fi
-exec python3 "${APP_DIR}/server.py" "${SERVER_ARGS[@]}"
+python3 "${APP_DIR}/server.py" "${SERVER_ARGS[@]}"
