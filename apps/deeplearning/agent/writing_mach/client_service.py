@@ -73,7 +73,7 @@ DEFAULT_CONFIG = {
     "user_id": "",
     "password": "",
     "model": "",
-    "keep_alive": "6m",
+    "keep_alive": "1m",
     "num_ctx": 8192,
     "target_words_per_chapter": 7000,
     "language": "ko",
