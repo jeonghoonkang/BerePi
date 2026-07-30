@@ -217,6 +217,139 @@ class TechReportPdfTests(unittest.TestCase):
             "bedrock ok",
         )
 
+    def test_unknown_target_switches_to_different_model_worker(self) -> None:
+        fallback = {
+            "name": "fallback",
+            "server_base_url": "http://fallback.test",
+            "generate_path": "/api/generate",
+            "status_path": "/api/status",
+            "request_timeout_seconds": 1,
+            "user_id": "",
+            "password": "",
+            "model": "model-b",
+            "keep_alive": "6m",
+            "num_ctx": 8192,
+            "cloud_model_enabled": False,
+        }
+        config = {
+            "name": "primary",
+            "server_base_url": "http://primary.test",
+            "generate_path": "/api/generate",
+            "status_path": "/api/status",
+            "request_timeout_seconds": 1,
+            "user_id": "",
+            "password": "",
+            "model": "model-a",
+            "keep_alive": "6m",
+            "num_ctx": 8192,
+            "cloud_model_enabled": False,
+            "model_retry_wait_seconds": 1,
+            "model_retry_prompt_after_failures": 20,
+            "agent_workers": [fallback],
+        }
+        invoked_models = []
+
+        def invoke(active_config, _url, payload, _timeout):
+            invoked_models.append((active_config["model"], payload["model"]))
+            if len(invoked_models) == 1:
+                raise TimeoutError("primary timeout")
+            return {"response": "ok"}
+
+        with (
+            patch.object(client_service, "invoke_model_request", side_effect=invoke),
+            patch.object(
+                client_service,
+                "model_server_retry_status",
+                side_effect=[
+                    {
+                        "available_targets": None,
+                        "queue_empty": True,
+                        "status": "model-a",
+                        "model": "model-a",
+                        "idle_targets": 1,
+                        "active_requests": 0,
+                        "pending_prompts": 0,
+                    },
+                    {
+                        "available_targets": 1,
+                        "queue_empty": True,
+                        "status": "model-b",
+                        "model": "model-b",
+                        "idle_targets": 1,
+                        "active_requests": 0,
+                        "pending_prompts": 0,
+                    },
+                ],
+            ),
+        ):
+            result = client_service.call_model(
+                config,
+                "read image",
+                label="tech-report-ocr-page-1",
+                images=["ZmFrZS1wbmc="],
+            )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(
+            invoked_models,
+            [("model-a", "model-a"), ("model-b", "model-b")],
+        )
+
+    def test_unknown_target_without_fallback_does_not_resend(self) -> None:
+        status = {
+            "available_targets": None,
+            "queue_empty": True,
+            "status": "model-a",
+            "model": "model-a",
+            "idle_targets": 1,
+            "active_requests": 0,
+            "pending_prompts": 0,
+        }
+        with patch.object(
+            client_service,
+            "model_server_retry_status",
+            return_value=status,
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "prompt was not resent",
+            ):
+                client_service.wait_for_model_queue_slot(
+                    {"model": "model-a", "server_base_url": "http://primary.test"},
+                    "tech-report-ocr-page-1",
+                    1,
+                    "timeout",
+                    fallback_workers=[],
+                )
+
+    def test_retry_status_does_not_treat_target_without_availability_as_idle(self) -> None:
+        remote_status = {
+            "model": "model-a",
+            "status_url": "http://router.test/api/status",
+            "raw": {
+                "targets": [{"id": "target-a", "enabled": True}],
+                "metrics": {
+                    "target-a": {
+                        "status": "ok",
+                        "active_requests": 0,
+                        "pending_queue": 0,
+                    }
+                },
+            },
+        }
+        with patch.object(
+            client_service,
+            "fetch_remote_status",
+            return_value=remote_status,
+        ):
+            status = client_service.model_server_retry_status(
+                {"model_retry_status_timeout_seconds": 1}
+            )
+
+        self.assertIsNone(status["available_targets"])
+        self.assertEqual(status["idle_targets"], 0)
+        self.assertFalse(status["queue_empty"])
+
 
 if __name__ == "__main__":
     unittest.main()

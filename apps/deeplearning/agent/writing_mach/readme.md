@@ -483,3 +483,27 @@ Bedrock 설정의 `model`에는 Converse API와 이미지 입력을 지원하며
 계정에서 접근 권한이 있는 model ID 또는 inference profile ID를 지정해야 합니다.
 모든 공급자 설정에서 `model`, `max_tokens`, `temperature`,
 `request_timeout_seconds`, `parallelism`을 변경할 수 있습니다.
+### `available_targets=unknown` 재전송 방지
+
+모델 요청 실패 후 status 응답의 `available_targets`가 `unknown`이면 같은
+endpoint로 prompt를 재전송하지 않습니다. `agent_workers`에 현재 모델과 다른
+모델이 설정되어 있고 그 worker의 `available_targets`가 1 이상이며 queue가
+비어 있으면 동일한 prompt와 OCR 이미지를 해당 worker로 전환하여 전송합니다.
+
+```json
+{
+  "agent_workers": [
+    {
+      "name": "fallback-qwen",
+      "server_base_url": "http://10.0.0.46:8082",
+      "generate_path": "/api/generate",
+      "status_path": "/api/status",
+      "model": "qwen2.5:32b",
+      "max_parallel": 1
+    }
+  ]
+}
+```
+
+가용성이 확인된 다른 모델이 없으면 prompt를 다시 보내지 않고
+`target availability is unknown; prompt was not resent` 오류로 중단합니다.

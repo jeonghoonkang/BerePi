@@ -1679,12 +1679,18 @@ def call_model(
     timeout_multiplier: int = 1,
     images: list[str] | None = None,
 ) -> str:
-    generate_url = join_url(config["server_base_url"], config["generate_path"])
+    active_config = dict(config)
+    fallback_workers = [
+        dict(worker)
+        for worker in config.get("agent_workers", [])
+        if isinstance(worker, dict)
+    ]
+    generate_url = join_url(active_config["server_base_url"], active_config["generate_path"])
     started = time.perf_counter()
     started_at = time.strftime("%Y-%m-%d %H:%M:%S")
-    payload = build_generate_payload(config, prompt, images=images)
+    payload = build_generate_payload(active_config, prompt, images=images)
     label_text = f" [{label}]" if label else ""
-    base_timeout_seconds = int(config["request_timeout_seconds"])
+    base_timeout_seconds = int(active_config["request_timeout_seconds"])
     timeout_scale = max(1, int(timeout_multiplier or 1))
     timeout_seconds = base_timeout_seconds * timeout_scale
     prompt_words = word_count(prompt)
@@ -1700,7 +1706,7 @@ def call_model(
         "model-request",
         (
             f"user={payload.get('user_id') or '-'} "
-            f"model={payload.get('model') or config.get('model') or 'server-default'} "
+            f"model={payload.get('model') or active_config.get('model') or 'server-default'} "
             f"keep_alive={payload.get('keep_alive')} "
             f"num_ctx={payload.get('options', {}).get('num_ctx')} "
             f"image_count={len(images or [])}"
@@ -1723,7 +1729,7 @@ def call_model(
                 "cyan",
             )
             data = invoke_model_request(
-                config,
+                active_config,
                 generate_url,
                 payload,
                 timeout_seconds,
@@ -1746,7 +1752,7 @@ def call_model(
             error = f"Model endpoint returned HTTP {exc.code}: {generate_url} | {exc.reason}{detail}"
             trace_path = save_llm_trace(
                 url=generate_url,
-                config=config,
+                config=active_config,
                 prompt=prompt,
                 started_at=started_at,
                 elapsed_seconds=time.perf_counter() - started,
@@ -1772,7 +1778,7 @@ def call_model(
             error = f"Could not connect to model endpoint: {generate_url} | {exc}"
             trace_path = save_llm_trace(
                 url=generate_url,
-                config=config,
+                config=active_config,
                 prompt=prompt,
                 started_at=started_at,
                 elapsed_seconds=time.perf_counter() - started,
@@ -1795,7 +1801,7 @@ def call_model(
             error = str(exc)
             trace_path = save_llm_trace(
                 url=generate_url,
-                config=config,
+                config=active_config,
                 prompt=prompt,
                 started_at=started_at,
                 elapsed_seconds=time.perf_counter() - started,
@@ -1814,7 +1820,7 @@ def call_model(
             if trace_path:
                 progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
         except Exception as exc:
-            if not config.get("cloud_model_enabled"):
+            if not active_config.get("cloud_model_enabled"):
                 raise
             send_elapsed = time.perf_counter() - send_started
             error = f"Cloud model request failed: {type(exc).__name__}: {exc}"
@@ -1841,10 +1847,10 @@ def call_model(
             f"{label or 'model'} request failed without response ({failure_count}): {error}",
             "yellow",
         )
-        if config.get("cloud_model_enabled"):
+        if active_config.get("cloud_model_enabled"):
             wait_seconds = min(
                 60,
-                int(config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"]),
+                int(active_config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"]),
             )
             progress_log(
                 "model-retry",
@@ -1854,7 +1860,26 @@ def call_model(
             time.sleep(wait_seconds)
         else:
             try:
-                wait_for_model_queue_slot(config, label, failure_count, error)
+                fallback = wait_for_model_queue_slot(
+                    active_config,
+                    label,
+                    failure_count,
+                    error,
+                    fallback_workers=fallback_workers,
+                )
+                if fallback is not None:
+                    active_config = dict(fallback)
+                    generate_url = join_url(
+                        active_config["server_base_url"],
+                        active_config["generate_path"],
+                    )
+                    payload = build_generate_payload(
+                        active_config,
+                        prompt,
+                        images=images,
+                    )
+                    base_timeout_seconds = int(active_config["request_timeout_seconds"])
+                    timeout_seconds = base_timeout_seconds * timeout_scale
             except Exception as retry_exc:
                 raise ValueError(f"{error} | retry_status_failed={retry_exc}") from retry_exc
         progress_log(
@@ -1876,7 +1901,7 @@ def call_model(
     progress_log("model-response", f"response preview: {preview_text(text, 1200)}", "dim")
     trace_path = save_llm_trace(
         url=generate_url,
-        config=config,
+        config=active_config,
         prompt=prompt,
         started_at=started_at,
         elapsed_seconds=time.perf_counter() - started,
@@ -1975,6 +2000,7 @@ def model_server_retry_status(config: dict[str, Any]) -> dict[str, Any]:
     active = 0
     pending = 0
     available_targets = 0
+    has_availability_signal = False
     idle_targets = 0
     gpu_tokens: set[str] = set()
     requested_target_id = str(config.get("target_id") or "").strip()
@@ -1987,13 +2013,28 @@ def model_server_retry_status(config: dict[str, Any]) -> dict[str, Any]:
         metric = metrics.get(str(target.get("id"))) if isinstance(metrics, dict) else {}
         if not isinstance(metric, dict):
             metric = {}
-        if metric.get("status") in {"ok", "ready", None, ""}:
+        metric_available = metric.get("available_targets", target.get("available_targets"))
+        dispatch_eligible = metric.get("dispatch_eligible", target.get("dispatch_eligible"))
+        if isinstance(metric_available, (int, float)) and not isinstance(metric_available, bool):
+            has_availability_signal = True
+            target_available = int(metric_available) > 0
+        elif isinstance(dispatch_eligible, bool):
+            has_availability_signal = True
+            target_available = dispatch_eligible
+        else:
+            target_available = False
+        if target_available and metric.get("status") in {"ok", "ready", None, ""}:
             available_targets += 1
         target_active = int(metric.get("active_requests") or 0)
         target_pending = int(metric.get("pending_queue") or 0)
         active += target_active
         pending += target_pending
-        if target_active == 0 and target_pending == 0 and metric.get("status") in {"ok", "ready", None, ""}:
+        if (
+            target_available
+            and target_active == 0
+            and target_pending == 0
+            and metric.get("status") in {"ok", "ready", None, ""}
+        ):
             idle_targets += 1
         for key in ("selected_gpu_device", "selected_gpu_label", "selected_gpu", "gpu_type"):
             for token in split_gpu_tokens(str(metric.get(key) or target.get(key) or "")):
@@ -2008,7 +2049,11 @@ def model_server_retry_status(config: dict[str, Any]) -> dict[str, Any]:
 
     queue = raw.get("prompt_queue") if isinstance(raw.get("prompt_queue"), dict) else {}
     pending += int(queue.get("pending_count") or 0)
-    if not targets and pending == 0 and active == 0:
+    raw_available_targets = raw.get("available_targets")
+    if not targets and isinstance(raw_available_targets, (int, float)):
+        has_availability_signal = True
+        available_targets = max(0, int(raw_available_targets))
+    if not targets and available_targets > 0 and pending == 0 and active == 0:
         idle_targets = 1
 
     service_status = str(raw.get("status") or status.get("model") or "ok")
@@ -2017,7 +2062,11 @@ def model_server_retry_status(config: dict[str, Any]) -> dict[str, Any]:
         "status": service_status,
         "model": status.get("model") or "",
         "gpu_count": len(gpu_tokens) if gpu_tokens else None,
-        "available_targets": available_targets if targets else None,
+        "available_targets": (
+            available_targets
+            if has_availability_signal
+            else None
+        ),
         "idle_targets": idle_targets,
         "queue_empty": idle_targets > 0,
         "active_requests": active,
@@ -2053,7 +2102,43 @@ def ask_continue_after_failures(chapter_title: str, failures: int) -> bool:
     return answer in {"y", "yes", "c", "continue", "계속", "예", "네"}
 
 
-def wait_for_model_queue_slot(config: dict[str, Any], label: str, failure_count: int, last_error: str) -> None:
+def select_retry_fallback_worker(
+    current_config: dict[str, Any],
+    fallback_workers: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    current_model = str(current_config.get("model") or "").strip()
+    current_url = str(current_config.get("server_base_url") or "").rstrip("/")
+    checked: list[str] = []
+    for worker in fallback_workers:
+        worker_model = str(worker.get("model") or "").strip()
+        worker_url = str(worker.get("server_base_url") or "").rstrip("/")
+        if (worker_model and worker_model == current_model) or worker_url == current_url:
+            continue
+        name = str(worker.get("name") or worker_model or worker_url or "fallback")
+        try:
+            status = model_server_retry_status(worker)
+        except Exception as exc:  # noqa: BLE001
+            checked.append(f"{name}=status-error:{exc}")
+            continue
+        checked.append(f"{name}={retry_status_text(status)}")
+        available = status.get("available_targets")
+        if (
+            isinstance(available, (int, float))
+            and int(available) > 0
+            and status.get("queue_empty")
+        ):
+            return worker, checked
+    return None, checked
+
+
+def wait_for_model_queue_slot(
+    config: dict[str, Any],
+    label: str,
+    failure_count: int,
+    last_error: str,
+    *,
+    fallback_workers: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     wait_seconds = int(config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"])
     prompt_after = int(
         config.get("model_retry_prompt_after_failures")
@@ -2069,6 +2154,36 @@ def wait_for_model_queue_slot(config: dict[str, Any], label: str, failure_count:
                 raise ValueError(f"{title} stopped by user after {failure_count} failed model requests: {last_error}")
 
         status = model_server_retry_status(config)
+        available = status.get("available_targets")
+        if available is None:
+            fallback, checked = select_retry_fallback_worker(
+                config,
+                list(fallback_workers or []),
+            )
+            progress_log(
+                "model-retry",
+                (
+                    f"{title} skipping resend because available_targets=unknown. "
+                    f"{retry_status_text(status)}"
+                ),
+                "yellow",
+            )
+            if fallback is not None:
+                progress_log(
+                    "model-failover",
+                    (
+                        f"{title} switching to worker={fallback.get('name') or '-'} "
+                        f"model={fallback.get('model') or 'server-default'} "
+                        f"url={fallback.get('server_base_url') or '-'}"
+                    ),
+                    "green",
+                )
+                return fallback
+            detail = "; ".join(checked) if checked else "no different fallback workers configured"
+            raise ValueError(
+                f"{title} target availability is unknown; prompt was not resent. "
+                f"No available different model found: {detail}"
+            )
         if status.get("queue_empty"):
             progress_log(
                 "model-retry",
@@ -2078,7 +2193,7 @@ def wait_for_model_queue_slot(config: dict[str, Any], label: str, failure_count:
                 ),
                 "green",
             )
-            return
+            return None
 
         progress_log(
             "model-retry",
