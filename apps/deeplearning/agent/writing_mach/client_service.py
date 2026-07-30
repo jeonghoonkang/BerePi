@@ -69,7 +69,7 @@ DEFAULT_CONFIG = {
     "server_base_url": "http://127.0.0.1:8082",
     "generate_path": "/api/generate",
     "status_path": "/api/status",
-    "request_timeout_seconds": 600,
+    "request_timeout_seconds": 100,
     "user_id": "",
     "password": "",
     "model": "",
