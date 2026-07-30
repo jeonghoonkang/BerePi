@@ -126,7 +126,12 @@ class DispatchInfoTests(unittest.TestCase):
         )
         metric = server_routing.metric_for(failed.id)
         metric.consecutive_errors = 3
+        metric.available_targets = 1
         server_routing.store_metric(failed.id, metric)
+        for target in (same_model, fallback):
+            metric = server_routing.metric_for(target.id)
+            metric.available_targets = 1
+            server_routing.store_metric(target.id, metric)
 
         with (
             patch.object(
@@ -206,6 +211,85 @@ class DispatchInfoTests(unittest.TestCase):
                     server_routing.metric_for(target.id).consecutive_errors,
                     expected,
                 )
+
+    def test_unknown_availability_target_is_skipped(self) -> None:
+        unknown = server_routing.LLMTarget(
+            id="unknown-target",
+            name="Unknown",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        available = server_routing.LLMTarget(
+            id="available-target",
+            name="Available",
+            host="127.0.0.2",
+            port=11434,
+            model="model-b",
+        )
+        metric = server_routing.metric_for(available.id)
+        metric.available_targets = 1
+        server_routing.store_metric(available.id, metric)
+
+        with (
+            patch.object(server_routing, "load_targets", return_value=[unknown, available]),
+            patch.object(server_routing, "ensure_target_queues"),
+            patch.object(
+                server_routing,
+                "target_health",
+                return_value={"ok": True, "data": {}},
+            ),
+        ):
+            selected = server_routing.choose_target({"prompt": "same data"})
+            explicit = server_routing.choose_target(
+                {"prompt": "same data", "target_id": unknown.id}
+            )
+
+        self.assertEqual(selected.id, available.id)
+        self.assertEqual(explicit.id, available.id)
+        self.assertIsNone(
+            server_routing.metric_for(unknown.id).available_targets
+        )
+
+    def test_all_unknown_availability_targets_reject_dispatch(self) -> None:
+        unknown = server_routing.LLMTarget(
+            id="unknown-target",
+            name="Unknown",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        with (
+            patch.object(server_routing, "load_targets", return_value=[unknown]),
+            patch.object(server_routing, "ensure_target_queues"),
+            patch.object(
+                server_routing,
+                "target_health",
+                return_value={"ok": True, "data": {}},
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "No LLM targets have known positive availability",
+            ):
+                server_routing.choose_target({"prompt": "same data"})
+
+    def test_available_targets_is_derived_from_health_models(self) -> None:
+        self.assertEqual(
+            server_routing.available_targets_from_health(
+                {"models": [{"name": "model-a"}, {"name": "model-b"}]}
+            ),
+            2,
+        )
+        self.assertEqual(
+            server_routing.available_targets_from_health(
+                {"available_targets": 0}
+            ),
+            0,
+        )
+        self.assertIsNone(
+            server_routing.available_targets_from_health({"status": "ok"})
+        )
 
 
 if __name__ == "__main__":

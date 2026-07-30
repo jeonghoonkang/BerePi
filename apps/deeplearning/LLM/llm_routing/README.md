@@ -397,3 +397,16 @@ bash run.sh
 
 응답에는 `failover_applied`, `failover_from_models`,
 `failover_after_errors` 필드가 포함되어 실제 전환 여부를 확인할 수 있습니다.
+### `available_targets=unknown` 대상 제외
+
+라우터는 target의 `/health`, `/api/tags` 또는 `/v1/models` 응답에서 사용 가능한
+target/model 수를 확인합니다. 상태 응답에 가용성을 판정할 정보가 없어
+`available_targets=unknown`이거나 값이 `0`인 target은 prompt queue에 넣지
+않습니다.
+
+`target_id`로 해당 target을 직접 지정해도 가용성이 확인된 다른 모델이 있으면
+그 모델로 전환합니다. 대체 target도 없으면 backend에 전송하지 않고
+`No LLM targets have known positive availability` 오류를 반환합니다.
+
+상태 API의 target metric에서 `available_targets`와 `dispatch_eligible` 필드로
+전송 가능 여부를 확인할 수 있습니다.

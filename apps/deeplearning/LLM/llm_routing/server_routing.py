@@ -133,6 +133,7 @@ class TargetMetrics:
     remote_gpu_info: str = ""
     remote_gpu_type: str = ""
     remote_ifconfig_ips: str = ""
+    available_targets: int | None = None
     recent_response_seconds: list[float] = field(default_factory=list)
 
     @property
@@ -780,6 +781,47 @@ def target_health(target: LLMTarget) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+def available_targets_from_health(data: dict[str, Any]) -> int | None:
+    value = data.get("available_targets")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return max(0, int(value))
+    targets = data.get("targets")
+    if isinstance(targets, list):
+        return sum(
+            1
+            for item in targets
+            if not isinstance(item, dict) or item.get("enabled", True)
+        )
+    for key in ("model_ids", "models"):
+        models = data.get(key)
+        if isinstance(models, list):
+            return len(models)
+    return None
+
+
+def refresh_target_availability(target: LLMTarget) -> int | None:
+    health = target_health(target)
+    data = health.get("data") if isinstance(health.get("data"), dict) else {}
+    available = available_targets_from_health(data)
+    with STATE_LOCK:
+        metric = metric_for(target.id)
+        metric.last_health_at = time.time()
+        metric.last_health_probe_at = metric.last_health_at
+        metric.status = "ok" if health.get("ok") else "error"
+        metric.last_error = "" if health.get("ok") else str(health.get("error") or "")
+        metric.available_targets = available
+        store_metric(target.id, metric)
+    return available
+
+
+def target_has_known_availability(target: LLMTarget) -> bool:
+    with STATE_LOCK:
+        available = metric_for(target.id).available_targets
+    if available is None:
+        available = refresh_target_availability(target)
+    return available is not None and available > 0
+
+
 def parse_model_ids(target: LLMTarget, data: dict[str, Any]) -> list[str]:
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         values = data.get("data", [])
@@ -1035,27 +1077,43 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
     if not targets:
         raise ValueError("No enabled LLM targets are configured.")
     ensure_target_queues(targets)
+    known_targets = [target for target in targets if target_has_known_availability(target)]
     requested_id = str(payload.get("target_id") or "")
     if requested_id:
         for target in targets:
             if target.id == requested_id:
-                if target_failover_open(target):
+                if target not in known_targets or target_failover_open(target):
                     alternatives = [
                         item
-                        for item in available_target_candidates(targets)
+                        for item in available_target_candidates(known_targets)
                         if item.id != target.id
                         and item.model != target.model
                         and not target_failover_open(item)
                     ]
                     if alternatives:
                         return least_loaded_target(alternatives)
+                    availability = metric_for(target.id).available_targets
+                    reason = "unknown" if availability is None else str(availability)
+                    raise ValueError(
+                        f"Requested target {target.name} is not available "
+                        f"(available_targets={reason}); no eligible fallback model exists."
+                    )
                 return target
         raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")
 
     with STATE_LOCK:
-        candidates = available_target_candidates(targets)
+        candidates = available_target_candidates(known_targets)
         if not candidates:
-            raise QueueFullError(f"All target queues are full. max_per_target={QUEUE_MAX_PER_TARGET}")
+            availability = {
+                target.id: metric_for(target.id).available_targets
+                for target in targets
+            }
+            if known_targets:
+                raise QueueFullError(f"All target queues are full. max_per_target={QUEUE_MAX_PER_TARGET}")
+            raise ValueError(
+                "No LLM targets have known positive availability; "
+                f"skipping dispatch. available_targets={availability}"
+            )
         failed_models = {
             target.model
             for target in targets
@@ -1492,6 +1550,12 @@ def api_status_payload() -> dict[str, Any]:
     targets = [target for target in load_targets() if target.enabled]
     first = targets[0] if targets else None
     network = local_network_info()
+    available_targets = [
+        target
+        for target in targets
+        if metric_for(target.id).available_targets is not None
+        and int(metric_for(target.id).available_targets or 0) > 0
+    ]
     return {
         "ok": True,
         "service": "llm-routing",
@@ -1505,6 +1569,7 @@ def api_status_payload() -> dict[str, Any]:
         "service_url": network["service_url"],
         "network": network,
         "target_count": len(targets),
+        "available_targets": len(available_targets),
         "targets": [
             {
                 "id": target.id,
@@ -1516,6 +1581,8 @@ def api_status_payload() -> dict[str, Any]:
                 "api_type": target.api_type,
                 "selected_gpu": target.selected_gpu,
                 "selected_gpu_label": target.selected_gpu_label,
+                "available_targets": metric_for(target.id).available_targets,
+                "dispatch_eligible": target in available_targets,
             }
             for target in targets
         ],
@@ -2103,6 +2170,7 @@ def status_payload() -> dict[str, Any]:
             metric.last_error = "" if health["ok"] else health.get("error", "")
             metric.last_health_probe_at = now
             data = health.get("data") if isinstance(health.get("data"), dict) else {}
+            metric.available_targets = available_targets_from_health(data)
             if target.api_type in OPENAI_COMPATIBLE_API_TYPES and isinstance(data, dict):
                 running = data.get("num_requests_running")
                 waiting = data.get("num_requests_waiting")
@@ -2155,6 +2223,11 @@ def status_payload() -> dict[str, Any]:
             "selected_gpu_device": selected_gpu_health_label or selected_gpu_device(target),
             "queue_max_per_target": QUEUE_MAX_PER_TARGET,
             "activity_state": metric.queue_state,
+            "dispatch_eligible": bool(
+                target.enabled
+                and metric.available_targets is not None
+                and metric.available_targets > 0
+            ),
         }
 
     clients = []
@@ -2173,6 +2246,13 @@ def status_payload() -> dict[str, Any]:
         "started_at": dt.datetime.fromtimestamp(STARTED_AT).astimezone().isoformat(),
         "uptime": seconds_to_uptime(time.time() - STARTED_AT),
         "status_refresh_seconds": STATUS_REFRESH_SECONDS,
+        "available_targets": sum(
+            1
+            for target in targets
+            if target.enabled
+            and metric_for(target.id).available_targets is not None
+            and int(metric_for(target.id).available_targets or 0) > 0
+        ),
         "targets": [target.__dict__ for target in targets],
         "target_history": load_target_history(),
         "duplicate_target_ids": sorted(duplicate_target_ids(targets)),
