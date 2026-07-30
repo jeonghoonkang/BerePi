@@ -45,8 +45,10 @@ BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
 DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR = BASE_DIR / "output"
+INPUT_DIR = BASE_DIR / "input"
 CONFIG_PATH = DATA_DIR / "client_config.json"
 SAMPLE_CONFIG_PATH = BASE_DIR / "config" / "client_config.sample.json"
+CLOUD_CONFIG_PATH = BASE_DIR / "config" / "cloud_model.json"
 BACKBONE_PATH = BASE_DIR / "story_backbone.md"
 USE_COLOR = os.getenv("NO_COLOR", "").strip() == "" and os.getenv("WRITING_MACH_NO_COLOR", "").strip() == ""
 
@@ -96,6 +98,15 @@ DEFAULT_CONFIG = {
     "progress_pdf_enabled": True,
     "progress_pdf_interval_minutes": 30,
     "progress_pdf_output_dir": r"E:\sync_dir\nc_keties_22080\devel",
+    "cloud_model_enabled": False,
+    "cloud_provider": "openai-compatible",
+    "cloud_api_key": "",
+    "cloud_api_key_env": "OPENAI_API_KEY",
+    "cloud_max_tokens": 4096,
+    "cloud_temperature": 0.2,
+    "cloud_vision_detail": "high",
+    "cloud_aws_region": "",
+    "cloud_aws_profile": "",
 }
 
 
@@ -206,7 +217,19 @@ def parse_args() -> argparse.Namespace:
         metavar="PDF",
         help=(
             "Create a Korean engineering report from PDF and exit. "
-            "When PDF is omitted, uses the newest PDF in the backbone directory."
+            "When PDF is omitted, uses the newest PDF in the input directory. "
+            "Pages without sufficient selectable text are processed with OCR."
+        ),
+    )
+    parser.add_argument(
+        "--cloud-model",
+        nargs="?",
+        const=str(CLOUD_CONFIG_PATH),
+        default=None,
+        metavar="CONFIG",
+        help=(
+            "Use a paid cloud model (OpenAI-compatible, Google Gemini, or AWS Bedrock). "
+            f"Without CONFIG, loads {CLOUD_CONFIG_PATH}."
         ),
     )
     return parser.parse_args()
@@ -444,8 +467,13 @@ def backbone_bool_value(value: str) -> bool:
 def public_config(config: dict[str, Any]) -> dict[str, Any]:
     redacted = {key: value for key, value in config.items() if not key.startswith("_")}
     redacted.pop("password", None)
+    redacted.pop("cloud_api_key", None)
     redacted["agent_workers"] = [
-        {key: value for key, value in worker.items() if key not in {"password", "agent_workers"}}
+        {
+            key: value
+            for key, value in worker.items()
+            if key not in {"password", "cloud_api_key", "agent_workers"}
+        }
         for worker in config.get("agent_workers", [])
     ]
     return redacted
@@ -453,6 +481,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
 
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUTPUT_DIR / "checkpoints").mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -708,6 +737,31 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "progress_pdf_output_dir": str(
             incoming.get("progress_pdf_output_dir") or DEFAULT_CONFIG["progress_pdf_output_dir"]
         ),
+        "cloud_model_enabled": bool_value(
+            incoming.get("cloud_model_enabled"),
+            bool(DEFAULT_CONFIG["cloud_model_enabled"]),
+        ),
+        "cloud_provider": str(
+            incoming.get("cloud_provider") or DEFAULT_CONFIG["cloud_provider"]
+        ),
+        "cloud_api_key": str(incoming.get("cloud_api_key") or ""),
+        "cloud_api_key_env": str(
+            incoming.get("cloud_api_key_env") or DEFAULT_CONFIG["cloud_api_key_env"]
+        ),
+        "cloud_max_tokens": max(
+            1,
+            int(incoming.get("cloud_max_tokens") or DEFAULT_CONFIG["cloud_max_tokens"]),
+        ),
+        "cloud_temperature": float(
+            incoming.get("cloud_temperature")
+            if incoming.get("cloud_temperature") is not None
+            else DEFAULT_CONFIG["cloud_temperature"]
+        ),
+        "cloud_vision_detail": str(
+            incoming.get("cloud_vision_detail") or DEFAULT_CONFIG["cloud_vision_detail"]
+        ),
+        "cloud_aws_region": str(incoming.get("cloud_aws_region") or ""),
+        "cloud_aws_profile": str(incoming.get("cloud_aws_profile") or ""),
     }
     normalized["agent_workers"] = normalize_agent_workers(normalized)
     return normalized
@@ -734,6 +788,32 @@ def normalize_agent_workers(config: dict[str, Any]) -> list[dict[str, Any]]:
             "keep_alive": str(raw.get("keep_alive") or config["keep_alive"]),
             "num_ctx": int(raw.get("num_ctx") or config["num_ctx"]),
             "max_parallel": max(1, int(raw.get("max_parallel") or 1)),
+            "cloud_model_enabled": bool_value(
+                raw.get("cloud_model_enabled"),
+                bool(config.get("cloud_model_enabled")),
+            ),
+            "cloud_provider": str(raw.get("cloud_provider") or config.get("cloud_provider") or ""),
+            "cloud_api_key": str(raw.get("cloud_api_key") or config.get("cloud_api_key") or ""),
+            "cloud_api_key_env": str(
+                raw.get("cloud_api_key_env") or config.get("cloud_api_key_env") or ""
+            ),
+            "cloud_max_tokens": int(
+                raw.get("cloud_max_tokens") or config.get("cloud_max_tokens") or 4096
+            ),
+            "cloud_temperature": float(
+                raw.get("cloud_temperature")
+                if raw.get("cloud_temperature") is not None
+                else config.get("cloud_temperature") or 0
+            ),
+            "cloud_vision_detail": str(
+                raw.get("cloud_vision_detail") or config.get("cloud_vision_detail") or "high"
+            ),
+            "cloud_aws_region": str(
+                raw.get("cloud_aws_region") or config.get("cloud_aws_region") or ""
+            ),
+            "cloud_aws_profile": str(
+                raw.get("cloud_aws_profile") or config.get("cloud_aws_profile") or ""
+            ),
         }
         workers.append(worker)
 
@@ -753,6 +833,15 @@ def normalize_agent_workers(config: dict[str, Any]) -> list[dict[str, Any]]:
             "keep_alive": config["keep_alive"],
             "num_ctx": config["num_ctx"],
             "max_parallel": max(1, int(config.get("chapter_parallelism") or 1)),
+            "cloud_model_enabled": bool(config.get("cloud_model_enabled")),
+            "cloud_provider": str(config.get("cloud_provider") or ""),
+            "cloud_api_key": str(config.get("cloud_api_key") or ""),
+            "cloud_api_key_env": str(config.get("cloud_api_key_env") or ""),
+            "cloud_max_tokens": int(config.get("cloud_max_tokens") or 4096),
+            "cloud_temperature": float(config.get("cloud_temperature") or 0),
+            "cloud_vision_detail": str(config.get("cloud_vision_detail") or "high"),
+            "cloud_aws_region": str(config.get("cloud_aws_region") or ""),
+            "cloud_aws_profile": str(config.get("cloud_aws_profile") or ""),
         }
     ]
 
@@ -781,6 +870,105 @@ def runtime_config(override: dict[str, Any] | None = None) -> dict[str, Any]:
             merged[key] = value
     merged.update(RUNTIME_CONFIG_OVERRIDES)
     return normalize_config(merged)
+
+
+def load_cloud_model_overrides(config_value: str) -> dict[str, Any]:
+    path = Path(config_value).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Cloud model config not found: {path}")
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Could not read cloud model config {path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ValueError(f"Cloud model config must contain a JSON object: {path}")
+
+    provider_value = str(raw.get("provider") or "openai-compatible").strip().lower()
+    provider_aliases = {
+        "openai": "openai-compatible",
+        "openai-compatible": "openai-compatible",
+        "openai_compatible": "openai-compatible",
+        "google": "google",
+        "google-ai": "google",
+        "google_ai": "google",
+        "gemini": "google",
+        "aws": "aws-bedrock",
+        "bedrock": "aws-bedrock",
+        "aws-bedrock": "aws-bedrock",
+        "aws_bedrock": "aws-bedrock",
+    }
+    provider = provider_aliases.get(provider_value)
+    if not provider:
+        raise ValueError(f"Unsupported cloud provider: {provider_value}")
+    model = str(
+        os.getenv("WRITING_MACH_CLOUD_MODEL")
+        or raw.get("model")
+        or ""
+    ).strip()
+    if not model:
+        raise ValueError(
+            f"cloud model name is required in {path} or WRITING_MACH_CLOUD_MODEL"
+        )
+
+    default_key_env = "GOOGLE_API_KEY" if provider == "google" else "OPENAI_API_KEY"
+    api_key_env = str(raw.get("api_key_env") or default_key_env).strip()
+    api_key = str(raw.get("api_key") or os.getenv(api_key_env, "")).strip()
+    if provider != "aws-bedrock" and not api_key:
+        raise ValueError(
+            f"Cloud API key is missing. Set api_key in {path} or the {api_key_env} environment variable."
+        )
+
+    aws_region = ""
+    if provider == "google":
+        base_url = str(
+            raw.get("base_url") or "https://generativelanguage.googleapis.com"
+        ).strip().rstrip("/")
+        generate_path = str(
+            raw.get("generate_path")
+            or f"/v1beta/models/{urllib.parse.quote(model, safe='.-_')}:generateContent"
+        )
+        status_path = str(raw.get("status_path") or "/v1beta/models")
+    elif provider == "aws-bedrock":
+        aws_region = str(
+            raw.get("region")
+            or os.getenv("AWS_REGION")
+            or os.getenv("AWS_DEFAULT_REGION")
+            or ""
+        ).strip()
+        if not aws_region:
+            raise ValueError(
+                f"AWS region is missing. Set region in {path}, AWS_REGION, or AWS_DEFAULT_REGION."
+            )
+        base_url = f"aws-bedrock://{aws_region}"
+        generate_path = "/converse"
+        status_path = ""
+    else:
+        base_url = str(raw.get("base_url") or "").strip().rstrip("/")
+        if not base_url:
+            raise ValueError(f"cloud model base_url is required: {path}")
+        generate_path = str(raw.get("generate_path") or "/v1/chat/completions")
+        status_path = str(raw.get("status_path") or "/v1/models")
+
+    return {
+        "cloud_model_enabled": True,
+        "cloud_provider": provider,
+        "cloud_api_key": api_key,
+        "cloud_api_key_env": api_key_env,
+        "cloud_max_tokens": int(raw.get("max_tokens") or 4096),
+        "cloud_temperature": float(
+            raw.get("temperature") if raw.get("temperature") is not None else 0.2
+        ),
+        "cloud_vision_detail": str(raw.get("vision_detail") or "high"),
+        "cloud_aws_region": aws_region,
+        "cloud_aws_profile": str(raw.get("profile") or ""),
+        "server_base_url": base_url,
+        "generate_path": generate_path,
+        "status_path": status_path,
+        "model": model,
+        "request_timeout_seconds": int(raw.get("request_timeout_seconds") or 600),
+        "agent_workers": [],
+        "chapter_parallelism": max(1, int(raw.get("parallelism") or 1)),
+    }
 
 
 def read_story_backbone() -> str:
@@ -820,21 +1008,76 @@ def resolve_tech_report_pdf(value: str) -> Path:
             raise ValueError(f"--tech_report input must be a PDF file: {path}")
         return path
 
-    search_dirs = [BACKBONE_PATH.parent, BASE_DIR / "backbone", BASE_DIR]
-    candidates: list[Path] = []
-    for directory in search_dirs:
-        if directory.exists():
-            candidates.extend(directory.glob("*.pdf"))
-    unique_candidates = list({path.resolve(): path.resolve() for path in candidates}.values())
-    if not unique_candidates:
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    candidates = [path.resolve() for path in INPUT_DIR.glob("*.pdf") if path.is_file()]
+    if not candidates:
         raise FileNotFoundError(
-            "--tech_report could not find a PDF. Pass one explicitly, for example: "
-            "--tech_report .\\backbone\\technical_document.pdf"
+            f"--tech_report could not find a PDF in {INPUT_DIR}. "
+            "Copy a PDF into the input directory or pass a PDF path explicitly."
         )
-    return max(unique_candidates, key=lambda path: path.stat().st_mtime)
+    return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
-def extract_pdf_text(pdf_path: Path) -> str:
+def normalize_extracted_text(text: str) -> str:
+    cleaned = str(text or "").replace("\x00", " ").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = re.sub(r"(?<=\w)-\n(?=\w)", "", cleaned)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def merge_page_text(text_layer: str, ocr_text: str) -> str:
+    if not text_layer:
+        return ocr_text
+    if not ocr_text:
+        return text_layer
+    merged_lines = [line for line in text_layer.splitlines() if line.strip()]
+    known = {re.sub(r"\W+", "", line).casefold() for line in merged_lines}
+    for line in ocr_text.splitlines():
+        normalized = re.sub(r"\W+", "", line).casefold()
+        if normalized and normalized not in known:
+            merged_lines.append(line)
+            known.add(normalized)
+    return normalize_extracted_text("\n".join(merged_lines))
+
+
+def _load_pdf_renderer() -> Any:
+    try:
+        import fitz
+    except ImportError as exc:
+        raise RuntimeError(
+            "PDF page image rendering requires pymupdf. "
+            "Install Python dependencies with: py -3 -m pip install -r requirements.txt"
+        ) from exc
+    return fitz
+
+
+def model_ocr_prompt(page_number: int, text_layer: str) -> str:
+    existing = text_layer or "(텍스트 레이어 없음)"
+    return f"""너는 기술문서 OCR 전사기다.
+첨부된 PDF {page_number}페이지 이미지를 읽고 보이는 문자를 정확히 전사해라.
+
+규칙:
+- 한국어와 영문 기술 용어를 원문 그대로 보존한다.
+- 제목, 본문, 표, 목록, 코드, 수식의 읽기 순서를 유지한다.
+- 표는 가능한 경우 Markdown 표로 변환한다.
+- 보이지 않는 내용을 추측하거나 설명하지 않는다.
+- 안내 문구와 코드 펜스 없이 추출된 본문만 출력한다.
+- 아래 기존 텍스트 레이어는 참고하되, 이미지에서 확인되는 누락 내용을 보충한다.
+
+[기존 텍스트 레이어]
+{existing}
+"""
+
+
+def extract_pdf_content(
+    pdf_path: Path,
+    *,
+    config: dict[str, Any] | None = None,
+    ocr_dpi: int = 300,
+    minimum_text_characters: int = 100,
+) -> tuple[str, dict[str, Any]]:
     try:
         from pypdf import PdfReader
     except ImportError as exc:
@@ -845,17 +1088,113 @@ def extract_pdf_text(pdf_path: Path) -> str:
 
     reader = PdfReader(str(pdf_path))
     page_texts: list[str] = []
+    page_details: list[dict[str, Any]] = []
+    ocr_page_indexes: list[int] = []
+    selectable_text: dict[int, str] = {}
+    extraction_warnings: list[str] = []
+
     for page_number, page in enumerate(reader.pages, start=1):
-        text = (page.extract_text() or "").strip()
+        try:
+            text = normalize_extracted_text(page.extract_text() or "")
+        except Exception as exc:  # noqa: BLE001
+            text = ""
+            extraction_warnings.append(f"page {page_number}: text extraction failed: {exc}")
+        selectable_text[page_number] = text
+        if len(text) < minimum_text_characters:
+            ocr_page_indexes.append(page_number - 1)
+
+    ocr_results: dict[int, str] = {}
+    ocr_warnings: list[str] = []
+    if ocr_page_indexes:
+        if config is None:
+            raise RuntimeError(
+                "PDF pages require model OCR, but no model configuration was supplied."
+            )
+        fitz = _load_pdf_renderer()
+        try:
+            document = fitz.open(str(pdf_path))
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Could not render PDF for OCR: {pdf_path} | {exc}") from exc
+        try:
+            scale = max(72, int(ocr_dpi)) / 72
+            for page_index in ocr_page_indexes:
+                page_number = page_index + 1
+                progress_log(
+                    "tech-report-ocr",
+                    (
+                        f"sending page image to model for OCR "
+                        f"page={page_number}/{len(reader.pages)} dpi={ocr_dpi}"
+                    ),
+                    "cyan",
+                )
+                page = document.load_page(page_index)
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+                image_base64 = base64.b64encode(pixmap.tobytes("png")).decode("ascii")
+                ocr_text = call_model(
+                    config,
+                    model_ocr_prompt(page_number, selectable_text.get(page_number, "")),
+                    label=f"tech-report-ocr-page-{page_number}",
+                    images=[image_base64],
+                )
+                normalized_ocr = normalize_extracted_text(ocr_text)
+                if not normalized_ocr:
+                    warning = f"page {page_number}: model OCR returned no text"
+                    ocr_warnings.append(warning)
+                    progress_log("tech-report-ocr", warning, "yellow")
+                ocr_results[page_number] = normalized_ocr
+        finally:
+            document.close()
+
+    for page_number in range(1, len(reader.pages) + 1):
+        text_layer = selectable_text.get(page_number, "")
+        ocr_text = ocr_results.get(page_number, "")
+        if ocr_text and text_layer:
+            text = merge_page_text(text_layer, ocr_text)
+            method = "text+ocr"
+        elif ocr_text:
+            text = ocr_text
+            method = "ocr"
+        else:
+            text = text_layer
+            method = "text"
         if text:
-            page_texts.append(f"[PDF page {page_number}]\n{text}")
+            page_texts.append(f"[PDF page {page_number} | extraction={method}]\n{text}")
+        page_details.append(
+            {
+                "page": page_number,
+                "method": method if text else "empty",
+                "characters": len(text),
+                "text_layer_characters": len(text_layer),
+                "ocr_characters": len(ocr_text),
+            }
+        )
+
     extracted = "\n\n".join(page_texts).strip()
     if not extracted:
         raise ValueError(
             f"No selectable text was found in {pdf_path}. "
-            "Run OCR on an image-only PDF before using --tech_report."
+            "OCR also returned no readable text."
         )
-    return extracted
+    metadata = {
+        "source_pdf": str(pdf_path),
+        "page_count": len(reader.pages),
+        "total_characters": len(extracted),
+        "text_pages": sum(1 for item in page_details if item["method"] in {"text", "text+ocr"}),
+        "ocr_pages": sum(1 for item in page_details if item["method"] in {"ocr", "text+ocr"}),
+        "empty_pages": sum(1 for item in page_details if item["method"] == "empty"),
+        "ocr_engine": "vision-model",
+        "ocr_model": str((config or {}).get("model") or "server-default"),
+        "ocr_dpi": int(ocr_dpi),
+        "ocr_warnings": ocr_warnings,
+        "extraction_warnings": extraction_warnings,
+        "pages": page_details,
+    }
+    return extracted, metadata
+
+
+def extract_pdf_text(pdf_path: Path) -> str:
+    text, _ = extract_pdf_content(pdf_path, config=runtime_config())
+    return text
 
 
 def build_tech_report_prompt(pdf_path: Path, pdf_text: str) -> str:
@@ -909,7 +1248,25 @@ def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
     started = time.perf_counter()
     pdf_path = resolve_tech_report_pdf(pdf_value)
     progress_log("tech-report", f"reading PDF -> {pdf_path}", "cyan", started)
-    pdf_text = extract_pdf_text(pdf_path)
+    pdf_text, extraction = extract_pdf_content(pdf_path, config=config)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    extracted_path = OUTPUT_DIR / f"tech_report_{timestamp}_extracted.txt"
+    extraction_path = OUTPUT_DIR / f"tech_report_{timestamp}_extraction.json"
+    extracted_path.write_text(pdf_text + "\n", encoding="utf-8")
+    extraction_path.write_text(
+        json.dumps(extraction, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    progress_log(
+        "tech-report",
+        (
+            f"extraction complete: pages={extraction['page_count']} "
+            f"text={extraction['text_pages']} ocr={extraction['ocr_pages']} "
+            f"empty={extraction['empty_pages']} -> {extracted_path}"
+        ),
+        "green",
+        started,
+    )
     prompt = build_tech_report_prompt(pdf_path, pdf_text)
     progress_log(
         "tech-report",
@@ -918,7 +1275,6 @@ def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
         started,
     )
     report = normalize_tech_report(call_model(config, prompt, label="tech-report"), pdf_path)
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
     markdown_path = OUTPUT_DIR / f"tech_report_{timestamp}.md"
     report_pdf_path = OUTPUT_DIR / f"tech_report_{timestamp}.pdf"
     markdown_path.write_text(report + "\n", encoding="utf-8")
@@ -931,6 +1287,9 @@ def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
     return {
         "ok": True,
         "source_pdf": str(pdf_path),
+        "extracted_text_path": str(extracted_path),
+        "extraction_metadata_path": str(extraction_path),
+        "extraction": extraction,
         "output_path": str(markdown_path),
         "pdf_path": str(report_pdf_path) if pdf_ok else "",
         "pdf_error": "" if pdf_ok else pdf_message,
@@ -1090,9 +1449,15 @@ def request_headers(payload: dict[str, Any] | None) -> dict[str, str]:
     return headers
 
 
-def request_json(url: str, payload: dict[str, Any] | None, timeout: int) -> dict[str, Any]:
+def request_json(
+    url: str,
+    payload: dict[str, Any] | None,
+    timeout: int,
+    extra_headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
     data = None
     headers = request_headers(payload)
+    headers.update(extra_headers or {})
     method = "GET"
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1112,7 +1477,73 @@ def request_json(url: str, payload: dict[str, Any] | None, timeout: int) -> dict
         raise ValueError(f"Expected JSON from {url}; preview={preview!r}") from exc
 
 
-def build_generate_payload(config: dict[str, Any], prompt: str) -> dict[str, Any]:
+def build_generate_payload(
+    config: dict[str, Any],
+    prompt: str,
+    images: list[str] | None = None,
+) -> dict[str, Any]:
+    if config.get("cloud_model_enabled"):
+        provider = str(config.get("cloud_provider") or "openai-compatible")
+        if provider == "google":
+            parts: list[dict[str, Any]] = [{"text": prompt}]
+            parts.extend(
+                {
+                    "inline_data": {
+                        "mime_type": "image/png",
+                        "data": image,
+                    }
+                }
+                for image in images or []
+            )
+            return {
+                "contents": [{"role": "user", "parts": parts}],
+                "generationConfig": {
+                    "maxOutputTokens": int(config.get("cloud_max_tokens") or 4096),
+                    "temperature": float(config.get("cloud_temperature") or 0),
+                },
+            }
+        if provider == "aws-bedrock":
+            content: list[dict[str, Any]] = [{"text": prompt}]
+            content.extend(
+                {
+                    "image": {
+                        "format": "png",
+                        "source": {"base64": image},
+                    }
+                }
+                for image in images or []
+            )
+            return {
+                "modelId": config["model"],
+                "messages": [{"role": "user", "content": content}],
+                "inferenceConfig": {
+                    "maxTokens": int(config.get("cloud_max_tokens") or 4096),
+                    "temperature": float(config.get("cloud_temperature") or 0),
+                },
+            }
+        if images:
+            content: str | list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+            detail = str(config.get("cloud_vision_detail") or "high")
+            content.extend(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{image}",
+                        "detail": detail,
+                    },
+                }
+                for image in images
+            )
+        else:
+            content = prompt
+        return {
+            "model": config["model"],
+            "messages": [{"role": "user", "content": content}],
+            "stream": False,
+            "max_tokens": int(config.get("cloud_max_tokens") or 4096),
+            "temperature": float(config.get("cloud_temperature") or 0),
+        }
+
     payload: dict[str, Any] = {
         "user_id": config["user_id"],
         "password": config["password"],
@@ -1123,7 +1554,84 @@ def build_generate_payload(config: dict[str, Any], prompt: str) -> dict[str, Any
     }
     if config.get("model"):
         payload["model"] = config["model"]
+    if images:
+        payload["images"] = images
     return payload
+
+
+def model_request_headers(config: dict[str, Any]) -> dict[str, str]:
+    if not config.get("cloud_model_enabled"):
+        return {}
+    provider = str(config.get("cloud_provider") or "openai-compatible")
+    if provider == "aws-bedrock":
+        return {}
+    api_key = str(config.get("cloud_api_key") or "").strip()
+    if not api_key:
+        env_name = str(config.get("cloud_api_key_env") or "OPENAI_API_KEY")
+        raise ValueError(f"Cloud API key is missing. Set the {env_name} environment variable.")
+    if provider == "google":
+        return {"x-goog-api-key": api_key}
+    return {"Authorization": f"Bearer {api_key}"}
+
+
+def invoke_model_request(
+    config: dict[str, Any],
+    url: str,
+    payload: dict[str, Any],
+    timeout: int,
+) -> dict[str, Any]:
+    if str(config.get("cloud_provider") or "") != "aws-bedrock":
+        return request_json(
+            url,
+            payload,
+            timeout,
+            extra_headers=model_request_headers(config),
+        )
+
+    try:
+        import boto3
+        from botocore.config import Config as BotocoreConfig
+    except ImportError as exc:
+        raise RuntimeError(
+            "AWS Bedrock requires boto3. Install dependencies with: "
+            "py -3 -m pip install -r requirements.txt"
+        ) from exc
+
+    session_options: dict[str, Any] = {}
+    profile = str(config.get("cloud_aws_profile") or "").strip()
+    if profile:
+        session_options["profile_name"] = profile
+    session = boto3.Session(**session_options)
+    client = session.client(
+        "bedrock-runtime",
+        region_name=str(config.get("cloud_aws_region") or ""),
+        config=BotocoreConfig(
+            connect_timeout=timeout,
+            read_timeout=timeout,
+            retries={"max_attempts": 3, "mode": "standard"},
+        ),
+    )
+    bedrock_payload = dict(payload)
+    messages = []
+    for message in payload.get("messages", []):
+        converted_content = []
+        for block in message.get("content", []):
+            image = block.get("image") if isinstance(block, dict) else None
+            source = image.get("source") if isinstance(image, dict) else None
+            if isinstance(source, dict) and "base64" in source:
+                converted_content.append(
+                    {
+                        "image": {
+                            "format": image.get("format", "png"),
+                            "source": {"bytes": base64.b64decode(source["base64"])},
+                        }
+                    }
+                )
+            else:
+                converted_content.append(block)
+        messages.append({"role": message["role"], "content": converted_content})
+    bedrock_payload["messages"] = messages
+    return client.converse(**bedrock_payload)
 
 
 def extract_response_text(data: dict[str, Any]) -> str:
@@ -1143,14 +1651,38 @@ def extract_response_text(data: dict[str, Any]) -> str:
             message = first.get("message")
             if isinstance(message, dict) and isinstance(message.get("content"), str):
                 return message["content"]
+    candidates = data.get("candidates")
+    if isinstance(candidates, list) and candidates:
+        content = candidates[0].get("content") if isinstance(candidates[0], dict) else None
+        parts = content.get("parts") if isinstance(content, dict) else None
+        if isinstance(parts, list):
+            texts = [part.get("text") for part in parts if isinstance(part, dict)]
+            joined = "\n".join(text for text in texts if isinstance(text, str))
+            if joined:
+                return joined
+    output = data.get("output")
+    if isinstance(output, dict):
+        message = output.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, list):
+            texts = [block.get("text") for block in content if isinstance(block, dict)]
+            joined = "\n".join(text for text in texts if isinstance(text, str))
+            if joined:
+                return joined
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_multiplier: int = 1) -> str:
+def call_model(
+    config: dict[str, Any],
+    prompt: str,
+    label: str = "",
+    timeout_multiplier: int = 1,
+    images: list[str] | None = None,
+) -> str:
     generate_url = join_url(config["server_base_url"], config["generate_path"])
     started = time.perf_counter()
     started_at = time.strftime("%Y-%m-%d %H:%M:%S")
-    payload = build_generate_payload(config, prompt)
+    payload = build_generate_payload(config, prompt, images=images)
     label_text = f" [{label}]" if label else ""
     base_timeout_seconds = int(config["request_timeout_seconds"])
     timeout_scale = max(1, int(timeout_multiplier or 1))
@@ -1170,7 +1702,8 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_mul
             f"user={payload.get('user_id') or '-'} "
             f"model={payload.get('model') or config.get('model') or 'server-default'} "
             f"keep_alive={payload.get('keep_alive')} "
-            f"num_ctx={payload.get('options', {}).get('num_ctx')}"
+            f"num_ctx={payload.get('options', {}).get('num_ctx')} "
+            f"image_count={len(images or [])}"
         ),
         "cyan",
     )
@@ -1189,7 +1722,12 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_mul
                 ),
                 "cyan",
             )
-            data = request_json(generate_url, payload, timeout_seconds)
+            data = invoke_model_request(
+                config,
+                generate_url,
+                payload,
+                timeout_seconds,
+            )
             send_elapsed = time.perf_counter() - send_started
             progress_log(
                 "model-response",
@@ -1275,19 +1813,50 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_mul
             )
             if trace_path:
                 progress_log("model-trace", f"saved failed request trace -> {trace_path}", "yellow")
+        except Exception as exc:
+            if not config.get("cloud_model_enabled"):
+                raise
+            send_elapsed = time.perf_counter() - send_started
+            error = f"Cloud model request failed: {type(exc).__name__}: {exc}"
+            progress_log(
+                "model-response",
+                (
+                    f"{label or 'model'} failed attempt={attempt_number} "
+                    f"send_elapsed={send_elapsed:.1f}s total_elapsed={time.perf_counter() - started:.1f}s "
+                    f"error={error}"
+                ),
+                "red",
+            )
 
         failure_count += 1
         if not retryable_model_error(error):
+            progress_log(
+                "model-fatal",
+                f"{label or 'model'} non-retryable endpoint error; stopping immediately: {error}",
+                "red",
+            )
             raise ValueError(error)
         progress_log(
             "model-retry",
             f"{label or 'model'} request failed without response ({failure_count}): {error}",
             "yellow",
         )
-        try:
-            wait_for_model_queue_slot(config, label, failure_count, error)
-        except Exception as retry_exc:
-            raise ValueError(f"{error} | retry_status_failed={retry_exc}") from retry_exc
+        if config.get("cloud_model_enabled"):
+            wait_seconds = min(
+                60,
+                int(config.get("model_retry_wait_seconds") or DEFAULT_CONFIG["model_retry_wait_seconds"]),
+            )
+            progress_log(
+                "model-retry",
+                f"{label or 'model'} cloud request retrying in {wait_seconds}s",
+                "yellow",
+            )
+            time.sleep(wait_seconds)
+        else:
+            try:
+                wait_for_model_queue_slot(config, label, failure_count, error)
+            except Exception as retry_exc:
+                raise ValueError(f"{error} | retry_status_failed={retry_exc}") from retry_exc
         progress_log(
             "model-retry",
             f"{label or 'model'} resending prompt after queue check",
@@ -1321,9 +1890,28 @@ def call_model(config: dict[str, Any], prompt: str, label: str = "", timeout_mul
 
 
 def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
+    if str(config.get("cloud_provider") or "") == "aws-bedrock":
+        region = str(config.get("cloud_aws_region") or "")
+        return {
+            "server_base_url": config["server_base_url"],
+            "status_url": "AWS credential chain / Bedrock Converse",
+            "model": config.get("model", ""),
+            "host": "bedrock-runtime.amazonaws.com",
+            "port": 443,
+            "raw": {
+                "provider": "aws-bedrock",
+                "region": region,
+                "profile": str(config.get("cloud_aws_profile") or "default"),
+            },
+        }
     url = join_url(config["server_base_url"], config["status_path"])
     try:
-        data = request_json(url, None, int(config["request_timeout_seconds"]))
+        data = request_json(
+            url,
+            None,
+            int(config["request_timeout_seconds"]),
+            extra_headers=model_request_headers(config),
+        )
     except urllib.error.URLError as exc:
         raise ValueError(f"Could not connect to model status endpoint: {url} | {exc}") from exc
     return {
@@ -1338,6 +1926,15 @@ def fetch_remote_status(config: dict[str, Any]) -> dict[str, Any]:
 
 def retryable_model_error(error: str) -> bool:
     lowered = (error or "").lower()
+    non_retryable_markers = (
+        "no space left on device",
+        "errno 28",
+        "disk quota exceeded",
+        "read-only file system",
+        "filesystem is read-only",
+    )
+    if any(marker in lowered for marker in non_retryable_markers):
+        return False
     return any(
         marker in lowered
         for marker in (
@@ -1589,7 +2186,12 @@ def run_model_diagnostics(timeout_seconds: int) -> bool:
                 ),
                 "cyan",
             )
-            data = request_json(generate_url, payload, timeout)
+            data = request_json(
+                generate_url,
+                payload,
+                timeout,
+                extra_headers=model_request_headers(test_config),
+            )
             text = extract_response_text(data).strip()
             if not text:
                 raise ValueError(f"Generate response JSON did not contain text. Keys={list(data.keys())}")
@@ -3547,7 +4149,7 @@ def main() -> int:
     args = parse_args()
     BACKBONE_PATH = Path(args.backbone).expanduser().resolve()
     CONFIG_PATH = Path(args.config).expanduser().resolve()
-    RUNTIME_CONFIG_OVERRIDES = {
+    runtime_overrides = {
         key: value
         for key, value in {
             "user_id": args.llm_user,
@@ -3559,9 +4161,23 @@ def main() -> int:
         }.items()
         if value is not None
     }
+    if args.cloud_model is not None:
+        runtime_overrides.update(load_cloud_model_overrides(args.cloud_model))
+    RUNTIME_CONFIG_OVERRIDES = runtime_overrides
     ensure_dirs()
     log_path = init_service_log(args.log_file)
     progress_log("service", f"Client config: {CONFIG_PATH}", "cyan")
+    if args.cloud_model is not None:
+        cloud_config = runtime_config()
+        progress_log(
+            "cloud-model",
+            (
+                f"enabled provider={cloud_config['cloud_provider']} "
+                f"model={cloud_config['model']} base_url={cloud_config['server_base_url']} "
+                f"config={Path(args.cloud_model).expanduser().resolve()}"
+            ),
+            "magenta",
+        )
     if args.test:
         return 0 if run_model_diagnostics(args.model_check_timeout) else 2
     if args.tech_report is not None:

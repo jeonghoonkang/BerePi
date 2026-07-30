@@ -376,3 +376,24 @@ vLLM 예:
   ]
 }
 ```
+## 연속 오류 모델 자동 전환
+
+각 target의 backend 요청이 연속 3회 실패하면 해당 target의 `model`을 장애
+모델로 표시합니다. 이후 자동 선택 요청은 장애 모델과 다른 `model` 값을 가진
+정상 target으로 같은 payload를 전달합니다. 요청에 `target_id`가 지정되어
+있어도 지정 대상이 연속 오류 기준에 도달했고 다른 모델이 사용 가능하면 자동
+전환합니다.
+
+성공한 backend 요청은 해당 target의 연속 오류 횟수를 0으로 초기화합니다.
+다른 모델이 없거나 모든 대체 target의 queue가 가득 찬 경우에는 요청을 완전히
+차단하지 않기 위해 기존 후보 중에서 선택합니다.
+
+전환 기준은 환경변수로 변경할 수 있습니다.
+
+```bash
+export LLM_ROUTING_FAILOVER_AFTER_ERRORS=3
+bash run.sh
+```
+
+응답에는 `failover_applied`, `failover_from_models`,
+`failover_after_errors` 필드가 포함되어 실제 전환 여부를 확인할 수 있습니다.

@@ -1,0 +1,10 @@
+{
+  "provider": "aws-bedrock",
+  "region": "ap-northeast-2",
+  "profile": "",
+  "model": "amazon.nova-lite-v1:0",
+  "request_timeout_seconds": 600,
+  "max_tokens": 4096,
+  "temperature": 0.2,
+  "parallelism": 1
+}

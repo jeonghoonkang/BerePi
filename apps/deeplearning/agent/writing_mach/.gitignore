@@ -1,4 +1,5 @@
 data/
+input/*.pdf
 output/
 __pycache__/
 *.pyc

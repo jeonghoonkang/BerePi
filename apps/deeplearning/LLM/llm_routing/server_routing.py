@@ -41,6 +41,7 @@ PROXY_HOST = os.getenv("LLM_ROUTING_PROXY_HOST", HOST)
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
 PROXY_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_PROXY_TIMEOUT", "180"))
 QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
+FAILOVER_AFTER_ERRORS = max(1, int(os.getenv("LLM_ROUTING_FAILOVER_AFTER_ERRORS", "3")))
 STATUS_REFRESH_SECONDS = int(os.getenv("LLM_ROUTING_STATUS_REFRESH_SECONDS", os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "10")))
 HEALTH_CHECK_INTERVAL_SECONDS = STATUS_REFRESH_SECONDS
 WEBDAV_DEFAULT_INTERVAL_MINUTES = int(os.getenv("LLM_ROUTING_WEBDAV_INTERVAL_MINUTES", "30"))
@@ -121,6 +122,8 @@ class TargetMetrics:
     total_response_seconds: float = 0.0
     last_response_seconds: float = 0.0
     last_error: str = ""
+    consecutive_errors: int = 0
+    last_error_at: str = ""
     last_seen_at: str = ""
     last_health_at: float = 0.0
     status: str = "unknown"
@@ -1002,8 +1005,32 @@ def scheduler_load(target: LLMTarget) -> tuple[int, int, float]:
     return busy, pending + active, weighted_load
 
 
-def choose_target(payload: dict[str, Any]) -> LLMTarget:
+def target_failover_open(target: LLMTarget) -> bool:
+    with STATE_LOCK:
+        return metric_for(target.id).consecutive_errors >= FAILOVER_AFTER_ERRORS
+
+
+def available_target_candidates(targets: list[LLMTarget]) -> list[LLMTarget]:
+    candidates = []
+    for target in targets:
+        q = TARGET_QUEUES.get(target.id)
+        pending = q.qsize() if q else 0
+        if pending < QUEUE_MAX_PER_TARGET:
+            candidates.append(target)
+    return candidates
+
+
+def least_loaded_target(targets: list[LLMTarget]) -> LLMTarget:
     global TARGET_CURSOR
+    scored = [(scheduler_load(target), target) for target in targets]
+    best_score = min(score for score, _ in scored)
+    best = [target for score, target in scored if score == best_score]
+    target = best[TARGET_CURSOR % len(best)]
+    TARGET_CURSOR += 1
+    return target
+
+
+def choose_target(payload: dict[str, Any]) -> LLMTarget:
     targets = [target for target in load_targets() if target.enabled]
     if not targets:
         raise ValueError("No enabled LLM targets are configured.")
@@ -1012,24 +1039,34 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
     if requested_id:
         for target in targets:
             if target.id == requested_id:
+                if target_failover_open(target):
+                    alternatives = [
+                        item
+                        for item in available_target_candidates(targets)
+                        if item.id != target.id
+                        and item.model != target.model
+                        and not target_failover_open(item)
+                    ]
+                    if alternatives:
+                        return least_loaded_target(alternatives)
                 return target
         raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")
 
     with STATE_LOCK:
-        candidates: list[tuple[tuple[int, int, float], LLMTarget]] = []
-        for target in targets:
-            q = TARGET_QUEUES.get(target.id)
-            pending = q.qsize() if q else 0
-            if pending >= QUEUE_MAX_PER_TARGET:
-                continue
-            candidates.append((scheduler_load(target), target))
+        candidates = available_target_candidates(targets)
         if not candidates:
             raise QueueFullError(f"All target queues are full. max_per_target={QUEUE_MAX_PER_TARGET}")
-        best_score = min(score for score, _ in candidates)
-        best = [target for score, target in candidates if score == best_score]
-        target = best[TARGET_CURSOR % len(best)]
-        TARGET_CURSOR += 1
-        return target
+        failed_models = {
+            target.model
+            for target in targets
+            if target.model and target_failover_open(target)
+        }
+        healthy = [
+            target
+            for target in candidates
+            if not target_failover_open(target) and target.model not in failed_models
+        ]
+        return least_loaded_target(healthy or candidates)
 
 
 def record_access(event: dict[str, Any]) -> None:
@@ -1119,6 +1156,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             metric.total_response_seconds += elapsed
             metric.last_response_seconds = elapsed
             metric.last_error = ""
+            metric.consecutive_errors = 0
+            metric.last_error_at = ""
             metric.last_seen_at = now_text()
             metric.status = "ok"
             metric.active_requests = max(0, metric.active_requests - 1)
@@ -1162,6 +1201,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         with STATE_LOCK:
             metric = metric_for(target.id)
             metric.last_error = str(exc)
+            metric.consecutive_errors += 1
+            metric.last_error_at = now_text()
             metric.status = "error"
             metric.active_requests = max(0, metric.active_requests - 1)
             q = TARGET_QUEUES.get(target.id)
@@ -1173,6 +1214,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
                 "client": client,
                 "status": "error",
                 "error": str(exc),
+                "consecutive_errors": metric.consecutive_errors,
+                "failover_after_errors": FAILOVER_AFTER_ERRORS,
                 "response_seconds": round(elapsed, 3),
                 **access_target_fields(target),
             }
@@ -1188,6 +1231,15 @@ def route_prompt(
     if not prompt_text(payload).strip():
         raise ValueError("prompt or messages is required.")
     target = selected_target or choose_target(payload)
+    requested_target_id = str(payload.get("target_id") or "")
+    requested_target = target_by_id(requested_target_id) if requested_target_id else None
+    failed_models = sorted(
+        {
+            item.model
+            for item in load_targets()
+            if item.enabled and item.model and target_failover_open(item)
+        }
+    )
     # Freeze the routing metadata as soon as the target is selected.  The
     # configured target list may be edited while a long-running LLM request is
     # in flight, but the response must describe the model that was actually
@@ -1244,6 +1296,14 @@ def route_prompt(
     result["request_timeout_seconds"] = wait_timeout
     result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
     result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET
+    result["failover_after_errors"] = FAILOVER_AFTER_ERRORS
+    result["failover_applied"] = bool(
+        (requested_target is not None and requested_target.id != target.id)
+        or (failed_models and target.model not in failed_models)
+    )
+    result["failover_from_models"] = failed_models
+    if requested_target is not None and requested_target.id != target.id:
+        result["failover_from_target_id"] = requested_target.id
     return result
 
 

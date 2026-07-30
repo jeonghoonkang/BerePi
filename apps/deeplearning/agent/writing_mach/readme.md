@@ -69,16 +69,50 @@ py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start -
 PDF의 기술 구조와 작동 원리를 분석한 한국어 엔지니어링 보고서를 생성하려면 다음과 같이 실행합니다. 이 모드는 웹 서비스를 시작하지 않고 보고서를 생성한 뒤 종료합니다.
 
 ```powershell
-py -3 .\client_service.py --config .\data\client_config.json --tech_report .\backbone\기술자료.pdf
+py -3 .\client_service.py --config .\data\client_config.json --tech-report .\input\기술자료.pdf
 ```
 
-PDF 경로를 생략하면 `--backbone` 파일이 있는 폴더와 프로젝트의 `backbone` 폴더에서 가장 최근 PDF를 자동 선택합니다.
+PDF 경로를 생략하면 프로젝트의 `input` 폴더에서 가장 최근 PDF를 자동 선택합니다.
 
 ```powershell
-py -3 .\client_service.py --tech_report
+py -3 .\client_service.py --tech-report
 ```
 
-결과는 `output/tech_report_YYYYMMDD_HHMMSS.md`와 `output/tech_report_YYYYMMDD_HHMMSS.pdf`에 저장됩니다. 스캔 이미지로만 된 PDF는 먼저 OCR을 적용해야 합니다.
+텍스트 레이어가 있는 페이지는 직접 문자를 추출하고, 텍스트가 없거나 너무 짧은 페이지는 300 DPI PNG 이미지로 변환한 후 현재 설정된 vision LLM에 이미지로 전송해 OCR을 수행합니다. Tesseract는 사용하지 않습니다. 추출된 원문과 페이지별 추출 방식은 다음 파일로 함께 저장됩니다.
+
+- `output/tech_report_YYYYMMDD_HHMMSS_extracted.txt`
+- `output/tech_report_YYYYMMDD_HHMMSS_extraction.json`
+- `output/tech_report_YYYYMMDD_HHMMSS.md`
+- `output/tech_report_YYYYMMDD_HHMMSS.pdf`
+
+PDF 페이지 렌더링을 위한 Python 의존성을 설치해야 합니다.
+
+```powershell
+py -3 -m pip install -r .\requirements.txt
+```
+
+OCR 대상 모델은 이미지 입력을 지원해야 하며, API 요청의 `images` 필드에 페이지 PNG의 Base64 데이터가 전달됩니다.
+
+### 유료 클라우드 모델 사용
+
+기본 클라우드 설정은 `config/cloud_model.json`에 있습니다. API 키는 설정
+파일에 저장하지 않고 `api_key_env`에 지정된 환경변수에서 읽습니다.
+
+```powershell
+$env:OPENAI_API_KEY="<API 키>"
+py -3 .\client_service.py --tech-report --cloud-model
+```
+
+다른 OpenAI-compatible 공급자나 모델을 사용할 때는 설정 파일을 복사해
+`base_url`, `model`, `api_key_env` 등을 변경한 후 경로를 전달합니다.
+
+```powershell
+$env:MY_CLOUD_API_KEY="<API 키>"
+py -3 .\client_service.py --tech-report --cloud-model .\config\my_cloud_model.json
+```
+
+`--cloud-model`은 일반 텍스트 작성과 PDF 페이지 이미지 OCR 요청에 모두
+적용됩니다. 사용량에 따라 클라우드 공급자의 API 비용이 청구될 수 있습니다.
 
 설정 파일에 저장하지 않고 LLM API 인증값 지정:
 
@@ -420,3 +454,32 @@ $env:NO_COLOR="1"
 # 또는
 $env:WRITING_MACH_NO_COLOR="1"
 ```
+## 다양한 유료 클라우드 모델 사용
+
+`--cloud-model` 뒤에 공급자별 JSON 설정 파일을 지정할 수 있습니다. 지원하는
+`provider` 값은 `openai-compatible`, `google`, `aws-bedrock`입니다.
+
+Google Gemini API 키를 환경변수로 전달하는 방법:
+
+```powershell
+$env:GOOGLE_API_KEY="<Google AI API 키>"
+py -3 .\client_service.py --tech-report --cloud-model .\config\cloud_model.google.json
+```
+
+Google 설정의 `api_key` 항목에 키를 직접 입력할 수도 있지만, 저장소에 키가
+커밋되지 않도록 환경변수 사용을 권장합니다.
+
+AWS Bedrock은 Boto3의 기본 자격증명 체인을 사용합니다. AWS CLI 로그인,
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, IAM Role 또는 설정의 `profile`
+중 하나를 사용할 수 있습니다.
+
+```powershell
+$env:AWS_PROFILE="development"
+$env:AWS_REGION="ap-northeast-2"
+py -3 .\client_service.py --tech-report --cloud-model .\config\cloud_model.bedrock.json
+```
+
+Bedrock 설정의 `model`에는 Converse API와 이미지 입력을 지원하며 해당 AWS
+계정에서 접근 권한이 있는 model ID 또는 inference profile ID를 지정해야 합니다.
+모든 공급자 설정에서 `model`, `max_tokens`, `temperature`,
+`request_timeout_seconds`, `parallelism`을 변경할 수 있습니다.

@@ -1,0 +1,11 @@
+{
+  "provider": "google",
+  "base_url": "https://generativelanguage.googleapis.com",
+  "api_key": "",
+  "api_key_env": "GOOGLE_API_KEY",
+  "model": "gemini-2.5-flash",
+  "request_timeout_seconds": 600,
+  "max_tokens": 4096,
+  "temperature": 0.2,
+  "parallelism": 1
+}

@@ -1,0 +1,14 @@
+{
+  "_provider_help": "provider: openai-compatible | google | aws-bedrock",
+  "provider": "openai-compatible",
+  "base_url": "https://api.openai.com",
+  "generate_path": "/v1/chat/completions",
+  "status_path": "/v1/models",
+  "api_key_env": "OPENAI_API_KEY",
+  "model": "gpt-4.1-mini",
+  "request_timeout_seconds": 600,
+  "max_tokens": 4096,
+  "temperature": 0.2,
+  "vision_detail": "high",
+  "parallelism": 1
+}
