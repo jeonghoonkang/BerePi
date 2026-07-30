@@ -10,6 +10,7 @@ class DispatchInfoTests(unittest.TestCase):
         server_routing.TARGET_RUNTIME.clear()
         server_routing.TARGET_QUEUES.clear()
         server_routing.TARGET_WORKERS.clear()
+        server_routing.MODEL_DISPATCH_COUNTS.clear()
         server_routing.TARGET_CURSOR = 0
 
     def test_prompt_input_has_default_smoke_test_text(self) -> None:
@@ -290,6 +291,64 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertIsNone(
             server_routing.available_targets_from_health({"status": "ok"})
         )
+
+    def test_repeated_model_dispatch_reduces_timeout_to_100_seconds(self) -> None:
+        first_target = server_routing.LLMTarget(
+            id="target-1",
+            name="First",
+            host="127.0.0.1",
+            port=11434,
+            model="shared-model",
+        )
+        second_target = server_routing.LLMTarget(
+            id="target-2",
+            name="Second",
+            host="127.0.0.2",
+            port=11434,
+            model="shared-model",
+        )
+        observed_timeouts = []
+
+        def fake_request(_url, _payload, timeout, headers=None):
+            observed_timeouts.append(timeout)
+            return {"response": "ok"}
+
+        with (
+            patch.object(server_routing, "request_json", side_effect=fake_request),
+            patch.object(server_routing, "record_access"),
+            patch.object(server_routing, "update_client_stats"),
+            patch.object(server_routing, "dispatch_target_fields", return_value={}),
+        ):
+            first = server_routing.execute_prompt(
+                first_target,
+                {"prompt": "first", "timeout": 600},
+                "test-client",
+            )
+            second = server_routing.execute_prompt(
+                second_target,
+                {"prompt": "second", "timeout": 600},
+                "test-client",
+            )
+
+        self.assertEqual(observed_timeouts, [600, 100])
+        self.assertEqual(first["model_dispatch_attempt"], 1)
+        self.assertFalse(first["repeated_model_timeout_applied"])
+        self.assertEqual(second["model_dispatch_attempt"], 2)
+        self.assertTrue(second["repeated_model_timeout_applied"])
+        self.assertEqual(second["backend_timeout_seconds"], 100)
+
+    def test_repeated_model_timeout_does_not_raise_shorter_requested_timeout(self) -> None:
+        target = server_routing.LLMTarget(
+            id="target-1",
+            name="Target",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        server_routing.MODEL_DISPATCH_COUNTS["model-a"] = 1
+
+        self.assertEqual(server_routing.repeated_model_timeout(target, 45), 45)
+        self.assertEqual(server_routing.repeated_model_timeout(target, 600), 100)
 
 
 if __name__ == "__main__":

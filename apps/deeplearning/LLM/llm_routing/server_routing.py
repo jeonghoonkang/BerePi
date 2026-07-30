@@ -39,6 +39,10 @@ HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 PROXY_HOST = os.getenv("LLM_ROUTING_PROXY_HOST", HOST)
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_TIMEOUT", "180"))
+REPEATED_MODEL_TIMEOUT_SECONDS = max(
+    1,
+    int(os.getenv("LLM_ROUTING_REPEATED_MODEL_TIMEOUT", "100")),
+)
 PROXY_TIMEOUT_SECONDS = int(os.getenv("LLM_ROUTING_PROXY_TIMEOUT", "180"))
 QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
 FAILOVER_AFTER_ERRORS = max(1, int(os.getenv("LLM_ROUTING_FAILOVER_AFTER_ERRORS", "3")))
@@ -58,6 +62,7 @@ RECENT_ACCESS: list[dict[str, Any]] = []
 AUTH_SESSIONS: dict[str, float] = {}
 TARGET_QUEUES: dict[str, queue.Queue["PromptJob"]] = {}
 TARGET_WORKERS: dict[str, threading.Thread] = {}
+MODEL_DISPATCH_COUNTS: dict[str, int] = {}
 PROXY_SERVERS: dict[str, tuple[ThreadingHTTPServer, threading.Thread, int]] = {}
 WEBDAV_REPORT_STATE: dict[str, Any] = {
     "enabled": False,
@@ -117,6 +122,7 @@ class LLMTarget:
 @dataclass
 class TargetMetrics:
     total_prompts: int = 0
+    total_dispatch_attempts: int = 0
     pending_queue: int = 0
     active_requests: int = 0
     total_response_seconds: float = 0.0
@@ -1190,7 +1196,40 @@ def target_worker(target_id: str, q: queue.Queue[PromptJob]) -> None:
             sync_queue_metric(target_id)
 
 
+def model_dispatch_key(target: LLMTarget) -> str:
+    return target.model.strip() or target.id
+
+
+def repeated_model_timeout(target: LLMTarget, requested_timeout: int) -> int:
+    with STATE_LOCK:
+        already_dispatched = MODEL_DISPATCH_COUNTS.get(model_dispatch_key(target), 0) > 0
+    if already_dispatched:
+        return min(requested_timeout, REPEATED_MODEL_TIMEOUT_SECONDS)
+    return requested_timeout
+
+
+def reserve_model_dispatch(target: LLMTarget, requested_timeout: int) -> tuple[int, int]:
+    with STATE_LOCK:
+        key = model_dispatch_key(target)
+        attempt = MODEL_DISPATCH_COUNTS.get(key, 0) + 1
+        MODEL_DISPATCH_COUNTS[key] = attempt
+        metric = metric_for(target.id)
+        metric.total_dispatch_attempts += 1
+        store_metric(target.id, metric)
+    effective_timeout = (
+        min(requested_timeout, REPEATED_MODEL_TIMEOUT_SECONDS)
+        if attempt > 1
+        else requested_timeout
+    )
+    return effective_timeout, attempt
+
+
 def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> dict[str, Any]:
+    requested_timeout = int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS)
+    effective_timeout, model_dispatch_attempt = reserve_model_dispatch(
+        target,
+        requested_timeout,
+    )
     with STATE_LOCK:
         metric = metric_for(target.id)
         metric.active_requests += 1
@@ -1203,7 +1242,7 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         data = request_json(
             url,
             backend_payload,
-            int(payload.get("timeout") or DEFAULT_TIMEOUT_SECONDS),
+            effective_timeout,
             headers=target_auth_headers(target),
         )
         elapsed = time.time() - started
@@ -1232,6 +1271,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
                 "client": client,
                 "status": "ok",
                 "response_seconds": round(elapsed, 3),
+                "backend_timeout_seconds": effective_timeout,
+                "model_dispatch_attempt": model_dispatch_attempt,
                 **access_target_fields(target),
             }
         )
@@ -1252,6 +1293,9 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             **dispatch_count_fields(1),
             **dispatch_target_fields(target),
             "response_seconds": elapsed,
+            "backend_timeout_seconds": effective_timeout,
+            "model_dispatch_attempt": model_dispatch_attempt,
+            "repeated_model_timeout_applied": model_dispatch_attempt > 1,
             **normalized,
         }
     except Exception as exc:  # noqa: BLE001
@@ -1275,6 +1319,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
                 "consecutive_errors": metric.consecutive_errors,
                 "failover_after_errors": FAILOVER_AFTER_ERRORS,
                 "response_seconds": round(elapsed, 3),
+                "backend_timeout_seconds": effective_timeout,
+                "model_dispatch_attempt": model_dispatch_attempt,
                 **access_target_fields(target),
             }
         )
@@ -1306,11 +1352,12 @@ def route_prompt(
     dispatch_info = dispatch_info_fields(target, dispatch_metadata)
     client = client_key(handler, payload)
     q = target_queue(target.id)
-    backend_timeout = int(
+    requested_backend_timeout = int(
         payload.get("timeout")
         or handler.headers.get("X-LLM-Routing-Timeout")
         or DEFAULT_TIMEOUT_SECONDS
     )
+    backend_timeout = repeated_model_timeout(target, requested_backend_timeout)
     if backend_timeout < 1:
         raise ValueError("timeout must be at least 1 second.")
     expected_queue_depth = q.qsize() + 1
@@ -1350,7 +1397,10 @@ def route_prompt(
     result.update(dispatch_metadata)
     result.update(dispatch_info)
     result["dispatch_metadata_status"] = "complete"
-    result["backend_timeout_seconds"] = backend_timeout
+    result["requested_backend_timeout_seconds"] = requested_backend_timeout
+    result["backend_timeout_seconds"] = int(
+        result.get("backend_timeout_seconds") or backend_timeout
+    )
     result["request_timeout_seconds"] = wait_timeout
     result["queue_wait_seconds"] = max(0.0, (job.started_at or time.time()) - job.enqueued_at)
     result["queue_max_per_target"] = QUEUE_MAX_PER_TARGET

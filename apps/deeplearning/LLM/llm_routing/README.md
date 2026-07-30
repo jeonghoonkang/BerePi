@@ -410,3 +410,21 @@ target/model 수를 확인합니다. 상태 응답에 가용성을 판정할 정
 
 상태 API의 target metric에서 `available_targets`와 `dispatch_eligible` 필드로
 전송 가능 여부를 확인할 수 있습니다.
+### 재전송 모델 timeout 단축
+
+라우터 프로세스가 시작된 뒤 특정 `model`에 처음 prompt를 전달할 때는 요청의
+기존 timeout을 그대로 사용합니다. 같은 `model`에 두 번째 이후 prompt를
+전달할 때는 backend timeout을 최대 100초로 제한합니다. 따라서 최초 요청이
+600초라면 이후 요청은 100초로 전송되며, 원래 요청 timeout이 100초보다
+짧으면 그 값을 유지합니다.
+
+기준 시간은 환경변수로 변경할 수 있습니다.
+
+```bash
+export LLM_ROUTING_REPEATED_MODEL_TIMEOUT=100
+bash run.sh
+```
+
+응답의 `requested_backend_timeout_seconds`, `backend_timeout_seconds`,
+`model_dispatch_attempt`, `repeated_model_timeout_applied` 필드에서 적용 결과를
+확인할 수 있습니다.
