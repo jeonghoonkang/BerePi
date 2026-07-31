@@ -1,2 +1,3 @@
 PyMuPDF>=1.24,<2
+pypdf>=5,<6
 requests>=2.31,<3

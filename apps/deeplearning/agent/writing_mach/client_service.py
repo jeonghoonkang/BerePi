@@ -14,6 +14,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -24,6 +25,12 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+AGENT_DIR = Path(__file__).resolve().parent.parent
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
+
+from read_mach import pdf_text_extractor
 
 HOST = os.getenv("WRITING_MACH_HOST", "127.0.0.1")
 PORT = int(os.getenv("WRITING_MACH_PORT", "8786"))
@@ -1078,6 +1085,27 @@ def extract_pdf_content(
     ocr_dpi: int = 300,
     minimum_text_characters: int = 100,
 ) -> tuple[str, dict[str, Any]]:
+    # PDF reading/OCR lives in read_mach; callbacks connect it to this service's
+    # model router and progress logger without coupling the reader to writing_mach.
+    return pdf_text_extractor.extract_pdf_content(
+        pdf_path,
+        config=config,
+        model_call=call_model,
+        progress=progress_log,
+        renderer_loader=_load_pdf_renderer,
+        ocr_dpi=ocr_dpi,
+        minimum_text_characters=minimum_text_characters,
+    )
+
+
+def _legacy_extract_pdf_content(
+    pdf_path: Path,
+    *,
+    config: dict[str, Any] | None = None,
+    ocr_dpi: int = 300,
+    minimum_text_characters: int = 100,
+) -> tuple[str, dict[str, Any]]:
+    """Deprecated implementation kept temporarily for downstream imports."""
     try:
         from pypdf import PdfReader
     except ImportError as exc:

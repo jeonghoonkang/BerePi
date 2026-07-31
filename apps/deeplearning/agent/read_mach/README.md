@@ -1,5 +1,21 @@
 # read_mach
 
+## PDF 문자 추출 모듈
+
+`pdf_text_extractor.py`는 PDF의 텍스트 레이어를 페이지별로 읽고, 문자가
+부족한 스캔 페이지를 PNG로 렌더링하여 비전 모델 OCR 콜백으로 전달합니다.
+`writing_mach --tech-report`도 이 공용 모듈을 사용합니다. 따라서 PDF 읽기,
+문자 정규화, 텍스트/OCR 병합 로직은 `read_mach`에서 관리합니다.
+
+주요 진입점:
+
+```python
+from read_mach.pdf_text_extractor import extract_pdf_content
+```
+
+호출자는 `model_call`과 `progress` 콜백을 제공하여 사용하는 모델 라우터와
+로그 방식을 선택할 수 있습니다. Tesseract는 사용하지 않습니다.
+
 `input` 디렉토리의 PDF를 한 페이지씩 이미지로 변환하고 원격 Gemma 비전 모델로
 판정합니다. 사진, 삽화, 지도, 스크린샷, 차트, 그래프, 다이어그램 또는 도면이 있는
 페이지는 `output` 디렉토리에 PNG로 저장합니다.
@@ -30,16 +46,25 @@ Windows PowerShell에서는 가상환경 활성화 명령이 다음과 같습니
 Linux/macOS:
 
 ```bash
-export READ_MACH_PASSWORD="aimodel"
+export READ_MACH_PASSWORD="<서버 비밀번호 입력>"
 python3 extract_picture_pages.py
+```
+
+또는 비밀번호 환경변수를 현재 실행에만 적용할 수 있습니다.
+
+```bash
+READ_MACH_PASSWORD="<서버 비밀번호 입력>" python3 extract_picture_pages.py
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:READ_MACH_PASSWORD = "aimodel"
+$env:READ_MACH_PASSWORD = "<서버 비밀번호 입력>"
 python .\extract_picture_pages.py
 ```
+
+실행 전 `READ_MACH_PASSWORD`에 모델 서버의 실제 비밀번호를 입력해야 합니다.
+비밀번호를 README나 소스 코드에 직접 저장하지 마세요.
 
 기본 설정:
 
