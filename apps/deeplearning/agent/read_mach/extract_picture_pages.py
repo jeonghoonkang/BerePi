@@ -21,7 +21,8 @@ import requests
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_INPUT_DIR = APP_DIR / "input"
 DEFAULT_OUTPUT_DIR = APP_DIR / "output"
-DEFAULT_SERVER_URL = "http://keties.iptime.org:4004"
+DEFAULT_CONFIG_PATH = APP_DIR / "config" / "server_config.json"
+DEFAULT_SERVER_URL = "http://llm-server.example:4004"
 DEFAULT_MODEL = "gemma4:31b"
 SUPPORTED_SUFFIXES = {".pdf"}
 
@@ -52,30 +53,63 @@ class PageDecision:
     raw_response: str
 
 
+def load_server_config(config_path: Path) -> dict[str, Any]:
+    path = config_path.expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"서버 설정 파일이 없습니다: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"서버 설정 파일을 읽을 수 없습니다: {path} | {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"서버 설정은 JSON 객체여야 합니다: {path}")
+    return data
+
+
 def parse_args() -> argparse.Namespace:
+    config_parser = argparse.ArgumentParser(add_help=False)
+    config_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    config_args, _ = config_parser.parse_known_args()
+    config = load_server_config(config_args.config)
+    password_env = str(config.get("password_env") or "READ_MACH_PASSWORD")
+
     parser = argparse.ArgumentParser(
         description="input의 PDF를 페이지별로 판독하여 그림이 있는 페이지를 PNG로 저장합니다."
     )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=config_args.config,
+        help=f"서버 JSON 설정 파일 (기본값: {DEFAULT_CONFIG_PATH})",
+    )
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT_DIR)
+    parser.add_argument(
+        "--input-file",
+        type=Path,
+        help=(
+            "input 디렉토리에서 처리할 PDF 한 개. 파일명 또는 input 내부 경로를 지정합니다. "
+            "생략하면 input 디렉토리의 모든 PDF를 처리합니다."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--server-url",
-        default=os.getenv("READ_MACH_SERVER_URL", DEFAULT_SERVER_URL),
+        default=os.getenv("READ_MACH_SERVER_URL") or config.get("server_url") or DEFAULT_SERVER_URL,
         help=f"LLM Routing 서버 주소 (기본값: {DEFAULT_SERVER_URL})",
     )
     parser.add_argument(
         "--password",
-        default=os.getenv("READ_MACH_PASSWORD"),
-        help="접근 비밀번호. 생략 시 READ_MACH_PASSWORD 환경변수를 사용합니다.",
+        default=os.getenv(password_env),
+        help=f"접근 비밀번호. 생략 시 {password_env} 환경변수를 사용합니다.",
     )
     parser.add_argument(
         "--model",
-        default=os.getenv("READ_MACH_MODEL", DEFAULT_MODEL),
+        default=os.getenv("READ_MACH_MODEL") or config.get("model") or DEFAULT_MODEL,
         help=f"요청할 모델명 (기본값: {DEFAULT_MODEL})",
     )
     parser.add_argument(
         "--target-id",
-        default=os.getenv("READ_MACH_TARGET_ID"),
+        default=os.getenv("READ_MACH_TARGET_ID") or config.get("target_id") or None,
         help="LLM Routing target ID. 생략하면 이미지 전달이 가능한 Ollama 대상을 자동 선택합니다.",
     )
     parser.add_argument(
@@ -93,7 +127,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=240,
+        default=int(config.get("timeout_seconds") or 240),
         help="페이지당 모델 요청 제한 시간, 초 (기본값: 240)",
     )
     parser.add_argument(
@@ -166,19 +200,35 @@ def classify_page(
     password: str,
     model: str,
     target_id: str,
+    api_type: str,
     jpeg_bytes: bytes,
     timeout: int,
 ) -> PageDecision:
-    payload = {
+    encoded_image = base64.b64encode(jpeg_bytes).decode("ascii")
+    payload: dict[str, Any] = {
         "client_id": "read-mach-picture-page-extractor",
         "model": model,
         "prompt": CLASSIFICATION_PROMPT,
-        "images": [base64.b64encode(jpeg_bytes).decode("ascii")],
         "stream": False,
         "temperature": 0,
         "timeout": timeout,
         "target_id": target_id,
     }
+    if api_type == "vllm":
+        payload["messages"] = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": CLASSIFICATION_PROMPT},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"},
+                    },
+                ],
+            }
+        ]
+    else:
+        payload["images"] = [encoded_image]
     response = session.post(
         f"{server_url.rstrip('/')}/api/generate",
         headers=auth_headers(password),
@@ -204,8 +254,9 @@ def select_ollama_target(
     password: str,
     requested_model: str,
     explicit_target_id: str | None,
+    excluded_target_ids: set[str] | None = None,
     timeout: int = 15,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     response = session.get(
         f"{server_url.rstrip('/')}/api/status",
         headers=auth_headers(password),
@@ -216,33 +267,65 @@ def select_ollama_target(
     if not isinstance(targets, list):
         raise ValueError("서버 상태 응답에 targets 목록이 없습니다.")
 
+    excluded = excluded_target_ids or set()
+
+    def is_dispatch_eligible(target: dict[str, Any]) -> bool:
+        try:
+            available = int(target.get("available_targets"))
+        except (TypeError, ValueError):
+            return False
+        return bool(target.get("dispatch_eligible")) and available > 0
+
     if explicit_target_id:
         matches = [target for target in targets if str(target.get("id")) == explicit_target_id]
         if not matches:
             raise ValueError(f"서버에서 target ID를 찾을 수 없습니다: {explicit_target_id}")
         target = matches[0]
-        if str(target.get("api_type") or "").lower() != "ollama":
+        api_type = str(target.get("api_type") or "").strip().lower()
+        if api_type not in {"ollama", "vllm"}:
             raise ValueError(
-                f"선택한 target은 이미지 배열을 전달하지 않는 {target.get('api_type')} 형식입니다."
+                f"선택한 target은 지원하지 않는 {target.get('api_type')} 형식입니다."
             )
-        return explicit_target_id, str(target.get("model") or requested_model)
+        if not is_dispatch_eligible(target):
+            raise ValueError(
+                f"선택한 target을 현재 사용할 수 없습니다: {explicit_target_id} "
+                f"(available_targets={target.get('available_targets')})"
+            )
+        return explicit_target_id, str(target.get("model") or requested_model), api_type
 
-    ollama_targets = [
+    vision_targets = [
         target
         for target in targets
-        if str(target.get("api_type") or "").strip().lower() == "ollama"
+        if str(target.get("api_type") or "").strip().lower() in {"ollama", "vllm"}
         and target.get("id")
+        and str(target.get("id")) not in excluded
+        and is_dispatch_eligible(target)
     ]
-    if not ollama_targets:
-        raise ValueError("이미지 입력을 전달할 수 있는 Ollama target이 없습니다.")
+    if not vision_targets:
+        raise ValueError("이미지 입력을 전달할 수 있는 가용 Ollama/vLLM target이 없습니다.")
 
     exact = [
         target
-        for target in ollama_targets
+        for target in vision_targets
         if str(target.get("model") or "").strip() == requested_model
     ]
-    target = (exact or ollama_targets)[0]
-    return str(target["id"]), str(target.get("model") or requested_model)
+    target = (exact or vision_targets)[0]
+    return (
+        str(target["id"]),
+        str(target.get("model") or requested_model),
+        str(target.get("api_type") or "ollama").strip().lower(),
+    )
+
+
+def is_target_unavailable_error(exc: requests.RequestException) -> bool:
+    response = getattr(exc, "response", None)
+    body = str(getattr(response, "text", "") or "").casefold()
+    return bool(
+        response is not None
+        and getattr(response, "status_code", 0) in {400, 409, 503}
+        and "target" in body
+        and ("not available" in body or "no eligible fallback" in body)
+    )
 
 
 def safe_stem(path: Path) -> str:
@@ -262,6 +345,30 @@ def iter_pdf_files(input_dir: Path) -> list[Path]:
         for path in input_dir.rglob("*")
         if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
     )
+
+
+def select_pdf_files(input_dir: Path, input_file: Path | None) -> list[Path]:
+    """Select one PDF inside input_dir, or all PDFs when no file is specified."""
+    resolved_input_dir = input_dir.expanduser().resolve()
+    if input_file is None:
+        return iter_pdf_files(resolved_input_dir)
+
+    requested = input_file.expanduser()
+    if requested.is_absolute():
+        selected = requested.resolve()
+    else:
+        direct_path = requested.resolve()
+        selected = direct_path if direct_path.exists() else (resolved_input_dir / requested).resolve()
+
+    try:
+        selected.relative_to(resolved_input_dir)
+    except ValueError as exc:
+        raise ValueError(f"--input-file은 input 디렉토리 내부 파일이어야 합니다: {selected}") from exc
+    if not selected.is_file():
+        raise FileNotFoundError(f"선택한 입력 파일이 없습니다: {selected}")
+    if selected.suffix.lower() not in SUPPORTED_SUFFIXES:
+        raise ValueError(f"--input-file은 PDF 파일이어야 합니다: {selected}")
+    return [selected]
 
 
 def process_pdf(
@@ -302,10 +409,62 @@ def process_pdf(
                     password=args.password,
                     model=args.model,
                     target_id=args.target_id,
+                    api_type=args.api_type,
                     jpeg_bytes=jpeg_bytes,
                     timeout=args.timeout,
                 )
-            except (requests.RequestException, ValueError) as exc:
+            except requests.RequestException as exc:
+                if not is_target_unavailable_error(exc):
+                    failed_pages += 1
+                    LOGGER.error("[%s %d/%d] 모델 판정 실패: %s", pdf_path.name, page_number, last, exc)
+                    continue
+                failed_target_id = str(args.target_id)
+                LOGGER.warning(
+                    "[%s %d/%d] target %s 사용 불가; /api/status를 다시 확인합니다.",
+                    pdf_path.name,
+                    page_number,
+                    last,
+                    failed_target_id,
+                )
+                try:
+                    args.target_id, args.model, args.api_type = select_ollama_target(
+                        session,
+                        server_url=args.server_url,
+                        password=args.password,
+                        requested_model=args.model,
+                        explicit_target_id=None,
+                        excluded_target_ids={failed_target_id},
+                    )
+                    LOGGER.info(
+                        "[%s %d/%d] 다른 target으로 전환: %s (model=%s, api_type=%s)",
+                        pdf_path.name,
+                        page_number,
+                        last,
+                        args.target_id,
+                        args.model,
+                        args.api_type,
+                    )
+                    decision = classify_page(
+                        session,
+                        server_url=args.server_url,
+                        password=args.password,
+                        model=args.model,
+                        target_id=args.target_id,
+                        api_type=args.api_type,
+                        jpeg_bytes=jpeg_bytes,
+                        timeout=args.timeout,
+                    )
+                except (requests.RequestException, ValueError) as retry_exc:
+                    failed_pages += 1
+                    LOGGER.error(
+                        "[%s %d/%d] 다른 가용 target 전환 실패: %s",
+                        pdf_path.name,
+                        page_number,
+                        last,
+                        retry_exc,
+                    )
+                    continue
+            except ValueError as exc:
                 failed_pages += 1
                 LOGGER.error("[%s %d/%d] 모델 판정 실패: %s", pdf_path.name, page_number, last, exc)
                 continue
@@ -347,7 +506,11 @@ def main() -> int:
         LOGGER.error("입력 디렉토리가 없습니다: %s", args.input_dir)
         return 2
 
-    pdf_files = iter_pdf_files(args.input_dir)
+    try:
+        pdf_files = select_pdf_files(args.input_dir, args.input_file)
+    except (FileNotFoundError, ValueError) as exc:
+        LOGGER.error("입력 PDF 선택 실패: %s", exc)
+        return 2
     if not pdf_files:
         LOGGER.warning("입력 PDF가 없습니다: %s", args.input_dir)
         return 0
@@ -359,7 +522,7 @@ def main() -> int:
 
     with requests.Session() as session:
         try:
-            args.target_id, selected_model = select_ollama_target(
+            args.target_id, selected_model, args.api_type = select_ollama_target(
                 session,
                 server_url=args.server_url,
                 password=args.password,
@@ -367,7 +530,12 @@ def main() -> int:
                 explicit_target_id=args.target_id,
             )
             args.model = selected_model
-            LOGGER.info("Ollama target 선택: %s (model=%s)", args.target_id, args.model)
+            LOGGER.info(
+                "모델 target 선택: %s (model=%s, api_type=%s)",
+                args.target_id,
+                args.model,
+                args.api_type,
+            )
         except (requests.RequestException, ValueError) as exc:
             LOGGER.error("이미지 처리 target 선택 실패: %s", exc)
             return 2

@@ -1,0 +1,7 @@
+{
+  "server_url": "http://llm-server.example:4004",
+  "model": "gemma4:31b",
+  "target_id": "",
+  "timeout_seconds": 240,
+  "password_env": "READ_MACH_PASSWORD"
+}

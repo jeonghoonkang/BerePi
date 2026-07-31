@@ -4,7 +4,11 @@
 from __future__ import annotations
 
 import base64
+import argparse
+import json
+import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -75,6 +79,8 @@ def extract_pdf_content(
     renderer_loader: RendererLoader = load_pdf_renderer,
     ocr_dpi: int = 300,
     minimum_text_characters: int = 100,
+    start_page: int = 1,
+    end_page: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Return page-labelled PDF text and extraction metadata.
 
@@ -91,13 +97,22 @@ def extract_pdf_content(
 
     source = Path(pdf_path).expanduser().resolve()
     reader = PdfReader(str(source))
+    total_pdf_pages = len(reader.pages)
+    first_page = max(1, int(start_page))
+    last_page = min(total_pdf_pages, int(end_page) if end_page is not None else total_pdf_pages)
+    if first_page > last_page:
+        raise ValueError(
+            f"처리할 페이지 범위가 없습니다: start={first_page}, end={last_page}, total={total_pdf_pages}"
+        )
+    selected_page_numbers = range(first_page, last_page + 1)
     page_texts: list[str] = []
     page_details: list[dict[str, Any]] = []
     ocr_page_indexes: list[int] = []
     selectable_text: dict[int, str] = {}
     extraction_warnings: list[str] = []
 
-    for page_number, page in enumerate(reader.pages, start=1):
+    for page_number in selected_page_numbers:
+        page = reader.pages[page_number - 1]
         try:
             text = normalize_extracted_text(page.extract_text() or "")
         except Exception as exc:  # noqa: BLE001
@@ -148,7 +163,7 @@ def extract_pdf_content(
         finally:
             document.close()
 
-    for page_number in range(1, len(reader.pages) + 1):
+    for page_number in selected_page_numbers:
         text_layer = selectable_text.get(page_number, "")
         ocr_text = ocr_results.get(page_number, "")
         if ocr_text and text_layer:
@@ -174,7 +189,10 @@ def extract_pdf_content(
         raise ValueError(f"No readable text was found in {source}. OCR also returned no text.")
     metadata = {
         "source_pdf": str(source),
-        "page_count": len(reader.pages),
+        "page_count": len(page_details),
+        "total_pdf_pages": total_pdf_pages,
+        "start_page": first_page,
+        "end_page": last_page,
         "total_characters": len(extracted),
         "text_pages": sum(1 for item in page_details if item["method"] in {"text", "text+ocr"}),
         "ocr_pages": sum(1 for item in page_details if item["method"] in {"ocr", "text+ocr"}),
@@ -187,3 +205,190 @@ def extract_pdf_content(
         "pages": page_details,
     }
     return extracted, metadata
+
+
+def parse_cli_args() -> argparse.Namespace:
+    from extract_picture_pages import DEFAULT_CONFIG_PATH
+
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    pre_args, _ = pre_parser.parse_known_args()
+
+    parser = argparse.ArgumentParser(
+        description="PDF의 선택 페이지에서 문자와 문장을 추출하여 텍스트로 저장합니다."
+    )
+    parser.add_argument("--input-file", type=Path, required=True)
+    parser.add_argument("--config", type=Path, default=pre_args.config)
+    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent / "output")
+    parser.add_argument("--start-page", type=int, default=1)
+    parser.add_argument("--end-page", type=int)
+    parser.add_argument("--ocr-dpi", type=int, default=300)
+    parser.add_argument("--minimum-text-characters", type=int, default=100)
+    parser.add_argument("--password", default=None)
+    return parser.parse_args()
+
+
+def cli_main() -> int:
+    import requests
+
+    from extract_picture_pages import (
+        auth_headers,
+        is_target_unavailable_error,
+        load_server_config,
+        response_text,
+        select_ollama_target,
+        select_pdf_files,
+    )
+
+    args = parse_cli_args()
+    try:
+        server_config = load_server_config(args.config)
+        password_env = str(server_config.get("password_env") or "READ_MACH_PASSWORD")
+        password = args.password or os.getenv(password_env)
+        if not password:
+            raise ValueError(f"서버 비밀번호가 없습니다. {password_env} 환경변수를 입력하세요.")
+        input_dir = Path(__file__).resolve().parent / "input"
+        pdf_path = select_pdf_files(input_dir, args.input_file)[0]
+        server_url = str(server_config.get("server_url") or "").rstrip("/")
+        if not server_url:
+            raise ValueError("설정 파일의 server_url이 비어 있습니다.")
+        requested_model = str(server_config.get("model") or "")
+        explicit_target = str(server_config.get("target_id") or "") or None
+        timeout = int(server_config.get("timeout_seconds") or 240)
+
+        with requests.Session() as session:
+            target_id, model, api_type = select_ollama_target(
+                session,
+                server_url=server_url,
+                password=password,
+                requested_model=requested_model,
+                explicit_target_id=explicit_target,
+            )
+            print(f"모델 target 선택: {target_id} (model={model}, api_type={api_type})")
+
+            def call_vision_model(
+                _config: dict[str, Any],
+                prompt: str,
+                *,
+                label: str,
+                images: list[str],
+            ) -> str:
+                nonlocal target_id, model, api_type
+
+                def send_request() -> Any:
+                    response = session.post(
+                        f"{server_url}/api/generate",
+                        headers=auth_headers(password),
+                        json=payload,
+                        timeout=timeout + 30,
+                    )
+                    if not response.ok:
+                        detail = response.text.strip().replace("\n", " ")[:500]
+                        raise requests.HTTPError(
+                            f"{label}: {response.status_code} {response.reason}: {detail}",
+                            response=response,
+                        )
+                    return response
+
+                payload: dict[str, Any] = {
+                    "client_id": "read-mach-pdf-text-extractor",
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "temperature": 0,
+                    "timeout": timeout,
+                    "target_id": target_id,
+                }
+                if api_type == "vllm":
+                    payload["messages"] = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                *[
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {"url": f"data:image/png;base64,{image}"},
+                                    }
+                                    for image in images
+                                ],
+                            ],
+                        }
+                    ]
+                else:
+                    payload["images"] = images
+                try:
+                    response = send_request()
+                except requests.RequestException as exc:
+                    if not is_target_unavailable_error(exc):
+                        raise
+                    failed_target = target_id
+                    target_id, model, api_type = select_ollama_target(
+                        session,
+                        server_url=server_url,
+                        password=password,
+                        requested_model=model,
+                        explicit_target_id=None,
+                        excluded_target_ids={failed_target},
+                    )
+                    print(
+                        f"target 전환: {failed_target} -> {target_id} "
+                        f"(model={model}, api_type={api_type})",
+                        flush=True,
+                    )
+                    payload["target_id"] = target_id
+                    payload["model"] = model
+                    if api_type == "vllm" and "messages" not in payload:
+                        payload.pop("images", None)
+                        payload["messages"] = [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    *[
+                                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}}
+                                        for image in images
+                                    ],
+                                ],
+                            }
+                        ]
+                    elif api_type == "ollama" and "images" not in payload:
+                        payload.pop("messages", None)
+                        payload["images"] = images
+                    response = send_request()
+                text = response_text(response.json()).strip()
+                if not text:
+                    raise ValueError(f"{label}: 모델 OCR 응답이 비어 있습니다.")
+                return text
+
+            def progress(_label: str, message: str, _color: str) -> None:
+                print(message, flush=True)
+
+            extraction_config = {"model": model, "target_id": target_id, "api_type": api_type}
+            text, metadata = extract_pdf_content(
+                pdf_path,
+                config=extraction_config,
+                model_call=call_vision_model,
+                progress=progress,
+                ocr_dpi=args.ocr_dpi,
+                minimum_text_characters=args.minimum_text_characters,
+                start_page=args.start_page,
+                end_page=args.end_page,
+            )
+
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        suffix = f"pages_{metadata['start_page']}-{metadata['end_page']}"
+        text_path = args.output_dir / f"{pdf_path.stem}_{suffix}_extracted.txt"
+        metadata_path = args.output_dir / f"{pdf_path.stem}_{suffix}_extraction.json"
+        text_path.write_text(text + "\n", encoding="utf-8")
+        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"추출 문자 저장: {text_path}")
+        print(f"추출 정보 저장: {metadata_path}")
+        return 0
+    except (OSError, ValueError, RuntimeError, requests.RequestException) as exc:
+        print(f"PDF 문자 추출 실패: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli_main())
