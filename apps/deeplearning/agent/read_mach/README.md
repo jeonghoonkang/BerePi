@@ -112,7 +112,39 @@ READ_MACH_PASSWORD="<서버 비밀번호 입력>" python3 pdf_text_extractor.py 
   --end-page 6
 ```
 
-실행 전 `READ_MACH_PASSWORD`에 모델 서버의 실제 비밀번호를 입력해야 합니다.
+### URL 웹페이지 문자 추출
+
+웹 URL의 제목과 본문을 문자로 저장하려면 `url_text_extractor.py`를 실행합니다.
+HTTP/HTTPS 페이지의 `article`, `main` 또는 본문 영역에서 제목, 문단, 목록,
+인용문과 표를 추출하고 메뉴, 스크립트, 폼 등의 불필요한 요소를 제거합니다.
+
+```bash
+python3 url_text_extractor.py --url \
+  "https://tech.ktcloud.com/entry/2026-03-ktcloud-physical-ai-datacenter-%EC%9D%B8%ED%94%84%EB%9D%BC-%EC%A0%84%EB%A7%9D" \
+  --config ./config/this_server_config.json
+```
+
+기본 결과는 `output` 디렉토리에 저장됩니다.
+
+- `url_<페이지명>_<hash>.txt`: 정리된 제목과 본문
+- `url_<페이지명>_<hash>.json`: 원본 URL, 최종 URL, 제목, 문자 수와 수집 시간
+
+출력 디렉토리와 요청 제한 시간을 변경할 수도 있습니다.
+
+```bash
+python3 url_text_extractor.py \
+  --url "https://example.com/article" \
+  --config ./config/this_server_config.json \
+  --output-dir ./output \
+  --timeout 60
+```
+
+URL 추출에는 모델 서버 설정이나 비밀번호가 필요하지 않습니다. 페이지가 로그인,
+JavaScript 렌더링 또는 봇 차단을 요구하면 정적 HTML에서 본문을 추출하지 못할 수
+있습니다.
+
+PDF 이미지 판정 및 모델 OCR 실행 전에는 `READ_MACH_PASSWORD`에 모델 서버의 실제
+비밀번호를 입력해야 합니다.
 비밀번호를 README나 소스 코드에 직접 저장하지 마세요.
 
 기본 설정:
