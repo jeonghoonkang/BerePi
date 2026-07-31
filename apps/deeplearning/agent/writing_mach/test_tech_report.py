@@ -49,6 +49,44 @@ class FakeDocument:
 
 
 class TechReportPdfTests(unittest.TestCase):
+    def test_uploads_markdown_and_pdf_to_output_webdav(self) -> None:
+        class FakeWebDavResponse:
+            status = 201
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        config = {
+            "output_webdav_enabled": True,
+            "output_webdav_url": "http://cloud.test/remote.php/dav/files/netcopy/writing_output",
+            "output_webdav_user": "netcopy",
+            "output_webdav_password": "secret",
+            "output_webdav_timeout_seconds": 60,
+        }
+        requests = []
+
+        def fake_urlopen(request, timeout):
+            requests.append((request, timeout))
+            return FakeWebDavResponse()
+
+        with tempfile.TemporaryDirectory() as directory:
+            markdown = Path(directory) / "report file.md"
+            pdf = Path(directory) / "report file.pdf"
+            markdown.write_text("# report", encoding="utf-8")
+            pdf.write_bytes(b"%PDF-test")
+            with patch.object(client_service.urllib.request, "urlopen", side_effect=fake_urlopen):
+                result = client_service.publish_writing_outputs(config, [markdown, pdf])
+
+        self.assertEqual(len(result["uploaded"]), 2)
+        self.assertEqual(result["errors"], [])
+        self.assertEqual([item[1] for item in requests], [60, 60])
+        self.assertTrue(requests[0][0].full_url.endswith("report%20file.md"))
+        self.assertEqual(requests[0][0].get_method(), "PUT")
+        self.assertTrue(requests[0][0].get_header("Authorization").startswith("Basic "))
+
     def test_short_report_expansion_requires_explicit_approval(self) -> None:
         with patch("builtins.input", return_value="n"):
             self.assertFalse(client_service.confirm_tech_report_expansion(8, "pdf"))

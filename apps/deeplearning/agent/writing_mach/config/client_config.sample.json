@@ -32,5 +32,10 @@
   "allow_global_rewrite": false,
   "progress_pdf_enabled": true,
   "progress_pdf_interval_minutes": 30,
-  "progress_pdf_output_dir": "E:\\sync_dir\\nc_keties_22080\\devel"
+  "progress_pdf_output_dir": "E:\\sync_dir\\nc_keties_22080\\devel",
+  "output_webdav_enabled": true,
+  "output_webdav_url": "http://keties.iptime.org:22080/remote.php/dav/files/netcopy/writing_output",
+  "output_webdav_user": "netcopy",
+  "output_webdav_password": "",
+  "output_webdav_timeout_seconds": 60
 }

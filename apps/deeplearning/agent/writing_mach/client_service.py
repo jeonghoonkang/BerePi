@@ -109,6 +109,11 @@ DEFAULT_CONFIG = {
     "progress_pdf_enabled": True,
     "progress_pdf_interval_minutes": 30,
     "progress_pdf_output_dir": r"E:\sync_dir\nc_keties_22080\devel",
+    "output_webdav_enabled": True,
+    "output_webdav_url": "http://keties.iptime.org:22080/remote.php/dav/files/netcopy/writing_output",
+    "output_webdav_user": "netcopy",
+    "output_webdav_password": "",
+    "output_webdav_timeout_seconds": 60,
     "cloud_model_enabled": False,
     "cloud_provider": "openai-compatible",
     "cloud_api_key": "",
@@ -747,6 +752,32 @@ def normalize_config(raw: dict[str, Any] | None) -> dict[str, Any]:
         "progress_pdf_interval_minutes": max(1, progress_pdf_interval),
         "progress_pdf_output_dir": str(
             incoming.get("progress_pdf_output_dir") or DEFAULT_CONFIG["progress_pdf_output_dir"]
+        ),
+        "output_webdav_enabled": bool_value(
+            incoming.get("output_webdav_enabled"),
+            bool(DEFAULT_CONFIG["output_webdav_enabled"]),
+        ),
+        "output_webdav_url": str(
+            os.getenv("WRITING_MACH_OUTPUT_WEBDAV_URL")
+            or incoming.get("output_webdav_url")
+            or DEFAULT_CONFIG["output_webdav_url"]
+        ).rstrip("/"),
+        "output_webdav_user": str(
+            os.getenv("WRITING_MACH_OUTPUT_WEBDAV_USER")
+            or incoming.get("output_webdav_user")
+            or DEFAULT_CONFIG["output_webdav_user"]
+        ),
+        "output_webdav_password": str(
+            os.getenv("WRITING_MACH_OUTPUT_WEBDAV_PASSWORD")
+            or incoming.get("output_webdav_password")
+            or ""
+        ),
+        "output_webdav_timeout_seconds": max(
+            5,
+            int(
+                incoming.get("output_webdav_timeout_seconds")
+                or DEFAULT_CONFIG["output_webdav_timeout_seconds"]
+            ),
         ),
         "cloud_model_enabled": bool_value(
             incoming.get("cloud_model_enabled"),
@@ -1399,6 +1430,51 @@ def expand_tech_report_by_sections(config: dict[str, Any], report: str) -> str:
     )
 
 
+def upload_file_to_output_webdav(config: dict[str, Any], local_path: Path) -> str:
+    base_url = str(config.get("output_webdav_url") or "").rstrip("/")
+    if not base_url:
+        raise ValueError("output_webdav_url is empty")
+    remote_url = f"{base_url}/{urllib.parse.quote(local_path.name)}"
+    headers = {"Content-Type": "application/pdf" if local_path.suffix.lower() == ".pdf" else "text/markdown; charset=utf-8"}
+    username = str(config.get("output_webdav_user") or "")
+    password = str(config.get("output_webdav_password") or "")
+    if username or password:
+        token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+        headers["Authorization"] = f"Basic {token}"
+    request = urllib.request.Request(
+        remote_url,
+        data=local_path.read_bytes(),
+        headers=headers,
+        method="PUT",
+    )
+    timeout = int(config.get("output_webdav_timeout_seconds") or 60)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        status_value = getattr(response, "status", None)
+        status = int(status_value if status_value is not None else response.getcode())
+        if status not in {HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT}:
+            raise OSError(f"WebDAV upload returned HTTP {status}: {remote_url}")
+    return remote_url
+
+
+def publish_writing_outputs(config: dict[str, Any], paths: list[Path]) -> dict[str, Any]:
+    result: dict[str, Any] = {"enabled": bool(config.get("output_webdav_enabled", True)), "uploaded": [], "errors": []}
+    if not result["enabled"]:
+        return result
+    for path in paths:
+        if not path.is_file():
+            result["errors"].append(f"local output does not exist: {path}")
+            continue
+        try:
+            remote_url = upload_file_to_output_webdav(config, path)
+            result["uploaded"].append(remote_url)
+            progress_log("output-webdav", f"uploaded {path.name} -> {remote_url}", "green")
+        except Exception as exc:  # noqa: BLE001
+            error = f"{path.name}: {exc}"
+            result["errors"].append(error)
+            progress_log("output-webdav", f"upload failed; local output retained: {error}", "yellow")
+    return result
+
+
 def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]:
     ensure_dirs()
     started = time.perf_counter()
@@ -1492,6 +1568,10 @@ def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]
     progress_log("tech-report", f"Markdown written -> {markdown_path}", "green", started)
     if pdf_ok:
         progress_log("tech-report", f"PDF written -> {report_pdf_path}", "green", started)
+    output_webdav = publish_writing_outputs(
+        config,
+        [markdown_path, *([report_pdf_path] if pdf_ok else [])],
+    )
     return {
         "ok": True,
         "source_file": str(source_path),
@@ -1508,6 +1588,7 @@ def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]
         "page_count_method": page_count_method,
         "expansion_approved": expansion_approved,
         "initial_output_path": initial_markdown_path,
+        "output_webdav": output_webdav,
         "elapsed_seconds": time.perf_counter() - started,
     }
 

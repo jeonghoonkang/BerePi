@@ -92,6 +92,27 @@ py -3 .\client_service.py --config .\data\client_config.json --tech-report .\inp
 추가 작성이 승인되면 최초 결과는
 `output/tech_report_YYYYMMDD_HHMMSS_initial.md`로 별도 보존됩니다.
 
+최종 Markdown과 PDF가 생성되면 기본적으로 Nextcloud WebDAV의
+`/netcopy/writing_output`에 업로드합니다. 비밀번호는 설정 파일에 저장하지 않고
+환경변수로 입력합니다.
+
+```powershell
+$env:WRITING_MACH_OUTPUT_WEBDAV_PASSWORD = "<Nextcloud 앱 비밀번호>"
+py -3 .\client_service.py --tech-report .\input\기술원문.txt
+```
+
+기본 WebDAV URL은 다음과 같습니다.
+
+```text
+http://keties.iptime.org:22080/remote.php/dav/files/netcopy/writing_output
+```
+
+`output_webdav_url`, `output_webdav_user`, `output_webdav_timeout_seconds`는
+`config/client_config.sample.json`과 같은 클라이언트 설정에서 변경할 수 있습니다.
+환경변수 `WRITING_MACH_OUTPUT_WEBDAV_URL`,
+`WRITING_MACH_OUTPUT_WEBDAV_USER`, `WRITING_MACH_OUTPUT_WEBDAV_PASSWORD`가 설정
+파일보다 우선합니다. 업로드가 실패해도 로컬 Markdown/PDF는 삭제하지 않습니다.
+
 ```powershell
 py -3 .\client_service.py --tech-report
 ```
