@@ -47,6 +47,10 @@ LLM_TRACE_COUNTER = 0
 CHECKPOINT_LOCK = threading.Lock()
 CHECKPOINT_PATH: Path | None = None
 CHECKPOINT_STATE: dict[str, Any] | None = None
+MODEL_TIMEOUT_MAX_SECONDS = 300
+MODEL_TIMEOUT_GROWTH_PERCENT = 10
+TECH_REPORT_TARGET_PAGES = 20
+TECH_REPORT_ESTIMATED_CHARACTERS_PER_PAGE = 1800
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -76,7 +80,7 @@ DEFAULT_CONFIG = {
     "server_base_url": "http://127.0.0.1:8082",
     "generate_path": "/api/generate",
     "status_path": "/api/status",
-    "request_timeout_seconds": 100,
+    "request_timeout_seconds": 150,
     "user_id": "",
     "password": "",
     "model": "",
@@ -221,11 +225,11 @@ def parse_args() -> argparse.Namespace:
         nargs="?",
         const="",
         default=None,
-        metavar="PDF",
+        metavar="SOURCE",
         help=(
-            "Create a Korean engineering report from PDF and exit. "
-            "When PDF is omitted, uses the newest PDF in the input directory. "
-            "Pages without sufficient selectable text are processed with OCR."
+            "Create an approximately 20-page Korean engineering report from PDF or TXT and exit. "
+            "When SOURCE is omitted, uses the newest PDF/TXT in the input directory. "
+            "Sparse PDF pages use model OCR; TXT input is read directly."
         ),
     )
     parser.add_argument(
@@ -1007,22 +1011,59 @@ TECH_REPORT_REQUEST = """[역할]
 
 
 def resolve_tech_report_pdf(value: str) -> Path:
+    """Resolve a PDF/TXT tech-report source (legacy function name retained)."""
     if value.strip():
         path = Path(value).expanduser().resolve()
         if not path.exists():
-            raise FileNotFoundError(f"Tech report PDF not found: {path}")
-        if path.suffix.lower() != ".pdf":
-            raise ValueError(f"--tech_report input must be a PDF file: {path}")
+            raise FileNotFoundError(f"Tech report source not found: {path}")
+        if path.suffix.lower() not in {".pdf", ".txt"}:
+            raise ValueError(f"--tech_report input must be a PDF or TXT file: {path}")
         return path
 
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    candidates = [path.resolve() for path in INPUT_DIR.glob("*.pdf") if path.is_file()]
+    candidates = [
+        path.resolve()
+        for path in INPUT_DIR.iterdir()
+        if path.is_file() and path.suffix.lower() in {".pdf", ".txt"}
+    ]
     if not candidates:
         raise FileNotFoundError(
-            f"--tech_report could not find a PDF in {INPUT_DIR}. "
-            "Copy a PDF into the input directory or pass a PDF path explicitly."
+            f"--tech_report could not find a PDF/TXT in {INPUT_DIR}. "
+            "Copy a source into the input directory or pass its path explicitly."
         )
     return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def read_tech_report_source(
+    source_path: Path,
+    *,
+    config: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    if source_path.suffix.lower() == ".pdf":
+        return extract_pdf_content(source_path, config=config)
+
+    try:
+        source_text = source_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"TXT input must be UTF-8 encoded: {source_path}") from exc
+    text = normalize_extracted_text(source_text)
+    if not text:
+        raise ValueError(f"TXT input contains no readable text: {source_path}")
+    metadata = {
+        "source_file": str(source_path),
+        "source_type": "txt",
+        "page_count": 0,
+        "total_characters": len(text),
+        "text_pages": 0,
+        "ocr_pages": 0,
+        "empty_pages": 0,
+        "ocr_engine": "not-used",
+        "ocr_model": "",
+        "ocr_warnings": [],
+        "extraction_warnings": [],
+        "encoding": "utf-8",
+    }
+    return text, metadata
 
 
 def normalize_extracted_text(text: str) -> str:
@@ -1225,18 +1266,20 @@ def extract_pdf_text(pdf_path: Path) -> str:
     return text
 
 
-def build_tech_report_prompt(pdf_path: Path, pdf_text: str) -> str:
+def build_tech_report_prompt(source_path: Path, source_text: str) -> str:
+    source_type = "PDF" if source_path.suffix.lower() == ".pdf" else "TXT"
     return f"""{TECH_REPORT_REQUEST}
 
-[입력 PDF]
-- 파일명: {pdf_path.name}
-- 총 원문 분량: {len(pdf_text):,} characters
+[입력 문서]
+- 형식: {source_type}
+- 파일명: {source_path.name}
+- 총 원문 분량: {len(source_text):,} characters
 
-[PDF 추출 원문 시작]
-{pdf_text}
-[PDF 추출 원문 끝]
+[입력 원문 시작]
+{source_text}
+[입력 원문 끝]
 
-지금 바로 위 PDF 원문을 바탕으로 작성을 시작해 줘.
+지금 바로 위 입력 원문을 바탕으로 약 20페이지 분량의 기술 보고서 작성을 시작해 줘.
 """
 
 
@@ -1271,16 +1314,101 @@ def normalize_tech_report(markdown: str, pdf_path: Path) -> str:
     return text
 
 
-def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
+def tech_report_page_count(report: str, pdf_path: Path, pdf_ok: bool) -> tuple[int, str]:
+    if pdf_ok and pdf_path.is_file():
+        try:
+            from pypdf import PdfReader
+
+            return len(PdfReader(str(pdf_path)).pages), "pdf"
+        except Exception as exc:  # noqa: BLE001
+            progress_log("tech-report", f"could not count rendered PDF pages: {exc}", "yellow")
+    estimated = max(
+        1,
+        (len(report) + TECH_REPORT_ESTIMATED_CHARACTERS_PER_PAGE - 1)
+        // TECH_REPORT_ESTIMATED_CHARACTERS_PER_PAGE,
+    )
+    return estimated, "character-estimate"
+
+
+def confirm_tech_report_expansion(page_count: int, count_method: str) -> bool:
+    prompt = (
+        f"기술보고서 분량이 목표 {TECH_REPORT_TARGET_PAGES}페이지보다 짧습니다 "
+        f"(현재 {page_count}페이지, 측정={count_method}). "
+        "기존 문서를 챕터별 가이드로 사용하여 추가 작성을 진행할까요? [y/N]: "
+    )
+    try:
+        answer = input(prompt).strip().casefold()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return answer in {"y", "yes", "예", "네", "진행", "계속"}
+
+
+def split_tech_report_sections(report: str) -> tuple[str, list[str]]:
+    matches = list(re.finditer(r"(?m)^##\s*[1-5]\s*[.)]?\s+.*$", report))
+    if len(matches) != 5:
+        raise ValueError("Tech report expansion requires all five numbered sections.")
+    preamble = report[: matches[0].start()].rstrip()
+    sections = [
+        report[match.start() : (matches[index + 1].start() if index + 1 < len(matches) else len(report))].strip()
+        for index, match in enumerate(matches)
+    ]
+    return preamble, sections
+
+
+def expand_tech_report_by_sections(config: dict[str, Any], report: str) -> str:
+    preamble, sections = split_tech_report_sections(report)
+    expanded_sections: list[str] = []
+    for index, section in enumerate(sections, start=1):
+        progress_log(
+            "tech-report-expand",
+            f"expanding section {index}/{len(sections)} from the initial report guide",
+            "magenta",
+        )
+        expansion_prompt = f"""[역할]
+너는 수석 시스템 아키텍트(System Architect)다.
+
+[작업]
+아래 기존 기술보고서의 {index}번 챕터를 작성 가이드로 사용하여 해당 챕터를 다시 작성해라.
+전체 보고서가 A4 약 {TECH_REPORT_TARGET_PAGES}페이지가 되도록 이 챕터는 A4 약 4페이지 수준으로 충분히 확장한다.
+
+[규칙]
+- 기존 챕터의 번호와 제목을 정확히 유지한다.
+- 기존 문서에서 확인되지 않은 사실을 새로 만들지 않는다.
+- 아키텍처, 데이터 흐름, 기술 사양, 제약사항과 적용 고려사항을 구체적으로 설명한다.
+- 필요한 경우 표와 단계별 목록을 사용한다.
+- 다른 챕터, 안내 문구 또는 코드 펜스 없이 완성된 해당 챕터 Markdown만 출력한다.
+
+[기존 챕터 가이드 시작]
+{section}
+[기존 챕터 가이드 끝]
+"""
+        expanded = call_model(
+            config,
+            expansion_prompt,
+            label=f"tech-report-expand-section-{index}",
+        ).strip()
+        expanded = re.sub(r"^```(?:markdown)?\s*", "", expanded, flags=re.IGNORECASE)
+        expanded = re.sub(r"\s*```\s*$", "", expanded)
+        if not re.match(rf"^##\s*{index}\s*[.)]?\s+", expanded):
+            original_heading = section.splitlines()[0]
+            expanded = f"{original_heading}\n\n{expanded}"
+        expanded_sections.append(expanded)
+    return normalize_tech_report(
+        "\n\n".join(part for part in [preamble, *expanded_sections] if part).strip(),
+        Path("expanded-tech-report.md"),
+    )
+
+
+def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]:
     ensure_dirs()
     started = time.perf_counter()
-    pdf_path = resolve_tech_report_pdf(pdf_value)
-    progress_log("tech-report", f"reading PDF -> {pdf_path}", "cyan", started)
-    pdf_text, extraction = extract_pdf_content(pdf_path, config=config)
+    source_path = resolve_tech_report_pdf(source_value)
+    progress_log("tech-report", f"reading source -> {source_path}", "cyan", started)
+    source_text, extraction = read_tech_report_source(source_path, config=config)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     extracted_path = OUTPUT_DIR / f"tech_report_{timestamp}_extracted.txt"
     extraction_path = OUTPUT_DIR / f"tech_report_{timestamp}_extraction.json"
-    extracted_path.write_text(pdf_text + "\n", encoding="utf-8")
+    extracted_path.write_text(source_text + "\n", encoding="utf-8")
     extraction_path.write_text(
         json.dumps(extraction, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -1295,18 +1423,70 @@ def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
         "green",
         started,
     )
-    prompt = build_tech_report_prompt(pdf_path, pdf_text)
+    prompt = build_tech_report_prompt(source_path, source_text)
     progress_log(
         "tech-report",
-        f"requesting report from {len(pdf_text):,} extracted characters",
+        f"requesting report from {len(source_text):,} extracted characters",
         "magenta",
         started,
     )
-    report = normalize_tech_report(call_model(config, prompt, label="tech-report"), pdf_path)
+    report = normalize_tech_report(call_model(config, prompt, label="tech-report"), source_path)
     markdown_path = OUTPUT_DIR / f"tech_report_{timestamp}.md"
     report_pdf_path = OUTPUT_DIR / f"tech_report_{timestamp}.pdf"
     markdown_path.write_text(report + "\n", encoding="utf-8")
     pdf_ok, pdf_message = write_book_pdf(markdown_path, report_pdf_path)
+    initial_page_count, page_count_method = tech_report_page_count(
+        report,
+        report_pdf_path,
+        pdf_ok,
+    )
+    expansion_approved = False
+    initial_markdown_path = ""
+    if initial_page_count < TECH_REPORT_TARGET_PAGES:
+        progress_log(
+            "tech-report",
+            (
+                f"report is shorter than target: current={initial_page_count} "
+                f"target={TECH_REPORT_TARGET_PAGES} method={page_count_method}"
+            ),
+            "yellow",
+            started,
+        )
+        expansion_approved = confirm_tech_report_expansion(
+            initial_page_count,
+            page_count_method,
+        )
+        if expansion_approved:
+            initial_path = OUTPUT_DIR / f"tech_report_{timestamp}_initial.md"
+            initial_path.write_text(report + "\n", encoding="utf-8")
+            initial_markdown_path = str(initial_path)
+            report = expand_tech_report_by_sections(config, report)
+            markdown_path.write_text(report + "\n", encoding="utf-8")
+            pdf_ok, pdf_message = write_book_pdf(markdown_path, report_pdf_path)
+            final_page_count, page_count_method = tech_report_page_count(
+                report,
+                report_pdf_path,
+                pdf_ok,
+            )
+            progress_log(
+                "tech-report-expand",
+                (
+                    f"expanded report complete: initial_pages={initial_page_count} "
+                    f"final_pages={final_page_count} method={page_count_method}"
+                ),
+                "green",
+                started,
+            )
+        else:
+            final_page_count = initial_page_count
+            progress_log(
+                "tech-report-expand",
+                "additional writing was not approved; keeping the initial report",
+                "yellow",
+                started,
+            )
+    else:
+        final_page_count = initial_page_count
     if not pdf_ok:
         progress_log("tech-report", f"PDF export failed: {pdf_message}", "yellow", started)
     progress_log("tech-report", f"Markdown written -> {markdown_path}", "green", started)
@@ -1314,13 +1494,20 @@ def run_tech_report(config: dict[str, Any], pdf_value: str) -> dict[str, Any]:
         progress_log("tech-report", f"PDF written -> {report_pdf_path}", "green", started)
     return {
         "ok": True,
-        "source_pdf": str(pdf_path),
+        "source_file": str(source_path),
+        "source_type": source_path.suffix.lower().lstrip("."),
         "extracted_text_path": str(extracted_path),
         "extraction_metadata_path": str(extraction_path),
         "extraction": extraction,
         "output_path": str(markdown_path),
         "pdf_path": str(report_pdf_path) if pdf_ok else "",
         "pdf_error": "" if pdf_ok else pdf_message,
+        "target_pages": TECH_REPORT_TARGET_PAGES,
+        "initial_page_count": initial_page_count,
+        "final_page_count": final_page_count,
+        "page_count_method": page_count_method,
+        "expansion_approved": expansion_approved,
+        "initial_output_path": initial_markdown_path,
         "elapsed_seconds": time.perf_counter() - started,
     }
 
@@ -1720,7 +1907,7 @@ def call_model(
     label_text = f" [{label}]" if label else ""
     base_timeout_seconds = int(active_config["request_timeout_seconds"])
     timeout_scale = max(1, int(timeout_multiplier or 1))
-    timeout_seconds = base_timeout_seconds * timeout_scale
+    timeout_seconds = min(MODEL_TIMEOUT_MAX_SECONDS, base_timeout_seconds * timeout_scale)
     prompt_words = word_count(prompt)
     progress_log(
         "model",
@@ -1870,6 +2057,20 @@ def call_model(
                 "red",
             )
             raise ValueError(error)
+        if timeout_model_error(error):
+            previous_timeout = timeout_seconds
+            timeout_seconds = next_model_timeout(previous_timeout)
+            timeout_scale = round(timeout_seconds / max(1, base_timeout_seconds), 2)
+            if timeout_seconds > previous_timeout:
+                progress_log(
+                    "model-timeout",
+                    (
+                        f"{label or 'model'} timeout increased by 10% after timeout error: "
+                        f"{previous_timeout}s -> {timeout_seconds}s "
+                        f"(maximum={MODEL_TIMEOUT_MAX_SECONDS}s)"
+                    ),
+                    "yellow",
+                )
         progress_log(
             "model-retry",
             f"{label or 'model'} request failed without response ({failure_count}): {error}",
@@ -1907,7 +2108,7 @@ def call_model(
                         images=images,
                     )
                     base_timeout_seconds = int(active_config["request_timeout_seconds"])
-                    timeout_seconds = base_timeout_seconds * timeout_scale
+                    timeout_scale = round(timeout_seconds / max(1, base_timeout_seconds), 2)
             except Exception as retry_exc:
                 raise ValueError(f"{error} | retry_status_failed={retry_exc}") from retry_exc
         progress_log(
@@ -2002,6 +2203,18 @@ def retryable_model_error(error: str) -> bool:
             "http 503",
             "http 504",
         )
+    )
+
+
+def timeout_model_error(error: str) -> bool:
+    lowered = str(error or "").casefold()
+    return "timed out" in lowered or "timeout" in lowered
+
+
+def next_model_timeout(current_timeout: int) -> int:
+    return min(
+        MODEL_TIMEOUT_MAX_SECONDS,
+        (int(current_timeout) * (100 + MODEL_TIMEOUT_GROWTH_PERCENT) + 99) // 100,
     )
 
 

@@ -64,21 +64,39 @@ py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start
 py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start --exit-after-run
 ```
 
-## PDF 기술 보고서 생성 (`--tech_report`)
+## PDF/TXT 기술 보고서 생성 (`--tech_report`)
 
-PDF의 기술 구조와 작동 원리를 분석한 한국어 엔지니어링 보고서를 생성하려면 다음과 같이 실행합니다. 이 모드는 웹 서비스를 시작하지 않고 보고서를 생성한 뒤 종료합니다.
+PDF 또는 UTF-8 TXT 원문을 분석해 약 20페이지 분량의 한국어 엔지니어링 보고서를 생성합니다. 이 모드는 웹 서비스를 시작하지 않고 보고서를 생성한 뒤 종료합니다.
 
 ```powershell
 py -3 .\client_service.py --config .\data\client_config.json --tech-report .\input\기술자료.pdf
 ```
 
-PDF 경로를 생략하면 프로젝트의 `input` 폴더에서 가장 최근 PDF를 자동 선택합니다.
+URL 추출기 등으로 만든 문자열 TXT 파일도 직접 사용할 수 있습니다. TXT 입력은 OCR 없이 원문 문자열을 그대로 보고서 작성 모델에 전달합니다.
+
+```powershell
+py -3 .\client_service.py --config .\data\client_config.json --tech-report .\input\기술원문.txt
+```
+
+입력 경로를 생략하면 프로젝트의 `input` 폴더에서 가장 최근 PDF 또는 TXT 파일을 자동 선택합니다.
+
+모델 요청이 timeout으로 실패하면 다음 재시도의 제한 시간을 10% 늘립니다. 기본
+100초 기준으로 `100 → 110 → 121 ...` 순서로 증가하며 최대 300초를 넘지 않습니다.
+응답이 성공하면 다음 프롬프트는 다시 기본 100초에서 시작합니다. timeout이 아닌
+오류에는 제한 시간을 늘리지 않습니다.
+
+초기 보고서 생성 후 렌더링된 PDF가 목표 20페이지보다 짧으면 터미널에서 추가
+작성 여부를 한 번 묻습니다. `y`, `yes`, `예`, `네`, `진행`, `계속` 중 하나를
+입력한 경우에만 기존 보고서의 5개 목차를 각각 챕터 가이드로 사용해 다시
+확장 작성합니다. 그 외 입력이나 입력 불가능 환경에서는 초기 보고서를 유지합니다.
+추가 작성이 승인되면 최초 결과는
+`output/tech_report_YYYYMMDD_HHMMSS_initial.md`로 별도 보존됩니다.
 
 ```powershell
 py -3 .\client_service.py --tech-report
 ```
 
-텍스트 레이어가 있는 페이지는 직접 문자를 추출하고, 텍스트가 없거나 너무 짧은 페이지는 300 DPI PNG 이미지로 변환한 후 현재 설정된 vision LLM에 이미지로 전송해 OCR을 수행합니다. Tesseract는 사용하지 않습니다. 추출된 원문과 페이지별 추출 방식은 다음 파일로 함께 저장됩니다.
+PDF의 텍스트 레이어가 있는 페이지는 직접 문자를 추출하고, 텍스트가 없거나 너무 짧은 페이지는 300 DPI PNG 이미지로 변환한 후 현재 설정된 vision LLM에 이미지로 전송해 OCR을 수행합니다. Tesseract는 사용하지 않습니다. TXT는 UTF-8 문자열을 직접 읽습니다. 입력 원문과 추출 정보는 다음 파일로 함께 저장됩니다.
 
 - `output/tech_report_YYYYMMDD_HHMMSS_extracted.txt`
 - `output/tech_report_YYYYMMDD_HHMMSS_extraction.json`

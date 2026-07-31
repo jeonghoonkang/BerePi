@@ -49,6 +49,81 @@ class FakeDocument:
 
 
 class TechReportPdfTests(unittest.TestCase):
+    def test_short_report_expansion_requires_explicit_approval(self) -> None:
+        with patch("builtins.input", return_value="n"):
+            self.assertFalse(client_service.confirm_tech_report_expansion(8, "pdf"))
+        with patch("builtins.input", return_value="yes"):
+            self.assertTrue(client_service.confirm_tech_report_expansion(8, "pdf"))
+
+    def test_splits_five_report_sections_as_expansion_guides(self) -> None:
+        report = """# 기술 보고서
+
+## 1. 개요 (Background & Objectives)
+개요 내용
+## 2. 핵심 아키텍처 및 데이터 흐름 (Core Architecture & Workflow)
+구조 내용
+## 3. 주요 모듈 / 기술 사양 (Technical Specifications - 표 형식 활용)
+사양 내용
+## 4. 기존 기술 대비 차별점 및 제약사항 (Comparison & Limitations)
+제약 내용
+## 5. 결론 및 적용/고려 사항 (Key Takeaways)
+결론 내용
+"""
+        preamble, sections = client_service.split_tech_report_sections(report)
+        self.assertEqual(preamble, "# 기술 보고서")
+        self.assertEqual(len(sections), 5)
+        self.assertTrue(sections[0].startswith("## 1."))
+        self.assertTrue(sections[4].startswith("## 5."))
+
+    def test_page_estimate_is_used_when_pdf_is_unavailable(self) -> None:
+        pages, method = client_service.tech_report_page_count(
+            "가" * 3601,
+            Path("missing.pdf"),
+            False,
+        )
+        self.assertEqual((pages, method), (3, "character-estimate"))
+
+    def test_timeout_grows_ten_percent_and_resets_after_success(self) -> None:
+        config = {
+            "server_base_url": "http://model.test",
+            "generate_path": "/api/generate",
+            "status_path": "/api/status",
+            "request_timeout_seconds": 100,
+            "user_id": "",
+            "password": "",
+            "model": "model-a",
+            "keep_alive": "1m",
+            "num_ctx": 8192,
+            "cloud_model_enabled": False,
+            "agent_workers": [],
+        }
+        observed_timeouts = []
+
+        def timeout_then_succeed(_config, _url, _payload, timeout):
+            observed_timeouts.append(timeout)
+            if len(observed_timeouts) <= 2:
+                raise TimeoutError("backend timed out")
+            return {"response": "ok"}
+
+        with (
+            patch.object(client_service, "invoke_model_request", side_effect=timeout_then_succeed),
+            patch.object(client_service, "wait_for_model_queue_slot", return_value=None),
+        ):
+            self.assertEqual(client_service.call_model(config, "write report"), "ok")
+
+        with patch.object(
+            client_service,
+            "invoke_model_request",
+            side_effect=lambda _config, _url, _payload, timeout: (
+                observed_timeouts.append(timeout) or {"response": "reset"}
+            ),
+        ):
+            self.assertEqual(client_service.call_model(config, "next prompt"), "reset")
+
+        self.assertEqual(observed_timeouts, [100, 110, 121, 100])
+        self.assertEqual(client_service.next_model_timeout(280), 300)
+        self.assertEqual(client_service.next_model_timeout(300), 300)
+
     def test_uses_text_layer_and_ocr_for_scanned_page(self) -> None:
         fake_fitz = SimpleNamespace(
             open=lambda _path: FakeDocument(),
@@ -99,6 +174,31 @@ class TechReportPdfTests(unittest.TestCase):
                 selected = client_service.resolve_tech_report_pdf("")
 
         self.assertEqual(selected.name, "newer.pdf")
+
+    def test_reads_utf8_txt_source_without_ocr(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "article.txt"
+            source.write_text("Physical AI 데이터센터 기술 구조와 운영 원리", encoding="utf-8")
+
+            text, metadata = client_service.read_tech_report_source(source, config={})
+
+        self.assertIn("Physical AI", text)
+        self.assertEqual(metadata["source_type"], "txt")
+        self.assertEqual(metadata["ocr_engine"], "not-used")
+        self.assertEqual(metadata["total_characters"], len(text))
+
+    def test_accepts_txt_path_and_builds_twenty_page_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.txt"
+            source.write_text("기술 원문", encoding="utf-8")
+
+            selected = client_service.resolve_tech_report_pdf(str(source))
+            prompt = client_service.build_tech_report_prompt(selected, "기술 원문")
+
+        self.assertEqual(selected, source.resolve())
+        self.assertIn("형식: TXT", prompt)
+        self.assertIn("약 20페이지", prompt)
+        self.assertIn("기술 원문", prompt)
 
     def test_cloud_vision_payload_contains_image_data_url(self) -> None:
         config = {
