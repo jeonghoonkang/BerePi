@@ -70,7 +70,7 @@ python .\extract_picture_pages.py
 
 - 입력: `read_mach/input`
 - 출력: `read_mach/output`
-- 서버: `http://keties.iptime.org:4004/api/generate`
+- 서버: `http://llm-server.example:4004/api/generate`
 - 모델: `gemma4:31b`
 - 렌더링: 144 DPI
 
@@ -94,7 +94,7 @@ python .\extract_picture_pages.py --help
 다른 서버나 모델은 환경변수 또는 옵션으로 변경할 수 있습니다.
 
 ```powershell
-$env:READ_MACH_SERVER_URL = "http://keties.iptime.org:4004"
+$env:READ_MACH_SERVER_URL = "http://llm-server.example:4004"
 $env:READ_MACH_MODEL = "gemma4:31b"
 python .\extract_picture_pages.py --dpi 180 --overwrite
 ```
