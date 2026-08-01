@@ -1,5 +1,50 @@
 # read_mach
 
+## 추가 문서 및 그림 입력
+
+모든 지원 형식의 통합 진입점은 `text_extract.py`입니다. `--input-file`을 생략하면
+`input`과 하위 디렉토리에서 PDF, DOCX, HWPX, JPG, PNG를 찾아 경로순으로 처리합니다.
+
+```powershell
+python .\text_extract.py
+```
+
+일부 파일만 순서대로 처리하려면 옵션을 여러 번 지정합니다.
+
+```powershell
+python .\text_extract.py `
+  --input-file ".\input\보고서.pdf" `
+  --input-file ".\input\문서.hwpx" `
+  --input-file ".\input\화면.png"
+```
+
+기본적으로 한 파일이 실패해도 다음 파일을 계속 처리합니다. 첫 실패에서 중단하려면
+`--fail-fast`를 사용합니다. PDF 전용 페이지 및 OCR 옵션도 통합 진입점에서 전달할 수
+있습니다.
+
+`input` 디렉토리 안의 DOCX, HWPX, JPG, PNG 파일도 각각의 실행 파일로 처리할 수 있습니다.
+DOCX/HWPX는 XML 본문을 직접 추출하고 문서에 포함된 PNG/JPEG 그림은 비전 모델 OCR로
+전사합니다. JPG/PNG는 그림 전체를 비전 모델로 전사합니다. 결과는 `output` 디렉토리에
+UTF-8 `.txt` 본문과 `.json` 메타데이터로 저장됩니다.
+
+```powershell
+python .\docx_text_extractor.py --input-file ".\input\문서.docx"
+python .\hwpx_text_extractor.py --input-file ".\input\문서.hwpx"
+python .\jpg_text_extractor.py  --input-file ".\input\사진.jpg"
+python .\png_text_extractor.py  --input-file ".\input\화면.png"
+```
+
+그림 OCR 또는 포함 그림 OCR이 필요한 경우 PDF 처리와 마찬가지로 서버 비밀번호를 먼저
+지정해야 합니다.
+
+```powershell
+$env:READ_MACH_PASSWORD = "<서버 비밀번호 입력>"
+```
+
+DOCX/HWPX에 텍스트만 있고 지원되는 포함 그림이 없으면 모델 서버를 호출하지 않습니다.
+현재 문서 내 포함 그림 OCR은 PNG, JPG/JPEG에 적용되며 EMF/WMF 같은 벡터 그림은
+건너뜁니다.
+
 ## PDF 문자 추출 모듈
 
 `pdf_text_extractor.py`는 PDF의 텍스트 레이어를 페이지별로 읽고, 문자가
