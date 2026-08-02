@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dispatch supported input files to the format-specific text extractors."""
+"""Dispatch supported input files and URLs to their text extractors."""
 
 from __future__ import annotations
 
@@ -82,6 +82,25 @@ def extractor_command(
     return command
 
 
+def url_extractor_command(
+    url: str, *, config_path: Path, output_dir: Path, timeout: int
+) -> list[str]:
+    """Build the URL text extractor command for one web address."""
+    script = Path(__file__).resolve().parent / "url_text_extractor.py"
+    return [
+        sys.executable,
+        str(script),
+        "--url",
+        url,
+        "--config",
+        str(config_path),
+        "--output-dir",
+        str(output_dir),
+        "--timeout",
+        str(max(1, timeout)),
+    ]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="입력 파일 확장자에 맞는 추출기를 선택하여 문자를 순차 추출합니다."
@@ -91,7 +110,16 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         action="append",
         default=[],
-        help="처리할 input 내부 파일. 여러 번 지정 가능하며, 생략하면 지원 파일 전체를 처리합니다.",
+        help=(
+            "처리할 input 내부 파일. 여러 번 지정 가능하며, 파일과 URL을 모두 생략하면 "
+            "지원 파일 전체를 처리합니다."
+        ),
+    )
+    parser.add_argument(
+        "--url",
+        action="append",
+        default=[],
+        help="본문을 추출할 HTTP/HTTPS URL. 여러 번 지정할 수 있습니다.",
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -99,6 +127,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-page", type=int, help="PDF에만 적용")
     parser.add_argument("--ocr-dpi", type=int, default=300, help="PDF에만 적용")
     parser.add_argument("--minimum-text-characters", type=int, default=100, help="PDF에만 적용")
+    parser.add_argument("--url-timeout", type=int, default=30, help="URL별 요청 제한 시간(초)")
     parser.add_argument("--fail-fast", action="store_true", help="첫 실패에서 처리를 중단")
     return parser.parse_args()
 
@@ -106,48 +135,58 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        sources = (
-            resolve_requested_files(DEFAULT_INPUT_DIR, args.input_file)
-            if args.input_file
-            else discover_input_files(DEFAULT_INPUT_DIR)
-        )
+        if args.input_file:
+            sources = resolve_requested_files(DEFAULT_INPUT_DIR, args.input_file)
+        elif args.url:
+            sources = []
+        else:
+            sources = discover_input_files(DEFAULT_INPUT_DIR)
     except (OSError, ValueError) as exc:
         print(f"입력 파일 선택 실패: {exc}", file=sys.stderr)
         return 2
 
-    if not sources:
-        print(f"지원되는 입력 파일이 없습니다: {DEFAULT_INPUT_DIR}", file=sys.stderr)
+    if not sources and not args.url:
+        print(f"지원되는 입력 파일 또는 URL이 없습니다: {DEFAULT_INPUT_DIR}", file=sys.stderr)
         return 2
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    failures: list[tuple[Path, int]] = []
-    total = len(sources)
-    for index, source in enumerate(sources, 1):
+    failures: list[tuple[str, int]] = []
+    tasks: list[tuple[str, str, list[str]]] = []
+    for source in sources:
         extractor = EXTRACTORS[source.suffix.casefold()]
-        print(f"[{index}/{total}] {source.name} -> {extractor}", flush=True)
         command = extractor_command(
-            source,
-            config_path=args.config,
-            output_dir=args.output_dir,
-            start_page=max(1, args.start_page),
-            end_page=args.end_page,
+            source, config_path=args.config, output_dir=args.output_dir,
+            start_page=max(1, args.start_page), end_page=args.end_page,
             ocr_dpi=max(72, args.ocr_dpi),
             minimum_text_characters=max(0, args.minimum_text_characters),
         )
+        tasks.append((str(source), extractor, command))
+    for url in args.url:
+        command = url_extractor_command(
+            url, config_path=args.config, output_dir=args.output_dir, timeout=args.url_timeout
+        )
+        tasks.append((url, "url_text_extractor.py", command))
+
+    total = len(tasks)
+    attempted = 0
+    successes = 0
+    for index, (label, extractor, command) in enumerate(tasks, 1):
+        attempted += 1
+        print(f"[{index}/{total}] {label} -> {extractor}", flush=True)
         result = subprocess.run(command, check=False)
         if result.returncode:
-            failures.append((source, result.returncode))
-            print(f"[{index}/{total}] 실패(exit={result.returncode}): {source}", file=sys.stderr)
+            failures.append((label, result.returncode))
+            print(f"[{index}/{total}] 실패(exit={result.returncode}): {label}", file=sys.stderr)
             if args.fail_fast:
                 break
         else:
-            print(f"[{index}/{total}] 완료: {source.name}", flush=True)
+            successes += 1
+            print(f"[{index}/{total}] 완료: {label}", flush=True)
 
-    completed = total - len(failures) if not args.fail_fast else index - len(failures)
-    print(f"처리 요약: 성공 {completed}, 실패 {len(failures)}, 대상 {total}")
+    print(f"처리 요약: 성공 {successes}, 실패 {len(failures)}, 시도 {attempted}, 대상 {total}")
     if failures:
-        for source, returncode in failures:
-            print(f"- 실패(exit={returncode}): {source}", file=sys.stderr)
+        for label, returncode in failures:
+            print(f"- 실패(exit={returncode}): {label}", file=sys.stderr)
         return 1
     return 0
 
