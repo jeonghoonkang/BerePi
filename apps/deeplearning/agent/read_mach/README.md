@@ -18,6 +18,20 @@ python .\text_extract.py `
   --input-file ".\input\화면.png"
 ```
 
+여러 웹페이지의 본문을 순차 추출하려면 `--url`을 반복 지정합니다. URL만 지정하면
+`input` 디렉토리의 파일은 자동 탐색하지 않습니다.
+
+```powershell
+python .\text_extract.py `
+  --url "https://example.com/article-1" `
+  --url "https://example.com/article-2" `
+  --url-timeout 60
+```
+
+`--input-file`과 `--url`을 함께 사용하면 지정한 로컬 파일을 먼저 처리한 뒤 URL을
+입력 순서대로 처리합니다. 각 URL 결과는 기존과 같이 `output`에 고유 해시가 포함된
+`.txt` 본문과 `.json` 메타데이터로 저장됩니다.
+
 기본적으로 한 파일이 실패해도 다음 파일을 계속 처리합니다. 첫 실패에서 중단하려면
 `--fail-fast`를 사용합니다. PDF 전용 페이지 및 OCR 옵션도 통합 진입점에서 전달할 수
 있습니다.
