@@ -2,6 +2,61 @@
 
 ## 추가 문서 및 그림 입력
 
+### 명함 OCR 문서 생성
+
+`--bizcard`는 JPG/PNG 명함을 모델 서버로 전송해 OCR하고 성명, 회사, 부서, 직책,
+전화번호, 이메일, 주소 등을 구조화합니다. `output/bizcards.md` 한 파일의 위쪽에
+명함 Index를 만들고, 그 아래에 각 명함 내용을 연속해서 저장합니다.
+
+로컬 명함은 `input` 디렉토리 내부 파일을 지정합니다. 여러 장은 `--input-file`을
+반복해서 전달할 수 있고, 파일을 생략하면 `input` 아래의 모든 JPG/JPEG/PNG를 처리합니다.
+
+```powershell
+$env:READ_MACH_PASSWORD = "<모델 서버 비밀번호>"
+python .\text_extract.py --bizcard `
+  --input-file ".\input\card-front.jpg" `
+  --input-file ".\input\card-back.png"
+```
+
+WebDAV 폴더의 명함을 처리하려면 다음 환경변수와 `--bizcard-webdav`를 사용합니다.
+인증이 필요 없는 WebDAV라면 사용자명과 비밀번호를 생략할 수 있습니다.
+
+```powershell
+$env:READ_MACH_WEBDAV_USERNAME = "<WebDAV 사용자명>"
+$env:READ_MACH_WEBDAV_PASSWORD = "<WebDAV 앱 비밀번호>"
+python .\text_extract.py --bizcard --bizcard-webdav
+```
+
+WebDAV에서 내려받은 명함 원본을 OCR 처리와 함께 로컬 디렉토리에도 저장하려면
+`--webdav-save-dir`을 지정합니다. 저장 디렉토리가 없으면 자동으로 생성됩니다.
+
+```powershell
+python .\text_extract.py --bizcard --bizcard-webdav `
+  --webdav-save-dir ".\input\webdav"
+```
+
+같은 다운로드에 동일한 파일명이 여러 개 있으면 `_2`, `_3` 접미사를 붙여 모두
+보존합니다. 이후 같은 명령을 다시 실행하면 같은 이름의 로컬 파일은 최신 원격
+내용으로 갱신됩니다.
+
+기본 WebDAV 주소:
+
+```text
+http://***.org:111/apps/memories/folders/Photos/memories/biz_card
+```
+
+다른 주소를 사용하려면 `--webdav-url`로 변경할 수 있습니다. WebDAV 모드는 폴더에
+`PROPFIND Depth: 1`을 요청하고 JPG/JPEG/PNG 항목을 순차 다운로드합니다.
+
+처리 완료한 명함의 원본 경로 또는 WebDAV URL은 `output/.bizcard_state.json`에
+기록됩니다. 다음 실행에서 경로가 같은 명함은 모델에 다시 보내지 않고 건너뜁니다.
+이미 처리한 명함을 강제로 다시 읽고 통합 문서의 해당 내용을 갱신하려면 다음과 같이
+`--bizcard-force`를 사용합니다.
+
+```powershell
+python .\text_extract.py --bizcard --bizcard-webdav --bizcard-force
+```
+
 모든 지원 형식의 통합 진입점은 `text_extract.py`입니다. `--input-file`을 생략하면
 `input`과 하위 디렉토리에서 PDF, DOCX, HWPX, JPG, PNG를 찾아 경로순으로 처리합니다.
 

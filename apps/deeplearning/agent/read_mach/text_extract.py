@@ -101,6 +101,40 @@ def url_extractor_command(
     ]
 
 
+def bizcard_extractor_command(
+    input_files: list[Path],
+    *,
+    config_path: Path,
+    output_dir: Path,
+    use_webdav: bool,
+    webdav_url: str,
+    webdav_username: str | None,
+    webdav_password: str | None,
+    webdav_timeout: int,
+    force: bool,
+    webdav_save_dir: Path | None = None,
+) -> list[str]:
+    """Build the business-card document extractor command."""
+    script = Path(__file__).resolve().parent / "bizcard_text_extractor.py"
+    command = [
+        sys.executable, str(script), "--config", str(config_path), "--output-dir", str(output_dir)
+    ]
+    for path in input_files:
+        command.extend(["--input-file", str(path)])
+    if use_webdav:
+        command.extend(["--webdav", "--webdav-url", webdav_url])
+        command.extend(["--webdav-timeout", str(max(1, webdav_timeout))])
+        if webdav_username:
+            command.extend(["--webdav-username", webdav_username])
+        if webdav_password:
+            command.extend(["--webdav-password", webdav_password])
+        if webdav_save_dir is not None:
+            command.extend(["--webdav-save-dir", str(webdav_save_dir)])
+    if force:
+        command.append("--force")
+    return command
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="입력 파일 확장자에 맞는 추출기를 선택하여 문자를 순차 추출합니다."
@@ -121,6 +155,21 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="본문을 추출할 HTTP/HTTPS URL. 여러 번 지정할 수 있습니다.",
     )
+    parser.add_argument("--bizcard", action="store_true", help="JPG/PNG 명함을 OCR하여 문서를 생성")
+    parser.add_argument("--bizcard-webdav", action="store_true", help="명함 원본을 WebDAV에서 읽기")
+    parser.add_argument("--bizcard-force", action="store_true", help="처리된 동일 경로 명함도 다시 OCR")
+    parser.add_argument(
+        "--webdav-url",
+        default="http://keties.iptime.org:4001/apps/memories/folders/Photos/memories/biz_card",
+    )
+    parser.add_argument("--webdav-username")
+    parser.add_argument("--webdav-password")
+    parser.add_argument("--webdav-timeout", type=int, default=30)
+    parser.add_argument(
+        "--webdav-save-dir",
+        type=Path,
+        help="WebDAV 명함 원본을 함께 저장할 로컬 디렉토리 (--bizcard 전용)",
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--start-page", type=int, default=1, help="PDF에만 적용")
@@ -134,6 +183,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.bizcard:
+        command = bizcard_extractor_command(
+            args.input_file,
+            config_path=args.config,
+            output_dir=args.output_dir,
+            use_webdav=args.bizcard_webdav,
+            webdav_url=args.webdav_url,
+            webdav_username=args.webdav_username,
+            webdav_password=args.webdav_password,
+            webdav_timeout=args.webdav_timeout,
+            force=args.bizcard_force,
+            webdav_save_dir=args.webdav_save_dir,
+        )
+        return subprocess.run(command, check=False).returncode
     try:
         if args.input_file:
             sources = resolve_requested_files(DEFAULT_INPUT_DIR, args.input_file)
