@@ -19,6 +19,7 @@ services:
     restart: always
     volumes:
       - ${VOL_PATH}/nextcloud_volume:/var/www/html
+      - ${VOL_PATH}/photo_volume:/Photo
     environment:
       - VIRTUAL_HOST=***.mooo.com
       - LETSENCRYPT_HOST=***.mooo.com
