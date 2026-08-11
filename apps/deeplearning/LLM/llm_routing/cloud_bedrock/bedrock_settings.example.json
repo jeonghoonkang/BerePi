@@ -1,0 +1,13 @@
+{
+  "region": "us-east-1",
+  "model_id": "amazon.nova-micro-v1:0",
+  "access_key_id_env": "AWS_ACCESS_KEY_ID",
+  "secret_access_key_env": "AWS_SECRET_ACCESS_KEY",
+  "session_token_env": "AWS_SESSION_TOKEN",
+  "bearer_token_env": "AWS_BEARER_TOKEN_BEDROCK",
+  "inference_config": {
+    "maxTokens": 1024,
+    "temperature": 0.2,
+    "topP": 0.9
+  }
+}

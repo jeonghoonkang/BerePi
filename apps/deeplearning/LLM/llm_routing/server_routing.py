@@ -28,6 +28,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from cloud_bedrock import BedrockClient
+from cloud_gcp import GCPVertexClient
+
 
 APP_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.getenv("LLM_ROUTING_CONFIG", APP_DIR / "llm_targets.json"))
@@ -116,6 +119,10 @@ class LLMTarget:
 
     @property
     def base_url(self) -> str:
+        if self.api_type == "bedrock":
+            return f"aws-bedrock://{self.host}/{self.model}".rstrip("/")
+        if self.api_type == "gcp_vertex":
+            return f"gcp-vertex://{self.host}/{self.model}".rstrip("/")
         return f"http://{self.host}:{self.port}".rstrip("/")
 
 
@@ -773,6 +780,9 @@ def probe_openai_compatible_target(target: LLMTarget) -> dict[str, Any]:
 
 def target_health(target: LLMTarget) -> dict[str, Any]:
     try:
+        if target.api_type == "bedrock":
+            client = BedrockClient()
+            return {"ok": True, "data": {"available_targets": 1, "models": [{"name": client.model_id}]}}
         if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
             data = probe_openai_compatible_target(target)
             return {"ok": bool(data.get("ok")), "data": data}
@@ -1238,15 +1248,26 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
 
     started = time.time()
     try:
-        url, backend_payload = build_backend_payload(target, payload)
-        data = request_json(
-            url,
-            backend_payload,
-            effective_timeout,
-            headers=target_auth_headers(target),
-        )
+        if target.api_type == "bedrock":
+            bedrock_payload = dict(payload)
+            # The selected route owns the Bedrock model. Ignore a model name
+            # left in a legacy Ollama/OpenAI request.
+            bedrock_payload["model"] = target.model
+            normalized = BedrockClient().converse(bedrock_payload, effective_timeout)
+        elif target.api_type == "gcp_vertex":
+            gcp_payload = dict(payload)
+            gcp_payload["model"] = target.model
+            normalized = GCPVertexClient().generate(gcp_payload, effective_timeout)
+        else:
+            url, backend_payload = build_backend_payload(target, payload)
+            data = request_json(
+                url,
+                backend_payload,
+                effective_timeout,
+                headers=target_auth_headers(target),
+            )
+            normalized = normalize_backend_response(target, data)
         elapsed = time.time() - started
-        normalized = normalize_backend_response(target, data)
         with STATE_LOCK:
             metric = metric_for(target.id)
             metric.total_prompts += 1
@@ -1413,6 +1434,44 @@ def route_prompt(
     if requested_target is not None and requested_target.id != target.id:
         result["failover_from_target_id"] = requested_target.id
     return result
+
+
+def route_bedrock_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
+    """Route only the dedicated Bedrock endpoint to AWS."""
+    settings = BedrockClient()
+    target = LLMTarget(
+        id="aws-bedrock-endpoint",
+        name="AWS Bedrock",
+        host=settings.region,
+        port=443,
+        model=settings.model_id,
+        api_type="bedrock",
+        gpu_info="AWS managed",
+        gpu_type="cloud",
+        notes="Dedicated /api/bedrock/generate endpoint",
+    )
+    request_payload = dict(payload)
+    request_payload.pop("target_id", None)
+    return route_prompt(handler, request_payload, selected_target=target)
+
+
+def route_gcp_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
+    """Route only the dedicated GCP endpoint to a Vertex AI Gemma deployment."""
+    settings = GCPVertexClient()
+    target = LLMTarget(
+        id="gcp-vertex-gemma-endpoint",
+        name="GCP Vertex AI Gemma",
+        host=settings.location,
+        port=443,
+        model=settings.model_id,
+        api_type="gcp_vertex",
+        gpu_info="GCP managed",
+        gpu_type="cloud",
+        notes="Dedicated /api/gcp/generate endpoint",
+    )
+    request_payload = dict(payload)
+    request_payload.pop("target_id", None)
+    return route_prompt(handler, request_payload, selected_target=target)
 
 
 def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
@@ -3291,6 +3350,22 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     self.write_prompt_sse(payload)
                     return
                 self.write_json(route_prompt(self, payload))
+                return
+            if self.path == "/api/bedrock/generate":
+                if not prompt_api_authenticated(self, payload):
+                    self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
+                    return
+                if payload.get("stream") is True:
+                    raise ValueError("Bedrock endpoint currently supports non-streaming requests only.")
+                self.write_json(route_bedrock_prompt(self, payload))
+                return
+            if self.path == "/api/gcp/generate":
+                if not prompt_api_authenticated(self, payload):
+                    self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
+                    return
+                if payload.get("stream") is True:
+                    raise ValueError("GCP endpoint currently supports non-streaming requests only.")
+                self.write_json(route_gcp_prompt(self, payload))
                 return
             if self.path == "/v1/chat/completions":
                 if not prompt_api_authenticated(self, payload):

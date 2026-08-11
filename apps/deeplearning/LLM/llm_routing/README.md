@@ -428,3 +428,48 @@ bash run.sh
 응답의 `requested_backend_timeout_seconds`, `backend_timeout_seconds`,
 `model_dispatch_attempt`, `repeated_model_timeout_applied` 필드에서 적용 결과를
 확인할 수 있습니다.
+## AWS Bedrock cloud routing
+
+Existing routing endpoints continue to use the targets in `llm_targets.json`.
+Only `POST /api/bedrock/generate` sends a request to AWS Bedrock through the
+Converse API. Install the dependency and provide credentials before starting
+the routing server:
+
+```bash
+python -m pip install -r requirements.txt
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+# Temporary credentials only:
+export AWS_SESSION_TOKEN="..."
+bash run.sh
+```
+
+Alternatively, put a Bedrock API key in `AWS_BEARER_TOKEN_BEDROCK`. Runtime
+settings are in `cloud_bedrock/bedrock_settings.json`; the committed template
+is `cloud_bedrock/bedrock_settings.example.json`. The real settings file is
+git-ignored and contains environment-variable names, never secret values.
+Use `LLM_ROUTING_BEDROCK_CONFIG` to load a settings file from another path.
+
+```bash
+curl -X POST http://SERVER_IP:4004/api/bedrock/generate \
+  -H 'Content-Type: application/json' \
+  -H 'X-LLM-Routing-Password: YOUR_ROUTING_PASSWORD' \
+  -d '{"prompt":"hello from Bedrock"}'
+```
+
+`POST /api/generate`, `/generate`, `/api/chat`, and
+`/v1/chat/completions` retain their existing target-based behavior.
+
+## GCP Vertex AI Gemma endpoint
+
+`POST /api/gcp/generate` is an independent endpoint for a Gemma model deployed
+to a GCP Vertex AI Endpoint. It does not change the existing target routing or
+the AWS Bedrock endpoint. Configuration and deployment instructions are in
+`cloud_gcp/README.md`.
+
+```bash
+curl -X POST http://SERVER_IP:4004/api/gcp/generate \
+  -H 'Content-Type: application/json' \
+  -H 'X-LLM-Routing-Password: YOUR_ROUTING_PASSWORD' \
+  -d '{"prompt":"hello from GCP Gemma"}'
+```
