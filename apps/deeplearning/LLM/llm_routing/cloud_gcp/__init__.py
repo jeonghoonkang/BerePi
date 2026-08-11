@@ -1,5 +1,5 @@
-"""Google Cloud Vertex AI backend for llm_routing."""
+"""Google AI Studio backend for llm_routing."""
 
-from .client import GCPVertexClient, GCPConfigError
+from .client import GCPConfigError, GCPVertexClient, GoogleAIStudioClient
 
-__all__ = ["GCPVertexClient", "GCPConfigError"]
+__all__ = ["GoogleAIStudioClient", "GCPVertexClient", "GCPConfigError"]

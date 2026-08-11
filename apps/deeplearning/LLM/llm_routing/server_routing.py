@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from cloud_bedrock import BedrockClient
-from cloud_gcp import GCPVertexClient
+from cloud_gcp import GoogleAIStudioClient
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -121,8 +121,8 @@ class LLMTarget:
     def base_url(self) -> str:
         if self.api_type == "bedrock":
             return f"aws-bedrock://{self.host}/{self.model}".rstrip("/")
-        if self.api_type == "gcp_vertex":
-            return f"gcp-vertex://{self.host}/{self.model}".rstrip("/")
+        if self.api_type == "google_ai_studio":
+            return f"google-ai-studio://{self.host}/{self.model}".rstrip("/")
         return f"http://{self.host}:{self.port}".rstrip("/")
 
 
@@ -1254,10 +1254,10 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             # left in a legacy Ollama/OpenAI request.
             bedrock_payload["model"] = target.model
             normalized = BedrockClient().converse(bedrock_payload, effective_timeout)
-        elif target.api_type == "gcp_vertex":
+        elif target.api_type == "google_ai_studio":
             gcp_payload = dict(payload)
             gcp_payload["model"] = target.model
-            normalized = GCPVertexClient().generate(gcp_payload, effective_timeout)
+            normalized = GoogleAIStudioClient().generate(gcp_payload, effective_timeout)
         else:
             url, backend_payload = build_backend_payload(target, payload)
             data = request_json(
@@ -1456,18 +1456,18 @@ def route_bedrock_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any
 
 
 def route_gcp_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
-    """Route only the dedicated GCP endpoint to a Vertex AI Gemma deployment."""
-    settings = GCPVertexClient()
+    """Route only the dedicated GCP endpoint to Google AI Studio."""
+    settings = GoogleAIStudioClient()
     target = LLMTarget(
-        id="gcp-vertex-gemma-endpoint",
-        name="GCP Vertex AI Gemma",
-        host=settings.location,
+        id="google-ai-studio-endpoint",
+        name="Google AI Studio",
+        host="generativelanguage.googleapis.com",
         port=443,
         model=settings.model_id,
-        api_type="gcp_vertex",
+        api_type="google_ai_studio",
         gpu_info="GCP managed",
         gpu_type="cloud",
-        notes="Dedicated /api/gcp/generate endpoint",
+        notes="Dedicated /api/gcp/generate Google AI Studio endpoint",
     )
     request_payload = dict(payload)
     request_payload.pop("target_id", None)

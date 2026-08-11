@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -12,8 +13,8 @@ class GCPConfigError(RuntimeError):
     pass
 
 
-class GCPVertexClient:
-    """Call a self-deployed Vertex AI Gemma endpoint via Chat Completions."""
+class GoogleAIStudioClient:
+    """Call the Google AI Studio Gemini API with an API key."""
 
     def __init__(self, config_path: str | Path | None = None) -> None:
         path = Path(
@@ -24,93 +25,99 @@ class GCPVertexClient:
         try:
             self.settings = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError as exc:
-            raise GCPConfigError(f"GCP config file not found: {path}") from exc
+            raise GCPConfigError(f"Google AI Studio config file not found: {path}") from exc
         except (OSError, json.JSONDecodeError) as exc:
-            raise GCPConfigError(f"Cannot read GCP config {path}: {exc}") from exc
+            raise GCPConfigError(f"Cannot read Google AI Studio config {path}: {exc}") from exc
 
-        self.project_id = str(self.settings.get("project_id") or "").strip()
-        self.location = str(self.settings.get("location") or "").strip()
-        self.endpoint_id = str(self.settings.get("endpoint_id") or "").strip()
-        self.model_id = str(self.settings.get("model_id") or "google/gemma-4-31b-it").strip()
-        if not self.project_id or not self.location or not self.endpoint_id:
-            raise GCPConfigError("GCP project_id, location, and endpoint_id are required.")
+        self.model_id = str(self.settings.get("model_id") or "gemma-4-31b-it").strip()
+        self.api_version = str(self.settings.get("api_version") or "v1beta").strip()
+        self.base_url = str(
+            self.settings.get("base_url") or "https://generativelanguage.googleapis.com"
+        ).rstrip("/")
+        if not self.model_id:
+            raise GCPConfigError("Google AI Studio model_id is required.")
 
     @property
     def endpoint_url(self) -> str:
-        configured = str(self.settings.get("endpoint_url") or "").strip()
-        if configured:
-            return configured
-        return (
-            f"https://{self.location}-aiplatform.googleapis.com/v1/projects/"
-            f"{self.project_id}/locations/{self.location}/endpoints/"
-            f"{self.endpoint_id}/chat/completions"
-        )
+        model = urllib.parse.quote(self.model_id, safe="-._/")
+        return f"{self.base_url}/{self.api_version}/models/{model}:generateContent"
 
-    def _access_token(self) -> str:
-        token_env = str(self.settings.get("access_token_env") or "GOOGLE_OAUTH_ACCESS_TOKEN")
-        if os.getenv(token_env):
-            return str(os.environ[token_env])
-        service_account_env = str(
-            self.settings.get("service_account_file_env")
-            or "GOOGLE_APPLICATION_CREDENTIALS"
-        )
-        if service_account_env != "GOOGLE_APPLICATION_CREDENTIALS" and os.getenv(service_account_env):
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.environ[service_account_env]
-        try:
-            import google.auth
-            from google.auth.transport.requests import Request
-        except ImportError as exc:
+    def _api_key(self) -> str:
+        # gcp_settings.json is git-ignored, so a literal key is supported for
+        # local deployment. An environment variable remains the safer option.
+        key = str(self.settings.get("api_key") or "").strip()
+        key_env = str(self.settings.get("api_key_env") or "GEMINI_API_KEY").strip()
+        key = key or str(os.getenv(key_env) or "").strip()
+        if not key or key == "PUT_YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE":
             raise GCPConfigError(
-                "google-auth is required: python -m pip install google-auth"
-            ) from exc
-        credentials, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-        credentials.refresh(Request())
-        if not credentials.token:
-            raise GCPConfigError("Could not obtain a Google Cloud access token.")
-        return str(credentials.token)
+                f"Google AI Studio API key is required. Set api_key or environment variable {key_env}."
+            )
+        return key
 
     @staticmethod
-    def _messages(payload: dict[str, Any]) -> list[dict[str, str]]:
+    def _text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "\n".join(
+                str(part.get("text") or "")
+                for part in content
+                if isinstance(part, dict) and part.get("type", "text") == "text"
+            )
+        return str(content or "")
+
+    @classmethod
+    def _contents(cls, payload: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         source = payload.get("messages")
         if not isinstance(source, list):
-            return [{"role": "user", "content": str(payload.get("prompt") or "")}]
-        messages: list[dict[str, str]] = []
+            return ([{"role": "user", "parts": [{"text": str(payload.get("prompt") or "")}]}], None)
+        contents: list[dict[str, Any]] = []
+        system_texts: list[str] = []
         for item in source:
             if not isinstance(item, dict):
                 continue
-            content = item.get("content")
-            if isinstance(content, list):
-                content = "\n".join(
-                    str(part.get("text") or "")
-                    for part in content
-                    if isinstance(part, dict) and part.get("type", "text") == "text"
-                )
-            messages.append({
-                "role": str(item.get("role") or "user"),
-                "content": str(content or ""),
-            })
-        return messages
+            role = str(item.get("role") or "user")
+            text = cls._text(item.get("content"))
+            if role == "system":
+                system_texts.append(text)
+            else:
+                contents.append({
+                    "role": "model" if role == "assistant" else "user",
+                    "parts": [{"text": text}],
+                })
+        system = {"parts": [{"text": "\n".join(system_texts)}]} if system_texts else None
+        return contents, system
 
     def generate(self, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
-        defaults = self.settings.get("inference_config", {})
-        body: dict[str, Any] = {
-            "model": self.model_id,
-            "messages": self._messages(payload),
-            "stream": False,
+        contents, system = self._contents(payload)
+        defaults = self.settings.get("generation_config", {})
+        generation: dict[str, Any] = {}
+        mappings = {
+            "temperature": "temperature",
+            "max_tokens": "maxOutputTokens",
+            "top_p": "topP",
+            "top_k": "topK",
         }
-        for key in ("temperature", "max_tokens", "top_p"):
-            value = payload.get(key, defaults.get(key))
+        for request_key, api_key in mappings.items():
+            value = payload.get(request_key, defaults.get(api_key))
             if value is not None:
-                body[key] = value
+                generation[api_key] = value
+        thinking_level = payload.get("thinking_level", defaults.get("thinkingLevel"))
+        if thinking_level is not None:
+            normalized_thinking = str(thinking_level).strip().lower()
+            if normalized_thinking not in {"minimal", "high"}:
+                raise ValueError("thinking_level must be 'minimal' or 'high'.")
+            generation["thinkingConfig"] = {"thinkingLevel": normalized_thinking}
+        body: dict[str, Any] = {"contents": contents}
+        if system:
+            body["systemInstruction"] = system
+        if generation:
+            body["generationConfig"] = generation
+
         request = urllib.request.Request(
             self.endpoint_url,
             data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self._access_token()}",
-                "Content-Type": "application/json",
-            },
+            headers={"x-goog-api-key": self._api_key(), "Content-Type": "application/json"},
             method="POST",
         )
         try:
@@ -118,11 +125,20 @@ class GCPVertexClient:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Vertex AI returned HTTP {exc.code}: {detail}") from exc
-        choices = data.get("choices", [])
-        text = ""
-        if choices and isinstance(choices[0], dict):
-            message = choices[0].get("message", {})
-            if isinstance(message, dict):
-                text = str(message.get("content") or "")
-        return {"response": text, "raw": data}
+            raise RuntimeError(f"Google AI Studio returned HTTP {exc.code}: {detail}") from exc
+
+        text_parts: list[str] = []
+        candidates = data.get("candidates", [])
+        if candidates and isinstance(candidates[0], dict):
+            content = candidates[0].get("content", {})
+            if isinstance(content, dict):
+                text_parts = [
+                    str(part.get("text") or "")
+                    for part in content.get("parts", [])
+                    if isinstance(part, dict)
+                ]
+        return {"response": "".join(text_parts), "raw": data}
+
+
+# Backward-compatible name for imports made before the AI Studio migration.
+GCPVertexClient = GoogleAIStudioClient

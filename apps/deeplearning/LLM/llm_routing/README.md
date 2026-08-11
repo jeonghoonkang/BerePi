@@ -460,16 +460,16 @@ curl -X POST http://SERVER_IP:4004/api/bedrock/generate \
 `POST /api/generate`, `/generate`, `/api/chat`, and
 `/v1/chat/completions` retain their existing target-based behavior.
 
-## GCP Vertex AI Gemma endpoint
+## Google AI Studio endpoint
 
-`POST /api/gcp/generate` is an independent endpoint for a Gemma model deployed
-to a GCP Vertex AI Endpoint. It does not change the existing target routing or
-the AWS Bedrock endpoint. Configuration and deployment instructions are in
+`POST /api/gcp/generate` is an independent endpoint for models available through
+the Google AI Studio Gemini API. It does not change the existing target routing
+or the AWS Bedrock endpoint. API-key configuration and instructions are in
 `cloud_gcp/README.md`.
 
 ```bash
 curl -X POST http://SERVER_IP:4004/api/gcp/generate \
   -H 'Content-Type: application/json' \
   -H 'X-LLM-Routing-Password: YOUR_ROUTING_PASSWORD' \
-  -d '{"prompt":"hello from GCP Gemma"}'
+  -d '{"prompt":"hello from Google AI Studio"}'
 ```
