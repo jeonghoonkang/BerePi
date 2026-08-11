@@ -1,6 +1,6 @@
 import unittest
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import server_routing
 
@@ -349,6 +349,47 @@ class DispatchInfoTests(unittest.TestCase):
 
         self.assertEqual(server_routing.repeated_model_timeout(target, 45), 45)
         self.assertEqual(server_routing.repeated_model_timeout(target, 600), 100)
+
+    def test_dedicated_bedrock_route_does_not_use_configured_targets(self) -> None:
+        handler = server_routing.RoutingHandler.__new__(server_routing.RoutingHandler)
+        settings = MagicMock(region="us-east-1", model_id="amazon.nova-micro-v1:0")
+        with (
+            patch.object(server_routing, "BedrockClient", return_value=settings),
+            patch.object(server_routing, "route_prompt", return_value={"ok": True}) as route,
+        ):
+            result = server_routing.route_bedrock_prompt(
+                handler,
+                {"prompt": "hello", "target_id": "local-target"},
+            )
+
+        self.assertTrue(result["ok"])
+        selected = route.call_args.kwargs["selected_target"]
+        forwarded = route.call_args.args[1]
+        self.assertEqual(selected.api_type, "bedrock")
+        self.assertEqual(selected.model, "amazon.nova-micro-v1:0")
+        self.assertNotIn("target_id", forwarded)
+
+    def test_dedicated_gcp_route_does_not_use_configured_targets(self) -> None:
+        handler = server_routing.RoutingHandler.__new__(server_routing.RoutingHandler)
+        settings = MagicMock(
+            location="us-central1",
+            model_id="google/gemma-4-31b-it",
+        )
+        with (
+            patch.object(server_routing, "GCPVertexClient", return_value=settings),
+            patch.object(server_routing, "route_prompt", return_value={"ok": True}) as route,
+        ):
+            result = server_routing.route_gcp_prompt(
+                handler,
+                {"prompt": "hello", "target_id": "local-target"},
+            )
+
+        self.assertTrue(result["ok"])
+        selected = route.call_args.kwargs["selected_target"]
+        forwarded = route.call_args.args[1]
+        self.assertEqual(selected.api_type, "gcp_vertex")
+        self.assertEqual(selected.model, "google/gemma-4-31b-it")
+        self.assertNotIn("target_id", forwarded)
 
 
 if __name__ == "__main__":
