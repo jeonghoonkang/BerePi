@@ -20,6 +20,12 @@ class DispatchInfoTests(unittest.TestCase):
             server_routing.INDEX_HTML,
         )
 
+    def test_gcp_tab_uses_dedicated_endpoint(self) -> None:
+        self.assertIn('data-tab="gcp"', server_routing.INDEX_HTML)
+        self.assertIn('id="gcp_test_prompt"', server_routing.INDEX_HTML)
+        self.assertIn("api('/api/gcp/generate'", server_routing.INDEX_HTML)
+        self.assertIn("자동 LLM 라우팅 대상에는 포함되지 않습니다", server_routing.INDEX_HTML)
+
     def test_sse_event_format(self) -> None:
         encoded = server_routing.sse_event_bytes("dispatch_info", {"value": "한글"})
 

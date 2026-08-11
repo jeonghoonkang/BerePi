@@ -2351,6 +2351,17 @@ def status_payload() -> dict[str, Any]:
                 "last_seen": seconds_to_uptime(now - float(stats.get("last_seen", now))) + " ago",
             }
         )
+    try:
+        google_ai_studio = GoogleAIStudioClient().configuration_status()
+    except Exception as exc:  # noqa: BLE001
+        google_ai_studio = {
+            "configured": False,
+            "model_id": "",
+            "api_version": "",
+            "base_url": "",
+            "key_source": "not_configured",
+            "error": str(exc),
+        }
     return {
         "started_at": dt.datetime.fromtimestamp(STARTED_AT).astimezone().isoformat(),
         "uptime": seconds_to_uptime(time.time() - STARTED_AT),
@@ -2366,6 +2377,7 @@ def status_payload() -> dict[str, Any]:
         "target_history": load_target_history(),
         "duplicate_target_ids": sorted(duplicate_target_ids(targets)),
         "metrics": health_by_id,
+        "google_ai_studio": google_ai_studio,
         "service": {
             "client_count": len(CLIENT_STATS),
             "clients": sorted(clients, key=lambda item: item["prompt_count"], reverse=True),
@@ -2511,6 +2523,7 @@ INDEX_HTML = """<!doctype html>
     <button data-tab="service">서비스</button>
     <button data-tab="local">로컬머신</button>
     <button data-tab="test">프롬프트 테스트</button>
+    <button data-tab="gcp">GCP Gemma 4 테스트</button>
   </nav>
   <section id="llms" class="active">
     <div class="grid" id="targetMetrics"></div>
@@ -2601,6 +2614,34 @@ INDEX_HTML = """<!doctype html>
     </div>
     <h3>전체 모델 비교</h3>
     <table><thead><tr><th>상태</th><th>LLM</th><th>모델</th><th>GPU</th><th>소요 시간</th><th>수신 내용</th></tr></thead><tbody id="compareRows"></tbody></table>
+  </section>
+  <section id="gcp">
+    <div class="panel">
+      <h2 style="margin-top:0">Google AI Studio · Gemma 4</h2>
+      <p>이 탭의 요청만 Google AI Studio로 전달되며 자동 LLM 라우팅 대상에는 포함되지 않습니다.</p>
+      <div id="gcp_config_notice" class="notice"></div>
+      <textarea id="gcp_test_prompt" placeholder="GCP Gemma 4로 전송할 프롬프트">Gemma 4 연결 테스트입니다. 정상 동작하면 OK라고 답변하세요.</textarea>
+      <div class="test-toolbar">
+        <button id="gcp_test_button" class="primary" onclick="sendGcpPrompt()">GCP 테스트 실행</button>
+        <button onclick="clearGcpTest()">결과 지우기</button>
+      </div>
+    </div>
+    <div class="test-metrics">
+      <div class="metric"><div class="label">API Key</div><div id="gcp_key_status" class="value">확인 중</div></div>
+      <div class="metric"><div class="label">모델</div><div id="gcp_model" class="value">-</div></div>
+      <div class="metric"><div class="label">상태</div><div id="gcp_test_status" class="value">대기</div></div>
+      <div class="metric"><div class="label">응답 시간</div><div id="gcp_test_elapsed" class="value">-</div></div>
+    </div>
+    <div class="test-output">
+      <div>
+        <h3>회신</h3>
+        <div id="gcp_test_answer" class="response-box markdown-view"></div>
+      </div>
+      <div>
+        <h3>원본 응답</h3>
+        <pre id="gcp_test_result" class="response-box raw-view"></pre>
+      </div>
+    </div>
   </section>
 </main>
 <script>
@@ -2730,7 +2771,19 @@ async function logout() {
 }
 async function refresh() {
   state = await api('/api/status');
-  renderTargets(); renderTargetHistory(); renderService(); renderLocal(); renderTestTargets();
+  renderTargets(); renderTargetHistory(); renderService(); renderLocal(); renderTestTargets(); renderGcpStatus();
+}
+function renderGcpStatus() {
+  const config = state.google_ai_studio || {};
+  const configured = Boolean(config.configured);
+  const keyStatus = document.getElementById('gcp_key_status');
+  keyStatus.textContent = configured ? '설정됨' : '미설정';
+  keyStatus.className = `value ${configured ? 'ok' : 'error'}`;
+  document.getElementById('gcp_model').textContent = config.model_id || '-';
+  document.getElementById('gcp_test_button').disabled = !configured;
+  document.getElementById('gcp_config_notice').textContent = configured
+    ? `API Key가 설정되어 있습니다 (${config.key_source || 'configured'}). ${config.model_id || ''} 모델을 테스트할 수 있습니다.`
+    : `API Key가 없습니다. cloud_gcp/gcp_settings.json의 api_key 또는 GEMINI_API_KEY 환경변수를 설정하세요.${config.error ? ' ' + config.error : ''}`;
 }
 function renderTargets() {
   const targets = state.targets || [];
@@ -3128,6 +3181,50 @@ function clearPromptTest() {
   setAnswer('');
   document.getElementById('test_result').textContent = '';
   document.getElementById('compareRows').innerHTML = '';
+}
+async function sendGcpPrompt() {
+  const config = state.google_ai_studio || {};
+  if (!config.configured) {
+    document.getElementById('gcp_test_result').textContent = 'Google AI Studio API Key가 설정되지 않았습니다.';
+    return;
+  }
+  const payload = {
+    prompt: document.getElementById('gcp_test_prompt').value,
+    client_id: 'web-ui-gcp-test',
+    thinking_level: 'minimal'
+  };
+  const startedAt = performance.now();
+  const button = document.getElementById('gcp_test_button');
+  button.disabled = true;
+  document.getElementById('gcp_test_status').textContent = '전송 중';
+  document.getElementById('gcp_test_elapsed').textContent = '-';
+  document.getElementById('gcp_test_answer').innerHTML = '';
+  document.getElementById('gcp_test_result').textContent = 'Running...';
+  try {
+    const data = await api('/api/gcp/generate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    const elapsedSeconds = (performance.now() - startedAt) / 1000;
+    document.getElementById('gcp_test_status').textContent = '완료';
+    document.getElementById('gcp_test_elapsed').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
+    document.getElementById('gcp_test_answer').innerHTML = renderMarkdown(data.response || '');
+    document.getElementById('gcp_test_result').textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    document.getElementById('gcp_test_status').textContent = '오류';
+    document.getElementById('gcp_test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(2)}s`;
+    document.getElementById('gcp_test_answer').innerHTML = '';
+    document.getElementById('gcp_test_result').textContent = String(err);
+  } finally {
+    button.disabled = !Boolean((state.google_ai_studio || {}).configured);
+  }
+}
+function clearGcpTest() {
+  document.getElementById('gcp_test_status').textContent = '대기';
+  document.getElementById('gcp_test_elapsed').textContent = '-';
+  document.getElementById('gcp_test_answer').innerHTML = '';
+  document.getElementById('gcp_test_result').textContent = '';
 }
 refresh();
 setInterval(refresh, 10000);

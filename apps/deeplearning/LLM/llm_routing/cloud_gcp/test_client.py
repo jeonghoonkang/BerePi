@@ -65,6 +65,15 @@ class GoogleAIStudioClientTests(unittest.TestCase):
         self.assertEqual(contents[0]["role"], "model")
         self.assertEqual(contents[1]["role"], "user")
 
+    def test_configuration_status_does_not_expose_key(self) -> None:
+        client = GoogleAIStudioClient(self.config)
+        status = client.configuration_status()
+
+        self.assertTrue(status["configured"])
+        self.assertEqual(status["model_id"], "gemma-4-31b-it")
+        self.assertEqual(status["key_source"], "settings_file")
+        self.assertNotIn("test-key", json.dumps(status))
+
 
 if __name__ == "__main__":
     unittest.main()

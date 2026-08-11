@@ -54,6 +54,25 @@ class GoogleAIStudioClient:
             )
         return key
 
+    def configuration_status(self) -> dict[str, Any]:
+        """Return non-secret configuration metadata for the management UI."""
+        key_env = str(self.settings.get("api_key_env") or "GEMINI_API_KEY").strip()
+        literal = str(self.settings.get("api_key") or "").strip()
+        literal_configured = bool(
+            literal and literal != "PUT_YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE"
+        )
+        environment_configured = bool(os.getenv(key_env))
+        return {
+            "configured": literal_configured or environment_configured,
+            "model_id": self.model_id,
+            "api_version": self.api_version,
+            "base_url": self.base_url,
+            "key_source": (
+                "settings_file" if literal_configured
+                else (f"environment:{key_env}" if environment_configured else "not_configured")
+            ),
+        }
+
     @staticmethod
     def _text(content: Any) -> str:
         if isinstance(content, str):
