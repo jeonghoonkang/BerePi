@@ -2523,7 +2523,7 @@ INDEX_HTML = """<!doctype html>
     <button data-tab="service">서비스</button>
     <button data-tab="local">로컬머신</button>
     <button data-tab="test">프롬프트 테스트</button>
-    <button data-tab="gcp">GCP Gemma 4 테스트</button>
+    <button data-tab="gcp">GCP 테스트</button>
   </nav>
   <section id="llms" class="active">
     <div class="grid" id="targetMetrics"></div>

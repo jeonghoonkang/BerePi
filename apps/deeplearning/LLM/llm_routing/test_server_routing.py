@@ -21,7 +21,7 @@ class DispatchInfoTests(unittest.TestCase):
         )
 
     def test_gcp_tab_uses_dedicated_endpoint(self) -> None:
-        self.assertIn('data-tab="gcp"', server_routing.INDEX_HTML)
+        self.assertIn('data-tab="gcp">GCP 테스트</button>', server_routing.INDEX_HTML)
         self.assertIn('id="gcp_test_prompt"', server_routing.INDEX_HTML)
         self.assertIn("api('/api/gcp/generate'", server_routing.INDEX_HTML)
         self.assertIn("자동 LLM 라우팅 대상에는 포함되지 않습니다", server_routing.INDEX_HTML)
