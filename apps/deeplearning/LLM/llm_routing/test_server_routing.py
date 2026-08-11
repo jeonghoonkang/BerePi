@@ -372,11 +372,10 @@ class DispatchInfoTests(unittest.TestCase):
     def test_dedicated_gcp_route_does_not_use_configured_targets(self) -> None:
         handler = server_routing.RoutingHandler.__new__(server_routing.RoutingHandler)
         settings = MagicMock(
-            location="us-central1",
-            model_id="google/gemma-4-31b-it",
+            model_id="gemma-4-31b-it",
         )
         with (
-            patch.object(server_routing, "GCPVertexClient", return_value=settings),
+            patch.object(server_routing, "GoogleAIStudioClient", return_value=settings),
             patch.object(server_routing, "route_prompt", return_value={"ok": True}) as route,
         ):
             result = server_routing.route_gcp_prompt(
@@ -387,8 +386,8 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         selected = route.call_args.kwargs["selected_target"]
         forwarded = route.call_args.args[1]
-        self.assertEqual(selected.api_type, "gcp_vertex")
-        self.assertEqual(selected.model, "google/gemma-4-31b-it")
+        self.assertEqual(selected.api_type, "google_ai_studio")
+        self.assertEqual(selected.model, "gemma-4-31b-it")
         self.assertNotIn("target_id", forwarded)
 
 

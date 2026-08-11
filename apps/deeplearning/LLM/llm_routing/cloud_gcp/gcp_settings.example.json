@@ -1,13 +1,13 @@
 {
-  "project_id": "YOUR_GCP_PROJECT_ID",
-  "location": "us-central1",
-  "endpoint_id": "YOUR_VERTEX_ENDPOINT_ID",
-  "model_id": "google/gemma-4-31b-it",
-  "service_account_file_env": "GOOGLE_APPLICATION_CREDENTIALS",
-  "access_token_env": "GOOGLE_OAUTH_ACCESS_TOKEN",
-  "inference_config": {
-    "max_tokens": 1024,
+  "api_key": "",
+  "api_key_env": "GEMINI_API_KEY",
+  "model_id": "gemma-4-31b-it",
+  "api_version": "v1beta",
+  "base_url": "https://generativelanguage.googleapis.com",
+  "generation_config": {
+    "maxOutputTokens": 1024,
     "temperature": 0.2,
-    "top_p": 0.9
+    "topP": 0.9,
+    "thinkingLevel": "high"
   }
 }
