@@ -240,6 +240,22 @@ OpenAI 호환 응답의 `routing` 필드에는 실제 사용된 target, IP/PORT,
 
 HTTP 응답은 queue에 넣은 뒤 해당 prompt 처리가 완료될 때까지 기다렸다가 반환합니다. 모든 target queue가 가득 차면 `429 Too Many Requests`를 반환합니다. target별 queue 최대 길이는 `LLM_ROUTING_QUEUE_MAX_PER_TARGET` 환경 변수로 변경할 수 있습니다.
 
+Ollama 또는 OpenAI/vLLM 호환 target으로 요청을 보내기 전에는 backend가 실제로
+지원하는 모델 목록을 확인합니다. Ollama는 `/api/tags`(필요하면 `/health`),
+OpenAI/vLLM 호환 backend는 `/v1/models`를 사용합니다. 요청 모델(예:
+`gemma4:31b`)이 목록에 없으면 다음 순서로 설치된 모델을 선택합니다.
+
+1. target에 설정된 모델이 실제 목록에 있으면 해당 모델
+2. 요청 모델과 같은 계열의 모델(예: `gemma4:27b`)
+3. backend가 반환한 첫 번째 지원 모델
+
+따라서 특정 오류 문구(`The model ... does not exist`)에 의존하지 않고 요청 전에
+대체 모델을 결정합니다. 모델 목록은 기본 30초 동안 캐시하며
+`LLM_ROUTING_MODEL_LIST_CACHE_SECONDS`로 변경할 수 있습니다. 목록 조회가 실패하거나
+빈 목록이면 결과를 캐시하지 않습니다. 응답의 `model`은 실제 호출 모델이며,
+`requested_model`, `configured_model`, `model_fallback_applied`, `supported_models`로
+선택 근거를 확인할 수 있습니다.
+
 응답 예:
 
 ```json

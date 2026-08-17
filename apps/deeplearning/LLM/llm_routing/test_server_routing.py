@@ -11,7 +11,50 @@ class DispatchInfoTests(unittest.TestCase):
         server_routing.TARGET_QUEUES.clear()
         server_routing.TARGET_WORKERS.clear()
         server_routing.MODEL_DISPATCH_COUNTS.clear()
+        server_routing.TARGET_MODEL_LIST_CACHE.clear()
         server_routing.TARGET_CURSOR = 0
+
+    def test_missing_requested_model_uses_an_installed_model(self) -> None:
+        target = server_routing.LLMTarget(
+            id="target-1",
+            name="Target",
+            host="127.0.0.1",
+            port=11434,
+            model="gemma4:31b",
+        )
+        backend_models: list[str] = []
+
+        def request_json(url, payload=None, *_args, **_kwargs):
+            if url.endswith("/api/tags"):
+                return {"models": [{"name": "llama3.2-vision:11b"}]}
+            backend_models.append(payload["model"])
+            return {"response": "ok"}
+
+        with (
+            patch.object(server_routing, "request_json", side_effect=request_json),
+            patch.object(server_routing, "record_access"),
+            patch.object(server_routing, "update_client_stats"),
+            patch.object(server_routing, "dispatch_target_fields", return_value={}),
+        ):
+            result = server_routing.execute_prompt(
+                target,
+                {"prompt": "same data", "model": "gemma4:31b", "timeout": 1},
+                "test-client",
+            )
+
+        self.assertEqual(backend_models, ["llama3.2-vision:11b"])
+        self.assertEqual(result["model"], "llama3.2-vision:11b")
+        self.assertEqual(result["requested_model"], "gemma4:31b")
+        self.assertTrue(result["model_fallback_applied"])
+
+    def test_model_fallback_prefers_same_model_family(self) -> None:
+        selected = server_routing.choose_supported_model(
+            "gemma4:31b",
+            "gemma4:31b",
+            ["llama3:8b", "gemma4:27b", "qwen3:14b"],
+        )
+
+        self.assertEqual(selected, "gemma4:27b")
 
     def test_prompt_input_has_default_smoke_test_text(self) -> None:
         self.assertIn(
