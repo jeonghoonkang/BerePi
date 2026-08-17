@@ -3471,7 +3471,8 @@ class RoutingHandler(BaseHTTPRequestHandler):
             self.write_json({"ok": True, "uptime": seconds_to_uptime(time.time() - STARTED_AT)})
             return
         if self.path == "/api/status":
-            self.write_json(status_payload() if self.is_authenticated() else api_status_payload())
+            authenticated = self.is_authenticated() or prompt_api_authenticated(self, {})
+            self.write_json(status_payload() if authenticated else api_status_payload())
             return
         if self.path == "/api/gcp/status":
             self.write_json(gcp_status_payload())
