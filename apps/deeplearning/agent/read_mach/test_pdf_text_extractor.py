@@ -22,12 +22,14 @@ class FakeReader:
 
 class PdfTextExtractorTests(unittest.TestCase):
     def test_extracts_only_selected_page_range(self) -> None:
+        progress_messages: list[str] = []
         with patch("pypdf.PdfReader", FakeReader):
             text, metadata = extract_pdf_content(
                 Path("sample.pdf"),
                 start_page=4,
                 end_page=6,
                 minimum_text_characters=10,
+                progress=lambda _label, message, _color: progress_messages.append(message),
             )
 
         self.assertNotIn("[PDF page 3", text)
@@ -35,6 +37,13 @@ class PdfTextExtractorTests(unittest.TestCase):
         self.assertIn("[PDF page 6", text)
         self.assertEqual(metadata["page_count"], 3)
         self.assertEqual(metadata["total_pdf_pages"], 6)
+        self.assertEqual(len(progress_messages), 3)
+        self.assertIn("전체 3페이지", progress_messages[0])
+        self.assertIn("현재 1/3페이지", progress_messages[0])
+        self.assertIn("원본 4페이지", progress_messages[0])
+        self.assertIn("진행률 33.3%", progress_messages[0])
+        self.assertIn("현재 3/3페이지", progress_messages[-1])
+        self.assertIn("진행률 100.0%", progress_messages[-1])
 
     def test_normalizes_wrapped_and_repeated_whitespace(self) -> None:
         self.assertEqual(normalize_extracted_text("data-\nflow   module"), "dataflow module")

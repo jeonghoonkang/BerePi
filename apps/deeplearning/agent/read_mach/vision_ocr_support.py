@@ -13,6 +13,68 @@ APP_DIR = Path(__file__).resolve().parent
 DEFAULT_INPUT_DIR = APP_DIR / "input"
 DEFAULT_OUTPUT_DIR = APP_DIR / "output"
 DEFAULT_CONFIG_PATH = APP_DIR / "config" / "server_config.json"
+_VERIFIED_CLOUD_FAST_TRACK_URLS: set[str] = set()
+
+
+def resolve_model_server_url(
+    config: dict[str, Any], *, cloud_fast_track: bool = False,
+    cloud_fast_track_url: str | None = None,
+) -> tuple[str, str]:
+    """Resolve the selected routing URL and return it with its source label."""
+    if cloud_fast_track:
+        server_url = str(cloud_fast_track_url or config.get("cloud_fast_track_url") or "").strip()
+        if not server_url:
+            raise ValueError(
+                "Cloud Fast Track 주소가 비어 있습니다. 설정 파일의 "
+                "cloud_fast_track_url 또는 --cloud-fast-track-url을 입력하세요."
+            )
+        return server_url.rstrip("/"), "cloud-fast-track"
+
+    server_url = str(config.get("server_url") or "").strip()
+    if not server_url:
+        raise ValueError("설정 파일의 server_url이 비어 있습니다.")
+    return server_url.rstrip("/"), "server"
+
+
+def model_generate_url(server_url: str, *, cloud_fast_track: bool = False) -> str:
+    """Return the generate URL for the selected routing mode."""
+    url = server_url.rstrip("/")
+    endpoint = "/api/gcp/generate" if cloud_fast_track else "/api/generate"
+    return f"{url}{endpoint}"
+
+
+def model_status_url(server_url: str, *, cloud_fast_track: bool = False) -> str:
+    """Return the status URL for the selected routing mode."""
+    url = server_url.rstrip("/")
+    endpoint = "/api/gcp/status" if cloud_fast_track else "/api/status"
+    return f"{url}{endpoint}"
+
+
+def verify_cloud_fast_track(
+    session: Any, server_url: str, *, password: str, timeout: int = 15,
+) -> dict[str, Any]:
+    """Verify the dedicated GCP endpoint once per base URL in this process."""
+    url = server_url.rstrip("/")
+    if url in _VERIFIED_CLOUD_FAST_TRACK_URLS:
+        return {"ok": True, "cached": True}
+    headers = {
+        "Authorization": f"Bearer {password}",
+        "X-LLM-Routing-Password": password,
+        "X-API-Key": password,
+    }
+    response = session.get(
+        model_status_url(url, cloud_fast_track=True),
+        headers=headers,
+        timeout=max(1, min(int(timeout), 30)),
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict):
+        raise ValueError("Cloud Fast Track 상태 응답이 JSON 객체가 아닙니다.")
+    if data.get("configured") is False or data.get("ok") is False:
+        raise ValueError(f"Cloud Fast Track을 사용할 수 없습니다: {data.get('error') or data}")
+    _VERIFIED_CLOUD_FAST_TRACK_URLS.add(url)
+    return data
 
 
 def select_input_file(input_file: Path, suffix: str) -> Path:
@@ -51,6 +113,8 @@ def call_vision_ocr(
     config_path: Path = DEFAULT_CONFIG_PATH,
     password: str | None = None,
     client_id: str = "read-mach-image-text-extractor",
+    cloud_fast_track: bool = False,
+    cloud_fast_track_url: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Send one or more encoded images to the configured routing server."""
     import requests
@@ -67,22 +131,30 @@ def call_vision_ocr(
     secret = password or os.getenv(password_env)
     if not secret:
         raise ValueError(f"서버 비밀번호가 없습니다. {password_env} 환경변수를 입력하세요.")
-    server_url = str(config.get("server_url") or "").rstrip("/")
-    if not server_url:
-        raise ValueError("설정 파일의 server_url이 비어 있습니다.")
+    server_url, route = resolve_model_server_url(
+        config,
+        cloud_fast_track=cloud_fast_track,
+        cloud_fast_track_url=cloud_fast_track_url,
+    )
     timeout = int(config.get("timeout_seconds") or 240)
     requested_model = str(config.get("model") or "")
     explicit_target = str(config.get("target_id") or "") or None
     encoded = [(image_to_base64(image), image_mime_type(image)) for image in images]
 
     with requests.Session() as session:
-        target_id, model, api_type = select_ollama_target(
-            session,
-            server_url=server_url,
-            password=secret,
-            requested_model=requested_model,
-            explicit_target_id=explicit_target,
-        )
+        if cloud_fast_track:
+            verify_cloud_fast_track(session, server_url, password=secret, timeout=timeout)
+            target_id = None
+            model = requested_model or "cloud-fast-track-default"
+            api_type = "cloud-fast-track"
+        else:
+            target_id, model, api_type = select_ollama_target(
+                session,
+                server_url=server_url,
+                password=secret,
+                requested_model=requested_model,
+                explicit_target_id=explicit_target,
+            )
         payload: dict[str, Any] = {
             "client_id": client_id,
             "model": model,
@@ -90,8 +162,9 @@ def call_vision_ocr(
             "stream": False,
             "temperature": 0,
             "timeout": timeout,
-            "target_id": target_id,
         }
+        if target_id:
+            payload["target_id"] = target_id
         if api_type == "vllm":
             payload["messages"] = [{
                 "role": "user",
@@ -106,7 +179,7 @@ def call_vision_ocr(
         else:
             payload["images"] = [item for item, _mime in encoded]
         response = session.post(
-            f"{server_url}/api/generate",
+            model_generate_url(server_url, cloud_fast_track=cloud_fast_track),
             headers=auth_headers(secret),
             json=payload,
             timeout=timeout + 30,
@@ -119,7 +192,10 @@ def call_vision_ocr(
         text = response_text(response.json()).strip()
         if not text:
             raise ValueError("모델 OCR 응답이 비어 있습니다.")
-        return text, {"ocr_engine": "vision-model", "ocr_model": model, "target_id": target_id}
+        return text, {
+            "ocr_engine": "vision-model", "ocr_model": model, "target_id": target_id,
+            "route": route, "server_url": server_url,
+        }
 
 
 OCR_PROMPT = """너는 기술문서 OCR 전사기다. 첨부 이미지를 읽고 보이는 문자를 정확히 전사해라.

@@ -14,9 +14,10 @@ class TextExtractDispatcherTests(unittest.TestCase):
             root = Path(directory)
             (root / "B.PNG").touch()
             (root / "a.docx").touch()
+            (root / "c.pptx").touch()
             (root / "ignored.txt").touch()
             files = text_extract.discover_input_files(root)
-        self.assertEqual([path.name for path in files], ["a.docx", "B.PNG"])
+        self.assertEqual([path.name for path in files], ["a.docx", "B.PNG", "c.pptx"])
 
     def test_maps_each_extension_to_its_extractor(self) -> None:
         for suffix, script_name in text_extract.EXTRACTORS.items():
@@ -31,6 +32,37 @@ class TextExtractDispatcherTests(unittest.TestCase):
                     minimum_text_characters=100,
                 )
             self.assertEqual(Path(command[1]).name, script_name)
+
+    def test_can_skip_pptx_embedded_image_ocr(self) -> None:
+        command = text_extract.extractor_command(
+            Path("sample.pptx"),
+            config_path=Path("config.json"),
+            output_dir=Path("output"),
+            start_page=1,
+            end_page=None,
+            ocr_dpi=300,
+            minimum_text_characters=100,
+            skip_embedded_image_ocr=True,
+        )
+        self.assertIn("--skip-embedded-image-ocr", command)
+
+    def test_forwards_cloud_fast_track_selection(self) -> None:
+        command = text_extract.extractor_command(
+            Path("sample.pptx"),
+            config_path=Path("config.json"),
+            output_dir=Path("output"),
+            start_page=1,
+            end_page=None,
+            ocr_dpi=300,
+            minimum_text_characters=100,
+            cloud_fast_track=True,
+            cloud_fast_track_url="https://fast.example/routing",
+        )
+        self.assertIn("--cloud-fast-track", command)
+        self.assertEqual(
+            command[command.index("--cloud-fast-track-url") + 1],
+            "https://fast.example/routing",
+        )
 
     def test_rejects_unsupported_explicit_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

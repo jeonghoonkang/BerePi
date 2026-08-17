@@ -98,6 +98,15 @@ def parse_args() -> argparse.Namespace:
         help=f"LLM Routing 서버 주소 (기본값: {DEFAULT_SERVER_URL})",
     )
     parser.add_argument(
+        "--cloud-fast-track", action="store_true",
+        help="--server-url 대신 Cloud Fast Track 주소를 사용합니다.",
+    )
+    parser.add_argument(
+        "--cloud-fast-track-url",
+        default=os.getenv("READ_MACH_CLOUD_FAST_TRACK_URL") or config.get("cloud_fast_track_url"),
+        help="Cloud Fast Track 주소. 생략하면 설정 파일 값을 사용합니다.",
+    )
+    parser.add_argument(
         "--password",
         default=os.getenv(password_env),
         help=f"접근 비밀번호. 생략 시 {password_env} 환경변수를 사용합니다.",
@@ -152,7 +161,16 @@ def parse_args() -> argparse.Namespace:
         help="모델 판정은 수행하되 결과 PNG는 저장하지 않습니다.",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.cloud_fast_track:
+        from vision_ocr_support import resolve_model_server_url
+
+        args.server_url, _route = resolve_model_server_url(
+            config,
+            cloud_fast_track=True,
+            cloud_fast_track_url=args.cloud_fast_track_url,
+        )
+    return args
 
 
 def auth_headers(password: str) -> dict[str, str]:
@@ -204,6 +222,8 @@ def classify_page(
     jpeg_bytes: bytes,
     timeout: int,
 ) -> PageDecision:
+    from vision_ocr_support import model_generate_url
+
     encoded_image = base64.b64encode(jpeg_bytes).decode("ascii")
     payload: dict[str, Any] = {
         "client_id": "read-mach-picture-page-extractor",
@@ -230,7 +250,7 @@ def classify_page(
     else:
         payload["images"] = [encoded_image]
     response = session.post(
-        f"{server_url.rstrip('/')}/api/generate",
+        model_generate_url(server_url, cloud_fast_track=api_type == "cloud-fast-track"),
         headers=auth_headers(password),
         json=payload,
         timeout=timeout + 30,
@@ -414,7 +434,7 @@ def process_pdf(
                     timeout=args.timeout,
                 )
             except requests.RequestException as exc:
-                if not is_target_unavailable_error(exc):
+                if args.cloud_fast_track or not is_target_unavailable_error(exc):
                     failed_pages += 1
                     LOGGER.error("[%s %d/%d] 모델 판정 실패: %s", pdf_path.name, page_number, last, exc)
                     continue
@@ -522,14 +542,24 @@ def main() -> int:
 
     with requests.Session() as session:
         try:
-            args.target_id, selected_model, args.api_type = select_ollama_target(
-                session,
-                server_url=args.server_url,
-                password=args.password,
-                requested_model=args.model,
-                explicit_target_id=args.target_id,
-            )
-            args.model = selected_model
+            if args.cloud_fast_track:
+                from vision_ocr_support import verify_cloud_fast_track
+
+                verify_cloud_fast_track(
+                    session, args.server_url, password=args.password, timeout=args.timeout
+                )
+                args.target_id = None
+                args.api_type = "cloud-fast-track"
+                LOGGER.info("Cloud Fast Track 직접 호출: %s", args.server_url)
+            else:
+                args.target_id, selected_model, args.api_type = select_ollama_target(
+                    session,
+                    server_url=args.server_url,
+                    password=args.password,
+                    requested_model=args.model,
+                    explicit_target_id=args.target_id,
+                )
+                args.model = selected_model
             LOGGER.info(
                 "모델 target 선택: %s (model=%s, api_type=%s)",
                 args.target_id,

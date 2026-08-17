@@ -57,7 +57,8 @@ def extract_hwpx_package(path: Path) -> tuple[str, list[tuple[str, bytes]]]:
 
 
 def extract_hwpx_content(
-    path: Path, *, config_path: Path = DEFAULT_CONFIG_PATH, password: str | None = None
+    path: Path, *, config_path: Path = DEFAULT_CONFIG_PATH, password: str | None = None,
+    cloud_fast_track: bool = False, cloud_fast_track_url: str | None = None,
 ) -> tuple[str, dict[str, object]]:
     text, images = extract_hwpx_package(path)
     ocr_blocks: list[str] = []
@@ -66,6 +67,7 @@ def extract_hwpx_content(
         result, model_metadata = call_vision_ocr(
             [data], f"{OCR_PROMPT}\nHWPX 포함 그림 {index}({name})를 전사한다.",
             config_path=config_path, password=password, client_id="read-mach-hwpx-text-extractor",
+            cloud_fast_track=cloud_fast_track, cloud_fast_track_url=cloud_fast_track_url,
         )
         if result.strip():
             ocr_blocks.append(f"[HWPX embedded image {index}: {name}]\n{result.strip()}")
@@ -86,10 +88,16 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--password")
+    parser.add_argument("--cloud-fast-track", action="store_true")
+    parser.add_argument("--cloud-fast-track-url")
     args = parser.parse_args()
     try:
         source = select_input_file(args.input_file, ".hwpx")
-        text, metadata = extract_hwpx_content(source, config_path=args.config, password=args.password)
+        text, metadata = extract_hwpx_content(
+            source, config_path=args.config, password=args.password,
+            cloud_fast_track=args.cloud_fast_track,
+            cloud_fast_track_url=args.cloud_fast_track_url,
+        )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         text_path = args.output_dir / f"{source.stem}_hwpx_extracted.txt"
         metadata_path = args.output_dir / f"{source.stem}_hwpx_extraction.json"

@@ -19,11 +19,15 @@ from vision_ocr_support import (
 
 
 def extract_image_text(
-    image_path: Path, *, config_path: Path = DEFAULT_CONFIG_PATH, password: str | None = None
+    image_path: Path, *, config_path: Path = DEFAULT_CONFIG_PATH, password: str | None = None,
+    cloud_fast_track: bool = False, cloud_fast_track_url: str | None = None,
 ) -> tuple[str, dict[str, object]]:
     data = image_path.read_bytes()
     image_mime_type(data)
-    text, model_metadata = call_vision_ocr([data], OCR_PROMPT, config_path=config_path, password=password)
+    text, model_metadata = call_vision_ocr(
+        [data], OCR_PROMPT, config_path=config_path, password=password,
+        cloud_fast_track=cloud_fast_track, cloud_fast_track_url=cloud_fast_track_url,
+    )
     metadata: dict[str, object] = {
         "source_image": str(image_path.resolve()),
         "format": image_path.suffix.lstrip(".").lower(),
@@ -40,10 +44,16 @@ def run_image_cli(suffix: str, description: str) -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--password")
+    parser.add_argument("--cloud-fast-track", action="store_true")
+    parser.add_argument("--cloud-fast-track-url")
     args = parser.parse_args()
     try:
         source = select_input_file(args.input_file, suffix)
-        text, metadata = extract_image_text(source, config_path=args.config, password=args.password)
+        text, metadata = extract_image_text(
+            source, config_path=args.config, password=args.password,
+            cloud_fast_track=args.cloud_fast_track,
+            cloud_fast_track_url=args.cloud_fast_track_url,
+        )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         stem = f"{source.stem}_{suffix.lstrip('.').lower()}_extracted"
         text_path = args.output_dir / f"{stem}.txt"

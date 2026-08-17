@@ -1,5 +1,6 @@
 {
   "server_url": "http://llm-server.example:4004",
+  "cloud_fast_track_url": "",
   "model": "gemma4:31b",
   "target_id": "",
   "timeout_seconds": 240,

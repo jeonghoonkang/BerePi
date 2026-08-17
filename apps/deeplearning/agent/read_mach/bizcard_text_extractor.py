@@ -230,6 +230,7 @@ def render_bizcard_document(records: list[dict[str, Any]]) -> str:
 def process_cards(
     cards: list[CardImage], *, config_path: Path, output_dir: Path,
     model_password: str | None = None, force: bool = False,
+    cloud_fast_track: bool = False, cloud_fast_track_url: str | None = None,
 ) -> list[dict[str, Any]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     state_path = output_dir / ".bizcard_state.json"
@@ -247,6 +248,7 @@ def process_cards(
         response, model = call_vision_ocr(
             [image.data], BIZCARD_PROMPT, config_path=config_path, password=model_password,
             client_id="read-mach-bizcard-extractor",
+            cloud_fast_track=cloud_fast_track, cloud_fast_track_url=cloud_fast_track_url,
         )
         card = parse_bizcard_response(response)
         record = {
@@ -283,6 +285,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--password", help="모델 서버 비밀번호")
+    parser.add_argument("--cloud-fast-track", action="store_true")
+    parser.add_argument("--cloud-fast-track-url")
     parser.add_argument("--force", action="store_true", help="이미 처리한 동일 경로 명함도 다시 OCR")
     return parser.parse_args()
 
@@ -304,6 +308,8 @@ def main() -> int:
         results = process_cards(
             cards, config_path=args.config, output_dir=args.output_dir,
             model_password=args.password, force=args.force,
+            cloud_fast_track=args.cloud_fast_track,
+            cloud_fast_track_url=args.cloud_fast_track_url,
         )
         print(f"명함 문서 생성 완료: 새로 처리 {len(results)}개, 입력 {len(cards)}개")
         return 0

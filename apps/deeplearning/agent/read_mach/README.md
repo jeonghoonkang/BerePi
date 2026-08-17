@@ -1,5 +1,84 @@
 # read_mach
 
+## 외부 LLM·서브 에이전트용 기준 프롬프트
+
+외부 LLM이나 서브 에이전트에게 `read_mach`의 실행 방법, 주요 구조 또는 장애 원인
+분석을 요청할 때는 아래 프롬프트를 복사해 사용합니다. 기준 소스는 GitHub의
+`https://github.com/jeonghoonkang/BerePi/tree/master/apps/deeplearning/agent/read_mach`이며,
+외부 LLM이 해당 URL을 열 수 없다면 디렉토리의 파일을 함께 제공합니다.
+
+```text
+당신은 Python 문서·이미지 문자 추출 모듈인 read_mach의 기술 분석가이자 실행
+가이드 작성자다. 추측하지 말고 아래 GitHub URL의 실제 코드와 README를 근거로
+현재 구현을 분석하라.
+
+https://github.com/jeonghoonkang/BerePi/tree/master/apps/deeplearning/agent/read_mach
+
+[목표]
+1. 처음 사용하는 사람이 read_mach를 설치하고 안전하게 실행할 수 있게 안내한다.
+2. 통합 진입점부터 형식별 추출기, 로컬 XML/텍스트 추출, 외부 비전 LLM 호출,
+   결과 저장까지의 주요 구조와 데이터 흐름을 설명한다.
+3. 기본 LLM Routing 서버와 Cloud Fast Track 경로가 어떤 조건에서 선택되는지
+   코드 근거로 확인한다.
+4. 실행 실패나 장시간 대기 시 확인할 진단 절차를 제시한다.
+
+[반드시 확인할 파일]
+- README.md: 지원 기능, 설치, 설정 및 사용 예시
+- text_extract.py: 통합 CLI, 입력 탐색, 확장자별 디스패치
+- vision_ocr_support.py: 공용 이미지 OCR, 인증, 서버 URL 선택
+- config/server_config.json: 서버·모델·타임아웃 설정 스키마
+- pdf_text_extractor.py: PDF 텍스트 레이어, 페이지 OCR 및 진행률
+- pptx_text_extractor.py: PPTX 슬라이드 문자, 포함 이미지 OCR 및 진행률
+- docx_text_extractor.py, hwpx_text_extractor.py: 패키지 XML과 포함 이미지 처리
+- image_text_extractor.py, jpg_text_extractor.py, png_text_extractor.py: 이미지 OCR
+- url_text_extractor.py: 외부 LLM을 사용하지 않는 웹 본문 추출
+- bizcard_text_extractor.py: 로컬/WebDAV 명함 OCR과 상태 저장
+- requirements.txt와 test_*.py: 의존성과 검증 가능한 동작
+
+[분석 규칙]
+- 파일명, 함수명, CLI 옵션과 설정 키는 실제 코드에 존재하는 것만 사용한다.
+- 코드의 현재 동작과 개선 제안을 명확히 구분한다.
+- 비밀번호, 토큰, 실제 운영 서버 주소를 출력하거나 소스·README·설정 파일에
+  저장하지 않는다. 비밀값은 password_env가 지정한 환경변수의 자리표시자로만 쓴다.
+- 입력 파일은 read_mach/input 내부에 있어야 한다는 경로 제한을 확인한다.
+- OCR이 필요 없는 문서 텍스트 추출과 외부 LLM 호출이 필요한 작업을 구분한다.
+- PPTX의 --skip-embedded-image-ocr, PDF 페이지 범위, --fail-fast와 진행률 출력의
+  의미를 설명한다.
+- --cloud-fast-track을 선택하지 않으면 server_url, 선택하면
+  --cloud-fast-track-url 또는 cloud_fast_track_url을 사용하는지 확인한다.
+- Cloud Fast Track은 cloud_fast_track_url을 베이스 주소로 사용해
+  /api/gcp/status를 확인하고 /api/gcp/generate로 요청하는지 확인한다.
+- 명령을 실행하기 전 --help, 설정 파일 존재 여부, 의존성 설치 여부와 입력 파일
+  존재 여부를 먼저 확인한다.
+- 실제 네트워크 호출이나 파일 변경을 요청받지 않았다면 분석과 명령 제안까지만 한다.
+
+[결과 형식]
+다음 순서로 한국어 보고서를 작성한다.
+1. 한 문단 요약
+2. 주요 구조: 파일/역할 표와 입력→디스패치→추출→선택적 OCR→출력 흐름
+3. 설치 및 사전 조건: Linux/macOS와 Windows PowerShell 명령
+4. 설정 키 표: server_url, cloud_fast_track_url, model, target_id,
+   timeout_seconds, password_env
+5. 대표 실행 명령:
+   - 자동 탐색
+   - 파일 하나 또는 여러 개
+   - PDF 페이지 범위
+   - PPTX 전체 OCR
+   - PPTX 이미지 OCR 제외
+   - 기본 server_url 사용
+   - Cloud Fast Track 설정값 사용
+   - Cloud Fast Track 주소를 CLI에서 일시 지정
+   - URL 본문 및 명함 처리
+6. 출력 파일과 메타데이터 설명
+7. 진행률이 멈춘 것처럼 보일 때의 확인 순서
+8. 테스트 및 검증 명령
+9. 코드에서 확인되지 않았거나 사용자에게 받아야 하는 값
+
+명령에는 실제 비밀번호 대신 <READ_MACH_PASSWORD>, 실제 서버 주소 대신
+<SERVER_URL> 또는 <CLOUD_FAST_TRACK_URL>, 입력 파일 대신 <INPUT_FILE>을 사용하라.
+근거가 부족한 내용은 단정하지 말고 확인이 필요한 파일이나 질문을 명시하라.
+```
+
 ## 추가 문서 및 그림 입력
 
 ### 명함 OCR 문서 생성
@@ -58,7 +137,7 @@ python .\text_extract.py --bizcard --bizcard-webdav --bizcard-force
 ```
 
 모든 지원 형식의 통합 진입점은 `text_extract.py`입니다. `--input-file`을 생략하면
-`input`과 하위 디렉토리에서 PDF, DOCX, HWPX, JPG, PNG를 찾아 경로순으로 처리합니다.
+`input`과 하위 디렉토리에서 PDF, DOCX, PPTX, HWPX, JPG, PNG를 찾아 경로순으로 처리합니다.
 
 ```powershell
 python .\text_extract.py
@@ -89,18 +168,26 @@ python .\text_extract.py `
 
 기본적으로 한 파일이 실패해도 다음 파일을 계속 처리합니다. 첫 실패에서 중단하려면
 `--fail-fast`를 사용합니다. PDF 전용 페이지 및 OCR 옵션도 통합 진입점에서 전달할 수
-있습니다.
+있습니다. PDF와 PPTX를 추출할 때는 전체 페이지 수, 현재 페이지와 진행률이 표시됩니다.
 
-`input` 디렉토리 안의 DOCX, HWPX, JPG, PNG 파일도 각각의 실행 파일로 처리할 수 있습니다.
-DOCX/HWPX는 XML 본문을 직접 추출하고 문서에 포함된 PNG/JPEG 그림은 비전 모델 OCR로
+`input` 디렉토리 안의 DOCX, PPTX, HWPX, JPG, PNG 파일도 각각의 실행 파일로 처리할 수 있습니다.
+DOCX/PPTX/HWPX는 XML 본문을 직접 추출하고 문서에 포함된 PNG/JPEG 그림은 비전 모델 OCR로
 전사합니다. JPG/PNG는 그림 전체를 비전 모델로 전사합니다. 결과는 `output` 디렉토리에
 UTF-8 `.txt` 본문과 `.json` 메타데이터로 저장됩니다.
 
 ```powershell
 python .\docx_text_extractor.py --input-file ".\input\문서.docx"
+python .\pptx_text_extractor.py --input-file ".\input\발표자료.pptx"
 python .\hwpx_text_extractor.py --input-file ".\input\문서.hwpx"
 python .\jpg_text_extractor.py  --input-file ".\input\사진.jpg"
 python .\png_text_extractor.py  --input-file ".\input\화면.png"
+```
+
+PPTX에 포함된 이미지가 많으면 이미지별 모델 OCR에 시간이 오래 걸릴 수 있습니다.
+슬라이드의 텍스트 상자와 표 문자만 빠르게 추출하려면 다음 옵션을 사용합니다.
+
+```powershell
+python .\text_extract.py --input-file ".\input\발표자료.pptx" --skip-embedded-image-ocr
 ```
 
 그림 OCR 또는 포함 그림 OCR이 필요한 경우 PDF 처리와 마찬가지로 서버 비밀번호를 먼저
@@ -110,7 +197,7 @@ python .\png_text_extractor.py  --input-file ".\input\화면.png"
 $env:READ_MACH_PASSWORD = "<서버 비밀번호 입력>"
 ```
 
-DOCX/HWPX에 텍스트만 있고 지원되는 포함 그림이 없으면 모델 서버를 호출하지 않습니다.
+DOCX/PPTX/HWPX에 텍스트만 있고 지원되는 포함 그림이 없으면 모델 서버를 호출하지 않습니다.
 현재 문서 내 포함 그림 OCR은 PNG, JPG/JPEG에 적용되며 EMF/WMF 같은 벡터 그림은
 건너뜁니다.
 
@@ -162,6 +249,7 @@ Windows PowerShell에서는 가상환경 활성화 명령이 다음과 같습니
 ```json
 {
   "server_url": "http://llm-server.example:4004",
+  "cloud_fast_track_url": "https://fast-track.example.com",
   "model": "gemma4:31b",
   "target_id": "",
   "timeout_seconds": 240,
@@ -169,12 +257,31 @@ Windows PowerShell에서는 가상환경 활성화 명령이 다음과 같습니
 }
 ```
 
-`server_url`을 실제 LLM Routing 서버 주소로 변경하세요. 비밀번호 값은 JSON에
+`server_url`을 실제 LLM Routing 서버 주소로 변경하세요. Cloud Fast Track을 사용할
+경우 `cloud_fast_track_url`에 해당 서비스 주소를 입력합니다. 비밀번호 값은 JSON에
 기록하지 않고 `password_env`가 가리키는 환경변수에 입력합니다. 다른 설정
 파일을 사용하려면 `--config`로 지정합니다.
 
 ```bash
 python3 extract_picture_pages.py --config ./config/my_server.json
+```
+
+실행 시 `--cloud-fast-track`을 선택하면 `cloud_fast_track_url`을 베이스 주소로
+사용합니다. 먼저 `<cloud_fast_track_url>/api/gcp/status`를 확인하고, 생성 요청은
+`<cloud_fast_track_url>/api/gcp/generate`로 전송합니다. 설정값에는 `/api/gcp/...`
+경로를 붙이지 않습니다.
+
+```bash
+python3 text_extract.py --input-file ./input/발표자료.pptx \
+  --config ./config/my_server.json --cloud-fast-track
+```
+
+설정 파일을 수정하지 않고 이번 실행에만 주소를 지정할 수도 있습니다.
+
+```bash
+python3 text_extract.py --input-file ./input/발표자료.pptx \
+  --cloud-fast-track \
+  --cloud-fast-track-url "https://fast-track.example.com"
 ```
 
 ## 실행

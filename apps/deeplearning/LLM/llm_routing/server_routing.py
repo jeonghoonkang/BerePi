@@ -1474,6 +1474,23 @@ def route_gcp_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -
     return route_prompt(handler, request_payload, selected_target=target)
 
 
+def gcp_status_payload() -> dict[str, Any]:
+    """Return non-secret Google AI Studio readiness information."""
+    try:
+        status = GoogleAIStudioClient().configuration_status()
+        return {"ok": bool(status.get("configured")), **status}
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "configured": False,
+            "model_id": "",
+            "api_version": "",
+            "base_url": "",
+            "key_source": "not_configured",
+            "error": str(exc),
+        }
+
+
 def compare_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
     if not prompt_text(payload).strip():
         raise ValueError("prompt or messages is required.")
@@ -3394,6 +3411,9 @@ class RoutingHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/status":
             self.write_json(status_payload() if self.is_authenticated() else api_status_payload())
+            return
+        if self.path == "/api/gcp/status":
+            self.write_json(gcp_status_payload())
             return
         self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
