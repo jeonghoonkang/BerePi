@@ -287,11 +287,15 @@ def call_vision_ocr(
             raise requests.HTTPError(
                 f"OCR 요청 실패: {response.status_code} {response.reason}: {detail}", response=response
             )
-        text = response_text(response.json()).strip()
+        response_data = response.json()
+        text = response_text(response_data).strip()
         if not text:
             raise ValueError("모델 OCR 응답이 비어 있습니다.")
+        actual_model = str(response_data.get("model") or model)
         return text, {
-            "ocr_engine": "vision-model", "ocr_model": model, "target_id": target_id,
+            "ocr_engine": "vision-model", "ocr_model": actual_model,
+            "requested_ocr_model": requested_model, "target_id": target_id,
+            "model_fallback_applied": bool(response_data.get("model_fallback_applied")),
             "route": route, "server_url": server_url,
         }
 
