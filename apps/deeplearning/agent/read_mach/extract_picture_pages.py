@@ -277,24 +277,20 @@ def select_ollama_target(
     excluded_target_ids: set[str] | None = None,
     timeout: int = 15,
 ) -> tuple[str, str, str]:
+    from vision_ocr_support import model_status_url
+
     response = session.get(
-        f"{server_url.rstrip('/')}/api/status",
+        model_status_url(server_url),
         headers=auth_headers(password),
         timeout=timeout,
     )
     response.raise_for_status()
-    targets = response.json().get("targets")
+    status = response.json()
+    targets = status.get("targets")
     if not isinstance(targets, list):
         raise ValueError("서버 상태 응답에 targets 목록이 없습니다.")
 
     excluded = excluded_target_ids or set()
-
-    def is_dispatch_eligible(target: dict[str, Any]) -> bool:
-        try:
-            available = int(target.get("available_targets"))
-        except (TypeError, ValueError):
-            return False
-        return bool(target.get("dispatch_eligible")) and available > 0
 
     if explicit_target_id:
         matches = [target for target in targets if str(target.get("id")) == explicit_target_id]
@@ -306,10 +302,10 @@ def select_ollama_target(
             raise ValueError(
                 f"선택한 target은 지원하지 않는 {target.get('api_type')} 형식입니다."
             )
-        if not is_dispatch_eligible(target):
+        if not is_target_dispatch_eligible(status, target):
             raise ValueError(
                 f"선택한 target을 현재 사용할 수 없습니다: {explicit_target_id} "
-                f"(available_targets={target.get('available_targets')})"
+                f"(available_targets={target_available_count(status, target)})"
             )
         return explicit_target_id, str(target.get("model") or requested_model), api_type
 
@@ -319,7 +315,7 @@ def select_ollama_target(
         if str(target.get("api_type") or "").strip().lower() in {"ollama", "vllm"}
         and target.get("id")
         and str(target.get("id")) not in excluded
-        and is_dispatch_eligible(target)
+        and is_target_dispatch_eligible(status, target)
     ]
     if not vision_targets:
         raise ValueError("이미지 입력을 전달할 수 있는 가용 Ollama/vLLM target이 없습니다.")
@@ -335,6 +331,40 @@ def select_ollama_target(
         str(target.get("model") or requested_model),
         str(target.get("api_type") or "ollama").strip().lower(),
     )
+
+
+def target_status_metric(
+    status: dict[str, Any], target: dict[str, Any],
+) -> dict[str, Any]:
+    """Return dynamic target metrics from an authenticated status response."""
+    metrics = status.get("metrics")
+    if not isinstance(metrics, dict):
+        return {}
+    metric = metrics.get(str(target.get("id")))
+    return metric if isinstance(metric, dict) else {}
+
+
+def target_available_count(
+    status: dict[str, Any], target: dict[str, Any],
+) -> int | None:
+    """Read availability from either public flattened targets or authenticated metrics."""
+    value = target.get("available_targets")
+    if value is None:
+        value = target_status_metric(status, target).get("available_targets")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def is_target_dispatch_eligible(
+    status: dict[str, Any], target: dict[str, Any],
+) -> bool:
+    available = target_available_count(status, target)
+    dispatch_eligible = target.get("dispatch_eligible")
+    if dispatch_eligible is None:
+        dispatch_eligible = target_status_metric(status, target).get("dispatch_eligible")
+    return bool(dispatch_eligible) and available is not None and available > 0
 
 
 def is_target_unavailable_error(exc: requests.RequestException) -> bool:

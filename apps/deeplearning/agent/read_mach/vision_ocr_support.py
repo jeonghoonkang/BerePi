@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,17 @@ DEFAULT_INPUT_DIR = APP_DIR / "input"
 DEFAULT_OUTPUT_DIR = APP_DIR / "output"
 DEFAULT_CONFIG_PATH = APP_DIR / "config" / "server_config.json"
 _VERIFIED_CLOUD_FAST_TRACK_URLS: set[str] = set()
+
+
+@dataclass(frozen=True)
+class LocalParallelPlan:
+    """Available local OCR capacity calculated from the routing status endpoint."""
+
+    available_gpu_count: int
+    available_model_count: int
+    available_count: int
+    max_workers: int
+    target_ids: tuple[str, ...]
 
 
 def resolve_model_server_url(
@@ -77,6 +89,91 @@ def verify_cloud_fast_track(
     return data
 
 
+def local_parallel_plan(
+    *, config_path: Path = DEFAULT_CONFIG_PATH, password: str | None = None,
+) -> LocalParallelPlan:
+    """Calculate local OCR parallelism as 50 percent of available GPUs."""
+    import requests
+
+    from extract_picture_pages import (
+        auth_headers,
+        is_target_dispatch_eligible,
+        load_server_config,
+        target_available_count,
+        target_status_metric,
+    )
+
+    config = load_server_config(config_path)
+    password_env = str(config.get("password_env") or "READ_MACH_PASSWORD")
+    secret = password or os.getenv(password_env)
+    if not secret:
+        raise ValueError(f"서버 비밀번호가 없습니다. {password_env} 환경변수를 입력하세요.")
+    server_url, _route = resolve_model_server_url(config)
+    timeout = max(1, min(int(config.get("timeout_seconds") or 240), 30))
+    with requests.Session() as session:
+        response = session.get(
+            model_status_url(server_url),
+            headers=auth_headers(secret),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        status = response.json()
+    if not isinstance(status, dict):
+        raise ValueError("서버 상태 응답이 JSON 객체가 아닙니다.")
+    targets = status.get("targets")
+    if not isinstance(targets, list):
+        raise ValueError("서버 상태 응답에 targets 목록이 없습니다.")
+
+    requested_model = str(config.get("model") or "").strip()
+    explicit_target_id = str(config.get("target_id") or "").strip()
+    eligible = [
+        target
+        for target in targets
+        if isinstance(target, dict)
+        and target.get("id")
+        and str(target.get("api_type") or "").strip().lower() in {"ollama", "vllm"}
+        and is_target_dispatch_eligible(status, target)
+        and (not explicit_target_id or str(target.get("id")) == explicit_target_id)
+    ]
+    exact = [
+        target for target in eligible
+        if requested_model and str(target.get("model") or "").strip() == requested_model
+    ]
+    model_targets = exact or eligible
+    if not model_targets:
+        raise ValueError("이미지 입력을 전달할 수 있는 가용 Ollama/vLLM target이 없습니다.")
+
+    gpu_targets: dict[str, dict[str, Any]] = {}
+    for target in model_targets:
+        metric = target_status_metric(status, target)
+        host = str(target.get("host") or target.get("base_url") or "").strip()
+        port = str(target.get("port") or "").strip()
+        selected_gpu = str(
+            target.get("selected_gpu")
+            or target.get("selected_gpu_label")
+            or metric.get("selected_gpu_device")
+            or ""
+        ).strip()
+        endpoint = ":".join(part for part in (host, port) if part)
+        gpu_key = f"{endpoint}|{selected_gpu}" if endpoint else str(target.get("id"))
+        gpu_targets.setdefault(gpu_key, target)
+
+    available_gpu_count = len(gpu_targets)
+    available_model_count = sum(
+        max(0, target_available_count(status, target) or 0)
+        for target in model_targets
+    )
+    available_count = available_gpu_count
+    max_workers = max(1, available_gpu_count // 2)
+    return LocalParallelPlan(
+        available_gpu_count=available_gpu_count,
+        available_model_count=available_model_count,
+        available_count=available_count,
+        max_workers=max_workers,
+        target_ids=tuple(str(target["id"]) for target in gpu_targets.values()),
+    )
+
+
 def select_input_file(input_file: Path, suffix: str) -> Path:
     """Resolve one file below input/, rejecting traversal and wrong suffixes."""
     input_dir = DEFAULT_INPUT_DIR.resolve()
@@ -115,6 +212,7 @@ def call_vision_ocr(
     client_id: str = "read-mach-image-text-extractor",
     cloud_fast_track: bool = False,
     cloud_fast_track_url: str | None = None,
+    local_target_id: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Send one or more encoded images to the configured routing server."""
     import requests
@@ -138,7 +236,7 @@ def call_vision_ocr(
     )
     timeout = int(config.get("timeout_seconds") or 240)
     requested_model = str(config.get("model") or "")
-    explicit_target = str(config.get("target_id") or "") or None
+    explicit_target = local_target_id or str(config.get("target_id") or "") or None
     encoded = [(image_to_base64(image), image_mime_type(image)) for image in images]
 
     with requests.Session() as session:

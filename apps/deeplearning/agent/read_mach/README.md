@@ -42,7 +42,7 @@ https://github.com/jeonghoonkang/BerePi/tree/master/apps/deeplearning/agent/read
   저장하지 않는다. 비밀값은 password_env가 지정한 환경변수의 자리표시자로만 쓴다.
 - 입력 파일은 read_mach/input 내부에 있어야 한다는 경로 제한을 확인한다.
 - OCR이 필요 없는 문서 텍스트 추출과 외부 LLM 호출이 필요한 작업을 구분한다.
-- PPTX의 --skip-embedded-image-ocr, PDF 페이지 범위, --fail-fast와 진행률 출력의
+- PPTX의 --skip-embedded-image-ocr, PDF/PPTX 페이지 범위, --fail-fast와 진행률 출력의
   의미를 설명한다.
 - --cloud-fast-track을 선택하지 않으면 server_url, 선택하면
   --cloud-fast-track-url 또는 cloud_fast_track_url을 사용하는지 확인한다.
@@ -63,6 +63,7 @@ https://github.com/jeonghoonkang/BerePi/tree/master/apps/deeplearning/agent/read
    - 자동 탐색
    - 파일 하나 또는 여러 개
    - PDF 페이지 범위
+   - PPTX 페이지 범위
    - PPTX 전체 OCR
    - PPTX 이미지 OCR 제외
    - 기본 server_url 사용
@@ -167,13 +168,33 @@ python .\text_extract.py `
 `.txt` 본문과 `.json` 메타데이터로 저장됩니다.
 
 기본적으로 한 파일이 실패해도 다음 파일을 계속 처리합니다. 첫 실패에서 중단하려면
-`--fail-fast`를 사용합니다. PDF 전용 페이지 및 OCR 옵션도 통합 진입점에서 전달할 수
-있습니다. PDF와 PPTX를 추출할 때는 전체 페이지 수, 현재 페이지와 진행률이 표시됩니다.
+`--fail-fast`를 사용합니다. PDF/PPTX 페이지 범위와 PDF 전용 OCR 옵션도 통합
+진입점에서 전달할 수 있습니다. PDF와 PPTX를 추출할 때는 전체 페이지 수, 현재
+페이지와 진행률이 표시됩니다. 각 입력의 완료·실패 시 소요 시간과 전체 실행 시간은
+`시:분:초` 형식으로 출력됩니다.
 
 `input` 디렉토리 안의 DOCX, PPTX, HWPX, JPG, PNG 파일도 각각의 실행 파일로 처리할 수 있습니다.
 DOCX/PPTX/HWPX는 XML 본문을 직접 추출하고 문서에 포함된 PNG/JPEG 그림은 비전 모델 OCR로
 전사합니다. JPG/PNG는 그림 전체를 비전 모델로 전사합니다. 결과는 `output` 디렉토리에
 UTF-8 `.txt` 본문과 `.json` 메타데이터로 저장됩니다.
+
+DOCX/PPTX/HWPX에서 추출한 PNG/JPEG 원본은 지정한 출력 디렉토리 아래
+`extract_image/<문서명_형식>`에 저장됩니다. 문서별 디렉토리와 순번 접두사를 사용하므로
+서로 다른 문서나 같은 이름의 포함 그림이 덮어쓰이지 않습니다.
+
+```powershell
+python .\text_extract.py --input-file ".\input\발표자료.pptx" `
+  --output-dir ".\output"
+```
+
+OCR에는 포함 그림을 사용하되 디스크에 남기지 않으려면 `--rm-image`를 지정합니다.
+같은 출력 디렉토리에 이전 실행에서 남아 있던 해당 문서의 그림 디렉토리도 제거하며,
+다른 문서의 `extract_image` 디렉토리는 보존합니다.
+
+```powershell
+python .\text_extract.py --input-file ".\input\발표자료.pptx" `
+  --output-dir ".\output" --rm-image
+```
 
 ```powershell
 python .\docx_text_extractor.py --input-file ".\input\문서.docx"
@@ -184,10 +205,38 @@ python .\png_text_extractor.py  --input-file ".\input\화면.png"
 ```
 
 PPTX에 포함된 이미지가 많으면 이미지별 모델 OCR에 시간이 오래 걸릴 수 있습니다.
+`--cloud-fast-track`을 사용하지 않는 로컬 LLM 경로에서는 이미지 OCR 전에
+`server_url/api/status`를 확인합니다. 요청 모델을 처리할 수 있는 가용 GPU 수의
+50%(`소수점 이하 버림, 최소 1`)만큼 병렬 실행하며, 모델 수는 상태 정보로만
+표시하고 병렬도 계산에는 사용하지 않습니다. 각 작업은 GPU별 대표 target에
+순서대로 분산합니다. 실행 시 계산 결과가 다음 형식으로 표시됩니다.
+
+```text
+[로컬 LLM 병렬 설정] 가용 GPU 4개 | 가용 모델 7개 | GPU 50% 기준 병렬 2개
+```
+
+로컬 GPU 요청이 타임아웃, 연결 오류, 서버 오류 또는 모델 응답 오류로 실패하면
+동일한 이미지와 프롬프트를 실패한 GPU가 아닌 다음 가용 GPU target으로 재전송합니다.
+모든 GPU가 실패하면 시도한 target별 오류를 모아 실행을 실패 처리합니다. 인증 실패처럼
+GPU 변경으로 해결할 수 없는 HTTP 4xx 오류는 즉시 중단합니다. 이 동작은
+`error_handling/gpu_failover.py`에서 독립적으로 관리합니다.
+
+Cloud Fast Track은 이 로컬 병렬도 계산을 적용하지 않고 기존 전용 GCP 경로를
+사용합니다.
+
 슬라이드의 텍스트 상자와 표 문자만 빠르게 추출하려면 다음 옵션을 사용합니다.
 
 ```powershell
 python .\text_extract.py --input-file ".\input\발표자료.pptx" --skip-embedded-image-ocr
+```
+
+PPTX의 일부 슬라이드만 처리하려면 1부터 시작하는 페이지 범위를 지정합니다. 선택한
+슬라이드의 문자와 해당 슬라이드가 직접 참조하는 PNG/JPEG만 추출하며, 결과 파일명에는
+`pages_<시작>-<끝>` 범위가 포함됩니다.
+
+```powershell
+python .\text_extract.py --input-file ".\input\발표자료.pptx" `
+  --start-page 3 --end-page 3
 ```
 
 그림 OCR 또는 포함 그림 OCR이 필요한 경우 PDF 처리와 마찬가지로 서버 비밀번호를 먼저

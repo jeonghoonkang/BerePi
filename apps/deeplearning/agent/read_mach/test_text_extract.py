@@ -9,6 +9,10 @@ import text_extract
 
 
 class TextExtractDispatcherTests(unittest.TestCase):
+    def test_formats_elapsed_time(self) -> None:
+        self.assertEqual(text_extract.format_elapsed(0), "00:00:00.0")
+        self.assertEqual(text_extract.format_elapsed(3661.25), "01:01:01.2")
+
     def test_discovers_supported_files_in_stable_order(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -45,6 +49,36 @@ class TextExtractDispatcherTests(unittest.TestCase):
             skip_embedded_image_ocr=True,
         )
         self.assertIn("--skip-embedded-image-ocr", command)
+        self.assertEqual(command[command.index("--start-page") + 1], "1")
+
+    def test_forwards_pptx_page_range(self) -> None:
+        command = text_extract.extractor_command(
+            Path("sample.pptx"),
+            config_path=Path("config.json"),
+            output_dir=Path("output"),
+            start_page=3,
+            end_page=5,
+            ocr_dpi=300,
+            minimum_text_characters=100,
+        )
+        self.assertEqual(command[command.index("--start-page") + 1], "3")
+        self.assertEqual(command[command.index("--end-page") + 1], "5")
+
+    def test_forwards_remove_image_only_to_embedded_image_extractors(self) -> None:
+        for suffix in (".docx", ".pptx", ".hwpx"):
+            command = text_extract.extractor_command(
+                Path(f"sample{suffix}"), config_path=Path("config.json"),
+                output_dir=Path("output"), start_page=1, end_page=None,
+                ocr_dpi=300, minimum_text_characters=100, rm_image=True,
+            )
+            self.assertIn("--rm-image", command)
+
+        image_command = text_extract.extractor_command(
+            Path("sample.png"), config_path=Path("config.json"),
+            output_dir=Path("output"), start_page=1, end_page=None,
+            ocr_dpi=300, minimum_text_characters=100, rm_image=True,
+        )
+        self.assertNotIn("--rm-image", image_command)
 
     def test_forwards_cloud_fast_track_selection(self) -> None:
         command = text_extract.extractor_command(
@@ -107,7 +141,9 @@ class TextExtractDispatcherTests(unittest.TestCase):
         self.assertIn("--webdav", command)
         self.assertIn("--force", command)
         self.assertEqual(command[command.index("--webdav-url") + 1], "https://dav.example/cards")
-        self.assertEqual(command[command.index("--webdav-save-dir") + 1], "input\\webdav")
+        self.assertEqual(
+            command[command.index("--webdav-save-dir") + 1], str(Path("input/webdav"))
+        )
 
     @patch("text_extract.subprocess.run")
     @patch("text_extract.parse_args")
