@@ -311,6 +311,12 @@ Windows PowerShell에서는 가상환경 활성화 명령이 다음과 같습니
 기록하지 않고 `password_env`가 가리키는 환경변수에 입력합니다. 다른 설정
 파일을 사용하려면 `--config`로 지정합니다.
 
+`model`은 우선 요청할 모델입니다. LLM Routing 서버가 실제 backend 모델 목록을
+확인했을 때 이 모델이 존재하지 않으면, 설정 모델 또는 같은 모델 계열을 우선하고
+마지막으로 backend가 지원하는 모델 중 하나를 선택해 실행합니다. OCR 결과 메타데이터의
+`ocr_model`에는 실제 사용 모델, `requested_ocr_model`에는 요청 모델,
+`model_fallback_applied`에는 대체 여부가 기록됩니다.
+
 ```bash
 python3 extract_picture_pages.py --config ./config/my_server.json
 ```

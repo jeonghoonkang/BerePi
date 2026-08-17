@@ -3,6 +3,6 @@
   "cloud_fast_track_url": "http://keties.iptime.org:4004",
   "model": "gemma4:31b",
   "target_id": "",
-  "timeout_seconds": 90,
+  "timeout_seconds": 120,
   "password_env": "READ_MACH_PASSWORD"
 }
