@@ -111,7 +111,17 @@ def extract_pdf_content(
     selectable_text: dict[int, str] = {}
     extraction_warnings: list[str] = []
 
-    for page_number in selected_page_numbers:
+    selected_page_count = last_page - first_page + 1
+    for current_page, page_number in enumerate(selected_page_numbers, 1):
+        if progress:
+            percentage = current_page * 100 / selected_page_count
+            progress(
+                "pdf-page-progress",
+                f"[PDF 추출] 전체 {selected_page_count}페이지 | "
+                f"현재 {current_page}/{selected_page_count}페이지 "
+                f"(원본 {page_number}페이지) | 진행률 {percentage:.1f}%",
+                "cyan",
+            )
         page = reader.pages[page_number - 1]
         try:
             text = normalize_extracted_text(page.extract_text() or "")
@@ -225,6 +235,11 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("--ocr-dpi", type=int, default=300)
     parser.add_argument("--minimum-text-characters", type=int, default=100)
     parser.add_argument("--password", default=None)
+    parser.add_argument(
+        "--cloud-fast-track", action="store_true",
+        help="server_url 대신 Cloud Fast Track 주소를 사용합니다.",
+    )
+    parser.add_argument("--cloud-fast-track-url")
     return parser.parse_args()
 
 
@@ -239,6 +254,11 @@ def cli_main() -> int:
         select_ollama_target,
         select_pdf_files,
     )
+    from vision_ocr_support import (
+        model_generate_url,
+        resolve_model_server_url,
+        verify_cloud_fast_track,
+    )
 
     args = parse_cli_args()
     try:
@@ -249,22 +269,34 @@ def cli_main() -> int:
             raise ValueError(f"서버 비밀번호가 없습니다. {password_env} 환경변수를 입력하세요.")
         input_dir = Path(__file__).resolve().parent / "input"
         pdf_path = select_pdf_files(input_dir, args.input_file)[0]
-        server_url = str(server_config.get("server_url") or "").rstrip("/")
-        if not server_url:
-            raise ValueError("설정 파일의 server_url이 비어 있습니다.")
+        server_url, route = resolve_model_server_url(
+            server_config,
+            cloud_fast_track=args.cloud_fast_track,
+            cloud_fast_track_url=args.cloud_fast_track_url,
+        )
+        print(f"모델 호출 경로: {route} ({server_url})", flush=True)
         requested_model = str(server_config.get("model") or "")
         explicit_target = str(server_config.get("target_id") or "") or None
         timeout = int(server_config.get("timeout_seconds") or 240)
 
         with requests.Session() as session:
-            target_id, model, api_type = select_ollama_target(
-                session,
-                server_url=server_url,
-                password=password,
-                requested_model=requested_model,
-                explicit_target_id=explicit_target,
-            )
-            print(f"모델 target 선택: {target_id} (model={model}, api_type={api_type})")
+            if args.cloud_fast_track:
+                verify_cloud_fast_track(
+                    session, server_url, password=password, timeout=timeout
+                )
+                target_id = None
+                model = requested_model or "cloud-fast-track-default"
+                api_type = "cloud-fast-track"
+                print(f"Cloud Fast Track 직접 호출: {server_url}", flush=True)
+            else:
+                target_id, model, api_type = select_ollama_target(
+                    session,
+                    server_url=server_url,
+                    password=password,
+                    requested_model=requested_model,
+                    explicit_target_id=explicit_target,
+                )
+                print(f"모델 target 선택: {target_id} (model={model}, api_type={api_type})")
 
             def call_vision_model(
                 _config: dict[str, Any],
@@ -277,7 +309,9 @@ def cli_main() -> int:
 
                 def send_request() -> Any:
                     response = session.post(
-                        f"{server_url}/api/generate",
+                        model_generate_url(
+                            server_url, cloud_fast_track=args.cloud_fast_track
+                        ),
                         headers=auth_headers(password),
                         json=payload,
                         timeout=timeout + 30,
@@ -297,8 +331,9 @@ def cli_main() -> int:
                     "stream": False,
                     "temperature": 0,
                     "timeout": timeout,
-                    "target_id": target_id,
                 }
+                if target_id:
+                    payload["target_id"] = target_id
                 if api_type == "vllm":
                     payload["messages"] = [
                         {
@@ -320,7 +355,7 @@ def cli_main() -> int:
                 try:
                     response = send_request()
                 except requests.RequestException as exc:
-                    if not is_target_unavailable_error(exc):
+                    if args.cloud_fast_track or not is_target_unavailable_error(exc):
                         raise
                     failed_target = target_id
                     target_id, model, api_type = select_ollama_target(
@@ -364,7 +399,10 @@ def cli_main() -> int:
             def progress(_label: str, message: str, _color: str) -> None:
                 print(message, flush=True)
 
-            extraction_config = {"model": model, "target_id": target_id, "api_type": api_type}
+            extraction_config = {
+                "model": model, "target_id": target_id, "api_type": api_type,
+                "route": route, "server_url": server_url,
+            }
             text, metadata = extract_pdf_content(
                 pdf_path,
                 config=extraction_config,

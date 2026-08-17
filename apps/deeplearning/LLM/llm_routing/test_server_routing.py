@@ -26,6 +26,23 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertIn("api('/api/gcp/generate'", server_routing.INDEX_HTML)
         self.assertIn("자동 LLM 라우팅 대상에는 포함되지 않습니다", server_routing.INDEX_HTML)
 
+    def test_gcp_status_does_not_expose_api_key(self) -> None:
+        settings = MagicMock()
+        settings.configuration_status.return_value = {
+            "configured": True,
+            "model_id": "gemma-4-31b-it",
+            "api_version": "v1beta",
+            "base_url": "https://generativelanguage.googleapis.com",
+            "key_source": "environment:GEMINI_API_KEY",
+        }
+        with patch.object(server_routing, "GoogleAIStudioClient", return_value=settings):
+            result = server_routing.gcp_status_payload()
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["configured"])
+        self.assertEqual(result["model_id"], "gemma-4-31b-it")
+        self.assertNotIn("api_key", result)
+
     def test_sse_event_format(self) -> None:
         encoded = server_routing.sse_event_bytes("dispatch_info", {"value": "한글"})
 

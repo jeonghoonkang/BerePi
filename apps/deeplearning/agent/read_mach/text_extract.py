@@ -14,6 +14,7 @@ from vision_ocr_support import DEFAULT_CONFIG_PATH, DEFAULT_INPUT_DIR, DEFAULT_O
 EXTRACTORS = {
     ".pdf": "pdf_text_extractor.py",
     ".docx": "docx_text_extractor.py",
+    ".pptx": "pptx_text_extractor.py",
     ".hwpx": "hwpx_text_extractor.py",
     ".jpg": "jpg_text_extractor.py",
     ".png": "png_text_extractor.py",
@@ -60,6 +61,9 @@ def extractor_command(
     end_page: int | None,
     ocr_dpi: int,
     minimum_text_characters: int,
+    skip_embedded_image_ocr: bool = False,
+    cloud_fast_track: bool = False,
+    cloud_fast_track_url: str | None = None,
 ) -> list[str]:
     """Build the format-specific extractor command for one source file."""
     suffix = source.suffix.casefold()
@@ -79,6 +83,12 @@ def extractor_command(
         command.extend(["--minimum-text-characters", str(minimum_text_characters)])
         if end_page is not None:
             command.extend(["--end-page", str(end_page)])
+    elif suffix == ".pptx" and skip_embedded_image_ocr:
+        command.append("--skip-embedded-image-ocr")
+    if cloud_fast_track:
+        command.append("--cloud-fast-track")
+        if cloud_fast_track_url:
+            command.extend(["--cloud-fast-track-url", cloud_fast_track_url])
     return command
 
 
@@ -113,6 +123,8 @@ def bizcard_extractor_command(
     webdav_timeout: int,
     force: bool,
     webdav_save_dir: Path | None = None,
+    cloud_fast_track: bool = False,
+    cloud_fast_track_url: str | None = None,
 ) -> list[str]:
     """Build the business-card document extractor command."""
     script = Path(__file__).resolve().parent / "bizcard_text_extractor.py"
@@ -132,6 +144,10 @@ def bizcard_extractor_command(
             command.extend(["--webdav-save-dir", str(webdav_save_dir)])
     if force:
         command.append("--force")
+    if cloud_fast_track:
+        command.append("--cloud-fast-track")
+        if cloud_fast_track_url:
+            command.extend(["--cloud-fast-track-url", cloud_fast_track_url])
     return command
 
 
@@ -171,11 +187,24 @@ def parse_args() -> argparse.Namespace:
         help="WebDAV 명함 원본을 함께 저장할 로컬 디렉토리 (--bizcard 전용)",
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument(
+        "--cloud-fast-track", action="store_true",
+        help="server_url 대신 Cloud Fast Track 주소를 사용",
+    )
+    parser.add_argument(
+        "--cloud-fast-track-url",
+        help="설정 파일의 cloud_fast_track_url을 이번 실행에서 덮어쓰기",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--start-page", type=int, default=1, help="PDF에만 적용")
     parser.add_argument("--end-page", type=int, help="PDF에만 적용")
     parser.add_argument("--ocr-dpi", type=int, default=300, help="PDF에만 적용")
     parser.add_argument("--minimum-text-characters", type=int, default=100, help="PDF에만 적용")
+    parser.add_argument(
+        "--skip-embedded-image-ocr",
+        action="store_true",
+        help="PPTX 포함 이미지 OCR을 건너뛰고 슬라이드 문자만 추출",
+    )
     parser.add_argument("--url-timeout", type=int, default=30, help="URL별 요청 제한 시간(초)")
     parser.add_argument("--fail-fast", action="store_true", help="첫 실패에서 처리를 중단")
     return parser.parse_args()
@@ -195,6 +224,8 @@ def main() -> int:
             webdav_timeout=args.webdav_timeout,
             force=args.bizcard_force,
             webdav_save_dir=args.webdav_save_dir,
+            cloud_fast_track=args.cloud_fast_track,
+            cloud_fast_track_url=args.cloud_fast_track_url,
         )
         return subprocess.run(command, check=False).returncode
     try:
@@ -222,6 +253,9 @@ def main() -> int:
             start_page=max(1, args.start_page), end_page=args.end_page,
             ocr_dpi=max(72, args.ocr_dpi),
             minimum_text_characters=max(0, args.minimum_text_characters),
+            skip_embedded_image_ocr=getattr(args, "skip_embedded_image_ocr", False),
+            cloud_fast_track=getattr(args, "cloud_fast_track", False),
+            cloud_fast_track_url=getattr(args, "cloud_fast_track_url", None),
         )
         tasks.append((str(source), extractor, command))
     for url in args.url:
