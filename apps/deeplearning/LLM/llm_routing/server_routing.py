@@ -51,6 +51,9 @@ QUEUE_MAX_PER_TARGET = int(os.getenv("LLM_ROUTING_QUEUE_MAX_PER_TARGET", "10"))
 FAILOVER_AFTER_ERRORS = max(1, int(os.getenv("LLM_ROUTING_FAILOVER_AFTER_ERRORS", "3")))
 STATUS_REFRESH_SECONDS = int(os.getenv("LLM_ROUTING_STATUS_REFRESH_SECONDS", os.getenv("LLM_ROUTING_HEALTH_CHECK_INTERVAL_SECONDS", "10")))
 HEALTH_CHECK_INTERVAL_SECONDS = STATUS_REFRESH_SECONDS
+MODEL_LIST_CACHE_SECONDS = max(
+    1, int(os.getenv("LLM_ROUTING_MODEL_LIST_CACHE_SECONDS", "30"))
+)
 WEBDAV_DEFAULT_INTERVAL_MINUTES = int(os.getenv("LLM_ROUTING_WEBDAV_INTERVAL_MINUTES", "30"))
 WEBDAV_MAX_INTERVAL_MINUTES = 24 * 60
 WEBDAV_RETENTION_DAYS = int(os.getenv("LLM_ROUTING_WEBDAV_RETENTION_DAYS", "90"))
@@ -66,6 +69,7 @@ AUTH_SESSIONS: dict[str, float] = {}
 TARGET_QUEUES: dict[str, queue.Queue["PromptJob"]] = {}
 TARGET_WORKERS: dict[str, threading.Thread] = {}
 MODEL_DISPATCH_COUNTS: dict[str, int] = {}
+TARGET_MODEL_LIST_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
 PROXY_SERVERS: dict[str, tuple[ThreadingHTTPServer, threading.Thread, int]] = {}
 WEBDAV_REPORT_STATE: dict[str, Any] = {
     "enabled": False,
@@ -900,6 +904,47 @@ def fetch_target_models(target: LLMTarget) -> list[str]:
     return parse_model_ids(target, data)
 
 
+def cached_target_models(target: LLMTarget) -> list[str]:
+    """Return the target's actual model list without probing on every prompt."""
+    now = time.time()
+    with STATE_LOCK:
+        cached = TARGET_MODEL_LIST_CACHE.get(target.id)
+        if cached and now - cached[0] < MODEL_LIST_CACHE_SECONDS:
+            return list(cached[1])
+    try:
+        models = fetch_target_models(target)
+    except Exception:
+        return []
+    if not models:
+        return []
+    with STATE_LOCK:
+        TARGET_MODEL_LIST_CACHE[target.id] = (now, tuple(models))
+    return models
+
+
+def choose_supported_model(
+    requested_model: str, configured_model: str, supported_models: list[str],
+) -> str:
+    """Choose an installed model, preferring the request and its model family."""
+    requested = str(requested_model or "").strip()
+    configured = str(configured_model or "").strip()
+    supported = list(dict.fromkeys(str(model).strip() for model in supported_models if str(model).strip()))
+    if not supported:
+        return requested or configured
+    for candidate in (requested, configured):
+        if candidate and candidate in supported:
+            return candidate
+    family = (requested or configured).split(":", 1)[0].casefold()
+    if family:
+        family_matches = [
+            model for model in supported
+            if model.split(":", 1)[0].casefold() == family
+        ]
+        if family_matches:
+            return family_matches[0]
+    return supported[0]
+
+
 def fetch_target_options(target: LLMTarget) -> dict[str, Any]:
     models = fetch_target_models(target)
     gpus: list[dict[str, str]] = []
@@ -1247,6 +1292,9 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         store_metric(target.id, metric)
 
     started = time.time()
+    requested_model = str(payload.get("model") or target.model or "").strip()
+    dispatched_model = target.model
+    supported_models: list[str] = []
     try:
         if target.api_type == "bedrock":
             bedrock_payload = dict(payload)
@@ -1259,7 +1307,14 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             gcp_payload["model"] = target.model
             normalized = GoogleAIStudioClient().generate(gcp_payload, effective_timeout)
         else:
-            url, backend_payload = build_backend_payload(target, payload)
+            supported_models = cached_target_models(target)
+            dispatched_model = choose_supported_model(
+                requested_model, target.model, supported_models
+            )
+            backend_request = dict(payload)
+            if dispatched_model:
+                backend_request["model"] = dispatched_model
+            url, backend_payload = build_backend_payload(target, backend_request)
             data = request_json(
                 url,
                 backend_payload,
@@ -1305,7 +1360,13 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
             "target_port": target.port,
             "target_url": target.base_url,
             "api_type": target.api_type,
-            "model": target.model,
+            "model": dispatched_model,
+            "requested_model": requested_model,
+            "configured_model": target.model,
+            "model_fallback_applied": bool(
+                dispatched_model and requested_model and dispatched_model != requested_model
+            ),
+            "supported_models": supported_models,
             "gpu_type": target.gpu_type,
             "gpu_info": target.gpu_info,
             "selected_gpu": target.selected_gpu,
@@ -3590,6 +3651,8 @@ class RoutingHandler(BaseHTTPRequestHandler):
         if not replaced:
             targets.append(new_target)
         save_targets(targets)
+        with STATE_LOCK:
+            TARGET_MODEL_LIST_CACHE.pop(target_id, None)
         remember_target_history(new_target)
         sync_ollama_proxy_servers()
         return new_target.__dict__
@@ -3616,6 +3679,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
         save_targets(filtered)
         with STATE_LOCK:
             TARGET_RUNTIME.pop(target_id, None)
+            TARGET_MODEL_LIST_CACHE.pop(target_id, None)
         sync_ollama_proxy_servers()
         return len(filtered) != len(targets)
 
