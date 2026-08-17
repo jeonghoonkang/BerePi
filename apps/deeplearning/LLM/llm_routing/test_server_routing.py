@@ -56,6 +56,23 @@ class DispatchInfoTests(unittest.TestCase):
 
         self.assertEqual(selected, "gemma4:27b")
 
+    def test_api_password_gets_refreshing_status_payload(self) -> None:
+        handler = server_routing.RoutingHandler.__new__(server_routing.RoutingHandler)
+        handler.path = "/api/status"
+
+        with (
+            patch.object(handler, "is_authenticated", return_value=False),
+            patch.object(server_routing, "prompt_api_authenticated", return_value=True),
+            patch.object(server_routing, "status_payload", return_value={"detail": True}) as detailed,
+            patch.object(server_routing, "api_status_payload", return_value={"detail": False}) as public,
+            patch.object(handler, "write_json") as write_json,
+        ):
+            handler.do_GET()
+
+        detailed.assert_called_once_with()
+        public.assert_not_called()
+        write_json.assert_called_once_with({"detail": True})
+
     def test_prompt_input_has_default_smoke_test_text(self) -> None:
         self.assertIn(
             '<textarea id="test_prompt" placeholder="전송할 prompt">'
