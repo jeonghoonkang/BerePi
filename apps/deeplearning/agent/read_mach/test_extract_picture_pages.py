@@ -19,11 +19,15 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, targets: list[dict]) -> None:
-        self.targets = targets
+    def __init__(self, targets: list[dict], metrics: dict | None = None) -> None:
+        self.payload = {"targets": targets}
+        self.get_url = ""
+        if metrics is not None:
+            self.payload["metrics"] = metrics
 
-    def get(self, *_args, **_kwargs) -> FakeResponse:
-        return FakeResponse({"targets": self.targets})
+    def get(self, url: str, **_kwargs) -> FakeResponse:
+        self.get_url = url
+        return FakeResponse(self.payload)
 
 
 class FakePostResponse:
@@ -38,8 +42,10 @@ class FakePostResponse:
 class CapturingSession:
     def __init__(self) -> None:
         self.payload: dict = {}
+        self.post_url = ""
 
-    def post(self, *_args, **kwargs) -> FakePostResponse:
+    def post(self, url: str, **kwargs) -> FakePostResponse:
+        self.post_url = url
         self.payload = kwargs["json"]
         return FakePostResponse()
 
@@ -85,6 +91,7 @@ class InputFileSelectionTests(unittest.TestCase):
         self.assertEqual(content[1]["type"], "image_url")
         self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
         self.assertNotIn("images", session.payload)
+        self.assertEqual(session.post_url, "http://router.example/api/generate")
 
     def test_selects_available_vllm_target(self) -> None:
         session = FakeSession(
@@ -100,6 +107,35 @@ class InputFileSelectionTests(unittest.TestCase):
         )
 
         self.assertEqual(selected, ("vllm-ready", "vision-model", "vllm"))
+
+    def test_selects_target_using_authenticated_status_metrics(self) -> None:
+        session = FakeSession(
+            [
+                {
+                    "id": "ollama-ready",
+                    "api_type": "ollama",
+                    "model": "gemma4:31b",
+                    "enabled": True,
+                }
+            ],
+            metrics={
+                "ollama-ready": {
+                    "available_targets": 2,
+                    "dispatch_eligible": True,
+                }
+            },
+        )
+
+        selected = select_ollama_target(
+            session,
+            server_url="http://router.example",
+            password="secret",
+            requested_model="gemma4:31b",
+            explicit_target_id=None,
+        )
+
+        self.assertEqual(selected, ("ollama-ready", "gemma4:31b", "ollama"))
+        self.assertEqual(session.get_url, "http://router.example/api/status")
 
     def test_explicit_unavailable_target_is_rejected(self) -> None:
         session = FakeSession(

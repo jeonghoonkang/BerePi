@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from vision_ocr_support import DEFAULT_CONFIG_PATH, DEFAULT_INPUT_DIR, DEFAULT_OUTPUT_DIR
@@ -19,6 +20,14 @@ EXTRACTORS = {
     ".jpg": "jpg_text_extractor.py",
     ".png": "png_text_extractor.py",
 }
+
+
+def format_elapsed(seconds: float) -> str:
+    """Format an elapsed duration as HH:MM:SS.s."""
+    total_seconds = max(0.0, float(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{int(hours):02d}:{int(minutes):02d}:{seconds:04.1f}"
 
 
 def discover_input_files(input_dir: Path) -> list[Path]:
@@ -62,6 +71,7 @@ def extractor_command(
     ocr_dpi: int,
     minimum_text_characters: int,
     skip_embedded_image_ocr: bool = False,
+    rm_image: bool = False,
     cloud_fast_track: bool = False,
     cloud_fast_track_url: str | None = None,
 ) -> list[str]:
@@ -78,13 +88,18 @@ def extractor_command(
         "--output-dir",
         str(output_dir),
     ]
-    if suffix == ".pdf":
-        command.extend(["--start-page", str(start_page), "--ocr-dpi", str(ocr_dpi)])
-        command.extend(["--minimum-text-characters", str(minimum_text_characters)])
+    if suffix in {".pdf", ".pptx"}:
+        command.extend(["--start-page", str(start_page)])
         if end_page is not None:
             command.extend(["--end-page", str(end_page)])
-    elif suffix == ".pptx" and skip_embedded_image_ocr:
-        command.append("--skip-embedded-image-ocr")
+    if suffix == ".pdf":
+        command.extend(["--ocr-dpi", str(ocr_dpi)])
+        command.extend(["--minimum-text-characters", str(minimum_text_characters)])
+    elif suffix == ".pptx":
+        if skip_embedded_image_ocr:
+            command.append("--skip-embedded-image-ocr")
+    if rm_image and suffix in {".docx", ".pptx", ".hwpx"}:
+        command.append("--rm-image")
     if cloud_fast_track:
         command.append("--cloud-fast-track")
         if cloud_fast_track_url:
@@ -196,8 +211,8 @@ def parse_args() -> argparse.Namespace:
         help="설정 파일의 cloud_fast_track_url을 이번 실행에서 덮어쓰기",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--start-page", type=int, default=1, help="PDF에만 적용")
-    parser.add_argument("--end-page", type=int, help="PDF에만 적용")
+    parser.add_argument("--start-page", type=int, default=1, help="PDF/PPTX에 적용")
+    parser.add_argument("--end-page", type=int, help="PDF/PPTX에 적용")
     parser.add_argument("--ocr-dpi", type=int, default=300, help="PDF에만 적용")
     parser.add_argument("--minimum-text-characters", type=int, default=100, help="PDF에만 적용")
     parser.add_argument(
@@ -205,12 +220,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="PPTX 포함 이미지 OCR을 건너뛰고 슬라이드 문자만 추출",
     )
+    parser.add_argument(
+        "--rm-image",
+        action="store_true",
+        help="DOCX/PPTX/HWPX에서 추출한 그림을 output/extract_image에 남기지 않음",
+    )
     parser.add_argument("--url-timeout", type=int, default=30, help="URL별 요청 제한 시간(초)")
     parser.add_argument("--fail-fast", action="store_true", help="첫 실패에서 처리를 중단")
     return parser.parse_args()
 
 
 def main() -> int:
+    started_at = time.perf_counter()
     args = parse_args()
     if args.bizcard:
         command = bizcard_extractor_command(
@@ -227,7 +248,9 @@ def main() -> int:
             cloud_fast_track=args.cloud_fast_track,
             cloud_fast_track_url=args.cloud_fast_track_url,
         )
-        return subprocess.run(command, check=False).returncode
+        result = subprocess.run(command, check=False)
+        print(f"전체 실행 시간: {format_elapsed(time.perf_counter() - started_at)}", flush=True)
+        return result.returncode
     try:
         if args.input_file:
             sources = resolve_requested_files(DEFAULT_INPUT_DIR, args.input_file)
@@ -254,6 +277,7 @@ def main() -> int:
             ocr_dpi=max(72, args.ocr_dpi),
             minimum_text_characters=max(0, args.minimum_text_characters),
             skip_embedded_image_ocr=getattr(args, "skip_embedded_image_ocr", False),
+            rm_image=getattr(args, "rm_image", False),
             cloud_fast_track=getattr(args, "cloud_fast_track", False),
             cloud_fast_track_url=getattr(args, "cloud_fast_track_url", None),
         )
@@ -269,18 +293,24 @@ def main() -> int:
     successes = 0
     for index, (label, extractor, command) in enumerate(tasks, 1):
         attempted += 1
+        task_started_at = time.perf_counter()
         print(f"[{index}/{total}] {label} -> {extractor}", flush=True)
         result = subprocess.run(command, check=False)
+        task_elapsed = format_elapsed(time.perf_counter() - task_started_at)
         if result.returncode:
             failures.append((label, result.returncode))
-            print(f"[{index}/{total}] 실패(exit={result.returncode}): {label}", file=sys.stderr)
+            print(
+                f"[{index}/{total}] 실패(exit={result.returncode}, 소요={task_elapsed}): {label}",
+                file=sys.stderr,
+            )
             if args.fail_fast:
                 break
         else:
             successes += 1
-            print(f"[{index}/{total}] 완료: {label}", flush=True)
+            print(f"[{index}/{total}] 완료(소요={task_elapsed}): {label}", flush=True)
 
     print(f"처리 요약: 성공 {successes}, 실패 {len(failures)}, 시도 {attempted}, 대상 {total}")
+    print(f"전체 실행 시간: {format_elapsed(time.perf_counter() - started_at)}", flush=True)
     if failures:
         for label, returncode in failures:
             print(f"- 실패(exit={returncode}): {label}", file=sys.stderr)
