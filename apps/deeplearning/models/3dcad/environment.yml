@@ -1,0 +1,13 @@
+name: brep-cad-learning
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - pythonocc-core=7.8
+  - numpy>=1.24
+  - pyyaml>=6
+  - tqdm>=4.66
+  - pytorch>=2.1
+  - pytest>=7
+  - pip
