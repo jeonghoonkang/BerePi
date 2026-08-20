@@ -1,7 +1,7 @@
 # LLM Routing
 
 외부에서 들어오는 prompt 요청을 여러 LLM 서버 중 하나로 전달하고, 받은 결과를 요청한 클라이언트로 되돌려주는 라우팅 서버입니다.
-openai ollama api 를 지원 합니다. 
+openai, ollama api 를 지원 합니다. 
 
 ## 기능
 
