@@ -185,6 +185,34 @@ class PromptDispatchError(Exception):
         self.target = target
 
 
+class BackendAuthenticationError(RuntimeError):
+    def __init__(self, status_code: int, detail: str = "") -> None:
+        super().__init__(f"Backend authentication failed (HTTP {status_code}).")
+        self.status_code = status_code
+        self.detail = detail
+
+
+class AllModelsFailedError(PromptDispatchError):
+    def __init__(
+        self,
+        message: str,
+        dispatch_count: int,
+        target: LLMTarget,
+        failures: list[dict[str, Any]],
+        routing_messages: list[str],
+    ) -> None:
+        super().__init__(message, dispatch_count, target)
+        self.response_fields = {
+            "all_models_failed": True,
+            "execution_stopped": True,
+            "last_model": target.model,
+            "model_failures": failures,
+            "routing_messages": routing_messages,
+            **dispatch_target_fields(target),
+            **dispatch_info_fields(target),
+        }
+
+
 def dispatch_count_fields(count: int) -> dict[str, int]:
     normalized = max(0, int(count))
     return {
@@ -535,6 +563,8 @@ def request_json(
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace").strip()
         detail = body[:500] if body else exc.reason
+        if exc.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+            raise BackendAuthenticationError(exc.code, str(detail)) from exc
         raise RuntimeError(f"HTTP {exc.code} from backend: {detail}") from exc
     if not body.strip():
         return {}
@@ -1409,14 +1439,98 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         raise
 
 
-def route_prompt(
+def is_backend_authentication_error(error: BaseException) -> bool:
+    current: BaseException | None = error
+    visited: set[int] = set()
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        if isinstance(current, BackendAuthenticationError):
+            return True
+        if isinstance(current, urllib.error.HTTPError) and current.code in {
+            HTTPStatus.UNAUTHORIZED,
+            HTTPStatus.FORBIDDEN,
+        }:
+            return True
+        status_code = getattr(current, "status_code", None)
+        if status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+            return True
+        lowered = str(current).lower()
+        if any(
+            marker in lowered
+            for marker in (
+                "invalid api key",
+                "invalid api password",
+                "invalid password",
+                "unauthorized",
+                "authentication failed",
+            )
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def prompt_failover_targets(initial_target: LLMTarget) -> list[LLMTarget]:
+    enabled_targets = [target for target in load_targets() if target.enabled]
+    initial_index = next(
+        (index for index, target in enumerate(enabled_targets) if target.id == initial_target.id),
+        None,
+    )
+    # Dedicated Bedrock/GCP endpoints are intentionally isolated from the
+    # configured automatic-routing targets.
+    if initial_index is None:
+        return [initial_target]
+
+    ordered = (
+        enabled_targets[initial_index + 1 :]
+        + enabled_targets[:initial_index]
+    )
+    candidates = [initial_target]
+    attempted_models = {model_dispatch_key(initial_target)}
+    for target in ordered:
+        model_key = model_dispatch_key(target)
+        if model_key in attempted_models:
+            continue
+        attempted_models.add(model_key)
+        metric = metric_for(target.id)
+        if metric.available_targets == 0 or target_failover_open(target):
+            continue
+        candidates.append(target)
+    return candidates
+
+
+def model_failure_fields(
+    target: LLMTarget,
+    error: BaseException,
+    attempt: int,
+) -> tuple[dict[str, Any], str]:
+    authentication_failed = is_backend_authentication_error(error)
+    model_name = target.model or target.name
+    if authentication_failed:
+        message = f"모델 '{model_name}' 호출 인증 정보(암호)가 올바르지 않습니다."
+        failure_type = "authentication"
+    else:
+        message = f"모델 '{model_name}' 호출이 실패했습니다: {error}"
+        failure_type = "backend"
+    return (
+        {
+            "attempt": attempt,
+            "target_id": target.id,
+            "target_name": target.name,
+            "model": target.model,
+            "type": failure_type,
+            "authentication_failed": authentication_failed,
+            "message": message,
+        },
+        message,
+    )
+
+
+def dispatch_prompt_to_target(
     handler: BaseHTTPRequestHandler,
     payload: dict[str, Any],
-    selected_target: LLMTarget | None = None,
+    target: LLMTarget,
 ) -> dict[str, Any]:
-    if not prompt_text(payload).strip():
-        raise ValueError("prompt or messages is required.")
-    target = selected_target or choose_target(payload)
     requested_target_id = str(payload.get("target_id") or "")
     requested_target = target_by_id(requested_target_id) if requested_target_id else None
     failed_models = sorted(
@@ -1495,6 +1609,72 @@ def route_prompt(
     if requested_target is not None and requested_target.id != target.id:
         result["failover_from_target_id"] = requested_target.id
     return result
+
+
+def route_prompt(
+    handler: BaseHTTPRequestHandler,
+    payload: dict[str, Any],
+    selected_target: LLMTarget | None = None,
+) -> dict[str, Any]:
+    if not prompt_text(payload).strip():
+        raise ValueError("prompt or messages is required.")
+
+    initial_target = selected_target or choose_target(payload)
+    candidates = prompt_failover_targets(initial_target)
+    failures: list[dict[str, Any]] = []
+    routing_messages: list[str] = []
+    total_dispatch_count = 0
+
+    for index, target in enumerate(candidates):
+        try:
+            result = dispatch_prompt_to_target(handler, payload, target)
+        except (PromptDispatchError, QueueFullError) as exc:
+            dispatch_count = (
+                exc.dispatch_count if isinstance(exc, PromptDispatchError) else 0
+            )
+            total_dispatch_count += dispatch_count
+            failure, message = model_failure_fields(target, exc, index + 1)
+            failures.append(failure)
+            has_next_model = index + 1 < len(candidates)
+            if has_next_model:
+                message = f"{message} 다음 모델을 호출합니다."
+            routing_messages.append(message)
+            if has_next_model:
+                continue
+
+            model_name = target.model or target.name
+            stopped_message = (
+                "모든 모델 호출이 실패했습니다. 동일 모델을 반복 호출하지 않고 "
+                f"마지막 모델 '{model_name}'에서 실행을 중지했습니다."
+            )
+            routing_messages.append(stopped_message)
+            raise AllModelsFailedError(
+                stopped_message,
+                total_dispatch_count,
+                target,
+                failures,
+                routing_messages,
+            ) from exc
+
+        total_dispatch_count += int(result.get("llm_dispatch_count") or 1)
+        result.update(dispatch_count_fields(total_dispatch_count))
+        if failures:
+            result["failover_applied"] = True
+            result["model_failures"] = failures
+            result["routing_messages"] = routing_messages
+            result["failover_from_models"] = list(
+                dict.fromkeys(
+                    model
+                    for model in [
+                        *(str(item.get("model") or "") for item in failures),
+                        *result.get("failover_from_models", []),
+                    ]
+                    if model
+                )
+            )
+        return result
+
+    raise RuntimeError("No LLM model candidates were available.")
 
 
 def route_bedrock_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1712,6 +1892,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
         "llm_dispatch_model_number": data.get("llm_dispatch_model_number"),
         "llm_dispatch_target": data.get("llm_dispatch_target"),
         "dispatch_info": data.get("dispatch_info"),
+        "model_failures": data.get("model_failures", []),
+        "routing_messages": data.get("routing_messages", []),
         "routing": {
             "target_id": data.get("target_id"),
             "target_name": data.get("target_name"),
@@ -1729,6 +1911,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             "llm_dispatch_target": data.get("llm_dispatch_target"),
             "dispatch_info": data.get("dispatch_info"),
             "response_seconds": data.get("response_seconds"),
+            "model_failures": data.get("model_failures", []),
+            "messages": data.get("routing_messages", []),
         },
     }
 
@@ -2840,7 +3024,11 @@ async function api(path, options) {
     throw new Error('login required');
   }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    const error = new Error(data.error || res.statusText);
+    error.data = data;
+    throw error;
+  }
   return data;
 }
 async function logout() {
@@ -3173,9 +3361,14 @@ async function sendPrompt() {
     document.getElementById('test_status').textContent = '오류';
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = '-';
-    document.getElementById('test_selected_target').textContent = '-';
-    setAnswer('');
-    document.getElementById('test_result').textContent = String(err);
+    const errorData = err.data || {};
+    document.getElementById('test_selected_target').textContent = errorData.llm_dispatch_target
+      ? `${errorData.llm_dispatch_target.target_name || ''} / ${errorData.last_model || errorData.llm_dispatch_target.model || ''}`
+      : '-';
+    setAnswer((errorData.routing_messages || [String(err)]).join('\n'));
+    document.getElementById('test_result').textContent = err.data
+      ? JSON.stringify(err.data, null, 2)
+      : String(err);
   } finally {
     window.clearInterval(elapsedTimer);
   }
@@ -3202,6 +3395,7 @@ function renderCompareResults(results) {
 }
 function promptResponseDetails(data) {
   const selectedGpu = data.selected_gpu_device || data.selected_gpu_label || data.selected_gpu || 'auto';
+  const routingMessages = (data.routing_messages || []).map(message => `> ${message}`);
   const lines = [
     `### ${data.target_name || ''}`,
     `- Target: ${data.target_host || ''}:${data.target_port || ''}`,
@@ -3211,6 +3405,8 @@ function promptResponseDetails(data) {
     `- Selected GPU: ${selectedGpu}`,
     `- Elapsed: ${Number(data.response_seconds || 0).toFixed(2)}s`,
     '',
+    ...routingMessages,
+    ...(routingMessages.length ? [''] : []),
     data.response || ''
   ];
   return lines.join('\\n');
@@ -3417,6 +3613,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     **dispatch_count_fields(exc.dispatch_count),
                     **dispatch_metadata,
                     **dispatch_info,
+                    **getattr(exc, "response_fields", {}),
                 },
             )
         except QueueFullError as exc:
@@ -3585,6 +3782,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     **dispatch_count_fields(exc.dispatch_count),
                     **dispatch_target_fields(exc.target),
                     **dispatch_info_fields(exc.target),
+                    **getattr(exc, "response_fields", {}),
                 },
                 HTTPStatus.BAD_GATEWAY,
             )

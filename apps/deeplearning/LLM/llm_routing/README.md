@@ -414,6 +414,18 @@ bash run.sh
 
 응답에는 `failover_applied`, `failover_from_models`,
 `failover_after_errors` 필드가 포함되어 실제 전환 여부를 확인할 수 있습니다.
+
+한 요청의 backend 호출이 실패하면 라우터는 설정 순서상 다음에 있는 서로 다른
+모델을 호출합니다. 같은 `model` 값은 한 요청에서 한 번만 호출하므로 모든 후보가
+실패해도 처음 모델로 돌아가 반복하지 않습니다. HTTP 401/403 또는 잘못된 API
+password/key 오류는 인증 실패로 분류됩니다.
+
+다음 모델이 성공하면 응답의 `model_failures`에 앞선 실패 모델과 실패 유형이,
+`routing_messages`에 인증 정보(암호) 오류 및 다음 모델 호출 안내가 포함됩니다.
+모든 모델이 실패하면 HTTP 502 응답에 `all_models_failed: true`,
+`execution_stopped: true`, `last_model`, `model_failures`, `routing_messages`가
+포함되며 마지막 모델에서 실행을 중지합니다.
+
 ### `available_targets=unknown` 대상 제외
 
 라우터는 target의 `/health`, `/api/tags` 또는 `/v1/models` 응답에서 사용 가능한

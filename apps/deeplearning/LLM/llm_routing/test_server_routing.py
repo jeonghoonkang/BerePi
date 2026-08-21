@@ -1,5 +1,6 @@
 import unittest
 from io import BytesIO
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 import server_routing
@@ -295,6 +296,126 @@ class DispatchInfoTests(unittest.TestCase):
                     server_routing.metric_for(target.id).consecutive_errors,
                     expected,
                 )
+
+    def test_backend_unauthorized_is_reported_as_authentication_failure(self) -> None:
+        http_error = urllib.error.HTTPError(
+            "http://backend/v1/chat/completions",
+            401,
+            "Unauthorized",
+            {},
+            BytesIO(b'{"error":"bad credentials"}'),
+        )
+        with patch("urllib.request.urlopen", side_effect=http_error):
+            with self.assertRaises(server_routing.BackendAuthenticationError) as raised:
+                server_routing.request_json(
+                    "http://backend/v1/chat/completions",
+                    {"model": "model-a", "prompt": "hello"},
+                )
+        http_error.close()
+
+        self.assertEqual(raised.exception.status_code, 401)
+
+    def test_authentication_failure_calls_next_model_once(self) -> None:
+        first = server_routing.LLMTarget(
+            id="target-1",
+            name="First",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        second = server_routing.LLMTarget(
+            id="target-2",
+            name="Second",
+            host="127.0.0.2",
+            port=11434,
+            model="model-b",
+        )
+        auth_error = server_routing.PromptDispatchError(
+            "Backend request failed: authentication failed",
+            1,
+            first,
+        )
+        auth_error.__cause__ = server_routing.BackendAuthenticationError(401)
+        handler = MagicMock(headers={}, client_address=("127.0.0.1", 12345))
+
+        with (
+            patch.object(server_routing, "load_targets", return_value=[first, second]),
+            patch.object(server_routing, "choose_target", return_value=first),
+            patch.object(
+                server_routing,
+                "dispatch_prompt_to_target",
+                side_effect=[
+                    auth_error,
+                    {
+                        "ok": True,
+                        "model": second.model,
+                        "llm_dispatch_count": 1,
+                        "failover_from_models": [],
+                    },
+                ],
+            ) as dispatch,
+        ):
+            result = server_routing.route_prompt(handler, {"prompt": "hello"})
+
+        self.assertEqual([call.args[2].id for call in dispatch.call_args_list], [first.id, second.id])
+        self.assertEqual(result["llm_dispatch_count"], 2)
+        self.assertTrue(result["failover_applied"])
+        self.assertTrue(result["model_failures"][0]["authentication_failed"])
+        self.assertIn("암호", result["routing_messages"][0])
+        self.assertIn("다음 모델", result["routing_messages"][0])
+
+    def test_all_models_fail_once_and_stop_at_last_model(self) -> None:
+        first = server_routing.LLMTarget(
+            id="target-1",
+            name="First",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        duplicate_model = server_routing.LLMTarget(
+            id="target-duplicate",
+            name="Duplicate",
+            host="127.0.0.2",
+            port=11434,
+            model="model-a",
+        )
+        last = server_routing.LLMTarget(
+            id="target-2",
+            name="Last",
+            host="127.0.0.3",
+            port=11434,
+            model="model-b",
+        )
+        first_error = server_routing.PromptDispatchError("first failed", 1, first)
+        first_error.__cause__ = server_routing.BackendAuthenticationError(401)
+        last_error = server_routing.PromptDispatchError("last failed", 1, last)
+        handler = MagicMock(headers={}, client_address=("127.0.0.1", 12345))
+
+        with (
+            patch.object(
+                server_routing,
+                "load_targets",
+                return_value=[first, duplicate_model, last],
+            ),
+            patch.object(server_routing, "choose_target", return_value=first),
+            patch.object(
+                server_routing,
+                "dispatch_prompt_to_target",
+                side_effect=[first_error, last_error],
+            ) as dispatch,
+        ):
+            with self.assertRaises(server_routing.AllModelsFailedError) as raised:
+                server_routing.route_prompt(handler, {"prompt": "hello"})
+
+        error = raised.exception
+        self.assertEqual([call.args[2].id for call in dispatch.call_args_list], [first.id, last.id])
+        self.assertEqual(error.dispatch_count, 2)
+        self.assertEqual(error.target.id, last.id)
+        self.assertTrue(error.response_fields["all_models_failed"])
+        self.assertTrue(error.response_fields["execution_stopped"])
+        self.assertEqual(error.response_fields["last_model"], last.model)
+        self.assertIn("반복 호출하지 않고", str(error))
+        self.assertIn("실행을 중지", str(error))
 
     def test_unknown_availability_target_is_skipped(self) -> None:
         unknown = server_routing.LLMTarget(
