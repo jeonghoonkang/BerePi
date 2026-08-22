@@ -16,7 +16,7 @@ openai, ollama api 를 지원 합니다.
 
 ```bash
 cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/llm_routing
-chmod +x run.sh start.sh stop.sh
+chmod +x run.sh start.sh stop.sh pull_and_start.sh
 ./run.sh
 ```
 
@@ -25,6 +25,14 @@ chmod +x run.sh start.sh stop.sh
 ```bash
 ./start.sh
 ./stop.sh
+```
+
+Git에서 현재 브랜치의 최신 코드를 fast-forward 방식으로 받은 뒤 백그라운드로
+시작하려면 다음 스크립트를 사용합니다. `git pull`이 실패하면 서비스는 시작되지
+않습니다.
+
+```bash
+./pull_and_start.sh
 ```
 
 기본 포트는 `4004`입니다.
