@@ -3365,7 +3365,7 @@ async function sendPrompt() {
     document.getElementById('test_selected_target').textContent = errorData.llm_dispatch_target
       ? `${errorData.llm_dispatch_target.target_name || ''} / ${errorData.last_model || errorData.llm_dispatch_target.model || ''}`
       : '-';
-    setAnswer((errorData.routing_messages || [String(err)]).join('\n'));
+    setAnswer((errorData.routing_messages || [String(err)]).join('\\n'));
     document.getElementById('test_result').textContent = err.data
       ? JSON.stringify(err.data, null, 2)
       : String(err);

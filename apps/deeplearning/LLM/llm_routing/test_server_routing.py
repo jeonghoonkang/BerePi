@@ -81,6 +81,12 @@ class DispatchInfoTests(unittest.TestCase):
             server_routing.INDEX_HTML,
         )
 
+    def test_index_html_keeps_javascript_newline_escape(self) -> None:
+        self.assertIn(
+            "routing_messages || [String(err)]).join('\\n')",
+            server_routing.INDEX_HTML,
+        )
+
     def test_gcp_tab_uses_dedicated_endpoint(self) -> None:
         self.assertIn('data-tab="gcp">GCP 테스트</button>', server_routing.INDEX_HTML)
         self.assertIn('id="gcp_test_prompt"', server_routing.INDEX_HTML)
