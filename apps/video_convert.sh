@@ -8,6 +8,9 @@
 
 # 설정 파일 로드
 CONFIG_FILE="${BASH_SOURCE%.*}.conf"  # 스크립트와 동일한 이름의 .conf 파일 사용
+CONFIG_FILE="$(readlink -f "$CONFIG_FILE")"
+echo "사용 설정 파일: $CONFIG_FILE"
+echo "이 스크립트는 위 경로의 conf 파일 설정을 기준으로 동작합니다."
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "설정 파일을 찾을 수 없습니다: $CONFIG_FILE" >&2
     exit 1
