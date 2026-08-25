@@ -48,6 +48,9 @@ __pycache__/
 
 /apps/deeplearning/models/
 
+# Local read_mach server configuration
+/apps/deeplearning/agent/read_mach/config/this_server_config.json
+
 # Local tinyGW runtime/config files
 /apps/tinyGW/list_ip/this_setting.conf
 /apps/tinyGW/pulsedav/this_settings.json
