@@ -49,6 +49,31 @@ class FakeDocument:
 
 
 class TechReportPdfTests(unittest.TestCase):
+    def test_command_history_is_newest_first_limited_and_masks_passwords(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            history = Path(directory) / "history_cmd.txt"
+            history.write_text("oldest\nolder\n", encoding="utf-8")
+
+            client_service.record_command_history(
+                ["python", "client_service.py", "--llm-password", "secret", "--run-on-start"],
+                history,
+                limit=2,
+            )
+
+            entries = history.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(entries), 2)
+        self.assertIn("python client_service.py", entries[0])
+        self.assertIn("--llm-password ***", entries[0])
+        self.assertNotIn("secret", entries[0])
+        self.assertEqual(entries[1], "oldest")
+
+    def test_command_history_masks_equals_style_web_password(self) -> None:
+        sanitized = client_service.sanitize_command_argv(
+            ["python", "client_service.py", "--web-password=secret"]
+        )
+        self.assertEqual(sanitized[-1], "--web-password=***")
+
     def test_uploads_markdown_and_pdf_to_output_webdav(self) -> None:
         class FakeWebDavResponse:
             status = 201
@@ -237,6 +262,31 @@ class TechReportPdfTests(unittest.TestCase):
         self.assertIn("형식: TXT", prompt)
         self.assertIn("약 20페이지", prompt)
         self.assertIn("기술 원문", prompt)
+
+    def test_accepts_markdown_source_without_ocr(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "this_input.md"
+            source.write_text("# DX 라이브러리\n\n- 데이터 진단\n", encoding="utf-8")
+
+            selected = client_service.resolve_tech_report_pdf(str(source))
+            text, metadata = client_service.read_tech_report_source(selected, config={})
+            prompt = client_service.build_tech_report_prompt(selected, text)
+
+        self.assertEqual(selected, source.resolve())
+        self.assertIn("# DX 라이브러리", text)
+        self.assertEqual(metadata["source_type"], "md")
+        self.assertEqual(metadata["ocr_engine"], "not-used")
+        self.assertIn("형식: Markdown", prompt)
+
+    def test_default_source_can_select_latest_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_dir = Path(directory)
+            source = input_dir / "latest.markdown"
+            source.write_text("# 최신 입력", encoding="utf-8")
+            with patch.object(client_service, "INPUT_DIR", input_dir):
+                selected = client_service.resolve_tech_report_pdf("")
+
+        self.assertEqual(selected, source.resolve())
 
     def test_cloud_vision_payload_contains_image_data_url(self) -> None:
         config = {

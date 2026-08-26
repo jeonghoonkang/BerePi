@@ -47,6 +47,7 @@ LLM_TRACE_COUNTER = 0
 CHECKPOINT_LOCK = threading.Lock()
 CHECKPOINT_PATH: Path | None = None
 CHECKPOINT_STATE: dict[str, Any] | None = None
+COMMAND_HISTORY_LOCK = threading.Lock()
 MODEL_TIMEOUT_MAX_SECONDS = 300
 MODEL_TIMEOUT_GROWTH_PERCENT = 10
 TECH_REPORT_TARGET_PAGES = 20
@@ -61,7 +62,54 @@ CONFIG_PATH = DATA_DIR / "client_config.json"
 SAMPLE_CONFIG_PATH = BASE_DIR / "config" / "client_config.sample.json"
 CLOUD_CONFIG_PATH = BASE_DIR / "config" / "cloud_model.json"
 BACKBONE_PATH = BASE_DIR / "story_backbone.md"
+COMMAND_HISTORY_PATH = BASE_DIR / "history_cmd.txt"
 USE_COLOR = os.getenv("NO_COLOR", "").strip() == "" and os.getenv("WRITING_MACH_NO_COLOR", "").strip() == ""
+
+COMMAND_HISTORY_LIMIT = 1000
+SENSITIVE_COMMAND_OPTIONS = {"--llm-password", "--web-password"}
+
+
+def sanitize_command_argv(argv: list[str]) -> list[str]:
+    """Mask command-line secrets before persisting an invocation."""
+    sanitized: list[str] = []
+    mask_next = False
+    for raw_arg in argv:
+        arg = str(raw_arg).replace("\r", " ").replace("\n", " ")
+        if mask_next:
+            sanitized.append("***")
+            mask_next = False
+            continue
+        option, separator, _value = arg.partition("=")
+        if option.casefold() in SENSITIVE_COMMAND_OPTIONS:
+            if separator:
+                sanitized.append(f"{option}=***")
+            else:
+                sanitized.append(arg)
+                mask_next = True
+            continue
+        sanitized.append(arg)
+    return sanitized
+
+
+def record_command_history(
+    argv: list[str] | None = None,
+    history_path: Path = COMMAND_HISTORY_PATH,
+    limit: int = COMMAND_HISTORY_LIMIT,
+) -> None:
+    """Prepend the current invocation and retain at most ``limit`` entries."""
+    invocation = list(argv if argv is not None else getattr(sys, "orig_argv", []))
+    if not invocation:
+        invocation = [Path(sys.executable).name, *sys.argv]
+    command = subprocess.list2cmdline(sanitize_command_argv(invocation))
+    with COMMAND_HISTORY_LOCK:
+        try:
+            existing = history_path.read_text(encoding="utf-8").splitlines() if history_path.exists() else []
+            entries = [command, *existing][: max(1, limit)]
+            temporary = history_path.with_name(f"{history_path.name}.{os.getpid()}.tmp")
+            temporary.write_text("\n".join(entries) + "\n", encoding="utf-8")
+            temporary.replace(history_path)
+        except OSError as exc:
+            print(f"[command-history] could not update {history_path}: {exc}", file=sys.stderr)
 
 COLORS = {
     "reset": "\033[0m",
@@ -232,9 +280,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="SOURCE",
         help=(
-            "Create an approximately 20-page Korean engineering report from PDF or TXT and exit. "
-            "When SOURCE is omitted, uses the newest PDF/TXT in the input directory. "
-            "Sparse PDF pages use model OCR; TXT input is read directly."
+            "Create an approximately 20-page Korean engineering report from PDF, TXT, or Markdown and exit. "
+            "When SOURCE is omitted, uses the newest PDF/TXT/Markdown in the input directory. "
+            "Sparse PDF pages use model OCR; TXT and Markdown input are read directly."
         ),
     )
     parser.add_argument(
@@ -1023,13 +1071,13 @@ TECH_REPORT_REQUEST = """[역할]
 너는 수석 시스템 아키텍트(System Architect)야.
 
 [목적]
-첨부된 PDF 문서의 기술 구조와 작동 원리를 분석하여 엔지니어링 보고서를 작성해 줘.
+제공된 입력 문서의 기술 구조와 작동 원리를 분석하여 엔지니어링 보고서를 작성해 줘.
 
 [가이드라인]
 - 작성 언어: 한국어 (단, 주요 기술 용어 및 코드는 영문 병행 표기)
 - 분량: A4 20페이지 수준
 - 가독성을 위해 목차 구분을 명확히 하고 표와 텍스트를 적절히 배분할 것.
-- 제공된 PDF 원문에서 확인할 수 없는 사실은 추측하지 말고, 필요한 경우 '문서에서 확인되지 않음'으로 표시할 것.
+- 제공된 입력 원문에서 확인할 수 없는 사실은 추측하지 말고, 필요한 경우 '문서에서 확인되지 않음'으로 표시할 것.
 - 결과에는 안내 문구, 작업 설명, 코드 펜스 없이 완성된 Markdown 보고서만 포함할 것.
 
 [목차]
@@ -1042,24 +1090,25 @@ TECH_REPORT_REQUEST = """[역할]
 
 
 def resolve_tech_report_pdf(value: str) -> Path:
-    """Resolve a PDF/TXT tech-report source (legacy function name retained)."""
+    """Resolve a PDF/TXT/Markdown tech-report source (legacy name retained)."""
+    supported_suffixes = {".pdf", ".txt", ".md", ".markdown"}
     if value.strip():
         path = Path(value).expanduser().resolve()
         if not path.exists():
             raise FileNotFoundError(f"Tech report source not found: {path}")
-        if path.suffix.lower() not in {".pdf", ".txt"}:
-            raise ValueError(f"--tech_report input must be a PDF or TXT file: {path}")
+        if path.suffix.lower() not in supported_suffixes:
+            raise ValueError(f"--tech_report input must be a PDF, TXT, or Markdown file: {path}")
         return path
 
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
     candidates = [
         path.resolve()
         for path in INPUT_DIR.iterdir()
-        if path.is_file() and path.suffix.lower() in {".pdf", ".txt"}
+        if path.is_file() and path.suffix.lower() in supported_suffixes
     ]
     if not candidates:
         raise FileNotFoundError(
-            f"--tech_report could not find a PDF/TXT in {INPUT_DIR}. "
+            f"--tech_report could not find a PDF/TXT/Markdown file in {INPUT_DIR}. "
             "Copy a source into the input directory or pass its path explicitly."
         )
     return max(candidates, key=lambda path: path.stat().st_mtime)
@@ -1076,13 +1125,13 @@ def read_tech_report_source(
     try:
         source_text = source_path.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise ValueError(f"TXT input must be UTF-8 encoded: {source_path}") from exc
+        raise ValueError(f"TXT/Markdown input must be UTF-8 encoded: {source_path}") from exc
     text = normalize_extracted_text(source_text)
     if not text:
-        raise ValueError(f"TXT input contains no readable text: {source_path}")
+        raise ValueError(f"TXT/Markdown input contains no readable text: {source_path}")
     metadata = {
         "source_file": str(source_path),
-        "source_type": "txt",
+        "source_type": source_path.suffix.lower().lstrip("."),
         "page_count": 0,
         "total_characters": len(text),
         "text_pages": 0,
@@ -1298,7 +1347,12 @@ def extract_pdf_text(pdf_path: Path) -> str:
 
 
 def build_tech_report_prompt(source_path: Path, source_text: str) -> str:
-    source_type = "PDF" if source_path.suffix.lower() == ".pdf" else "TXT"
+    source_type = {
+        ".pdf": "PDF",
+        ".txt": "TXT",
+        ".md": "Markdown",
+        ".markdown": "Markdown",
+    }.get(source_path.suffix.lower(), source_path.suffix.lstrip(".").upper())
     return f"""{TECH_REPORT_REQUEST}
 
 [입력 문서]
@@ -4583,6 +4637,7 @@ def start_run_on_start(exit_after_run: bool, httpd: ThreadingHTTPServer) -> None
 def main() -> int:
     global BACKBONE_PATH, CONFIG_PATH, WEB_AUTH_USER, WEB_AUTH_PASSWORD, RUNTIME_CONFIG_OVERRIDES
 
+    record_command_history()
     args = parse_args()
     BACKBONE_PATH = Path(args.backbone).expanduser().resolve()
     CONFIG_PATH = Path(args.config).expanduser().resolve()
