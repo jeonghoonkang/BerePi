@@ -103,6 +103,21 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertIn('.runtime-card.router-card { border-width:3px; }', server_routing.INDEX_HTML)
         self.assertIn('<div class="runtime-card router-card">', server_routing.INDEX_HTML)
 
+    def test_prompt_target_list_is_at_bottom(self) -> None:
+        answer_position = server_routing.INDEX_HTML.index('id="test_answer"')
+        compare_position = server_routing.INDEX_HTML.index('id="compareRows"')
+        target_list_position = server_routing.INDEX_HTML.index('class="target-list-bottom"')
+        self.assertLess(answer_position, compare_position)
+        self.assertLess(compare_position, target_list_position)
+
+    def test_markdown_viewer_has_preview_source_and_rich_blocks(self) -> None:
+        self.assertIn("setMarkdownMode('test_answer','preview')", server_routing.INDEX_HTML)
+        self.assertIn("setMarkdownMode('test_answer','source')", server_routing.INDEX_HTML)
+        self.assertIn("copyMarkdown('test_answer')", server_routing.INDEX_HTML)
+        self.assertIn("html.push('<hr>')", server_routing.INDEX_HTML)
+        self.assertIn("<blockquote><p>", server_routing.INDEX_HTML)
+        self.assertIn("<table><thead><tr>", server_routing.INDEX_HTML)
+
     def test_edit_target_loads_numbered_gpu_options(self) -> None:
         self.assertIn('GPU 번호 선택', server_routing.INDEX_HTML)
         self.assertIn('async function editTarget(t)', server_routing.INDEX_HTML)

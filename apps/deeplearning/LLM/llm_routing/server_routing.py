@@ -2869,13 +2869,31 @@ INDEX_HTML = """<!doctype html>
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
     .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
     .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
-    .response-box { margin:0; min-height:630px; max-height:630px; overflow:auto; background:#f1f3f5; color:#24292f; border:1px solid #d0d7de; border-radius:8px; padding:14px; line-height:1.48; }
-    .markdown-view { white-space:normal; overflow-wrap:anywhere; }
-    .markdown-view h1, .markdown-view h2, .markdown-view h3 { margin:12px 0 8px; line-height:1.25; }
-    .markdown-view p { margin:0 0 10px; color:#24292f; }
-    .markdown-view ul, .markdown-view ol { margin:0 0 10px 22px; padding:0; }
-    .markdown-view code { background:#e5e7eb; border-radius:4px; padding:1px 4px; }
-    .markdown-view pre { max-height:none; background:#e5e7eb; color:#24292f; border:1px solid #d0d7de; }
+    .response-box { margin:0; min-height:630px; max-height:630px; overflow:auto; background:#fff; color:#1f2937; border:1px solid #cbd5e1; border-radius:10px; padding:22px 24px; line-height:1.68; box-shadow:inset 0 1px 2px rgba(15,23,42,.04); }
+    .markdown-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .markdown-header h3 { margin-bottom:8px; }
+    .markdown-toolbar { display:flex; gap:6px; }
+    .markdown-toolbar button { min-height:30px; padding:0 9px; font-size:12px; }
+    .markdown-view { white-space:normal; overflow-wrap:anywhere; font-size:15px; }
+    .markdown-view h1, .markdown-view h2, .markdown-view h3, .markdown-view h4, .markdown-view h5, .markdown-view h6 { margin:1.25em 0 .55em; line-height:1.28; color:#0f172a; }
+    .markdown-view h1 { font-size:1.75em; border-bottom:2px solid #e2e8f0; padding-bottom:.3em; }
+    .markdown-view h2 { font-size:1.45em; border-bottom:1px solid #e2e8f0; padding-bottom:.25em; }
+    .markdown-view h3 { font-size:1.2em; }
+    .markdown-view p { margin:0 0 1em; color:#1f2937; }
+    .markdown-view ul, .markdown-view ol { margin:0 0 1em 1.6em; padding:0; }
+    .markdown-view li { margin:.25em 0; }
+    .markdown-view code { background:#eef2f7; color:#be123c; border-radius:4px; padding:2px 5px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+    .markdown-view pre { max-height:none; margin:0 0 1em; background:#0f172a; color:#e2e8f0; border:1px solid #1e293b; border-radius:8px; padding:14px 16px; white-space:pre; }
+    .markdown-view pre code { background:transparent; color:inherit; padding:0; }
+    .markdown-view blockquote { margin:0 0 1em; padding:.5em 1em; border-left:4px solid var(--accent); background:#f0fdfa; color:#475569; }
+    .markdown-view blockquote p { margin:0; color:inherit; }
+    .markdown-view table { margin:0 0 1em; display:block; overflow-x:auto; }
+    .markdown-view th { background:#f1f5f9; color:#334155; }
+    .markdown-view th, .markdown-view td { border:1px solid #cbd5e1; padding:7px 10px; }
+    .markdown-view hr { border:0; border-top:1px solid #cbd5e1; margin:1.4em 0; }
+    .markdown-view a { color:#0369a1; text-decoration:underline; text-underline-offset:2px; }
+    .markdown-view.source-mode { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
+    .target-list-bottom { margin-top:28px; padding-top:14px; border-top:2px solid var(--line); }
     .raw-view { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
     .compare-response { max-width:420px; max-height:120px; overflow:auto; white-space:pre-wrap; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
@@ -2969,7 +2987,6 @@ INDEX_HTML = """<!doctype html>
   <section id="test">
     <div class="panel">
       <select id="test_target"></select>
-      <div id="autoTargetSummary" class="model-status"></div>
       <textarea id="test_prompt" placeholder="전송할 prompt">다른 내용 없이 ok 만 회신</textarea>
       <div class="test-toolbar">
         <button class="primary" onclick="sendPrompt()">전송</button>
@@ -2983,11 +3000,16 @@ INDEX_HTML = """<!doctype html>
       <div class="metric"><div class="label">응답 시간</div><div id="test_response_time" class="value">-</div></div>
       <div class="metric"><div class="label">선택 결과</div><div id="test_selected_target" class="value">-</div></div>
     </div>
-    <h3>자동 선택 대상 모델/GPU</h3>
-    <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
     <div class="test-output">
       <div>
-        <h3>회신</h3>
+        <div class="markdown-header">
+          <h3>회신</h3>
+          <div class="markdown-toolbar">
+            <button onclick="setMarkdownMode('test_answer','preview')">미리보기</button>
+            <button onclick="setMarkdownMode('test_answer','source')">Markdown</button>
+            <button onclick="copyMarkdown('test_answer')">복사</button>
+          </div>
+        </div>
         <div id="test_answer" class="response-box markdown-view"></div>
       </div>
       <div>
@@ -2997,6 +3019,11 @@ INDEX_HTML = """<!doctype html>
     </div>
     <h3>전체 모델 비교</h3>
     <table><thead><tr><th>상태</th><th>LLM</th><th>모델</th><th>GPU</th><th>소요 시간</th><th>수신 내용</th></tr></thead><tbody id="compareRows"></tbody></table>
+    <div class="target-list-bottom">
+      <h3>자동 선택 대상 모델/GPU</h3>
+      <div id="autoTargetSummary" class="model-status"></div>
+      <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
+    </div>
   </section>
   <section id="gcp">
     <div class="panel">
@@ -3043,29 +3070,41 @@ function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 function inlineMarkdown(text) {
   return esc(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+    .replace(/(^|[^*])\\*([^*]+)\\*/g, '$1<em>$2</em>')
+    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+|mailto:[^\\s)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 function renderMarkdown(text) {
   const lines = String(text || '').split(/\\r?\\n/);
   const html = [];
   let inCode = false;
   let codeLines = [];
-  let inList = false;
+  let codeLanguage = '';
+  let listType = '';
   function closeList() {
-    if (inList) {
-      html.push('</ul>');
-      inList = false;
+    if (listType) {
+      html.push(`</${listType}>`);
+      listType = '';
     }
   }
-  for (const line of lines) {
-    if (line.trim().startsWith('```')) {
+  function tableCells(line) {
+    return line.trim().replace(/^\\||\\|$/g, '').split('|').map(cell => cell.trim());
+  }
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fence = line.trim().match(/^```\\s*([\\w+-]*)/);
+    if (fence) {
       if (inCode) {
-        html.push(`<pre><code>${esc(codeLines.join('\\n'))}</code></pre>`);
+        const languageClass = codeLanguage ? ` class="language-${esc(codeLanguage)}"` : '';
+        html.push(`<pre><code${languageClass}>${esc(codeLines.join('\\n'))}</code></pre>`);
         codeLines = [];
+        codeLanguage = '';
         inCode = false;
       } else {
         closeList();
         inCode = true;
+        codeLanguage = fence[1] || '';
       }
       continue;
     }
@@ -3073,36 +3112,87 @@ function renderMarkdown(text) {
       codeLines.push(line);
       continue;
     }
-    const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+    const heading = line.match(/^(#{1,6})\\s+(.+)$/);
     if (heading) {
       closeList();
       html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
       continue;
     }
-    const bullet = line.match(/^\\s*[-*]\\s+(.+)$/);
-    if (bullet) {
-      if (!inList) {
-        html.push('<ul>');
-        inList = true;
+    if (/^\\s*([-*_])(?:\\s*\\1){2,}\\s*$/.test(line)) {
+      closeList();
+      html.push('<hr>');
+      continue;
+    }
+    if (line.includes('|') && index + 1 < lines.length && /^\\s*\\|?\\s*:?-{3,}/.test(lines[index + 1])) {
+      closeList();
+      const headers = tableCells(line);
+      html.push(`<table><thead><tr>${headers.map(cell => `<th>${inlineMarkdown(cell)}</th>`).join('')}</tr></thead><tbody>`);
+      index += 2;
+      while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+        const cells = tableCells(lines[index]);
+        html.push(`<tr>${cells.map(cell => `<td>${inlineMarkdown(cell)}</td>`).join('')}</tr>`);
+        index += 1;
       }
-      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      html.push('</tbody></table>');
+      index -= 1;
+      continue;
+    }
+    const listItem = line.match(/^\\s*([-*+] |\\d+\\. )(.+)$/);
+    if (listItem) {
+      const nextListType = /^\\d/.test(listItem[1]) ? 'ol' : 'ul';
+      if (listType !== nextListType) {
+        closeList();
+        html.push(`<${nextListType}>`);
+        listType = nextListType;
+      }
+      const task = listItem[2].match(/^\\[([ xX])\\]\\s+(.+)$/);
+      html.push(task
+        ? `<li class="task-item"><input type="checkbox" disabled${task[1].toLowerCase() === 'x' ? ' checked' : ''}> ${inlineMarkdown(task[2])}</li>`
+        : `<li>${inlineMarkdown(listItem[2])}</li>`);
       continue;
     }
     closeList();
+    const quote = line.match(/^>\\s?(.*)$/);
+    if (quote) {
+      html.push(`<blockquote><p>${inlineMarkdown(quote[1])}</p></blockquote>`);
+      continue;
+    }
     if (!line.trim()) {
-      html.push('<br>');
+      continue;
     } else {
       html.push(`<p>${inlineMarkdown(line)}</p>`);
     }
   }
   if (inCode) {
-    html.push(`<pre><code>${esc(codeLines.join('\\n'))}</code></pre>`);
+    const languageClass = codeLanguage ? ` class="language-${esc(codeLanguage)}"` : '';
+    html.push(`<pre><code${languageClass}>${esc(codeLines.join('\\n'))}</code></pre>`);
   }
   closeList();
   return html.join('');
 }
+function setMarkdownContent(id, text) {
+  const element = document.getElementById(id);
+  element.dataset.markdown = String(text || '');
+  element.classList.remove('source-mode');
+  element.innerHTML = renderMarkdown(element.dataset.markdown);
+}
+function setMarkdownMode(id, mode) {
+  const element = document.getElementById(id);
+  const markdown = element.dataset.markdown || '';
+  if (mode === 'source') {
+    element.classList.add('source-mode');
+    element.textContent = markdown;
+  } else {
+    element.classList.remove('source-mode');
+    element.innerHTML = renderMarkdown(markdown);
+  }
+}
+async function copyMarkdown(id) {
+  const markdown = document.getElementById(id).dataset.markdown || '';
+  await navigator.clipboard.writeText(markdown);
+}
 function setAnswer(text) {
-  document.getElementById('test_answer').innerHTML = renderMarkdown(text);
+  setMarkdownContent('test_answer', text);
 }
 function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
 function formatDuration(seconds) {
