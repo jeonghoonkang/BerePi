@@ -2,21 +2,21 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_DIR="${APP_DIR}/logs"
-GPU_SELECTION_FILE="${APP_DIR}/gpu-selection"
-MODEL_SELECTION_FILE="${APP_DIR}/model-selection"
-mkdir -p "${LOG_DIR}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [port] [--ai-server-list-token TOKEN]
+Usage: $(basename "$0") [service_port] [gpu] [ollama_port] [--ai-server-list-token TOKEN]
 
-Starts the Gemma4 service. If [port] is provided, it overrides
-GEMMA4_SERVER_PORT for this run.
+Starts the Gemma4 service. When service_port is provided, a separate Ollama
+instance is created under instances/ollama_<service_port>. GPU may be a device
+index such as 0 or 1, or auto/all/cpu/none. If ollama_port is omitted, it
+defaults to service_port + 10000.
 
 Examples:
   $(basename "$0")
-  $(basename "$0") 8083
+  $(basename "$0") 2500 0
+  $(basename "$0") 2501 1
+  $(basename "$0") 2500 0 11434
   $(basename "$0") --ai-server-list-token ghp_xxx
   $(basename "$0") 8083 --ai-server-list-token ghp_xxx
   GEMMA4_SERVER_PORT=8084 $(basename "$0")
@@ -30,6 +30,8 @@ fi
 
 AI_SERVER_LIST_TOKEN_ARG=""
 PORT_ARG=""
+GPU_ARG=""
+OLLAMA_PORT_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -52,12 +54,17 @@ while [[ $# -gt 0 ]]; do
       exit 2
       ;;
     *)
-      if [[ -n "${PORT_ARG}" ]]; then
+      if [[ -z "${PORT_ARG}" ]]; then
+        PORT_ARG="$1"
+      elif [[ -z "${GPU_ARG}" ]]; then
+        GPU_ARG="$1"
+      elif [[ -z "${OLLAMA_PORT_ARG}" ]]; then
+        OLLAMA_PORT_ARG="$1"
+      else
         echo "Unexpected argument: $1" >&2
         usage >&2
         exit 2
       fi
-      PORT_ARG="$1"
       shift
       ;;
   esac
@@ -72,16 +79,54 @@ if [[ -n "${PORT_ARG}" ]]; then
   export GEMMA4_SERVER_PORT="${PORT_ARG}"
 fi
 
+if [[ -n "${GPU_ARG}" ]] && [[ ! "${GPU_ARG}" =~ ^[0-9]+$|^(auto|all|cpu|none)$ ]]; then
+  echo "Invalid GPU selection: ${GPU_ARG}. Use a GPU index, auto, all, cpu, or none." >&2
+  exit 2
+fi
+
+if [[ -n "${OLLAMA_PORT_ARG}" ]]; then
+  if [[ ! "${OLLAMA_PORT_ARG}" =~ ^[0-9]+$ ]] || (( OLLAMA_PORT_ARG < 1 || OLLAMA_PORT_ARG > 65535 )); then
+    echo "Invalid Ollama port: ${OLLAMA_PORT_ARG}" >&2
+    exit 2
+  fi
+fi
+
+if [[ -n "${PORT_ARG}" ]]; then
+  INSTANCE_DIR="${GEMMA4_INSTANCE_DIR:-${APP_DIR}/instances/ollama_${PORT_ARG}}"
+  LOG_DIR="${GEMMA4_LOG_DIR:-${INSTANCE_DIR}/logs}"
+  GPU_SELECTION_FILE="${GPU_SELECTION_FILE:-${INSTANCE_DIR}/gpu-selection}"
+  MODEL_SELECTION_FILE="${MODEL_SELECTION_FILE:-${INSTANCE_DIR}/model-selection}"
+  OLLAMA_PID_FILE="${OLLAMA_PID_FILE:-${INSTANCE_DIR}/ollama.pid}"
+  effective_ollama_port="${OLLAMA_PORT_ARG:-$((PORT_ARG + 10000))}"
+  if (( effective_ollama_port > 65535 )); then
+    echo "Derived Ollama port is invalid: ${effective_ollama_port}. Pass ollama_port explicitly." >&2
+    exit 2
+  fi
+  export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:${effective_ollama_port}}"
+  export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:${effective_ollama_port}}"
+else
+  INSTANCE_DIR="${APP_DIR}"
+  LOG_DIR="${GEMMA4_LOG_DIR:-${APP_DIR}/logs}"
+  GPU_SELECTION_FILE="${GPU_SELECTION_FILE:-${APP_DIR}/gpu-selection}"
+  MODEL_SELECTION_FILE="${MODEL_SELECTION_FILE:-${APP_DIR}/model-selection}"
+  OLLAMA_PID_FILE="${OLLAMA_PID_FILE:-${APP_DIR}/ollama.pid}"
+  export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
+  export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
+fi
+mkdir -p "${LOG_DIR}" "$(dirname "${GPU_SELECTION_FILE}")" "$(dirname "${OLLAMA_PID_FILE}")"
+if [[ -n "${GPU_ARG}" ]]; then
+  printf '%s\n' "${GPU_ARG}" > "${GPU_SELECTION_FILE}"
+fi
+
 export OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:31b}"
 export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-8192}"
 export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-60m}"
-export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
 export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
 export GEMMA4_SERVER_PORT="${GEMMA4_SERVER_PORT:-8082}"
-export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
-export OLLAMA_PID_FILE="${OLLAMA_PID_FILE:-${APP_DIR}/ollama.pid}"
+export OLLAMA_PID_FILE
 export GPU_SELECTION_FILE
 export MODEL_SELECTION_FILE
+export GEMMA4_LOG_DIR="${LOG_DIR}"
 
 OLLAMA_PID=""
 OLLAMA_USER_SERVICE_WAS_ACTIVE=0
@@ -539,6 +584,8 @@ ensure_ollama_model() {
 }
 
 apply_model_selection
+echo "Gemma4 instance: service_port=${GEMMA4_SERVER_PORT}, ollama=${OLLAMA_BASE_URL}, gpu=$(tr -d '[:space:]' < "${GPU_SELECTION_FILE}" 2>/dev/null || echo auto)"
+echo "Instance files: ${INSTANCE_DIR}"
 start_ollama_if_needed
 
 if [[ "${AUTO_PULL:-1}" == "1" ]]; then

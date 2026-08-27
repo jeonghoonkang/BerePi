@@ -48,6 +48,43 @@ Foreground with a custom service port:
 ./run_service.sh 8083
 ```
 
+### Separate Ollama instance per service port
+
+`run_service.sh` accepts a service port, GPU selection, and optional Ollama
+backend port:
+
+```text
+./run_service.sh SERVICE_PORT GPU [OLLAMA_PORT]
+```
+
+When a service port is supplied, runtime files are isolated under
+`instances/ollama_SERVICE_PORT`. If `OLLAMA_PORT` is omitted, it defaults to
+`SERVICE_PORT + 10000`.
+
+For example, run service port `2500` on GPU 0 with Ollama port `12500`:
+
+```bash
+./run_service.sh 2500 0
+```
+
+Run service port `2501` on GPU 1 with Ollama port `12501`:
+
+```bash
+./run_service.sh 2501 1
+```
+
+To choose the Ollama backend port explicitly:
+
+```bash
+./run_service.sh 2500 0 11434
+./run_service.sh 2501 1 11435
+```
+
+Each instance gets its own `gpu-selection`, `ollama.pid`, and log directory.
+Valid GPU values are a numeric device index, `auto`, `all`, `cpu`, or `none`.
+Running `./run_service.sh` without arguments preserves the legacy defaults:
+Gemma4 port `8082`, Ollama port `11434`, and files in the server directory.
+
 Detached:
 
 ```bash

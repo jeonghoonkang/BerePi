@@ -44,7 +44,7 @@ USER_PROMPT_HISTORY_FILE = Path(
   os.getenv("USER_PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("history_user_prompt.txt"))
 )
 API_KEY_CONF_FILE = Path(os.getenv("API_KEY_CONF_FILE", Path(__file__).resolve().with_name("api_key.conf")))
-LOG_DIR = Path(__file__).resolve().with_name("logs")
+LOG_DIR = Path(os.getenv("GEMMA4_LOG_DIR", Path(__file__).resolve().with_name("logs")))
 ACCESS_LOG_FILE = Path(os.getenv("GEMMA4_ACCESS_LOG_FILE", LOG_DIR / "access.jsonl"))
 SAMPLE_DIR = Path(os.getenv("GEMMA4_SAMPLE_DIR", Path(__file__).resolve().with_name("sample")))
 WORKSPACE_DIR = Path(os.getenv("GEMMA4_SERVER_WORKSPACE_DIR", Path(__file__).resolve().with_name("workspace")))
