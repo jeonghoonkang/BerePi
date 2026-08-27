@@ -2919,7 +2919,9 @@ INDEX_HTML = """<!doctype html>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
         <input id="gpu_info" placeholder="GPU 정보">
-        <select id="selected_gpu"><option value="">GPU 자동 선택</option></select>
+        <label>GPU 번호 선택
+          <select id="selected_gpu"><option value="">GPU 자동 선택</option></select>
+        </label>
         <input id="selected_gpu_label" type="hidden">
         <input id="access_id" placeholder="접근 ID">
         <input id="password" placeholder="PASS" type="password">
@@ -3389,7 +3391,7 @@ function setGpuOptions(gpus, selectedGpu = '') {
     select.value = currentGpu;
   }
 }
-function editTarget(t) {
+async function editTarget(t) {
   for (const key of ['target_id','name','host','port','proxy_port','model','api_type','gpu_type','gpu_info','selected_gpu','selected_gpu_label','access_id','password','notes']) {
     const id = key === 'target_id' ? 'target_id' : key;
     const value = key === 'target_id' ? t.id : t[key];
@@ -3398,7 +3400,8 @@ function editTarget(t) {
   document.getElementById('enabled').checked = Boolean(t.enabled);
   setModelOptions([], t.model || '');
   setGpuOptions([], t.selected_gpu || '');
-  document.getElementById('model_status').textContent = '';
+  document.getElementById('model_status').textContent = '편집할 서버의 모델/GPU 목록을 조회합니다...';
+  await loadModels(true);
 }
 function applyTargetHistory() {
   const select = document.getElementById('target_history');
@@ -3422,7 +3425,7 @@ function clearForm() {
   setGpuOptions([]);
   document.getElementById('model_status').textContent = '';
 }
-async function loadModels() {
+async function loadModels(preserveSelectionOnError = false) {
   const status = document.getElementById('model_status');
   const payload = {};
   for (const id of ['host','port','api_type','access_id','password']) payload[id] = document.getElementById(id).value;
@@ -3434,8 +3437,10 @@ async function loadModels() {
     const gpuText = (data.gpus || []).length ? `, GPU ${(data.gpus || []).length}개` : '';
     status.textContent = `${(data.models || []).length}개 모델${gpuText}를 찾았습니다.`;
   } catch (err) {
-    setModelOptions([]);
-    setGpuOptions([]);
+    if (!preserveSelectionOnError) {
+      setModelOptions([]);
+      setGpuOptions([]);
+    }
     status.textContent = String(err);
   }
 }

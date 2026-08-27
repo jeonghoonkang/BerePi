@@ -4,6 +4,23 @@ This directory runs a local Gemma4 service page and JSON API backed by Ollama.
 The default service port is `8082`, and the default Ollama model is
 `gemma4:31b`.
 
+When the server is started without arguments, the Gemma4 web page and JSON API
+listen on port `8082`:
+
+```text
+http://localhost:8082
+```
+
+The local Ollama backend is a separate service and listens on port `11434` by
+default:
+
+- Gemma4 web/API server: `8082`
+- Ollama backend: `11434`
+
+If `GEMMA4_SERVER_PORT` is already set, its value takes precedence over the
+default `8082`. Likewise, `OLLAMA_BASE_URL` and `OLLAMA_HOST` can override the
+default Ollama address `http://127.0.0.1:11434`.
+
 The service can:
 
 - start, stop, and check a local Ollama server

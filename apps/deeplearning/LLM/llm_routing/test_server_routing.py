@@ -99,6 +99,12 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertIn('class="api-number">#${esc(t.api_number', server_routing.INDEX_HTML)
         self.assertIn('<dt>API 번호</dt><dd>#${esc(t.api_number', server_routing.INDEX_HTML)
 
+    def test_edit_target_loads_numbered_gpu_options(self) -> None:
+        self.assertIn('GPU 번호 선택', server_routing.INDEX_HTML)
+        self.assertIn('async function editTarget(t)', server_routing.INDEX_HTML)
+        self.assertIn('await loadModels(true);', server_routing.INDEX_HTML)
+        self.assertIn('async function loadModels(preserveSelectionOnError = false)', server_routing.INDEX_HTML)
+
     def test_gcp_status_does_not_expose_api_key(self) -> None:
         settings = MagicMock()
         settings.configuration_status.return_value = {
