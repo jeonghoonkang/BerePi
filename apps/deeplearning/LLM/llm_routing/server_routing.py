@@ -2845,6 +2845,7 @@ INDEX_HTML = """<!doctype html>
     .metric .value { font-size:18px; font-weight:800; overflow-wrap:anywhere; }
     .runtime-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:14px; }
     .runtime-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:14px; }
+    .runtime-card.router-card { border-width:3px; }
     .runtime-card h3 { margin:0 0 10px; font-size:15px; line-height:1.25; overflow-wrap:anywhere; }
     .runtime-card .api-number { display:inline-block; margin-right:6px; padding:2px 7px; border-radius:999px; background:var(--accent); color:#fff; font-size:12px; }
     .runtime-card dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 10px; margin:0; font-size:13px; }
@@ -3195,7 +3196,7 @@ function renderTargets() {
     metric('최근 LLM 동작시각', latestTargetActivity(targets, metrics))
   ].join('');
   document.getElementById('runtimeCards').innerHTML = [
-    `<div class="runtime-card">
+    `<div class="runtime-card router-card">
       <h3>LLM Router</h3>
       <dl>
         <dt>uptime</dt><dd>${esc(state.uptime || '-')}</dd>
