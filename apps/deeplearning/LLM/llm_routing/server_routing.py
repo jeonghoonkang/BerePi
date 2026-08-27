@@ -2846,6 +2846,7 @@ INDEX_HTML = """<!doctype html>
     .runtime-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:14px; }
     .runtime-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:14px; }
     .runtime-card h3 { margin:0 0 10px; font-size:15px; line-height:1.25; overflow-wrap:anywhere; }
+    .runtime-card .api-number { display:inline-block; margin-right:6px; padding:2px 7px; border-radius:999px; background:var(--accent); color:#fff; font-size:12px; }
     .runtime-card dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 10px; margin:0; font-size:13px; }
     .runtime-card dt { color:var(--muted); }
     .runtime-card dd { margin:0; font-weight:700; overflow-wrap:anywhere; text-align:right; }
@@ -3206,9 +3207,13 @@ function renderTargets() {
     ...targets.map(t => {
       const m = metrics[t.id] || {};
       const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
+      const selectedGpuDevice = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '-';
       return `<div class="runtime-card">
-        <h3>${esc(t.name || t.model || t.id)}</h3>
+        <h3><span class="api-number">#${esc(t.api_number || '-')}</span>${esc(t.name || t.model || t.id)}</h3>
         <dl>
+          <dt>API 번호</dt><dd>#${esc(t.api_number || '-')}</dd>
+          <dt>모델</dt><dd>${esc(t.model || '-')}</dd>
+          <dt>GPU</dt><dd>${esc(selectedGpuDevice)}</dd>
           <dt>상태</dt><dd><span class="${cls}">${esc(m.status || 'unknown')}</span></dd>
           <dt>사용 여부</dt><dd>${esc(t.enabled ? '사용' : '비사용')}</dd>
           <dt>서비스 uptime</dt><dd>${esc(m.uptime || '-')}</dd>

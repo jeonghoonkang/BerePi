@@ -95,6 +95,10 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertIn("api('/api/gcp/generate'", server_routing.INDEX_HTML)
         self.assertIn("자동 LLM 라우팅 대상에는 포함되지 않습니다", server_routing.INDEX_HTML)
 
+    def test_runtime_gpu_cards_show_api_number(self) -> None:
+        self.assertIn('class="api-number">#${esc(t.api_number', server_routing.INDEX_HTML)
+        self.assertIn('<dt>API 번호</dt><dd>#${esc(t.api_number', server_routing.INDEX_HTML)
+
     def test_gcp_status_does_not_expose_api_key(self) -> None:
         settings = MagicMock()
         settings.configuration_status.return_value = {
