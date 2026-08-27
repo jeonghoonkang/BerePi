@@ -140,6 +140,23 @@ session cookie, or with JSON fields:
 {"user_id": "admin", "password": "change-me-now", "prompt": "hello"}
 ```
 
+To verify a locally running server on port `2500`, replace `id` and `pw` with
+credentials registered in `api_key.conf`, then run:
+
+```bash
+curl -sS -X POST http://127.0.0.1:2500/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "user_id": "id",
+    "password": "pw",
+    "prompt": "현재 시간을 알려주세요"
+  }' | python3 -m json.tool
+```
+
+A successful call returns formatted JSON containing the model response. An
+`invalid user id or password` response means the supplied credentials do not
+match an enabled user in `api_key.conf`.
+
 The web UI can log in through `/api/session-login`, log out through
 `/api/session-logout`, and save users through `/api/save-user`.
 
