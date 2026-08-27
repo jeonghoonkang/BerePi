@@ -100,6 +100,7 @@ GPU_METRIC_KEYWORDS = (
     "vllm:num_requests_waiting",
 )
 TARGET_HISTORY_LIMIT = 100
+GCP_TARGET_ID = "google-ai-studio-endpoint"
 
 
 @dataclass
@@ -108,6 +109,7 @@ class LLMTarget:
     name: str
     host: str
     port: int
+    api_number: int = 0
     proxy_port: int = 0
     model: str = ""
     api_type: str = "ollama"
@@ -227,10 +229,23 @@ def dispatch_target_fields(target: LLMTarget | None) -> dict[str, Any]:
             "llm_dispatch_model_number": None,
             "llm_dispatch_target": None,
         }
-    enabled_targets = [item for item in load_targets() if item.enabled]
-    number = next((index + 1 for index, item in enumerate(enabled_targets) if item.id == target.id), None)
+    configured_targets = load_targets()
+    configured_target = next(
+        (item for item in configured_targets if item.id == target.id),
+        None,
+    )
+    number = target.api_number or (
+        (configured_target.api_number or None) if configured_target else None
+    )
+    if number is None:
+        enabled_targets = [item for item in configured_targets if item.enabled]
+        number = next(
+            (index + 1 for index, item in enumerate(enabled_targets) if item.id == target.id),
+            None,
+        )
     target_info = {
         "number": number,
+        "api_number": number,
         "target_id": target.id,
         "target_name": target.name,
         "target_host": target.host,
@@ -399,16 +414,26 @@ def prompt_api_authenticated(handler: BaseHTTPRequestHandler, payload: dict[str,
 def load_targets() -> list[LLMTarget]:
     raw = load_json(CONFIG_PATH, {"targets": []})
     targets: list[LLMTarget] = []
+    used_api_numbers: set[int] = set()
+    next_api_number = 1
     for item in raw.get("targets", []):
         if not isinstance(item, dict):
             continue
         try:
+            requested_api_number = int(item.get("api_number") or 0)
+            if requested_api_number <= 0 or requested_api_number in used_api_numbers:
+                while next_api_number in used_api_numbers:
+                    next_api_number += 1
+                requested_api_number = next_api_number
+            used_api_numbers.add(requested_api_number)
+            next_api_number = max(next_api_number, requested_api_number + 1)
             targets.append(
                 LLMTarget(
                     id=str(item.get("id") or uuid.uuid4().hex),
                     name=str(item.get("name") or item.get("model") or "LLM"),
                     host=str(item.get("host") or "127.0.0.1"),
                     port=int(item.get("port") or 11434),
+                    api_number=requested_api_number,
                     proxy_port=int(item.get("proxy_port") or 0),
                     model=str(item.get("model") or ""),
                     api_type=str(item.get("api_type") or "ollama"),
@@ -482,6 +507,22 @@ def save_targets(targets: list[LLMTarget]) -> None:
     if not isinstance(history, list):
         history = []
     save_json(CONFIG_PATH, {"targets": [target.__dict__ for target in targets], "target_history": history})
+
+
+def persist_assigned_api_numbers() -> None:
+    """Write automatically assigned legacy target numbers once so they remain stable."""
+    raw = load_json(CONFIG_PATH, {"targets": []})
+    raw_targets = [item for item in raw.get("targets", []) if isinstance(item, dict)]
+    targets = load_targets()
+    stored_numbers: list[int] = []
+    for item in raw_targets:
+        try:
+            stored_numbers.append(int(item.get("api_number") or 0))
+        except (TypeError, ValueError):
+            stored_numbers.append(0)
+    assigned_numbers = [target.api_number for target in targets]
+    if stored_numbers != assigned_numbers:
+        save_targets(targets)
 
 
 def remember_target_history(target: LLMTarget) -> None:
@@ -583,6 +624,13 @@ def request_text(url: str, timeout: int = 5, headers: dict[str, str] | None = No
 def target_by_id(target_id: str) -> LLMTarget | None:
     for target in load_targets():
         if target.id == target_id:
+            return target
+    return None
+
+
+def target_by_api_number(api_number: int) -> LLMTarget | None:
+    for target in load_targets():
+        if target.api_number == api_number:
             return target
     return None
 
@@ -1060,6 +1108,8 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
         payload["selected_gpu"] = target.selected_gpu
     payload["stream"] = False
     payload.pop("target_id", None)
+    for key in ("api_number", "gpu_number", "target_number", "model_number"):
+        payload.pop(key, None)
     payload.pop("client_id", None)
     payload.pop("user_id", None)
     payload.pop("password", None)
@@ -1163,13 +1213,81 @@ def least_loaded_target(targets: list[LLMTarget]) -> LLMTarget:
     return target
 
 
+def requested_api_number(payload: dict[str, Any]) -> int | None:
+    """Return an explicitly requested GPU API number, accepting legacy-friendly aliases."""
+    values = [
+        payload.get(key)
+        for key in ("api_number", "gpu_number", "target_number", "model_number")
+        if payload.get(key) not in (None, "")
+    ]
+    if not values:
+        return None
+    try:
+        number = int(values[0])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("api_number must be a positive integer.") from exc
+    if number <= 0:
+        raise ValueError("api_number must be a positive integer.")
+    if any(str(value) != str(values[0]) for value in values[1:]):
+        raise ValueError("Conflicting GPU API numbers were supplied.")
+    return number
+
+
+def google_ai_studio_target() -> LLMTarget:
+    settings = GoogleAIStudioClient()
+    base_url = (
+        settings.base_url
+        if isinstance(getattr(settings, "base_url", None), str)
+        else "https://generativelanguage.googleapis.com"
+    )
+    parsed = urllib.parse.urlparse(base_url)
+    return LLMTarget(
+        id=GCP_TARGET_ID,
+        name="Google AI Studio",
+        host=parsed.hostname or "generativelanguage.googleapis.com",
+        port=parsed.port or (443 if parsed.scheme == "https" else 80),
+        model=settings.model_id,
+        api_type="google_ai_studio",
+        gpu_info="GCP managed",
+        gpu_type="cloud",
+        notes="Google AI Studio target selectable through target_id",
+    )
+
+
 def choose_target(payload: dict[str, Any]) -> LLMTarget:
+    requested_id = str(payload.get("target_id") or "").strip()
+    if requested_id == GCP_TARGET_ID:
+        return google_ai_studio_target()
     targets = [target for target in load_targets() if target.enabled]
     if not targets:
         raise ValueError("No enabled LLM targets are configured.")
     ensure_target_queues(targets)
     known_targets = [target for target in targets if target_has_known_availability(target)]
-    requested_id = str(payload.get("target_id") or "")
+    requested_number = requested_api_number(payload)
+    if requested_number is not None:
+        target = next(
+            (item for item in targets if item.api_number == requested_number),
+            None,
+        )
+        if target is None:
+            raise ValueError(
+                f"Requested api_number is not enabled or does not exist: {requested_number}"
+            )
+        if target not in known_targets or target_failover_open(target):
+            availability = metric_for(target.id).available_targets
+            reason = "unknown" if availability is None else str(availability)
+            raise ValueError(
+                f"Requested GPU API #{requested_number} ({target.name}) is not available "
+                f"(available_targets={reason})."
+            )
+        queue_for_target = target_queue(target.id)
+        if queue_for_target.qsize() >= QUEUE_MAX_PER_TARGET:
+            raise QueueFullError(
+                f"Requested GPU API #{requested_number} queue is full. "
+                f"max_per_target={QUEUE_MAX_PER_TARGET}",
+                target,
+            )
+        return target
     if requested_id:
         for target in targets:
             if target.id == requested_id:
@@ -1335,7 +1453,10 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         elif target.api_type == "google_ai_studio":
             gcp_payload = dict(payload)
             gcp_payload["model"] = target.model
-            normalized = GoogleAIStudioClient().generate(gcp_payload, effective_timeout)
+            gcp_client = GoogleAIStudioClient()
+            normalized = gcp_client.generate(gcp_payload, effective_timeout)
+            normalized["base_url"] = gcp_client.base_url
+            normalized["endpoint_url"] = gcp_client.endpoint_url
         else:
             supported_models = cached_target_models(target)
             dispatched_model = choose_supported_model(
@@ -1620,7 +1741,11 @@ def route_prompt(
         raise ValueError("prompt or messages is required.")
 
     initial_target = selected_target or choose_target(payload)
-    candidates = prompt_failover_targets(initial_target)
+    candidates = (
+        [initial_target]
+        if requested_api_number(payload) is not None
+        else prompt_failover_targets(initial_target)
+    )
     failures: list[dict[str, Any]] = []
     routing_messages: list[str] = []
     total_dispatch_count = 0
@@ -1698,18 +1823,7 @@ def route_bedrock_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any
 
 def route_gcp_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
     """Route only the dedicated GCP endpoint to Google AI Studio."""
-    settings = GoogleAIStudioClient()
-    target = LLMTarget(
-        id="google-ai-studio-endpoint",
-        name="Google AI Studio",
-        host="generativelanguage.googleapis.com",
-        port=443,
-        model=settings.model_id,
-        api_type="google_ai_studio",
-        gpu_info="GCP managed",
-        gpu_type="cloud",
-        notes="Dedicated /api/gcp/generate Google AI Studio endpoint",
-    )
+    target = google_ai_studio_target()
     request_payload = dict(payload)
     request_payload.pop("target_id", None)
     return route_prompt(handler, request_payload, selected_target=target)
@@ -1719,11 +1833,12 @@ def gcp_status_payload() -> dict[str, Any]:
     """Return non-secret Google AI Studio readiness information."""
     try:
         status = GoogleAIStudioClient().configuration_status()
-        return {"ok": bool(status.get("configured")), **status}
+        return {"ok": bool(status.get("configured")), "target_id": GCP_TARGET_ID, **status}
     except Exception as exc:  # noqa: BLE001
         return {
             "ok": False,
             "configured": False,
+            "target_id": GCP_TARGET_ID,
             "model_id": "",
             "api_version": "",
             "base_url": "",
@@ -2615,9 +2730,11 @@ def status_payload() -> dict[str, Any]:
         )
     try:
         google_ai_studio = GoogleAIStudioClient().configuration_status()
+        google_ai_studio["target_id"] = GCP_TARGET_ID
     except Exception as exc:  # noqa: BLE001
         google_ai_studio = {
             "configured": False,
+            "target_id": GCP_TARGET_ID,
             "model_id": "",
             "api_version": "",
             "base_url": "",
@@ -2821,7 +2938,7 @@ INDEX_HTML = """<!doctype html>
       <input id="target_id" type="hidden">
     </div>
     <div id="duplicateNotice" class="notice"></div>
-    <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>동작시간</th><th>응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
+    <table><thead><tr><th>상태</th><th>API 번호</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>동작시간</th><th>응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
   </section>
   <section id="service">
     <div class="grid" id="serviceMetrics"></div>
@@ -2891,6 +3008,7 @@ INDEX_HTML = """<!doctype html>
     <div class="test-metrics">
       <div class="metric"><div class="label">API Key</div><div id="gcp_key_status" class="value">확인 중</div></div>
       <div class="metric"><div class="label">모델</div><div id="gcp_model" class="value">-</div></div>
+      <div class="metric"><div class="label">API base_url</div><div id="gcp_base_url" class="value">-</div></div>
       <div class="metric"><div class="label">상태</div><div id="gcp_test_status" class="value">대기</div></div>
       <div class="metric"><div class="label">응답 시간</div><div id="gcp_test_elapsed" class="value">-</div></div>
     </div>
@@ -3046,6 +3164,7 @@ function renderGcpStatus() {
   keyStatus.textContent = configured ? '설정됨' : '미설정';
   keyStatus.className = `value ${configured ? 'ok' : 'error'}`;
   document.getElementById('gcp_model').textContent = config.model_id || '-';
+  document.getElementById('gcp_base_url').textContent = config.base_url || '-';
   document.getElementById('gcp_test_button').disabled = !configured;
   document.getElementById('gcp_config_notice').textContent = configured
     ? `API Key가 설정되어 있습니다 (${config.key_source || 'configured'}). ${config.model_id || ''} 모델을 테스트할 수 있습니다.`
@@ -3112,6 +3231,7 @@ function renderTargets() {
     const duplicateBadge = duplicateIds.has(t.id) ? '<br><span class="duplicate-badge">중복</span>' : '';
     return `<tr class="${duplicateIds.has(t.id) ? 'duplicate-row' : ''}">
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}${duplicateBadge}</td>
+      <td><strong>#${esc(t.api_number || '-')}</strong><br><small>/api/generate/${esc(t.api_number || '')}</small></td>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small>${ifconfigIps}</td>
       <td>${esc(t.model)}</td>
@@ -3212,8 +3332,13 @@ function renderTestTargets() {
   const select = document.getElementById('test_target');
   const previousValue = select.value || selectedTestTargetId;
   const enabledTargets = (state.targets || []).filter(t=>t.enabled);
-  select.innerHTML = '<option value="">자동 선택</option>' + (state.targets || []).filter(t=>t.enabled).map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
-  if (previousValue && enabledTargets.some(t => t.id === previousValue)) {
+  const gcp = state.google_ai_studio || {};
+  const selectableTargets = [...enabledTargets];
+  if (gcp.configured && gcp.target_id) {
+    selectableTargets.push({id:gcp.target_id, name:'Google AI Studio', model:gcp.model_id});
+  }
+  select.innerHTML = '<option value="">자동 선택</option>' + selectableTargets.map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
+  if (previousValue && selectableTargets.some(t => t.id === previousValue)) {
     select.value = previousValue;
   } else {
     select.value = '';
@@ -3483,7 +3608,10 @@ async function sendGcpPrompt() {
     const elapsedSeconds = (performance.now() - startedAt) / 1000;
     document.getElementById('gcp_test_status').textContent = '완료';
     document.getElementById('gcp_test_elapsed').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
-    document.getElementById('gcp_test_answer').innerHTML = renderMarkdown(data.response || '');
+    document.getElementById('gcp_base_url').textContent = data.base_url || config.base_url || '-';
+    document.getElementById('gcp_test_answer').innerHTML = renderMarkdown(
+      `**API base_url:** ${data.base_url || config.base_url || '-'}\n\n${data.response || ''}`
+    );
     document.getElementById('gcp_test_result').textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     document.getElementById('gcp_test_status').textContent = '오류';
@@ -3690,6 +3818,13 @@ class RoutingHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self.read_json()
+            request_path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+            numbered_generate = re.fullmatch(
+                r"/(?:api/)?generate/(\d+)(/stream)?",
+                request_path,
+            )
+            if numbered_generate:
+                payload["api_number"] = int(numbered_generate.group(1))
             if self.path == "/api/login":
                 if valid_admin_password(str(payload.get("password") or "")):
                     body = json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
@@ -3718,11 +3853,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 "/api/generate/stream",
                 "/generate/stream",
                 "/api/chat/stream",
-            }:
+            } or numbered_generate:
                 if not prompt_api_authenticated(self, payload):
                     self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
                     return
-                if self.path.endswith("/stream") or payload.get("stream") is True:
+                if request_path.endswith("/stream") or payload.get("stream") is True:
                     self.write_prompt_sse(payload)
                     return
                 self.write_json(route_prompt(self, payload))
@@ -3822,11 +3957,25 @@ class RoutingHandler(BaseHTTPRequestHandler):
         port = int(payload.get("port") or 0)
         if port <= 0:
             raise ValueError("port is required.")
+        targets = load_targets()
+        existing_target = next((target for target in targets if target.id == target_id), None)
+        used_api_numbers = {
+            target.api_number for target in targets if target.id != target_id
+        }
+        requested_number = int(payload.get("api_number") or 0)
+        api_number = requested_number or (
+            existing_target.api_number if existing_target else max(used_api_numbers, default=0) + 1
+        )
+        if api_number <= 0:
+            raise ValueError("api_number must be a positive integer.")
+        if api_number in used_api_numbers:
+            raise ValueError(f"api_number is already assigned: {api_number}")
         new_target = LLMTarget(
             id=target_id,
             name=name,
             host=host,
             port=port,
+            api_number=api_number,
             proxy_port=int(payload.get("proxy_port") or 0),
             model=str(payload.get("model") or "").strip(),
             api_type=str(payload.get("api_type") or "ollama").strip(),
@@ -3840,7 +3989,6 @@ class RoutingHandler(BaseHTTPRequestHandler):
             weight=max(1, int(payload.get("weight") or 1)),
             notes=str(payload.get("notes") or "").strip(),
         )
-        targets = load_targets()
         replaced = False
         for index, target in enumerate(targets):
             if target.id == target_id:
@@ -3893,6 +4041,7 @@ def main() -> int:
     HOST = args.host
     PORT = args.port
     ensure_default_config()
+    persist_assigned_api_numbers()
     ensure_admin_password()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     start_webdav_reporter()

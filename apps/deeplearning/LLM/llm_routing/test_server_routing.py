@@ -90,6 +90,8 @@ class DispatchInfoTests(unittest.TestCase):
     def test_gcp_tab_uses_dedicated_endpoint(self) -> None:
         self.assertIn('data-tab="gcp">GCP 테스트</button>', server_routing.INDEX_HTML)
         self.assertIn('id="gcp_test_prompt"', server_routing.INDEX_HTML)
+        self.assertIn('id="gcp_base_url"', server_routing.INDEX_HTML)
+        self.assertIn("data.base_url || config.base_url", server_routing.INDEX_HTML)
         self.assertIn("api('/api/gcp/generate'", server_routing.INDEX_HTML)
         self.assertIn("자동 LLM 라우팅 대상에는 포함되지 않습니다", server_routing.INDEX_HTML)
 
@@ -109,6 +111,60 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertTrue(result["configured"])
         self.assertEqual(result["model_id"], "gemma-4-31b-it")
         self.assertNotIn("api_key", result)
+
+    def test_api_number_selects_exact_gpu_target(self) -> None:
+        first = server_routing.LLMTarget(
+            id="gpu-1", name="GPU 1", host="127.0.0.1", port=11434, api_number=1
+        )
+        second = server_routing.LLMTarget(
+            id="gpu-2", name="GPU 2", host="127.0.0.2", port=11434, api_number=2
+        )
+        with (
+            patch.object(server_routing, "load_targets", return_value=[first, second]),
+            patch.object(server_routing, "ensure_target_queues"),
+            patch.object(server_routing, "target_has_known_availability", return_value=True),
+            patch.object(server_routing, "target_failover_open", return_value=False),
+            patch.object(server_routing, "target_queue", return_value=MagicMock(qsize=lambda: 0)),
+        ):
+            selected = server_routing.choose_target({"api_number": 2, "prompt": "hello"})
+
+        self.assertEqual(selected.id, "gpu-2")
+
+    def test_gcp_target_id_selects_google_ai_studio(self) -> None:
+        settings = MagicMock(
+            model_id="gemma-4-31b-it",
+            base_url="https://generativelanguage.googleapis.com",
+        )
+        with patch.object(server_routing, "GoogleAIStudioClient", return_value=settings):
+            selected = server_routing.choose_target(
+                {"target_id": "google-ai-studio-endpoint", "prompt": "hello"}
+            )
+
+        self.assertEqual(selected.id, "google-ai-studio-endpoint")
+        self.assertEqual(selected.api_type, "google_ai_studio")
+        self.assertEqual(selected.model, "gemma-4-31b-it")
+
+    def test_direct_api_number_disables_cross_gpu_failover(self) -> None:
+        target = server_routing.LLMTarget(
+            id="gpu-2", name="GPU 2", host="127.0.0.2", port=11434, api_number=2
+        )
+        handler = MagicMock(headers={}, client_address=("127.0.0.1", 12345))
+        with (
+            patch.object(server_routing, "choose_target", return_value=target),
+            patch.object(server_routing, "prompt_failover_targets") as failover,
+            patch.object(
+                server_routing,
+                "dispatch_prompt_to_target",
+                return_value={"ok": True, "llm_dispatch_count": 1},
+            ) as dispatch,
+        ):
+            result = server_routing.route_prompt(
+                handler, {"api_number": 2, "prompt": "hello"}
+            )
+
+        failover.assert_not_called()
+        dispatch.assert_called_once_with(handler, {"api_number": 2, "prompt": "hello"}, target)
+        self.assertTrue(result["ok"])
 
     def test_sse_event_format(self) -> None:
         encoded = server_routing.sse_event_bytes("dispatch_info", {"value": "한글"})

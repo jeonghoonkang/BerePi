@@ -151,6 +151,43 @@ curl -X POST http://127.0.0.1:4004/api/generate \
   -d '{"client_id":"client-a","target_id":"TARGET_ID","prompt":"hello"}'
 ```
 
+Google AI Studio도 일반 generate API에서 전용 `target_id`로 지정할 수 있습니다.
+
+```bash
+curl -X POST http://127.0.0.1:4004/api/generate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","target_id":"google-ai-studio-endpoint","prompt":"Gemma 4로 답변해줘"}'
+```
+
+이 ID는 `/api/status`의 `google_ai_studio.target_id`에서도 확인할 수 있습니다.
+
+각 GPU 대상에는 고정 `api_number`가 부여되며 관리 화면의 **API 번호** 열에서
+확인할 수 있습니다. 번호를 지정하면 자동 유휴 GPU 선택 대신 해당 GPU의 큐로
+직접 전송하며, 실패해도 다른 GPU로 자동 우회하지 않습니다.
+
+URL로 GPU API 번호 지정:
+
+```bash
+curl -X POST http://127.0.0.1:4004/api/generate/2 \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","prompt":"GPU API 2에서 실행"}'
+```
+
+JSON 필드로 GPU API 번호 지정:
+
+```bash
+curl -X POST http://127.0.0.1:4004/api/generate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","api_number":2,"prompt":"GPU API 2에서 실행"}'
+```
+
+스트리밍 직접 호출은 `/api/generate/2/stream`을 사용합니다. `gpu_number`,
+`target_number`, `model_number`도 `api_number`의 별칭으로 인식합니다. 번호를
+생략하면 기존처럼 동작 중이지 않은 GPU를 우선하여 자동 선택합니다.
+
 다른 머신에서 호출할 때는 `127.0.0.1` 대신 LLM Routing 서버 IP 또는 DNS 이름을 사용합니다.
 
 ```bash
