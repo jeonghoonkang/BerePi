@@ -81,6 +81,74 @@ class DispatchInfoTests(unittest.TestCase):
             server_routing.INDEX_HTML,
         )
 
+    def test_ocr_tab_supports_clipboard_and_file_upload(self) -> None:
+        html = server_routing.INDEX_HTML
+
+        self.assertIn('data-tab="ocr">이미지 OCR</button>', html)
+        for element_id in (
+            "ocr_target",
+            "ocr_paste_zone",
+            "ocr_image",
+            "ocr_prompt",
+            "ocr_result",
+            "ocr_raw_result",
+        ):
+            self.assertIn(f'id="{element_id}"', html)
+        self.assertIn("navigator.clipboard.read()", html)
+        self.assertIn("images: [dataUrl.base64]", html)
+        self.assertIn("async function runOcr()", html)
+
+    def test_ollama_backend_payload_preserves_ocr_images(self) -> None:
+        target = server_routing.LLMTarget(
+            id="vision-target",
+            name="Vision Target",
+            host="127.0.0.1",
+            port=8082,
+            model="vision-model",
+            api_type="ollama",
+        )
+
+        url, payload = server_routing.build_backend_payload(
+            target,
+            {
+                "prompt": "이미지의 문자를 추출해 주세요.",
+                "images": ["aW1hZ2U="],
+                "target_id": target.id,
+                "client_id": "web-ui-ocr",
+            },
+        )
+
+        self.assertEqual(url, "http://127.0.0.1:8082/api/generate")
+        self.assertEqual(payload["images"], ["aW1hZ2U="])
+        self.assertNotIn("target_id", payload)
+        self.assertNotIn("client_id", payload)
+
+    def test_openai_backend_payload_converts_ocr_images(self) -> None:
+        target = server_routing.LLMTarget(
+            id="openai-vision",
+            name="OpenAI Vision",
+            host="127.0.0.1",
+            port=8000,
+            model="vision-model",
+            api_type="openai",
+        )
+
+        url, payload = server_routing.build_backend_payload(
+            target,
+            {"prompt": "read text", "images": ["aW1hZ2U="]},
+        )
+
+        self.assertEqual(url, "http://127.0.0.1:8000/v1/chat/completions")
+        content = payload["messages"][0]["content"]
+        self.assertEqual(content[0], {"type": "text", "text": "read text"})
+        self.assertEqual(
+            content[1],
+            {
+                "type": "image_url",
+                "image_url": {"url": "data:image/png;base64,aW1hZ2U="},
+            },
+        )
+
     def test_index_html_keeps_javascript_newline_escape(self) -> None:
         self.assertIn(
             "routing_messages || [String(err)]).join('\\n')",

@@ -1089,7 +1089,20 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         messages = request_payload.get("messages")
         if not isinstance(messages, list):
-            messages = [{"role": "user", "content": prompt}]
+            images = request_payload.get("images")
+            if isinstance(images, list) and images:
+                content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+                content.extend(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{image}"},
+                    }
+                    for image in images
+                    if str(image or "").strip()
+                )
+                messages = [{"role": "user", "content": content}]
+            else:
+                messages = [{"role": "user", "content": prompt}]
         payload = {
             "model": model,
             "messages": messages,
@@ -2896,12 +2909,22 @@ INDEX_HTML = """<!doctype html>
     .target-list-bottom { margin-top:28px; padding-top:14px; border-top:2px solid var(--line); }
     .raw-view { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
     .compare-response { max-width:420px; max-height:120px; overflow:auto; white-space:pre-wrap; }
+    .ocr-grid { display:grid; grid-template-columns:minmax(280px,.9fr) minmax(0,1.1fr); gap:14px; margin-top:12px; }
+    .ocr-source-tabs { display:flex; gap:8px; margin:12px 0; }
+    .ocr-source-tab.active { color:#fff; background:var(--accent); border-color:var(--accent); }
+    .ocr-source-panel { display:none; }
+    .ocr-source-panel.active { display:block; }
+    .ocr-paste-zone { display:grid; place-items:center; min-height:120px; padding:18px; border:2px dashed var(--line); border-radius:8px; background:#fff; color:var(--muted); text-align:center; cursor:text; outline:none; }
+    .ocr-paste-zone:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(15,118,110,.14); }
+    .ocr-preview { min-height:220px; margin-top:12px; padding:10px; display:grid; place-items:center; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--muted); overflow:auto; }
+    .ocr-preview img { display:block; max-width:100%; max-height:520px; object-fit:contain; }
+    .ocr-result { min-height:420px; max-height:620px; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
     button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
     button.danger { color:#fff; background:var(--bad); border-color:var(--bad); }
     .ok { color:var(--accent); font-weight:700; } .error { color:var(--bad); font-weight:700; } .warn { color:var(--warn); font-weight:700; }
     pre { margin:0; white-space:pre-wrap; overflow:auto; max-height:420px; background:#101820; color:#ecf3f5; border-radius:8px; padding:12px; }
-    @media (max-width:900px) { .grid, .form-grid { grid-template-columns:1fr 1fr; } header { display:block; } }
+    @media (max-width:900px) { .grid, .form-grid { grid-template-columns:1fr 1fr; } .ocr-grid { grid-template-columns:1fr; } header { display:block; } }
     @media (max-width:620px) { .grid, .form-grid { grid-template-columns:1fr; } }
   </style>
 </head>
@@ -2922,6 +2945,7 @@ INDEX_HTML = """<!doctype html>
     <button data-tab="service">서비스</button>
     <button data-tab="local">로컬머신</button>
     <button data-tab="test">프롬프트 테스트</button>
+    <button data-tab="ocr">이미지 OCR</button>
     <button data-tab="gcp">GCP 테스트</button>
   </nav>
   <section id="llms" class="active">
@@ -3025,6 +3049,54 @@ INDEX_HTML = """<!doctype html>
       <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
     </div>
   </section>
+  <section id="ocr">
+    <div class="panel">
+      <h2 style="margin-top:0">이미지 OCR</h2>
+      <p>클립보드의 스크린샷을 붙여넣거나 이미지 파일을 업로드하여 선택한 LLM에서 문자를 추출합니다.</p>
+      <div class="ocr-grid">
+        <div>
+          <label for="ocr_target">OCR 실행 대상</label>
+          <select id="ocr_target"></select>
+          <div class="ocr-source-tabs" role="tablist" aria-label="OCR 이미지 입력 방식">
+            <button class="ocr-source-tab active" data-ocr-source="ocr_clipboard_panel" type="button" role="tab" aria-selected="true">클립보드 스크린샷</button>
+            <button class="ocr-source-tab" data-ocr-source="ocr_upload_panel" type="button" role="tab" aria-selected="false">이미지 파일 업로드</button>
+          </div>
+          <div id="ocr_clipboard_panel" class="ocr-source-panel active" role="tabpanel">
+            <div id="ocr_paste_zone" class="ocr-paste-zone" tabindex="0">이 영역을 클릭한 뒤 Ctrl+V 또는 Cmd+V로 스크린샷을 붙여넣으세요.</div>
+            <div class="test-toolbar">
+              <button type="button" onclick="readOcrClipboard()">클립보드 이미지 가져오기</button>
+              <button class="primary" type="button" onclick="runOcr()">붙여넣은 이미지 OCR 실행</button>
+            </div>
+          </div>
+          <div id="ocr_upload_panel" class="ocr-source-panel" role="tabpanel">
+            <label for="ocr_image">이미지 파일 선택</label>
+            <input id="ocr_image" type="file" accept="image/*">
+            <div class="test-toolbar">
+              <button class="primary" type="button" onclick="runOcr()">업로드 이미지 OCR 실행</button>
+            </div>
+          </div>
+          <div id="ocr_preview" class="ocr-preview">선택된 이미지가 없습니다.</div>
+          <div id="ocr_status" class="model-status">대기</div>
+        </div>
+        <div>
+          <label for="ocr_prompt">OCR 지시문</label>
+          <textarea id="ocr_prompt">이미지에서 읽을 수 있는 모든 문자를 정확하게 추출해 주세요. 원문의 줄바꿈과 표 구조를 가능한 한 유지하고, 설명 없이 추출된 문자만 출력해 주세요.</textarea>
+          <div class="markdown-header">
+            <h3>OCR 결과</h3>
+            <div class="markdown-toolbar">
+              <button onclick="setMarkdownMode('ocr_result','preview')">미리보기</button>
+              <button onclick="setMarkdownMode('ocr_result','source')">Markdown</button>
+              <button onclick="copyMarkdown('ocr_result')">복사</button>
+              <button onclick="clearOcr()">지우기</button>
+            </div>
+          </div>
+          <div id="ocr_result" class="response-box markdown-view ocr-result"></div>
+          <h3>원본 응답</h3>
+          <pre id="ocr_raw_result"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
   <section id="gcp">
     <div class="panel">
       <h2 style="margin-top:0">Google AI Studio · Gemma 4</h2>
@@ -3058,6 +3130,7 @@ INDEX_HTML = """<!doctype html>
 <script>
 let state = {};
 let selectedTestTargetId = localStorage.getItem('llmRoutingTestTargetId') || '';
+let ocrImageFile = null;
 for (const btn of document.querySelectorAll('nav button')) {
   btn.onclick = () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
@@ -3428,6 +3501,7 @@ async function testWebdavSettings() {
 }
 function renderTestTargets() {
   const select = document.getElementById('test_target');
+  const ocrSelect = document.getElementById('ocr_target');
   const previousValue = select.value || selectedTestTargetId;
   const enabledTargets = (state.targets || []).filter(t=>t.enabled);
   const gcp = state.google_ai_studio || {};
@@ -3436,12 +3510,16 @@ function renderTestTargets() {
     selectableTargets.push({id:gcp.target_id, name:'Google AI Studio', model:gcp.model_id});
   }
   select.innerHTML = '<option value="">자동 선택</option>' + selectableTargets.map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
+  ocrSelect.innerHTML = '<option value="">자동 선택</option>' + enabledTargets.map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
   if (previousValue && selectableTargets.some(t => t.id === previousValue)) {
     select.value = previousValue;
   } else {
     select.value = '';
     selectedTestTargetId = '';
     localStorage.removeItem('llmRoutingTestTargetId');
+  }
+  if (previousValue && enabledTargets.some(t => t.id === previousValue)) {
+    ocrSelect.value = previousValue;
   }
   renderAutoTargetRows(enabledTargets);
 }
@@ -3555,6 +3633,96 @@ async function setTargetEnabled(id, enabled) {
 async function deleteTarget(id) {
   await api('/api/delete-target', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
   await refresh();
+}
+function showOcrSource(panelId) {
+  document.querySelectorAll('.ocr-source-tab').forEach(tab => {
+    const active = tab.dataset.ocrSource === panelId;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('.ocr-source-panel').forEach(panel => panel.classList.toggle('active', panel.id === panelId));
+  if (panelId === 'ocr_clipboard_panel') document.getElementById('ocr_paste_zone').focus();
+}
+function imageFromClipboardEvent(event) {
+  const item = Array.from(event.clipboardData?.items || []).find(value => String(value.type || '').startsWith('image/'));
+  return item ? item.getAsFile() : null;
+}
+async function imageData(file) {
+  if (!file) throw new Error('OCR에 사용할 이미지를 먼저 선택하거나 붙여넣어 주세요.');
+  if (!String(file.type || '').startsWith('image/')) throw new Error('이미지 파일만 사용할 수 있습니다.');
+  if (file.size > 15 * 1024 * 1024) throw new Error('이미지 크기는 15MB 이하여야 합니다.');
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      resolve({dataUrl, base64: dataUrl.includes(',') ? dataUrl.split(',', 2)[1] : dataUrl});
+    };
+    reader.onerror = () => reject(reader.error || new Error('이미지를 읽지 못했습니다.'));
+    reader.readAsDataURL(file);
+  });
+}
+async function setOcrImage(file, sourceLabel) {
+  const data = await imageData(file);
+  ocrImageFile = file;
+  document.getElementById('ocr_preview').innerHTML = `<img src="${data.dataUrl}" alt="OCR preview">`;
+  document.getElementById('ocr_status').textContent = `${sourceLabel}: ${file.name || 'clipboard image'} (${Math.ceil(file.size / 1024)}KB)`;
+}
+async function readOcrClipboard() {
+  const status = document.getElementById('ocr_status');
+  try {
+    if (!navigator.clipboard?.read) throw new Error('clipboard read unavailable');
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = item.types.find(value => value.startsWith('image/'));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      await setOcrImage(new File([blob], `clipboard_${Date.now()}.png`, {type}), '클립보드 이미지');
+      return;
+    }
+    throw new Error('클립보드에 이미지가 없습니다.');
+  } catch (err) {
+    document.getElementById('ocr_paste_zone').focus();
+    status.textContent = `${String(err)} Ctrl+V 또는 Cmd+V로 붙여넣어 주세요.`;
+  }
+}
+async function runOcr() {
+  const status = document.getElementById('ocr_status');
+  const startedAt = performance.now();
+  status.textContent = '이미지를 준비하는 중입니다...';
+  setMarkdownContent('ocr_result', '');
+  document.getElementById('ocr_raw_result').textContent = 'Running...';
+  try {
+    const dataUrl = await imageData(ocrImageFile);
+    const prompt = document.getElementById('ocr_prompt').value.trim();
+    if (!prompt) throw new Error('OCR 지시문을 입력해 주세요.');
+    const payload = {
+      prompt,
+      images: [dataUrl.base64],
+      target_id: document.getElementById('ocr_target').value,
+      client_id: 'web-ui-ocr'
+    };
+    status.textContent = 'OCR 처리 중...';
+    const data = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const elapsed = (performance.now() - startedAt) / 1000;
+    setMarkdownContent('ocr_result', data.response || 'OCR 결과가 없습니다.');
+    document.getElementById('ocr_raw_result').textContent = JSON.stringify(data, null, 2);
+    status.textContent = `OCR 완료: ${elapsed.toFixed(2)}초 / ${selectedTargetLabel(data)}`;
+  } catch (err) {
+    const elapsed = (performance.now() - startedAt) / 1000;
+    const message = err.data?.error || String(err);
+    setMarkdownContent('ocr_result', message);
+    document.getElementById('ocr_raw_result').textContent = err.data ? JSON.stringify(err.data, null, 2) : String(err);
+    status.textContent = `OCR 오류 (${elapsed.toFixed(2)}초)`;
+  }
+  await refresh();
+}
+function clearOcr() {
+  ocrImageFile = null;
+  document.getElementById('ocr_image').value = '';
+  document.getElementById('ocr_preview').textContent = '선택된 이미지가 없습니다.';
+  document.getElementById('ocr_status').textContent = '대기';
+  setMarkdownContent('ocr_result', '');
+  document.getElementById('ocr_raw_result').textContent = '';
 }
 async function sendPrompt() {
   const select = document.getElementById('test_target');
@@ -3737,6 +3905,30 @@ document.getElementById('test_target').addEventListener('change', (event) => {
     localStorage.setItem('llmRoutingTestTargetId', selectedTestTargetId);
   } else {
     localStorage.removeItem('llmRoutingTestTargetId');
+  }
+});
+document.querySelectorAll('.ocr-source-tab').forEach(tab => {
+  tab.addEventListener('click', () => showOcrSource(tab.dataset.ocrSource));
+});
+document.getElementById('ocr_image').addEventListener('change', async event => {
+  const file = event.target.files?.[0] || null;
+  try {
+    if (file) await setOcrImage(file, '업로드 이미지');
+  } catch (err) {
+    document.getElementById('ocr_status').textContent = String(err);
+  }
+});
+document.getElementById('ocr_paste_zone').addEventListener('paste', async event => {
+  const file = imageFromClipboardEvent(event);
+  if (!file) {
+    document.getElementById('ocr_status').textContent = '붙여넣은 내용에 이미지가 없습니다.';
+    return;
+  }
+  event.preventDefault();
+  try {
+    await setOcrImage(file, '클립보드 이미지');
+  } catch (err) {
+    document.getElementById('ocr_status').textContent = String(err);
   }
 });
 document.getElementById('model_select').addEventListener('change', (event) => {
