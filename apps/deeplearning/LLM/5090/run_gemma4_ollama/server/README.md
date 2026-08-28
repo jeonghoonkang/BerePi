@@ -1,205 +1,135 @@
-# Gemma4 Ollama Server
+# Gemma4 Ollama 서버
 
-This directory runs a local Gemma4 service page and JSON API backed by Ollama.
-The default service port is `8082`, and the default Ollama model is
-`gemma4:31b`.
+이 디렉터리는 Ollama를 백엔드로 사용하는 Gemma4 웹 페이지와 JSON API 서버를 제공합니다.
 
-When the server is started without arguments, the Gemma4 web page and JSON API
-listen on port `8082`:
+- Gemma4 웹/API 서버 기본 포트: `8082`
+- Ollama 백엔드 기본 포트: `11434`
+- 기본 모델: `gemma4:31b`
+- 기본 접속 주소: `http://localhost:8082`
 
-```text
-http://localhost:8082
-```
+주요 기능:
 
-The local Ollama backend is a separate service and listens on port `11434` by
-default:
+- 로컬 Ollama 서버 시작, 중지 및 상태 확인
+- 필요한 Ollama 모델 자동 다운로드
+- 텍스트·이미지 프롬프트 처리
+- `api_key.conf` 기반 사용자 인증
+- 프롬프트 이력, 사용자별 이력 및 접속 로그 저장
+- 웹 UI에서 GPU와 모델 선택
+- 프롬프트 컨텍스트용 작업 파일 업로드
+- 서비스 포트별 독립 Ollama 인스턴스 실행
 
-- Gemma4 web/API server: `8082`
-- Ollama backend: `11434`
+## 요구 사항
 
-If `GEMMA4_SERVER_PORT` is already set, its value takes precedence over the
-default `8082`. Likewise, `OLLAMA_BASE_URL` and `OLLAMA_HOST` can override the
-default Ollama address `http://127.0.0.1:11434`.
+- Linux 또는 macOS
+- Bash, Python 3, curl
+- Ollama(없으면 시작 스크립트가 설치를 시도함)
+- NVIDIA GPU 사용 시 NVIDIA 드라이버와 `nvidia-smi`
 
-The service can:
-
-- start, stop, and check a local Ollama server
-- pull the configured Ollama model when it is missing
-- proxy text and image prompts to Ollama through `/api/generate`
-- manage prompt authentication with `api_key.conf`
-- save prompt history, user prompt history, and access logs
-- select model and GPU from the web UI
-- upload workspace files for prompt context
-- run in foreground with `run_service.sh` or detached with `start.sh`
-
-## Run
-
-Foreground:
+## 빠른 시작
 
 ```bash
-cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server
+cd /path/to/BerePi/apps/deeplearning/LLM/5090/run_gemma4_ollama/server
 chmod +x run_service.sh start.sh stop.sh
 ./run_service.sh
 ```
 
-Foreground with a custom service port:
+브라우저에서 `http://SERVER_IP:8082`를 엽니다. `run_service.sh`는 포그라운드에서 실행되며 `Ctrl+C`로 종료합니다.
 
-```bash
-./run_service.sh 8083
-```
-
-### Separate Ollama instance per service port
-
-`run_service.sh` accepts a service port, GPU selection, and optional Ollama
-backend port:
-
-```text
-./run_service.sh SERVICE_PORT GPU [OLLAMA_PORT]
-```
-
-When a service port is supplied, runtime files are isolated under
-`instances/ollama_SERVICE_PORT`. If `OLLAMA_PORT` is omitted, it defaults to
-`SERVICE_PORT + 10000`.
-
-For example, run service port `2500` on GPU 0 with Ollama port `12500`:
-
-```bash
-./run_service.sh 2500 0
-```
-
-Run service port `2501` on GPU 1 with Ollama port `12501`:
-
-```bash
-./run_service.sh 2501 1
-```
-
-To choose the Ollama backend port explicitly:
-
-```bash
-./run_service.sh 2500 0 11434
-./run_service.sh 2501 1 11435
-```
-
-Each instance gets its own `gpu-selection`, `ollama.pid`, and log directory.
-Valid GPU values are a numeric device index, `auto`, `all`, `cpu`, or `none`.
-Running `./run_service.sh` without arguments preserves the legacy defaults:
-Gemma4 port `8082`, Ollama port `11434`, and files in the server directory.
-
-Detached:
+백그라운드 실행과 중지:
 
 ```bash
 ./start.sh
+./stop.sh
 ```
 
-Open:
+`stop.sh`는 `server.pid`와 `ollama.pid`가 있으면 해당 프로세스를 중지합니다.
+
+## 포트 및 다중 인스턴스
 
 ```text
-http://SERVER_IP:8082
+./run_service.sh [서비스_포트] [GPU] [Ollama_포트] [--ai-server-list-token TOKEN]
 ```
 
-If you started the service with a custom port, use that port in the URL.
-
-The page checks:
-
-- web server status
-- Ollama reachability
-- available Ollama models
-- whether the selected Ollama model is available
-- quick prompt tests through `/api/generate`
-- prompt queue/result state
-- recent prompts saved in `prompt_history.txt`
-- user prompt history and access logs
-- selected GPU and selected model
-- workspace files
-- Ollama server start through `/api/start-ollama`
-- model unload through `/api/unload-model`
-- Ollama server stop through `/api/stop-ollama`
-
-## Startup Behavior
-
-`run_service.sh` and `start.sh` both set defaults for the service and Ollama.
-
-- `run_service.sh` runs the Python service in the foreground.
-- `start.sh` starts the service detached and writes PID/log files.
-- Both scripts discover or install `ollama` when needed.
-- Both scripts start Ollama if `OLLAMA_BASE_URL` is not reachable.
-- Both scripts pull `OLLAMA_MODEL` when it is missing and `AUTO_PULL=1`.
-- Both scripts read `gpu-selection` and `model-selection` before starting Ollama.
-- Both scripts refuse to start when the target service port is already occupied.
-
-`run_service.sh` accepts one optional positional argument:
+실행 예시:
 
 ```bash
-./run_service.sh 8083
+./run_service.sh 8083             # 서비스 포트만 변경
+./run_service.sh 2500 0           # 서비스 2500, GPU 0, Ollama 12500
+./run_service.sh 2501 1           # 서비스 2501, GPU 1, Ollama 12501
+./run_service.sh 2500 0 11434     # Ollama 포트 직접 지정
 ```
 
-This overrides `GEMMA4_SERVER_PORT` for that run. These forms are equivalent:
+서비스 포트를 지정하면 상태 파일이 `instances/ollama_<서비스_포트>/` 아래에 분리됩니다. Ollama 포트를 생략하면 `서비스 포트 + 10000`을 사용합니다. 각 인스턴스는 별도의 GPU 선택 파일, PID 파일 및 로그 디렉터리를 가집니다.
+
+GPU 값은 숫자 인덱스(`0`, `1` 등), `auto`, `all`, `cpu`, `none` 중 하나입니다.
+
+환경 변수로 포트를 지정할 수도 있습니다.
 
 ```bash
-./run_service.sh 8083
-GEMMA4_SERVER_PORT=8083 ./run_service.sh
-```
-
-`start.sh` does not currently accept a positional port argument. Use the
-environment variable form:
-
-```bash
+GEMMA4_SERVER_PORT=8084 ./run_service.sh
 GEMMA4_SERVER_PORT=8083 ./start.sh
 ```
 
-## Prompt Authentication
+`start.sh`는 위치 인수로 포트를 받지 않으므로 환경 변수를 사용해야 합니다.
 
-Prompt calls through the web page and `POST /api/generate` require a user ID and
-password from `api_key.conf`.
+## 시작 과정
+
+`run_service.sh`와 `start.sh`는 다음 작업을 수행합니다.
+
+1. Ollama 실행 파일을 찾고, 없으면 설치를 시도합니다.
+2. `gpu-selection`과 `model-selection`을 읽습니다.
+3. Ollama 상태를 확인하고 필요하면 시작합니다.
+4. 모델이 없고 `AUTO_PULL=1`이면 모델을 내려받습니다.
+5. 서비스 포트가 사용 가능한지 확인합니다.
+6. Python 웹/API 서버를 시작합니다.
+
+`run_service.sh`는 선택 GPU를 적용하기 위해 기존 Ollama를 안전하게 재시작할 수 있습니다. 리스닝 프로세스가 실제 Ollama인지 확인하며, 스크립트가 중지한 systemd Ollama 서비스는 포그라운드 서버 종료 시 복원합니다.
+
+## 사용자 인증
+
+웹 페이지와 `POST /api/generate` 호출에는 `api_key.conf`에 등록된 사용자 ID와 비밀번호가 필요합니다.
+
+```bash
+cp api_key.conf.sample api_key.conf
+chmod 600 api_key.conf
+```
+
+설정 예시:
 
 ```json
 {
   "enabled": true,
   "allow_only_user": "",
   "users": [
-    {"id": "admin", "password": "change-me-now", "enabled": true},
-    {"id": "operator", "password": "change-me-too", "enabled": true}
+    {"id": "admin", "password": "안전한-비밀번호", "enabled": true},
+    {"id": "operator", "password": "다른-안전한-비밀번호", "enabled": true}
   ]
 }
 ```
 
-Set `allow_only_user` to one user ID, such as `admin`, to invalidate every other
-account while leaving that one account active. Set it back to an empty string to
-allow every enabled account again.
+- `enabled`: 전체 인증 기능 활성화 여부
+- `allow_only_user`: 특정 사용자만 허용할 때 사용자 ID 지정. 모든 활성 사용자를 허용하려면 빈 문자열 사용
+- 사용자별 `enabled`: 해당 계정 활성화 여부
 
-If `api_key.conf` does not exist, the service creates it from default values and
-sets file permissions to `0600` when possible.
+`api_key.conf`가 없으면 서버가 기본 파일을 만들고 가능한 경우 권한을 `0600`으로 설정합니다. 운영 환경에서는 기본 비밀번호를 반드시 변경하십시오.
 
-API clients can pass credentials with HTTP Basic Auth, with an authenticated web
-session cookie, or with JSON fields:
+API 인증은 HTTP Basic Auth, 인증된 웹 세션 쿠키 또는 JSON의 `user_id`, `password` 필드로 전달할 수 있습니다.
 
-```json
-{"user_id": "admin", "password": "change-me-now", "prompt": "hello"}
-```
-
-To verify a locally running server on port `2500`, replace `id` and `pw` with
-credentials registered in `api_key.conf`, then run:
+## 텍스트 생성 API
 
 ```bash
 curl -sS -X POST http://127.0.0.1:2500/api/generate \
   -H 'Content-Type: application/json' \
   -d '{
-    "user_id": "id",
-    "password": "pw",
+    "user_id": "admin",
+    "password": "안전한-비밀번호",
     "prompt": "현재 시간을 알려주세요"
   }' | python3 -m json.tool
 ```
 
-A successful call returns formatted JSON containing the model response. An
-`invalid user id or password` response means the supplied credentials do not
-match an enabled user in `api_key.conf`.
+`invalid user id or password`가 반환되면 `api_key.conf`의 활성 사용자 정보와 요청 값을 확인합니다.
 
-The web UI can log in through `/api/session-login`, log out through
-`/api/session-logout`, and save users through `/api/save-user`.
-
-## Text and Image Prompts
-
-Text clients can call:
+프롬프트 API:
 
 ```text
 POST /api/generate
@@ -208,34 +138,27 @@ GET  /api/prompt-result?id=JOB_ID
 POST /api/cancel-pending-prompts
 ```
 
-Vision/OCR clients can pass Ollama-compatible base64 images. The server forwards
-`images` to Ollama's `/api/generate` payload.
+## 이미지·OCR 요청
+
+이미지는 Ollama 호환 Base64 문자열 배열로 전달합니다.
 
 ```json
 {
   "user_id": "admin",
-  "password": "change-me-now",
-  "prompt": "Extract all visible text from this image.",
+  "password": "안전한-비밀번호",
+  "prompt": "이미지에서 보이는 모든 글자를 추출해 주세요.",
   "images": ["base64-image-data"],
   "model": "vision-capable-model"
 }
 ```
 
-Use a model that supports image input. If the selected model is text-only, it may
-ignore the image and hallucinate a plausible answer.
+이미지 입력을 지원하는 모델을 선택해야 합니다. 텍스트 전용 모델은 이미지를 무시하거나 부정확한 응답을 만들 수 있습니다.
 
-To verify image delivery without running model inference, call:
+추론 없이 이미지 전달만 시험하려면 같은 인증 정보와 `images` 배열로 `POST /api/test-image-transfer`를 호출합니다. 응답의 `image_count`로 전달된 이미지 수를 확인할 수 있습니다.
 
-```text
-POST /api/test-image-transfer
-```
+## API 목록
 
-with the same authentication fields and an `images` array. The response includes
-`image_count`.
-
-## API
-
-Health and status:
+상태 확인:
 
 ```text
 GET /health
@@ -243,7 +166,7 @@ GET /api/tags
 GET /api/status
 ```
 
-Ollama controls:
+Ollama 제어:
 
 ```text
 POST /api/start-ollama
@@ -251,7 +174,7 @@ POST /api/unload-model
 POST /api/stop-ollama
 ```
 
-Selection and session APIs:
+GPU, 모델 및 세션 관리:
 
 ```text
 POST /api/select-gpu
@@ -262,7 +185,7 @@ POST /api/session-logout
 POST /api/save-user
 ```
 
-Logs, history, and workspace:
+로그, 이력 및 작업 공간:
 
 ```text
 GET  /api/prompt-history
@@ -272,61 +195,28 @@ GET  /api/workspace/files
 POST /api/workspace/upload
 ```
 
-`POST /api/workspace/upload` accepts authenticated JSON like:
+파일 업로드 예시:
 
 ```json
 {
   "user_id": "admin",
-  "password": "change-me-now",
+  "password": "안전한-비밀번호",
   "files": [
-    {
-      "name": "notes.txt",
-      "content": "prompt context"
-    }
+    {"name": "notes.txt", "content": "프롬프트에 사용할 참고 내용"}
   ]
 }
 ```
 
-Uploaded files are stored under `workspace/`. Duplicate names receive a numeric
-suffix.
+파일은 `workspace/`에 저장되며 같은 이름이 있으면 숫자 접미사가 붙습니다.
 
-## Stop
+## GPU 및 모델 선택
 
-```bash
-./stop.sh
-```
+웹 UI에서 선택한 값은 다음 파일에 저장됩니다.
 
-`stop.sh` stops the detached Python service PID from `server.pid` and the Ollama
-PID from `ollama.pid` when those files exist.
+- `gpu-selection`: `auto`, `all`, `cpu`, `none` 또는 GPU 인덱스
+- `model-selection`: Ollama 모델 이름
 
-## Foreground
-
-```bash
-./run_service.sh
-./run_service.sh 8083
-GEMMA4_SERVER_PORT=8084 ./run_service.sh
-./run_service.sh --help
-```
-
-By default `run_service.sh` starts Ollama locally on `127.0.0.1:11434`, uses an
-already installed `gemma4:31b` model when present, pulls it only when missing,
-and exposes the service page on `0.0.0.0:8082`.
-
-## GPU and Model Selection
-
-The service uses two small text files to persist UI selections:
-
-- `gpu-selection`: selected GPU value, such as `auto`, `all`, `cpu`, `none`, or a GPU index
-- `model-selection`: selected Ollama model name
-
-When `gpu-selection` contains a GPU index and `nvidia-smi` is available, startup
-maps that index to a GPU UUID before setting `CUDA_VISIBLE_DEVICES`. Set
-`GEMMA4_CUDA_VISIBLE_USE_UUID=1` for API-side UUID mapping behavior where
-supported.
-
-When `model-selection` exists, startup uses it to override `OLLAMA_MODEL`.
-
-Examples:
+직접 지정하는 예시:
 
 ```bash
 echo 0 > gpu-selection
@@ -334,29 +224,11 @@ echo gemma4:31b > model-selection
 ./run_service.sh
 ```
 
-Use `cpu` or `none` in `gpu-selection` to force `CUDA_VISIBLE_DEVICES=-1`.
+숫자 GPU 인덱스를 선택하고 `nvidia-smi`를 사용할 수 있으면 인덱스를 GPU UUID로 변환해 `CUDA_VISIBLE_DEVICES`에 적용합니다. `cpu` 또는 `none`은 `CUDA_VISIBLE_DEVICES=-1`을 사용합니다.
 
-If an Ollama daemon is already listening, `run_service.sh` unloads its active
-models with `ollama stop`, verifies the PID listening on the Ollama port, and
-restarts only that verified Ollama daemon so the selected GPU environment is
-actually applied. It never uses a broad `pgrep` kill. If the selected numeric
-GPU index is unavailable and exactly one GPU is installed, startup warns and
-uses that GPU. With multiple installed GPUs, an invalid index stops startup
-with the available indexes instead of silently selecting the wrong device. If
-`nvidia-smi` is installed but temporarily returns no GPU rows, the configured
-selection is applied directly to `CUDA_VISIBLE_DEVICES` with a warning rather
-than incorrectly reporting that the selection is invalid.
+GPU가 하나뿐인데 잘못된 인덱스를 지정하면 경고 후 유일한 GPU를 사용합니다. GPU가 여러 개인 경우에는 사용 가능한 인덱스를 표시하고 시작을 중단합니다.
 
-When Ollama is managed by a user or system `ollama.service`, the script stops
-that service before terminating the listener so systemd cannot immediately
-restart it with the old GPU environment. A system service is controlled only
-directly, with cached/non-interactive sudo, or through one sudo password prompt
-when `run_service.sh` is launched from an interactive terminal. In unattended
-execution it never waits for a password and instead stops with an explicit
-command. Services that the script stopped are restored when the foreground
-Gemma4 service exits.
-
-## systemd user service
+## systemd 사용자 서비스
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -364,6 +236,7 @@ cp gemma4-ollama-8082.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now gemma4-ollama-8082.service
 systemctl --user status gemma4-ollama-8082.service
+journalctl --user -u gemma4-ollama-8082.service -f
 ```
 
 ## macOS LaunchAgent
@@ -376,40 +249,35 @@ launchctl enable "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 launchctl kickstart -k "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 ```
 
-Stop it with:
+중지:
 
 ```bash
 launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 ```
 
-## Environment
+## 주요 환경 변수
 
-- `OLLAMA_MODEL`: default `gemma4:31b`
-- `OLLAMA_CONTEXT_LENGTH`: default `8192` so `gemma4:31b` fits on a 24 GB RTX 4090
-- `OLLAMA_KEEP_ALIVE`: default `60m` to keep the loaded model warm between prompts
-- `OLLAMA_BIN`: default discovered `ollama`, or `/usr/local/bin/ollama`
-- `OLLAMA_PID_FILE`: default `ollama.pid` in this directory
-- `API_KEY_CONF_FILE`: default `api_key.conf` in this directory
-- `OLLAMA_BASE_URL`: default `http://127.0.0.1:11434`
-- `OLLAMA_HOST`: default `127.0.0.1:11434`
-- `GEMMA4_SERVER_HOST`: default `0.0.0.0`
-- `GEMMA4_SERVER_PORT`: default `8082`
-- `AUTO_PULL`: default `1`; set `0` to skip `ollama pull`
-- `PROMPT_HISTORY_FILE`: default `prompt_history.txt` in this directory
-- `GEMMA4_ACCESS_LOG_FILE`: default `logs/access.jsonl`
-- `GEMMA4_SAMPLE_DIR`: default `sample` in this directory
-- `GEMMA4_SERVER_WORKSPACE_DIR`: default `workspace` in this directory
-- `GEMMA4_MACH_STATS_DIR`: default `mach_stats` in this directory
-- `GEMMA4_PROMPT_PROCESS_COUNT_FILE`: default `mach_stats/prompt_process_count.txt`
-- `GEMMA4_REQUEST_TIMEOUT`: default `600`
-- `GEMMA4_SESSION_TTL_SECONDS`: default `28800`
-- `GEMMA4_SELECTED_MODEL`: runtime override for selected model
-- `GEMMA4_SELECTED_GPU`: runtime override for selected GPU
-- `GEMMA4_CUDA_VISIBLE_USE_UUID`: map selected GPU indexes to UUIDs when true
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `OLLAMA_MODEL` | `gemma4:31b` | 기본 Ollama 모델 |
+| `OLLAMA_CONTEXT_LENGTH` | `8192` | 모델 컨텍스트 길이 |
+| `OLLAMA_KEEP_ALIVE` | `60m` | 모델 메모리 유지 시간 |
+| `OLLAMA_BIN` | 자동 탐색 | Ollama 실행 파일 경로 |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API 주소 |
+| `OLLAMA_HOST` | `127.0.0.1:11434` | Ollama 리스닝 주소 |
+| `GEMMA4_SERVER_HOST` | `0.0.0.0` | 웹/API 서버 리스닝 주소 |
+| `GEMMA4_SERVER_PORT` | `8082` | 웹/API 서버 포트 |
+| `AUTO_PULL` | `1` | 모델 자동 다운로드 여부 |
+| `API_KEY_CONF_FILE` | `api_key.conf` | 사용자 인증 설정 파일 |
+| `GEMMA4_REQUEST_TIMEOUT` | `600` | 요청 제한 시간(초) |
+| `GEMMA4_SESSION_TTL_SECONDS` | `28800` | 웹 세션 유효 시간(초) |
+| `GEMMA4_SELECTED_MODEL` | 없음 | 선택 모델 런타임 재정의 |
+| `GEMMA4_SELECTED_GPU` | 없음 | 선택 GPU 런타임 재정의 |
+| `GEMMA4_CUDA_VISIBLE_USE_UUID` | 비활성 | GPU 인덱스를 UUID로 매핑 |
 
-## Generated Files
+경로 관련 변수로 `OLLAMA_PID_FILE`, `GPU_SELECTION_FILE`, `MODEL_SELECTION_FILE`, `PROMPT_HISTORY_FILE`, `GEMMA4_ACCESS_LOG_FILE`, `GEMMA4_SAMPLE_DIR`, `GEMMA4_SERVER_WORKSPACE_DIR`, `GEMMA4_MACH_STATS_DIR`, `GEMMA4_PROMPT_PROCESS_COUNT_FILE`, `GEMMA4_LOG_DIR`을 사용할 수 있습니다.
 
-The service may create or update these local files/directories:
+## 실행 중 생성되는 파일
 
 ```text
 api_key.conf
@@ -418,9 +286,39 @@ model-selection
 ollama.pid
 server.pid
 prompt_history.txt
+instances/
 logs/
 workspace/
 mach_stats/
 ```
 
-These files are runtime state and should generally not be committed.
+이 항목들은 인증 정보 또는 실행 상태를 포함할 수 있으므로 일반적으로 Git에 커밋하지 않습니다.
+
+## 문제 해결
+
+상태 확인:
+
+```bash
+curl -fsS http://127.0.0.1:8082/health
+curl -fsS http://127.0.0.1:11434/api/tags
+```
+
+로그 확인:
+
+```bash
+tail -f logs/server.log
+tail -f logs/ollama.log
+```
+
+포트 충돌 시 다른 포트를 사용합니다.
+
+```bash
+./run_service.sh 8083
+```
+
+모델 자동 다운로드를 끄거나 사용법을 확인하려면 다음 명령을 사용합니다.
+
+```bash
+AUTO_PULL=0 ./run_service.sh
+./run_service.sh --help
+```
