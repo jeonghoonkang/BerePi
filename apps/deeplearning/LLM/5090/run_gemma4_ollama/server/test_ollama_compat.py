@@ -6,6 +6,23 @@ import server
 
 
 class OllamaCompatibilityTests(unittest.TestCase):
+    def test_index_contains_clipboard_and_upload_ocr_tabs(self) -> None:
+        html = server.INDEX_HTML
+
+        for element_id in (
+            "ocrClipboardTab",
+            "ocrUploadTab",
+            "ocrClipboardPanel",
+            "ocrUploadPanel",
+            "ocrPasteZone",
+            "runOcrClipboard",
+            "runOcrUpload",
+        ):
+            self.assertIn(f'id="{element_id}"', html)
+
+        self.assertIn('ocrPasteZone.addEventListener("paste"', html)
+        self.assertIn('fetch("/api/generate"', html)
+
     def test_tags_payload_proxies_local_ollama_response(self) -> None:
         expected = {
             "models": [

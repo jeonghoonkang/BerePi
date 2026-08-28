@@ -298,6 +298,39 @@ INDEX_HTML = """<!doctype html>
     .prompt-box textarea {
       min-height: 150px;
     }
+    .ocr-source-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 14px 0 10px;
+    }
+    .ocr-source-tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .ocr-source-panel {
+      display: none;
+    }
+    .ocr-source-panel.active {
+      display: block;
+    }
+    .clipboard-image-drop {
+      display: grid;
+      place-items: center;
+      min-height: 110px;
+      padding: 16px;
+      border: 2px dashed var(--line);
+      border-radius: 10px;
+      background: #f8f9fa;
+      color: var(--muted);
+      text-align: center;
+      cursor: text;
+      outline: none;
+    }
+    .clipboard-image-drop:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(32, 201, 151, 0.15);
+    }
     .history-select {
       min-width: 0;
       width: 100%;
@@ -745,8 +778,8 @@ if __name__ == "__main__":
     </div>
 
     <section class="tab-panel" id="ocrPanel">
-      <h2>OCR</h2>
-      <p>../client OCR workflow: upload an image and extract readable text through the current Gemma4 vision model.</p>
+      <h2>이미지 OCR</h2>
+      <p>클립보드의 스크린샷을 붙여넣거나 이미지 파일을 업로드한 뒤 현재 선택된 비전 모델로 글자를 추출합니다.</p>
       <div class="vision-grid">
         <div>
           <div class="auth-box">
@@ -759,29 +792,47 @@ if __name__ == "__main__":
               <input id="ocrPassword" type="password" autocomplete="current-password">
             </div>
           </div>
-          <input id="ocrImage" type="file" accept="image/*">
+
+          <div class="ocr-source-tabs" role="tablist" aria-label="OCR 이미지 입력 방식">
+            <button class="ocr-source-tab active" id="ocrClipboardTab" data-ocr-source="ocrClipboardPanel" type="button" role="tab" aria-selected="true">클립보드 스크린샷</button>
+            <button class="ocr-source-tab" id="ocrUploadTab" data-ocr-source="ocrUploadPanel" type="button" role="tab" aria-selected="false">이미지 파일 업로드</button>
+          </div>
+
+          <div class="ocr-source-panel active" id="ocrClipboardPanel" role="tabpanel">
+            <div class="clipboard-image-drop" id="ocrPasteZone" tabindex="0">이 영역을 클릭하고 Ctrl+V 또는 Cmd+V로 스크린샷을 붙여넣으세요.</div>
+            <div class="row">
+              <button id="pasteOcrClipboard" type="button">클립보드 이미지 가져오기</button>
+              <button class="primary" id="runOcrClipboard" type="button">붙여넣은 이미지 OCR 실행</button>
+            </div>
+          </div>
+
+          <div class="ocr-source-panel" id="ocrUploadPanel" role="tabpanel">
+            <label for="ocrImage">OCR 이미지 파일</label>
+            <input id="ocrImage" type="file" accept="image/*">
+            <div class="row">
+              <button class="primary" id="runOcrUpload" type="button">업로드 이미지 OCR 실행</button>
+              <button class="demo-button" id="runOcrDemo" type="button">데모 이미지 OCR</button>
+            </div>
+          </div>
+
           <div class="vision-preview" id="ocrPreview">No image selected.</div>
           <div class="row">
-            <button class="primary" id="runOcr">Run OCR</button>
-            <button class="demo-button" id="runOcrDemo" type="button">Run Demo OCR</button>
             <span id="ocrStatus"></span>
           </div>
         </div>
         <div>
+          <label for="ocrPrompt">OCR 지시문</label>
           <textarea id="ocrPrompt">Extract all readable text from this image. Preserve line breaks where useful. If the image contains Korean text, return Korean text as accurately as possible.</textarea>
           <div class="clipboard-box">
-            <label for="ocrClipboardText">Clipboard Text / Captured Image</label>
-            <textarea id="ocrClipboardText"></textarea>
-            <div class="row">
-              <button id="pasteOcrClipboard" type="button">Paste Clipboard</button>
-              <span id="ocrClipboardStatus"></span>
-            </div>
+            <label for="ocrClipboardText">추가 참고 텍스트(선택)</label>
+            <textarea id="ocrClipboardText" placeholder="이미지와 함께 모델에 전달할 참고 텍스트를 입력할 수 있습니다."></textarea>
+            <span id="ocrClipboardStatus"></span>
           </div>
           <div class="answer-actions">
-            <button id="copyOcr">Copy OCR Result</button>
+            <button id="copyOcr">OCR 결과 복사</button>
             <span id="copyOcrStatus"></span>
           </div>
-          <div class="vision-output" id="ocrOutput">Waiting for OCR.</div>
+          <div class="vision-output" id="ocrOutput">OCR 실행을 기다리는 중입니다.</div>
         </div>
       </div>
     </section>
@@ -906,6 +957,9 @@ if __name__ == "__main__":
     const ocrOutput = document.getElementById("ocrOutput");
     const ocrStatus = document.getElementById("ocrStatus");
     const copyOcrStatus = document.getElementById("copyOcrStatus");
+    const ocrPasteZone = document.getElementById("ocrPasteZone");
+    const ocrSourceTabs = Array.from(document.querySelectorAll(".ocr-source-tab"));
+    const ocrSourcePanels = Array.from(document.querySelectorAll(".ocr-source-panel"));
     const yoloImage = document.getElementById("yoloImage");
     const yoloPreview = document.getElementById("yoloPreview");
     const yoloPrompt = document.getElementById("yoloPrompt");
@@ -1273,11 +1327,42 @@ if __name__ == "__main__":
       await pasteClipboardText(textTarget, status);
     }
 
+    async function pasteClipboardImage(input, preview, pasteZone, status) {
+      status.textContent = "클립보드 이미지를 읽는 중입니다...";
+      try {
+        const imageFile = await clipboardImageFileFromRead();
+        if (!imageFile) {
+          pasteZone.focus();
+          status.textContent = "클립보드에 이미지가 없습니다. 스크린샷을 복사한 뒤 Ctrl+V 또는 Cmd+V를 누르세요.";
+          return;
+        }
+        await useClipboardImage(imageFile, input, preview, status);
+        status.textContent = "클립보드 이미지를 가져왔습니다. OCR 실행 버튼을 누르세요.";
+      } catch (_) {
+        pasteZone.focus();
+        status.textContent = "브라우저의 자동 읽기가 차단되었습니다. 이 영역에서 Ctrl+V 또는 Cmd+V를 누르세요.";
+      }
+    }
+
     async function handleClipboardPaste(event, input, preview, status) {
       const imageFile = clipboardImageFileFromPaste(event);
       if (!imageFile) return;
       event.preventDefault();
       await useClipboardImage(imageFile, input, preview, status);
+    }
+
+    function showOcrSource(panelId) {
+      for (const tab of ocrSourceTabs) {
+        const active = tab.dataset.ocrSource === panelId;
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", String(active));
+      }
+      for (const panel of ocrSourcePanels) {
+        panel.classList.toggle("active", panel.id === panelId);
+      }
+      if (panelId === "ocrClipboardPanel") {
+        ocrPasteZone.focus();
+      }
     }
 
     async function copyAnswer() {
@@ -2023,17 +2108,20 @@ if __name__ == "__main__":
 
     document.getElementById("refresh").addEventListener("click", refreshStatus);
     pageTabs.forEach((tab) => tab.addEventListener("click", () => showTab(tab.dataset.tab)));
+    ocrSourceTabs.forEach((tab) => tab.addEventListener("click", () => showOcrSource(tab.dataset.ocrSource)));
     copyAnswerButton.addEventListener("click", copyAnswer);
     ocrImage.addEventListener("change", () => previewImage(ocrImage, ocrPreview));
     yoloImage.addEventListener("change", () => previewImage(yoloImage, yoloPreview));
-    document.getElementById("runOcr").addEventListener("click", () => runVisionTask({
-      input: ocrImage,
-      promptInput: ocrPrompt,
-      clipboardInput: ocrClipboardText,
-      output: ocrOutput,
-      status: ocrStatus,
-      label: "OCR"
-    }));
+    for (const buttonId of ["runOcrClipboard", "runOcrUpload"]) {
+      document.getElementById(buttonId).addEventListener("click", () => runVisionTask({
+        input: ocrImage,
+        promptInput: ocrPrompt,
+        clipboardInput: ocrClipboardText,
+        output: ocrOutput,
+        status: ocrStatus,
+        label: "OCR"
+      }));
+    }
     document.getElementById("runYolo").addEventListener("click", () => runVisionTask({
       input: yoloImage,
       promptInput: yoloPrompt,
@@ -2045,10 +2133,10 @@ if __name__ == "__main__":
     }));
     document.getElementById("copyOcr").addEventListener("click", () => copyPanelText(ocrOutput, copyOcrStatus));
     document.getElementById("copyYolo").addEventListener("click", () => copyPanelText(yoloOutput, copyYoloStatus));
-    document.getElementById("pasteOcrClipboard").addEventListener("click", () => pasteClipboardContent(
+    document.getElementById("pasteOcrClipboard").addEventListener("click", () => pasteClipboardImage(
       ocrImage,
       ocrPreview,
-      ocrClipboardText,
+      ocrPasteZone,
       ocrClipboardStatus
     ));
     document.getElementById("pasteYoloClipboard").addEventListener("click", () => pasteClipboardContent(
@@ -2057,6 +2145,12 @@ if __name__ == "__main__":
       yoloClipboardText,
       yoloClipboardStatus
     ));
+    ocrPasteZone.addEventListener("paste", async (event) => {
+      await handleClipboardPaste(event, ocrImage, ocrPreview, ocrClipboardStatus);
+      if (selectedImageFile(ocrImage)) {
+        ocrClipboardStatus.textContent = "스크린샷을 붙여넣었습니다. OCR 실행 버튼을 누르세요.";
+      }
+    });
     ocrClipboardText.addEventListener("paste", (event) => handleClipboardPaste(
       event,
       ocrImage,
