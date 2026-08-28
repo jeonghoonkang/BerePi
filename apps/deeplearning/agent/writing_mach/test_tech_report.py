@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -58,11 +59,13 @@ class TechReportPdfTests(unittest.TestCase):
                 ["python", "client_service.py", "--llm-password", "secret", "--run-on-start"],
                 history,
                 limit=2,
+                executed_at=datetime(2026, 8, 28, 14, 30, tzinfo=timezone.utc),
             )
 
             entries = history.read_text(encoding="utf-8").splitlines()
 
         self.assertEqual(len(entries), 2)
+        self.assertTrue(entries[0].startswith("[2026-08-28T14:30:00+00:00] "))
         self.assertIn("python client_service.py", entries[0])
         self.assertIn("--llm-password ***", entries[0])
         self.assertNotIn("secret", entries[0])

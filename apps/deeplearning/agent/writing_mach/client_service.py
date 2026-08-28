@@ -21,6 +21,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -95,16 +96,19 @@ def record_command_history(
     argv: list[str] | None = None,
     history_path: Path = COMMAND_HISTORY_PATH,
     limit: int = COMMAND_HISTORY_LIMIT,
+    executed_at: datetime | None = None,
 ) -> None:
-    """Prepend the current invocation and retain at most ``limit`` entries."""
+    """Prepend the timestamped invocation and retain at most ``limit`` entries."""
     invocation = list(argv if argv is not None else getattr(sys, "orig_argv", []))
     if not invocation:
         invocation = [Path(sys.executable).name, *sys.argv]
     command = subprocess.list2cmdline(sanitize_command_argv(invocation))
+    execution_time = (executed_at or datetime.now().astimezone()).isoformat(timespec="seconds")
+    entry = f"[{execution_time}] {command}"
     with COMMAND_HISTORY_LOCK:
         try:
             existing = history_path.read_text(encoding="utf-8").splitlines() if history_path.exists() else []
-            entries = [command, *existing][: max(1, limit)]
+            entries = [entry, *existing][: max(1, limit)]
             temporary = history_path.with_name(f"{history_path.name}.{os.getpid()}.tmp")
             temporary.write_text("\n".join(entries) + "\n", encoding="utf-8")
             temporary.replace(history_path)
