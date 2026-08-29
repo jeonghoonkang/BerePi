@@ -31,7 +31,7 @@ sudo journalctl -u ssh --since "${CHECK_DAYS} days ago" --no-pager > "${JOURNAL_
 
 echo
 echo "SSH 접속 IP별 성공/실패 횟수와 성공 로그인 ID"
-printf '%-40s %10s %10s  %s\n' "IP 주소" "성공" "실패" "성공 로그인 ID"
+printf '%-40s %10s %10s  %s\n' "IP 주소" "성공" "실패" "로그인 ID"
 printf '%-40s %10s %10s  %s\n' "----------------------------------------" "----------" "----------" "--------------------"
 
 result="$(awk -v users_file="${SUCCESS_USERS_FILE}" '
