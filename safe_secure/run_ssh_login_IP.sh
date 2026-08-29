@@ -13,7 +13,9 @@ if (( $# < 1 || $# > 2 )) || [[ ! ${CHECK_DAYS} =~ ^[1-9][0-9]*$ ]] ||
     exit 1
 fi
 
-LOG_FILE="${SCRIPT_DIR}/run_ssh_login_IP_$(date '+%Y%m%d_%H%M%S').log"
+LOG_DIR="${SCRIPT_DIR}/log"
+mkdir -p "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/run_ssh_login_IP_$(date '+%Y%m%d_%H%M%S').log"
 JOURNAL_FILE="$(mktemp)"
 SUCCESS_USERS_FILE="$(mktemp)"
 trap 'rm -f -- "${JOURNAL_FILE}" "${SUCCESS_USERS_FILE}"' EXIT

@@ -18,6 +18,14 @@ if [[ ! -f "${BLOCK_LIST}" ]]; then
     exit 1
 fi
 
+LOG_DIR="${SCRIPT_DIR}/log"
+mkdir -p "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/run_secure_$(date '+%Y%m%d_%H%M%S').log"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+echo "실행 시각: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+echo "로그 파일: ${LOG_FILE}"
+
 sudo -v
 
 echo "최근 ${CHECK_DAYS}일간의 SSH 접속 공격 기록입니다."
