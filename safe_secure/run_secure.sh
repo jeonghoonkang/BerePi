@@ -200,6 +200,27 @@ fi
 
 echo "완료: run_secure_block_ip_list.txt의 모든 IP 주소가 sshd 차단 목록에 설정되었습니다."
 
+host_name="$(hostname 2>/dev/null || echo '확인 불가')"
+host_ips="$(hostname -I 2>/dev/null | xargs || true)"
+if [[ -z ${host_ips} ]] && command -v ip > /dev/null 2>&1; then
+    host_ips="$(ip -o addr show scope global 2>/dev/null | awk '{ print $4 }' | cut -d/ -f1 | xargs || true)"
+fi
+host_ips="${host_ips:-확인 불가}"
+execution_time="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+
+if hosts_deny_mtime="$(sudo stat -c '%y' "${HOSTS_DENY}" 2>/dev/null)"; then
+    :
+elif hosts_deny_mtime="$(sudo stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S %Z' "${HOSTS_DENY}" 2>/dev/null)"; then
+    :
+else
+    hosts_deny_mtime="확인 불가"
+fi
+
+audit_entry="# 실행 기록 | 호스트명: ${host_name} | IP: ${host_ips} | 실행시간: ${execution_time} | ${HOSTS_DENY} 최종수정: ${hosts_deny_mtime}"
+FIDELITY_LOG="${LOG_DIR}/deny_file_fidelity_log.txt"
+printf '%s\n' "${audit_entry}" >> "${FIDELITY_LOG}"
+echo "별도 이력 로그에 실행 기록을 저장했습니다: ${FIDELITY_LOG}"
+
 echo "IP 차단 목록의 Git 변경 사항을 확인합니다."
 if ! command -v git > /dev/null 2>&1; then
     echo "오류: git 명령을 찾을 수 없어 차단 목록을 커밋·푸시하지 못했습니다." >&2
