@@ -1,0 +1,3 @@
+[submodule "workshot/agent"]
+	path = workshot/agent
+	url = https://github.com/langchain-ai/deepagents.git
