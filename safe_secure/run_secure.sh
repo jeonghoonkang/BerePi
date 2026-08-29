@@ -199,3 +199,37 @@ if (( missing != 0 )); then
 fi
 
 echo "완료: run_secure_block_ip_list.txt의 모든 IP 주소가 sshd 차단 목록에 설정되었습니다."
+
+echo "IP 차단 목록의 Git 변경 사항을 확인합니다."
+if ! command -v git > /dev/null 2>&1; then
+    echo "오류: git 명령을 찾을 수 없어 차단 목록을 커밋·푸시하지 못했습니다." >&2
+    exit 1
+fi
+
+if ! git_repo_root="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null)"; then
+    echo "오류: ${SCRIPT_DIR}가 Git 저장소에 포함되어 있지 않습니다." >&2
+    exit 1
+fi
+
+block_list_relative="$(git -C "${git_repo_root}" ls-files --full-name "${BLOCK_LIST}")"
+if [[ -z ${block_list_relative} ]]; then
+    echo "오류: 차단 목록이 Git에서 추적되고 있지 않습니다: ${BLOCK_LIST}" >&2
+    exit 1
+fi
+
+if git -C "${git_repo_root}" diff --quiet HEAD -- "${block_list_relative}"; then
+    echo "차단 목록에 변경이 없어 커밋·푸시를 건너뜁니다."
+else
+    current_branch="$(git -C "${git_repo_root}" branch --show-current)"
+    if [[ -z ${current_branch} ]]; then
+        echo "오류: 분리된 HEAD 상태에서는 자동 푸시할 수 없습니다." >&2
+        exit 1
+    fi
+
+    commit_date="$(date '+%Y-%m-%d')"
+    git -C "${git_repo_root}" add -- "${block_list_relative}"
+    git -C "${git_repo_root}" -c commit.gpgsign=false commit --only \
+        -m "SSH 자동 차단 IP 목록 갱신 ${commit_date}" -- "${block_list_relative}"
+    git -C "${git_repo_root}" push -u origin "${current_branch}"
+    echo "차단 목록 커밋·푸시 완료: ${current_branch}"
+fi

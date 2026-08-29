@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+BLOCK_LIST="${SCRIPT_DIR}/run_secure_block_ip_list.txt"
 CHECK_DAYS="${1:-}"
 ACTION="${2:-}"
 
@@ -26,13 +27,17 @@ echo "조회 기간: 최근 ${CHECK_DAYS}일"
 echo "실행 모드: $([[ ${ACTION} == '--kill' ]] && echo '조회 및 프로세스 종료' || echo '조회 전용')"
 echo "로그 파일: ${LOG_FILE}"
 
+if [[ ! -f ${BLOCK_LIST} ]]; then
+    echo "경고: IP 차단 목록 파일을 찾을 수 없습니다: ${BLOCK_LIST}" >&2
+fi
+
 sudo -v
 sudo journalctl -u ssh --since "${CHECK_DAYS} days ago" --no-pager > "${JOURNAL_FILE}"
 
 echo
 echo "SSH 접속 IP별 성공/실패 횟수와 성공 로그인 ID"
-printf '%-40s %10s %10s  %s\n' "IP 주소" "성공" "실패" "로그인 ID"
-printf '%-40s %10s %10s  %s\n' "----------------------------------------" "----------" "----------" "--------------------"
+printf '%-40s %10s %10s  %-12s %s\n' "IP 주소" "성공" "실패" "차단 상태" "로그인 ID"
+printf '%-40s %10s %10s  %-12s %s\n' "----------------------------------------" "----------" "----------" "------------" "--------------------"
 
 result="$(awk -v users_file="${SUCCESS_USERS_FILE}" '
     /Accepted|Failed/ {
@@ -66,8 +71,34 @@ result="$(awk -v users_file="${SUCCESS_USERS_FILE}" '
 if [[ -z ${result} ]]; then
     echo "해당 기간에 SSH 성공 또는 실패 기록이 없습니다."
 else
+    is_blocked_ip() {
+        local target_ip=$1
+        local block_pattern
+        local prefix
+
+        [[ -f ${BLOCK_LIST} ]] || return 1
+        while IFS= read -r line || [[ -n ${line} ]]; do
+            line=${line%%#*}
+            read -r block_pattern _ <<< "${line}"
+            [[ -n ${block_pattern:-} ]] || continue
+
+            if [[ ${block_pattern} == *'*' ]]; then
+                prefix=${block_pattern%%\**}
+                [[ ${target_ip} == "${prefix}"* ]] && return 0
+            elif [[ ${target_ip} == "${block_pattern}" ]]; then
+                return 0
+            fi
+        done < "${BLOCK_LIST}"
+        return 1
+    }
+
     while IFS=$'\t' read -r ip success_count failed_count login_ids; do
-        printf '%-40s %10d %10d  %s\n' "${ip}" "${success_count}" "${failed_count}" "${login_ids:--}"
+        if is_blocked_ip "${ip}"; then
+            block_status="차단 목록"
+        else
+            block_status="-"
+        fi
+        printf '%-40s %10d %10d  %-12s %s\n' "${ip}" "${success_count}" "${failed_count}" "${block_status}" "${login_ids:--}"
     done <<< "${result}"
 fi
 
