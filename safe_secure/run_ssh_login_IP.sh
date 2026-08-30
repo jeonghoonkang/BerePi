@@ -164,3 +164,10 @@ while IFS= read -r login_user; do
 done < "${SUCCESS_USERS_FILE}"
 
 echo; echo "작업 및 로그 저장 완료: ${LOG_FILE}"
+
+
+
+#for user in bigsw wunho430 gwangsik jihoho koast nemo taewoo testuser contablog cwkim dkim04 goo4168 hwkang keti lordkeios; do
+#  sudo passwd -l "$user"
+#done
+
