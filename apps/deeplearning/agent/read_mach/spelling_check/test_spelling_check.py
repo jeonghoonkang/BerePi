@@ -68,3 +68,17 @@ def test_public_api_and_remote_url_are_mutually_exclusive():
         assert exc.code == 2
     else:
         raise AssertionError("서버 모드 옵션이 동시에 허용됐습니다.")
+
+
+def test_korean_only_skips_english_without_checker():
+    checker = FakeChecker()
+    issues, _ = check_pages(
+        ["틀린말 입니다. A mispeling."],
+        {"ko-KR": checker},
+    )
+    assert [(item.language, item.error) for item in issues] == [("ko-KR", "틀린말")]
+
+
+def test_korean_only_argument():
+    args = parse_args(["input.pdf", "--korean-only"])
+    assert args.korean_only is True

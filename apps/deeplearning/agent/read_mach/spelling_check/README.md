@@ -52,7 +52,19 @@ py -3 spelling_check.py input.pdf
 py -3 spelling_check.py input.pdf --output result.json
 ```
 
+한글 맞춤법만 검사하려면 다음 옵션을 사용합니다. 이 모드에서는 영어 LanguageTool을 시작하지 않으므로 Java가 필요 없고 LanguageTool 다운로드도 발생하지 않습니다.
+
+```bash
+python3 spelling_check.py ../input/report_spelling.pdf --korean-only --output result.json
+```
+
 기본값은 호출 제한이 없는 로컬 검사입니다. 한글은 `hunspell-ko`, 영어는 LanguageTool을 사용합니다. 영어 LanguageTool은 최초 실행 시 약 260MB를 내려받습니다. 313페이지처럼 긴 PDF에는 기본 로컬 모드를 사용하세요.
+
+`libawt_xawt.so` 오류가 발생하면 headless가 아닌 전체 Java 런타임을 설치합니다.
+
+```bash
+sudo apt install -y openjdk-17-jre
+```
 
 기존 사내 LanguageTool 서버가 있다면 다음과 같이 지정합니다.
 

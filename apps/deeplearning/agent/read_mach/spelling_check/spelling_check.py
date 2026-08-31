@@ -200,7 +200,10 @@ def check_pages(
             empty_pages.append(page_number)
             continue
         for language, segment in iter_language_segments(text):
-            for match in checkers[language].check(segment):
+            checker = checkers.get(language)
+            if checker is None:
+                continue
+            for match in checker.check(segment):
                 issues.append(issue_from_match(page_number, language, segment, match))
     return issues, empty_pages
 
@@ -209,13 +212,16 @@ def create_checkers(
     remote_url: str | None = None,
     *,
     public_api: bool = False,
+    korean_only: bool = False,
 ) -> dict[str, Checker]:
+    korean_checker = KoreanHunspellChecker()
+    if korean_only:
+        return {"ko-KR": korean_checker}
     try:
         import language_tool_python
     except ImportError as exc:
+        korean_checker.close()
         raise RuntimeError("language-tool-python이 필요합니다. requirements.txt를 설치해 주세요.") from exc
-
-    korean_checker = KoreanHunspellChecker()
     if public_api:
         return {"ko-KR": korean_checker, "en-US": language_tool_python.LanguageToolPublicAPI("en-US")}
     kwargs = {"remote_server": remote_url} if remote_url else {}
@@ -266,6 +272,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="무료 공개 API 사용 (긴 PDF는 요청 한도 때문에 권장하지 않음)",
     )
+    parser.add_argument(
+        "--korean-only",
+        action="store_true",
+        help="한글만 hunspell-ko로 검사 (영어 LanguageTool 및 Java 사용 안 함)",
+    )
     return parser.parse_args(argv)
 
 
@@ -279,8 +290,13 @@ def main(argv: list[str] | None = None) -> int:
     checkers: dict[str, Checker] = {}
     try:
         pages = extract_pdf_pages(pdf_path)
-        print("LanguageTool 검사기를 준비하는 중...", file=sys.stderr, flush=True)
-        checkers = create_checkers(args.remote_url, public_api=args.public_api)
+        mode = "한글 Hunspell" if args.korean_only else "한글 Hunspell 및 영어 LanguageTool"
+        print(f"{mode} 검사기를 준비하는 중...", file=sys.stderr, flush=True)
+        checkers = create_checkers(
+            args.remote_url,
+            public_api=args.public_api,
+            korean_only=args.korean_only,
+        )
         issues, empty_pages = check_pages(pages, checkers, progress=print_progress)
         print_report(pdf_path, pages, issues, empty_pages)
         if args.output:
