@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from spelling_check import check_pages, iter_language_segments, parse_args
+from spelling_check import check_pages, format_duration, iter_language_segments, parse_args
 
 
 @dataclass
@@ -82,3 +82,9 @@ def test_korean_only_skips_english_without_checker():
 def test_korean_only_argument():
     args = parse_args(["input.pdf", "--korean-only"])
     assert args.korean_only is True
+
+
+def test_format_duration():
+    assert format_duration(0) == "00:00:00"
+    assert format_duration(65) == "00:01:05"
+    assert format_duration(90061) == "25:01:01"

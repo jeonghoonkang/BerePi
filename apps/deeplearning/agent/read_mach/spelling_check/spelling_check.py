@@ -9,7 +9,9 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol
 
@@ -251,14 +253,48 @@ def print_report(pdf_path: Path, pages: list[str], issues: list[SpellingIssue], 
         print(f"문맥: {issue.context}")
 
 
-def print_progress(page_number: int, total_pages: int) -> None:
-    """Display the currently checked page immediately."""
-    print(
-        f"\r맞춤법 검사 중: {page_number}/{total_pages} 페이지",
-        end="" if page_number < total_pages else "\n",
-        file=sys.stderr,
-        flush=True,
-    )
+def format_duration(seconds: float) -> str:
+    """Format a duration as HH:MM:SS, allowing jobs longer than one day."""
+    seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+class ProgressReporter:
+    """Display current page, elapsed time, remaining time, and estimated finish."""
+
+    def __init__(self) -> None:
+        self.started_at = time.monotonic()
+
+    def __call__(self, page_number: int, total_pages: int) -> None:
+        elapsed = time.monotonic() - self.started_at
+        completed_pages = page_number - 1
+        if completed_pages:
+            remaining_seconds = elapsed / completed_pages * (total_pages - completed_pages)
+            finish_at = datetime.now() + timedelta(seconds=remaining_seconds)
+            estimate = (
+                f"남은 시간 {format_duration(remaining_seconds)} | "
+                f"예상 종료 {finish_at:%Y-%m-%d %H:%M:%S}"
+            )
+        else:
+            estimate = "남은 시간 계산 중 | 예상 종료 계산 중"
+        print(
+            f"\r맞춤법 검사 중: {page_number}/{total_pages} 페이지 | "
+            f"경과 {format_duration(elapsed)} | {estimate}",
+            end="",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def finish(self, total_pages: int) -> None:
+        elapsed = time.monotonic() - self.started_at
+        print(
+            f"\r맞춤법 검사 완료: {total_pages}/{total_pages} 페이지 | "
+            f"총 소요 {format_duration(elapsed)}".ljust(120),
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -288,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     checkers: dict[str, Checker] = {}
+    progress_reporter: ProgressReporter | None = None
     try:
         pages = extract_pdf_pages(pdf_path)
         mode = "한글 Hunspell" if args.korean_only else "한글 Hunspell 및 영어 LanguageTool"
@@ -297,7 +334,9 @@ def main(argv: list[str] | None = None) -> int:
             public_api=args.public_api,
             korean_only=args.korean_only,
         )
-        issues, empty_pages = check_pages(pages, checkers, progress=print_progress)
+        progress_reporter = ProgressReporter()
+        issues, empty_pages = check_pages(pages, checkers, progress=progress_reporter)
+        progress_reporter.finish(len(pages))
         print_report(pdf_path, pages, issues, empty_pages)
         if args.output:
             output_path = args.output.expanduser().resolve()
@@ -313,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nJSON 저장: {output_path}")
         return 1 if issues else 0
     except Exception as exc:
+        if progress_reporter is not None:
+            print(file=sys.stderr)
         print(f"오류: {exc}", file=sys.stderr)
         return 2
     finally:
