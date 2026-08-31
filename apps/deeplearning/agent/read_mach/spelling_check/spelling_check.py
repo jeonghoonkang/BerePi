@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
+import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -33,6 +35,80 @@ class SpellingIssue:
     message: str
     context: str
     rule_id: str
+
+
+@dataclass(frozen=True)
+class HunspellMatch:
+    offset: int
+    error_length: int
+    replacements: list[str]
+    message: str = "한국어 사전에 없는 단어입니다."
+    rule_id: str = "HUNSPELL_KO"
+
+
+class KoreanHunspellChecker:
+    """Check Korean words with the system hunspell-ko dictionary."""
+
+    def __init__(self) -> None:
+        executable = shutil.which("hunspell")
+        if not executable:
+            raise RuntimeError(
+                "한글 검사기 hunspell을 찾을 수 없습니다. "
+                "sudo apt install -y hunspell hunspell-ko 명령으로 설치해 주세요."
+            )
+        self._process = subprocess.Popen(
+            [executable, "-a", "-d", "ko_KR", "-i", "UTF-8"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        assert self._process.stdout is not None
+        banner = self._process.stdout.readline()
+        if not banner.startswith("@(#)"):
+            error = self._process.stderr.read() if self._process.stderr else banner
+            self.close()
+            raise RuntimeError(f"hunspell-ko 사전을 시작하지 못했습니다: {error.strip()}")
+
+    def _check_word(self, word: str) -> tuple[bool, list[str]]:
+        if self._process.poll() is not None or self._process.stdin is None or self._process.stdout is None:
+            raise RuntimeError("hunspell 프로세스가 종료되었습니다.")
+        self._process.stdin.write(word + "\n")
+        self._process.stdin.flush()
+        lines: list[str] = []
+        while True:
+            line = self._process.stdout.readline()
+            if not line or line in ("\n", "\r\n"):
+                break
+            lines.append(line.strip())
+        for line in lines:
+            if line.startswith(("*", "+", "-")):
+                return True, []
+            if line.startswith("&") and ":" in line:
+                suggestions = [item.strip() for item in line.split(":", 1)[1].split(",")]
+                return False, [item for item in suggestions if item]
+            if line.startswith("#"):
+                return False, []
+        return True, []
+
+    def check(self, text: str) -> Iterable[HunspellMatch]:
+        for token in re.finditer(r"[가-힣]+", text):
+            word = token.group(0)
+            correct, suggestions = self._check_word(word)
+            if not correct:
+                yield HunspellMatch(token.start(), len(word), suggestions)
+
+    def close(self) -> None:
+        process = getattr(self, "_process", None)
+        if process and process.poll() is None:
+            if process.stdin:
+                process.stdin.close()
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
 
 
 def normalize_text(text: str) -> str:
@@ -139,21 +215,18 @@ def create_checkers(
     except ImportError as exc:
         raise RuntimeError("language-tool-python이 필요합니다. requirements.txt를 설치해 주세요.") from exc
 
+    korean_checker = KoreanHunspellChecker()
     if public_api:
-        return {
-            language: language_tool_python.LanguageToolPublicAPI(language)
-            for language in ("ko-KR", "en-US")
-        }
+        return {"ko-KR": korean_checker, "en-US": language_tool_python.LanguageToolPublicAPI("en-US")}
     kwargs = {"remote_server": remote_url} if remote_url else {}
     try:
-        return {
-            language: language_tool_python.LanguageTool(language, **kwargs)
-            for language in ("ko-KR", "en-US")
-        }
+        english_checker = language_tool_python.LanguageTool("en-US", **kwargs)
+        return {"ko-KR": korean_checker, "en-US": english_checker}
     except Exception as exc:
+        korean_checker.close()
         mode = f"원격 서버({remote_url})" if remote_url else "로컬 서버"
         raise RuntimeError(
-            f"LanguageTool {mode}를 시작하지 못했습니다: {exc}. "
+            f"영어 LanguageTool {mode}를 시작하지 못했습니다: {exc}. "
             "로컬 모드는 Java가 필요합니다. Java를 설치하거나 --remote-url을 사용해 주세요."
         ) from exc
 

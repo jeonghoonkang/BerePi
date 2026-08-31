@@ -13,11 +13,11 @@ py -3 -m pip install -r requirements.txt
 
 ### Java 17 설치 (Ubuntu/WSL)
 
-로컬 LanguageTool 실행에는 Java 17 이상이 필요합니다. Ubuntu 또는 WSL에서는 다음 명령으로 설치합니다.
+영어 로컬 LanguageTool 실행에는 Java 17 이상이 필요합니다. 한글 검사는 LanguageTool이 한국어를 지원하지 않으므로 `hunspell-ko` 사전을 사용합니다. Ubuntu 또는 WSL에서는 다음 명령으로 모두 설치합니다.
 
 ```bash
 sudo apt update
-sudo apt install -y openjdk-17-jre-headless
+sudo apt install -y openjdk-17-jre-headless hunspell hunspell-ko
 ```
 
 설치된 Java 버전을 확인합니다.
@@ -30,6 +30,12 @@ java -version
 
 ```bash
 sudo update-alternatives --config java
+```
+
+한국어 사전 설치 여부도 확인합니다.
+
+```bash
+hunspell -D 2>&1 | grep ko_KR
 ```
 
 WSL에서 실행할 때는 Python 의존성도 WSL 환경에 별도로 설치해야 합니다.
@@ -46,7 +52,7 @@ py -3 spelling_check.py input.pdf
 py -3 spelling_check.py input.pdf --output result.json
 ```
 
-기본값은 호출 제한이 없는 로컬 LanguageTool 서버입니다. 최초 실행 시 LanguageTool을 내려받으며 Java가 필요합니다. 313페이지처럼 긴 PDF에는 기본 로컬 모드를 사용하세요.
+기본값은 호출 제한이 없는 로컬 검사입니다. 한글은 `hunspell-ko`, 영어는 LanguageTool을 사용합니다. 영어 LanguageTool은 최초 실행 시 약 260MB를 내려받습니다. 313페이지처럼 긴 PDF에는 기본 로컬 모드를 사용하세요.
 
 기존 사내 LanguageTool 서버가 있다면 다음과 같이 지정합니다.
 
