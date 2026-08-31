@@ -4,12 +4,66 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BLOCK_LIST="${SCRIPT_DIR}/run_secure_block_ip_list.txt"
+REVIEW_LIST="${SCRIPT_DIR}/run_secure_review_ip_list.txt"
 HOSTS_DENY="/etc/hosts.deny"
-CHECK_DAYS="${1:-1}"
+CHECK_DAYS=1
+DRY_RUN=0
+declare -a APPROVED_PRIVATE_IPS=()
+declare -a APPROVED_PRIVATE_CIDRS=()
 
-if (( $# > 1 )) || [[ ! ${CHECK_DAYS} =~ ^[1-9][0-9]*$ ]]; then
-    echo "사용법: $0 [조회할_일수]" >&2
-    echo "예: $0 1, $0 2, $0 100" >&2
+usage() {
+    cat <<EOF
+사용법: $0 [조회할 일수] [옵션]
+       $0 --days 일수 [옵션]
+
+옵션:
+  --days N                       최근 N일의 SSH 실패 기록 조회
+  --include-private-ip IP        지정한 사설 IP의 차단을 허용 (반복 가능)
+  --include-private-cidr CIDR    지정한 사설 CIDR의 차단을 허용 (반복 가능)
+  --dry-run                      파일과 시스템을 변경하지 않고 예상 작업만 출력
+  -h, --help                     도움말 출력
+EOF
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        --days)
+            [[ $# -ge 2 ]] || { echo "오류: --days 값이 필요합니다." >&2; exit 1; }
+            CHECK_DAYS=$2
+            shift 2
+            ;;
+        --include-private-ip)
+            [[ $# -ge 2 ]] || { echo "오류: --include-private-ip 값이 필요합니다." >&2; exit 1; }
+            APPROVED_PRIVATE_IPS+=("$2")
+            shift 2
+            ;;
+        --include-private-cidr)
+            [[ $# -ge 2 ]] || { echo "오류: --include-private-cidr 값이 필요합니다." >&2; exit 1; }
+            APPROVED_PRIVATE_CIDRS+=("$2")
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        [1-9]|[1-9][0-9]*)
+            CHECK_DAYS=$1
+            shift
+            ;;
+        *)
+            echo "오류: 알 수 없는 인자입니다: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ ! ${CHECK_DAYS} =~ ^[1-9][0-9]*$ ]]; then
+    echo "오류: 조회 일수는 1 이상의 정수여야 합니다: ${CHECK_DAYS}" >&2
     exit 1
 fi
 
@@ -26,15 +80,6 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 echo "실행 시각: $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "로그 파일: ${LOG_FILE}"
 
-sudo -v
-
-echo "최근 ${CHECK_DAYS}일간의 SSH 접속 공격 기록입니다."
-echo "------------------------------------------------------------"
-if ! sudo journalctl -u ssh --since "${CHECK_DAYS} days ago" --no-pager | grep --color=never "Failed"; then
-    echo "해당 기간에 'Failed' SSH 기록이 없습니다."
-fi
-echo "------------------------------------------------------------"
-
 is_valid_ipv4() {
     local ip=$1
     local -a octets
@@ -47,6 +92,130 @@ is_valid_ipv4() {
         [[ ${octet} =~ ^[0-9]{1,3}$ ]] || return 1
         (( 10#${octet} <= 255 )) || return 1
     done
+}
+
+ipv4_to_int() {
+    local ip=$1
+    local a b c d
+    IFS='.' read -r a b c d <<< "${ip}"
+    printf '%u' "$(( (10#${a} << 24) + (10#${b} << 16) + (10#${c} << 8) + 10#${d} ))"
+}
+
+is_valid_cidr() {
+    local cidr=$1
+    local network prefix
+    [[ ${cidr} == */* ]] || return 1
+    network=${cidr%/*}
+    prefix=${cidr#*/}
+    is_valid_ipv4 "${network}" || return 1
+    [[ ${prefix} =~ ^[0-9]{1,2}$ ]] || return 1
+    (( 10#${prefix} >= 0 && 10#${prefix} <= 32 ))
+}
+
+cidr_contains() {
+    local ip=$1
+    local cidr=$2
+    local network=${cidr%/*}
+    local prefix=${cidr#*/}
+    local ip_int network_int mask
+
+    ip_int=$(ipv4_to_int "${ip}")
+    network_int=$(ipv4_to_int "${network}")
+    if (( prefix == 0 )); then
+        mask=0
+    else
+        mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    fi
+    (( (ip_int & mask) == (network_int & mask) ))
+}
+
+is_private_ipv4() {
+    local ip=$1
+    cidr_contains "${ip}" "10.0.0.0/8" ||
+        cidr_contains "${ip}" "172.16.0.0/12" ||
+        cidr_contains "${ip}" "192.168.0.0/16"
+}
+
+is_private_cidr() {
+    local cidr=$1
+    local network=${cidr%/*}
+    local prefix=${cidr#*/}
+    if cidr_contains "${network}" "10.0.0.0/8" && (( prefix >= 8 )); then
+        return 0
+    fi
+    if cidr_contains "${network}" "172.16.0.0/12" && (( prefix >= 12 )); then
+        return 0
+    fi
+    if cidr_contains "${network}" "192.168.0.0/16" && (( prefix >= 16 )); then
+        return 0
+    fi
+    return 1
+}
+
+is_approved_private_ip() {
+    local ip=$1
+    local approved
+    for approved in "${APPROVED_PRIVATE_IPS[@]}"; do
+        [[ ${ip} == "${approved}" ]] && return 0
+    done
+    for approved in "${APPROVED_PRIVATE_CIDRS[@]}"; do
+        cidr_contains "${ip}" "${approved}" && return 0
+    done
+    return 1
+}
+
+declare -A PROTECTED_IPS=()
+register_protected_ip() {
+    local ip=$1
+    is_valid_ipv4 "${ip}" && PROTECTED_IPS["${ip}"]=1
+}
+
+for local_ip in $(hostname -I 2>/dev/null || true); do
+    register_protected_ip "${local_ip}"
+done
+if [[ -n ${SSH_CONNECTION:-} ]]; then
+    read -r ssh_client_ip _ <<< "${SSH_CONNECTION}"
+    register_protected_ip "${ssh_client_ip}"
+fi
+
+is_protected_ip() {
+    [[ -n ${PROTECTED_IPS[$1]+x} ]]
+}
+
+for approved_ip in "${APPROVED_PRIVATE_IPS[@]}"; do
+    if ! is_valid_ipv4 "${approved_ip}" || ! is_private_ipv4 "${approved_ip}"; then
+        echo "오류: 승인 IP는 유효한 RFC1918 사설 IPv4 주소여야 합니다: ${approved_ip}" >&2
+        exit 1
+    fi
+done
+for approved_cidr in "${APPROVED_PRIVATE_CIDRS[@]}"; do
+    if ! is_valid_cidr "${approved_cidr}"; then
+        echo "오류: 올바르지 않은 승인 CIDR입니다: ${approved_cidr}" >&2
+        exit 1
+    fi
+    if ! is_private_cidr "${approved_cidr}"; then
+        echo "오류: 승인 CIDR은 RFC1918 사설망 내부여야 합니다: ${approved_cidr}" >&2
+        exit 1
+    fi
+done
+
+review_private_ip() {
+    local ip=$1
+    local failed_count=$2
+    local detected_at
+    detected_at=$(date '+%Y-%m-%d %H:%M:%S %Z')
+
+    if (( DRY_RUN != 0 )); then
+        echo "DRY-RUN 검토 보류: ${ip} (${failed_count}회, 사설 IP)"
+        return
+    fi
+    touch "${REVIEW_LIST}"
+    if awk -F '|' -v target="${ip}" '{ value=$1; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); if (value == target) found=1 } END { exit(found ? 0 : 1) }' "${REVIEW_LIST}"; then
+        echo "검토 목록에 이미 있음: ${ip} (${failed_count}회)"
+    else
+        printf '%s | Failed %s회 | %s | private/review\n' "${ip}" "${failed_count}" "${detected_at}" >> "${REVIEW_LIST}"
+        echo "검토 보류: ${ip} (${failed_count}회, 사설 IP)"
+    fi
 }
 
 is_valid_block_pattern() {
@@ -82,6 +251,75 @@ is_valid_block_pattern() {
     fi
 }
 
+block_pattern_prefix_bits() {
+    local pattern=$1
+    local -a octets
+    local bits=0
+    if [[ ${pattern} != *'*' ]]; then
+        printf '32'
+        return
+    fi
+    IFS='.' read -r -a octets <<< "${pattern}"
+    for octet in "${octets[@]}"; do
+        [[ ${octet} != '*' ]] || break
+        (( bits += 8 ))
+    done
+    printf '%s' "${bits}"
+}
+
+block_pattern_sample_ip() {
+    local pattern=$1
+    printf '%s' "${pattern//\*/0}"
+}
+
+block_pattern_contains_ip() {
+    local pattern=$1
+    local target_ip=$2
+    if [[ ${pattern} == *'*' ]]; then
+        local prefix=${pattern%%\**}
+        [[ ${target_ip} == "${prefix}"* ]]
+    else
+        [[ ${target_ip} == "${pattern}" ]]
+    fi
+}
+
+is_private_block_pattern() {
+    local pattern=$1
+    local sample
+    sample=$(block_pattern_sample_ip "${pattern}")
+    is_private_ipv4 "${sample}" ||
+        block_pattern_contains_ip "${pattern}" "10.0.0.1" ||
+        block_pattern_contains_ip "${pattern}" "172.16.0.1" ||
+        block_pattern_contains_ip "${pattern}" "192.168.0.1"
+}
+
+is_approved_private_pattern() {
+    local pattern=$1
+    local sample pattern_bits approved approved_bits
+    if [[ ${pattern} != *'*' ]]; then
+        is_approved_private_ip "${pattern}"
+        return
+    fi
+    sample=$(block_pattern_sample_ip "${pattern}")
+    pattern_bits=$(block_pattern_prefix_bits "${pattern}")
+    for approved in "${APPROVED_PRIVATE_CIDRS[@]}"; do
+        approved_bits=${approved#*/}
+        if (( approved_bits <= pattern_bits )) && cidr_contains "${sample}" "${approved}"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+block_pattern_is_protected() {
+    local pattern=$1
+    local protected_ip
+    for protected_ip in "${!PROTECTED_IPS[@]}"; do
+        block_pattern_contains_ip "${pattern}" "${protected_ip}" && return 0
+    done
+    return 1
+}
+
 to_hosts_deny_pattern() {
     local pattern=$1
     local -a octets
@@ -101,6 +339,18 @@ to_hosts_deny_pattern() {
     fi
 }
 
+sudo -v
+if (( DRY_RUN != 0 )); then
+    echo "DRY-RUN: 차단 목록, 검토 목록, ${HOSTS_DENY}를 변경하지 않습니다."
+fi
+
+echo "최근 ${CHECK_DAYS}일간의 SSH 접속 공격 기록입니다."
+echo "------------------------------------------------------------"
+if ! sudo journalctl -u ssh --since "${CHECK_DAYS} days ago" --no-pager | grep --color=never "Failed"; then
+    echo "해당 기간에 'Failed' SSH 기록이 없습니다."
+fi
+echo "------------------------------------------------------------"
+
 echo "최근 ${CHECK_DAYS}일간 Failed 기록이 10회 이상인 IP를 확인합니다."
 auto_add_date="$(date '+%Y-%m-%d')"
 while read -r failed_count failed_ip; do
@@ -108,6 +358,16 @@ while read -r failed_count failed_ip; do
 
     if ! is_valid_ipv4 "${failed_ip}"; then
         echo "로그에서 올바르지 않은 IPv4 주소를 건너뜁니다: ${failed_ip}" >&2
+        continue
+    fi
+
+    if is_protected_ip "${failed_ip}"; then
+        echo "보호 대상이라 건너뜀: ${failed_ip} (현재 SSH 접속 또는 서버 자체 IP)"
+        continue
+    fi
+
+    if is_private_ipv4 "${failed_ip}" && ! is_approved_private_ip "${failed_ip}"; then
+        review_private_ip "${failed_ip}" "${failed_count}"
         continue
     fi
 
@@ -123,8 +383,12 @@ while read -r failed_count failed_ip; do
         echo "자동 차단 목록에 이미 있음: ${failed_ip} (${failed_count}회)"
     else
         auto_entry="${failed_ip} # 자동 추가: ${auto_add_date}, 최근 ${CHECK_DAYS}일 Failed ${failed_count}회"
-        echo "${auto_entry}" | tee -a "${BLOCK_LIST}" > /dev/null
-        echo "자동 차단 목록에 추가됨: ${failed_ip} (${failed_count}회)"
+        if (( DRY_RUN != 0 )); then
+            echo "DRY-RUN 자동 차단 예정: ${failed_ip} (${failed_count}회)"
+        else
+            printf '%s\n' "${auto_entry}" >> "${BLOCK_LIST}"
+            echo "자동 차단 목록에 추가됨: ${failed_ip} (${failed_count}회)"
+        fi
     fi
 done < <(
     sudo journalctl -u ssh --since "${CHECK_DAYS} days ago" --no-pager |
@@ -158,6 +422,16 @@ while IFS= read -r line || [[ -n "${line}" ]]; do
         exit 1
     fi
 
+    if block_pattern_is_protected "${ip}"; then
+        echo "보호 대상과 겹쳐 차단에서 제외: ${ip}"
+        continue
+    fi
+
+    if is_private_block_pattern "${ip}" && ! is_approved_private_pattern "${ip}"; then
+        echo "승인되지 않은 사설 IP/대역이라 차단에서 제외: ${ip}"
+        continue
+    fi
+
     if [[ -z "${seen_ips[${ip}]+x}" ]]; then
         block_ips+=("${ip}")
         seen_ips["${ip}"]=1
@@ -165,8 +439,16 @@ while IFS= read -r line || [[ -n "${line}" ]]; do
 done < "${BLOCK_LIST}"
 
 if [[ ${#block_ips[@]} -eq 0 ]]; then
-    echo "오류: ${BLOCK_LIST}에 차단할 IP 주소가 없습니다." >&2
-    exit 1
+    echo "적용할 수 있는 차단 IP가 없습니다."
+    exit 0
+fi
+
+if (( DRY_RUN != 0 )); then
+    echo "DRY-RUN: 다음 항목을 ${HOSTS_DENY}에 적용할 예정입니다."
+    for ip in "${block_ips[@]}"; do
+        echo "  sshd: $(to_hosts_deny_pattern "${ip}")"
+    done
+    exit 0
 fi
 
 sudo touch "${HOSTS_DENY}"

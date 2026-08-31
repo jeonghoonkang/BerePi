@@ -1,0 +1,4 @@
+# 사설 IP 자동 차단 보류 목록 예시입니다.
+# 실제 run_secure_review_ip_list.txt 파일은 내부 IP 노출 방지를 위해 Git에서 제외됩니다.
+# 형식: IP | Failed 횟수 | 탐지시각 | 상태
+192.168.10.25 | Failed 32회 | 2026-09-01 13:20:10 KST | private/review
