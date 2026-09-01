@@ -10,7 +10,18 @@
 - 현재 SSH 클라이언트 IP와 서버 자체 IP는 승인 옵션이 있어도 차단하지 않습니다.
 - 먼저 `--dry-run`으로 결과를 확인하는 것을 권장합니다.
 
-## 사용법
+## 사용법, 실행방법
+
+접근 의심 확인 방법
+- bash ./run_ssh_login_IP.sh {날짜}
+  - 접근 시도한 IP와 성공 실패 갯수를 표시함
+  - 해당 접근 아이드 들의 crontab 와 실행 process 출력
+  - 그냥 확인만 하는 것임. 아무 설정도 안함
+- bash ./run_secure.sh 2
+  - 현재 부터 2일동안의 접속 시도시, fail IP, 아이디 무관, 를 접속 차단함
+  - /etc/hosts.deny 에 IP 리스트 작성
+  - 최신 Ubuntu 버전에서는 해당 /etc/hosts.deny 가 동작을 안한다고 함
+  - (to do) ufw 등으로 해당 IP 설정하는 기능 추가    
 
 ```bash
 ./run_secure.sh --days 1 --dry-run
