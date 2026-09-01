@@ -485,6 +485,29 @@ def target_history_item(target: LLMTarget) -> dict[str, Any]:
     return item
 
 
+MASKED_SECRET = "********"
+
+
+def mask_secrets_for_api(value: Any) -> Any:
+    """Return an API-safe copy with password fields masked recursively."""
+    if isinstance(value, dict):
+        return {
+            key: (
+                MASKED_SECRET
+                if key.lower() == "password" and field_value
+                else ""
+                if key.lower() == "password"
+                else mask_secrets_for_api(field_value)
+            )
+            for key, field_value in value.items()
+        }
+    if isinstance(value, list):
+        return [mask_secrets_for_api(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(mask_secrets_for_api(item) for item in value)
+    return value
+
+
 def load_target_history() -> list[dict[str, Any]]:
     raw = load_json(CONFIG_PATH, {"targets": [], "target_history": []})
     history = raw.get("target_history", [])
@@ -2754,7 +2777,7 @@ def status_payload() -> dict[str, Any]:
             "key_source": "not_configured",
             "error": str(exc),
         }
-    return {
+    payload = {
         "started_at": dt.datetime.fromtimestamp(STARTED_AT).astimezone().isoformat(),
         "uptime": seconds_to_uptime(time.time() - STARTED_AT),
         "status_refresh_seconds": STATUS_REFRESH_SECONDS,
@@ -2777,6 +2800,7 @@ def status_payload() -> dict[str, Any]:
         },
         "local": local_system_stats(),
     }
+    return mask_secrets_for_api(payload)
 
 
 LOGIN_HTML = """<!doctype html>
@@ -4263,6 +4287,9 @@ class RoutingHandler(BaseHTTPRequestHandler):
             raise ValueError("api_number must be a positive integer.")
         if api_number in used_api_numbers:
             raise ValueError(f"api_number is already assigned: {api_number}")
+        submitted_password = str(payload.get("password") or "")
+        if submitted_password == MASKED_SECRET:
+            submitted_password = existing_target.password if existing_target else ""
         new_target = LLMTarget(
             id=target_id,
             name=name,
@@ -4277,7 +4304,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             selected_gpu=str(payload.get("selected_gpu") or "").strip(),
             selected_gpu_label=str(payload.get("selected_gpu_label") or "").strip(),
             access_id=str(payload.get("access_id") or "").strip(),
-            password=str(payload.get("password") or ""),
+            password=submitted_password,
             enabled=bool_value(payload.get("enabled"), True),
             weight=max(1, int(payload.get("weight") or 1)),
             notes=str(payload.get("notes") or "").strip(),
@@ -4295,7 +4322,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             TARGET_MODEL_LIST_CACHE.pop(target_id, None)
         remember_target_history(new_target)
         sync_ollama_proxy_servers()
-        return new_target.__dict__
+        return mask_secrets_for_api(new_target.__dict__)
 
     def set_target_enabled(self, payload: dict[str, Any]) -> dict[str, Any]:
         target_id = str(payload.get("id") or "").strip()

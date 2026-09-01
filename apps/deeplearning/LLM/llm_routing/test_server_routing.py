@@ -74,6 +74,47 @@ class DispatchInfoTests(unittest.TestCase):
         public.assert_not_called()
         write_json.assert_called_once_with({"detail": True})
 
+    def test_api_secret_masking_is_recursive_and_does_not_modify_source(self) -> None:
+        source = {
+            "targets": [{"name": "current", "password": "target-secret"}],
+            "target_history": [{"password": "history-secret"}],
+            "empty": {"password": ""},
+        }
+
+        masked = server_routing.mask_secrets_for_api(source)
+
+        self.assertEqual(masked["targets"][0]["password"], server_routing.MASKED_SECRET)
+        self.assertEqual(masked["target_history"][0]["password"], server_routing.MASKED_SECRET)
+        self.assertEqual(masked["empty"]["password"], "")
+        self.assertEqual(source["targets"][0]["password"], "target-secret")
+
+    def test_upsert_preserves_existing_password_when_mask_is_submitted(self) -> None:
+        existing = server_routing.LLMTarget(
+            id="target-1",
+            name="Target",
+            host="127.0.0.1",
+            port=11434,
+            api_number=1,
+            password="real-secret",
+        )
+        handler = server_routing.RoutingHandler.__new__(server_routing.RoutingHandler)
+        payload = {
+            **existing.__dict__,
+            "password": server_routing.MASKED_SECRET,
+        }
+
+        with (
+            patch.object(server_routing, "load_targets", return_value=[existing]),
+            patch.object(server_routing, "save_targets") as save_targets,
+            patch.object(server_routing, "remember_target_history"),
+            patch.object(server_routing, "sync_ollama_proxy_servers"),
+        ):
+            result = handler.upsert_target(payload)
+
+        saved_target = save_targets.call_args.args[0][0]
+        self.assertEqual(saved_target.password, "real-secret")
+        self.assertEqual(result["password"], server_routing.MASKED_SECRET)
+
     def test_prompt_input_has_default_smoke_test_text(self) -> None:
         self.assertIn(
             '<textarea id="test_prompt" placeholder="전송할 prompt">'
