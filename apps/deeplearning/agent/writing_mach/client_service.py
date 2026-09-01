@@ -279,13 +279,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tech_report",
         "--tech-report",
-        nargs="?",
-        const="",
+        nargs="*",
         default=None,
         metavar="SOURCE",
         help=(
-            "Create an approximately 20-page Korean engineering report from PDF, TXT, or Markdown and exit. "
-            "When SOURCE is omitted, uses the newest PDF/TXT/Markdown in the input directory. "
+            "Create an approximately 20-page Korean engineering report from one or more PDF, TXT, or Markdown "
+            "files and exit. When SOURCE is omitted, uses the newest supported file in the input directory. "
             "Sparse PDF pages use model OCR; TXT and Markdown input are read directly."
         ),
     )
@@ -1118,6 +1117,22 @@ def resolve_tech_report_pdf(value: str) -> Path:
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
+def resolve_tech_report_sources(values: str | list[str] | tuple[str, ...]) -> list[Path]:
+    """Resolve one or more tech-report sources while preserving CLI order."""
+    if isinstance(values, str):
+        raw_values = [values] if values.strip() else []
+    else:
+        raw_values = [str(value) for value in values if str(value).strip()]
+    if not raw_values:
+        return [resolve_tech_report_pdf("")]
+    resolved = [resolve_tech_report_pdf(value) for value in raw_values]
+    duplicate_paths = [path for index, path in enumerate(resolved) if path in resolved[:index]]
+    if duplicate_paths:
+        names = ", ".join(str(path) for path in duplicate_paths)
+        raise ValueError(f"Duplicate --tech_report input source: {names}")
+    return resolved
+
+
 def read_tech_report_source(
     source_path: Path,
     *,
@@ -1148,6 +1163,44 @@ def read_tech_report_source(
         "encoding": "utf-8",
     }
     return text, metadata
+
+
+def read_tech_report_sources(
+    source_paths: list[Path],
+    *,
+    config: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Read and combine multiple sources with explicit document boundaries."""
+    if not source_paths:
+        raise ValueError("At least one tech report source is required.")
+    combined_parts: list[str] = []
+    source_metadata: list[dict[str, Any]] = []
+    for index, source_path in enumerate(source_paths, start=1):
+        progress_log(
+            "tech-report",
+            f"reading source {index}/{len(source_paths)} -> {source_path}",
+            "cyan",
+        )
+        text, metadata = read_tech_report_source(source_path, config=config)
+        combined_parts.append(f"[입력 문서 {index}: {source_path.name}]\n{text}")
+        source_metadata.append(metadata)
+    combined = "\n\n".join(combined_parts)
+    aggregate = {
+        "source_files": [str(path) for path in source_paths],
+        "source_count": len(source_paths),
+        "source_type": "multiple" if len(source_paths) > 1 else source_metadata[0].get("source_type", ""),
+        "page_count": sum(int(item.get("page_count") or 0) for item in source_metadata),
+        "total_characters": len(combined),
+        "text_pages": sum(int(item.get("text_pages") or 0) for item in source_metadata),
+        "ocr_pages": sum(int(item.get("ocr_pages") or 0) for item in source_metadata),
+        "empty_pages": sum(int(item.get("empty_pages") or 0) for item in source_metadata),
+        "ocr_warnings": [warning for item in source_metadata for warning in item.get("ocr_warnings", [])],
+        "extraction_warnings": [
+            warning for item in source_metadata for warning in item.get("extraction_warnings", [])
+        ],
+        "sources": source_metadata,
+    }
+    return combined, aggregate
 
 
 def normalize_extracted_text(text: str) -> str:
@@ -1350,18 +1403,27 @@ def extract_pdf_text(pdf_path: Path) -> str:
     return text
 
 
-def build_tech_report_prompt(source_path: Path, source_text: str) -> str:
-    source_type = {
-        ".pdf": "PDF",
-        ".txt": "TXT",
-        ".md": "Markdown",
-        ".markdown": "Markdown",
-    }.get(source_path.suffix.lower(), source_path.suffix.lstrip(".").upper())
+def build_tech_report_prompt(source_path: Path | list[Path], source_text: str) -> str:
+    source_paths = source_path if isinstance(source_path, list) else [source_path]
+    source_descriptions = []
+    source_types: list[str] = []
+    for index, path in enumerate(source_paths, start=1):
+        source_type = {
+            ".pdf": "PDF",
+            ".txt": "TXT",
+            ".md": "Markdown",
+            ".markdown": "Markdown",
+        }.get(path.suffix.lower(), path.suffix.lstrip(".").upper())
+        source_types.append(source_type)
+        source_descriptions.append(f"- 문서 {index}: {path.name} ({source_type})")
+    legacy_single_source = ""
+    if len(source_paths) == 1:
+        legacy_single_source = f"- 형식: {source_types[0]}\n- 파일명: {source_paths[0].name}\n"
     return f"""{TECH_REPORT_REQUEST}
 
-[입력 문서]
-- 형식: {source_type}
-- 파일명: {source_path.name}
+[입력 문서 목록]
+{legacy_single_source}{chr(10).join(source_descriptions)}
+- 문서 수: {len(source_paths)}
 - 총 원문 분량: {len(source_text):,} characters
 
 [입력 원문 시작]
@@ -1372,19 +1434,31 @@ def build_tech_report_prompt(source_path: Path, source_text: str) -> str:
 """
 
 
-def normalize_tech_report(markdown: str, pdf_path: Path) -> str:
-    text = markdown.strip()
-    text = re.sub(r"^```(?:markdown)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```\s*$", "", text)
-    if not re.search(r"^#\s+", text, re.MULTILINE):
-        text = f"# {pdf_path.stem} 기술 보고서\n\n{text}"
-    required_sections = [
+def required_tech_report_sections() -> list[str]:
+    return [
         "## 1. 개요 (Background & Objectives)",
         "## 2. 핵심 아키텍처 및 데이터 흐름 (Core Architecture & Workflow)",
         "## 3. 주요 모듈 / 기술 사양 (Technical Specifications - 표 형식 활용)",
         "## 4. 기존 기술 대비 차별점 및 제약사항 (Comparison & Limitations)",
         "## 5. 결론 및 적용/고려 사항 (Key Takeaways)",
     ]
+
+
+def missing_tech_report_sections(markdown: str) -> list[str]:
+    return [
+        heading
+        for section_number, heading in enumerate(required_tech_report_sections(), start=1)
+        if not re.search(rf"^##\s*{section_number}\s*[.)．]?\s*.*$", markdown, flags=re.MULTILINE)
+    ]
+
+
+def normalize_tech_report(markdown: str, pdf_path: Path) -> str:
+    text = markdown.strip()
+    text = re.sub(r"^```(?:markdown)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```\s*$", "", text)
+    if not re.search(r"^#\s+", text, re.MULTILINE):
+        text = f"# {pdf_path.stem} 기술 보고서\n\n{text}"
+    required_sections = required_tech_report_sections()
     missing: list[str] = []
     for section_number, canonical_heading in enumerate(required_sections, start=1):
         pattern = rf"^##\s*{section_number}\s*[.)．]?\s*.*$"
@@ -1401,6 +1475,64 @@ def normalize_tech_report(markdown: str, pdf_path: Path) -> str:
     if missing:
         raise ValueError("Model response is missing required tech report sections: " + ", ".join(missing))
     return text
+
+
+def repair_missing_tech_report_sections(
+    config: dict[str, Any],
+    markdown: str,
+    source_paths: list[Path],
+    source_text: str,
+    *,
+    max_attempts: int = 2,
+) -> str:
+    """Regenerate only missing required sections and merge them into the report."""
+    report = markdown.strip()
+    source_names = ", ".join(path.name for path in source_paths)
+    for attempt in range(1, max(1, max_attempts) + 1):
+        missing = missing_tech_report_sections(report)
+        if not missing:
+            return normalize_tech_report(report, source_paths[0])
+        progress_log(
+            "tech-report-repair",
+            f"missing {len(missing)} required section(s); repair attempt {attempt}/{max_attempts}",
+            "yellow",
+        )
+        for heading in missing:
+            section_number = int(re.match(r"##\s*(\d+)", heading).group(1))
+            repair_prompt = f"""[역할]
+너는 수석 시스템 아키텍트(System Architect)다.
+
+[문제]
+기술 보고서 모델 응답에서 아래 필수 섹션이 누락되었다.
+{heading}
+
+[작업]
+입력 원문을 근거로 누락된 {section_number}번 섹션만 다시 작성해라.
+
+[규칙]
+- 첫 줄은 반드시 다음 제목을 그대로 사용한다: {heading}
+- 다른 번호의 섹션은 출력하지 않는다.
+- 입력 원문에서 확인되지 않은 사실은 추측하지 않는다.
+- 안내 문구와 코드 펜스 없이 완성된 Markdown 섹션만 출력한다.
+
+[입력 파일]
+{source_names}
+
+[입력 원문 시작]
+{source_text}
+[입력 원문 끝]
+"""
+            repaired = call_model(
+                config,
+                repair_prompt,
+                label=f"tech-report-repair-section-{section_number}-attempt-{attempt}",
+            ).strip()
+            repaired = re.sub(r"^```(?:markdown)?\s*", "", repaired, flags=re.IGNORECASE)
+            repaired = re.sub(r"\s*```\s*$", "", repaired)
+            if not re.search(rf"^##\s*{section_number}\s*[.)．]?\s*.*$", repaired, flags=re.MULTILINE):
+                repaired = f"{heading}\n\n{repaired}"
+            report = f"{report.rstrip()}\n\n{repaired.strip()}"
+    return normalize_tech_report(report, source_paths[0])
 
 
 def tech_report_page_count(report: str, pdf_path: Path, pdf_ok: bool) -> tuple[int, str]:
@@ -1533,12 +1665,18 @@ def publish_writing_outputs(config: dict[str, Any], paths: list[Path]) -> dict[s
     return result
 
 
-def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]:
+def run_tech_report(config: dict[str, Any], source_value: str | list[str]) -> dict[str, Any]:
     ensure_dirs()
     started = time.perf_counter()
-    source_path = resolve_tech_report_pdf(source_value)
-    progress_log("tech-report", f"reading source -> {source_path}", "cyan", started)
-    source_text, extraction = read_tech_report_source(source_path, config=config)
+    source_paths = resolve_tech_report_sources(source_value)
+    source_path = source_paths[0]
+    progress_log(
+        "tech-report",
+        f"preparing {len(source_paths)} source file(s)",
+        "cyan",
+        started,
+    )
+    source_text, extraction = read_tech_report_sources(source_paths, config=config)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     extracted_path = OUTPUT_DIR / f"tech_report_{timestamp}_extracted.txt"
     extraction_path = OUTPUT_DIR / f"tech_report_{timestamp}_extraction.json"
@@ -1557,14 +1695,31 @@ def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]
         "green",
         started,
     )
-    prompt = build_tech_report_prompt(source_path, source_text)
+    prompt = build_tech_report_prompt(source_paths, source_text)
     progress_log(
         "tech-report",
         f"requesting report from {len(source_text):,} extracted characters",
         "magenta",
         started,
     )
-    report = normalize_tech_report(call_model(config, prompt, label="tech-report"), source_path)
+    raw_report = call_model(config, prompt, label="tech-report")
+    missing_sections = missing_tech_report_sections(raw_report)
+    if missing_sections:
+        progress_log(
+            "tech-report-repair",
+            "initial model response is missing required sections: " + ", ".join(missing_sections),
+            "yellow",
+            started,
+        )
+        report = repair_missing_tech_report_sections(
+            config,
+            raw_report,
+            source_paths,
+            source_text,
+            max_attempts=max(1, int(config.get("chapter_retry") or 2)),
+        )
+    else:
+        report = normalize_tech_report(raw_report, source_path)
     markdown_path = OUTPUT_DIR / f"tech_report_{timestamp}.md"
     report_pdf_path = OUTPUT_DIR / f"tech_report_{timestamp}.pdf"
     markdown_path.write_text(report + "\n", encoding="utf-8")
@@ -1633,7 +1788,9 @@ def run_tech_report(config: dict[str, Any], source_value: str) -> dict[str, Any]
     return {
         "ok": True,
         "source_file": str(source_path),
-        "source_type": source_path.suffix.lower().lstrip("."),
+        "source_files": [str(path) for path in source_paths],
+        "source_count": len(source_paths),
+        "source_type": "multiple" if len(source_paths) > 1 else source_path.suffix.lower().lstrip("."),
         "extracted_text_path": str(extracted_path),
         "extraction_metadata_path": str(extraction_path),
         "extraction": extraction,

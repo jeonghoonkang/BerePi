@@ -50,6 +50,15 @@ class FakeDocument:
 
 
 class TechReportPdfTests(unittest.TestCase):
+    def test_cli_accepts_multiple_tech_report_sources(self) -> None:
+        with patch(
+            "sys.argv",
+            ["client_service.py", "--tech_report", "first.txt", "second.md"],
+        ):
+            args = client_service.parse_args()
+
+        self.assertEqual(args.tech_report, ["first.txt", "second.md"])
+
     def test_command_history_is_newest_first_limited_and_masks_passwords(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             history = Path(directory) / "history_cmd.txt"
@@ -265,6 +274,68 @@ class TechReportPdfTests(unittest.TestCase):
         self.assertIn("형식: TXT", prompt)
         self.assertIn("약 20페이지", prompt)
         self.assertIn("기술 원문", prompt)
+
+    def test_resolves_and_combines_multiple_text_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "architecture.txt"
+            second = Path(directory) / "operations.md"
+            first.write_text("아키텍처 원문", encoding="utf-8")
+            second.write_text("# 운영 원문", encoding="utf-8")
+
+            sources = client_service.resolve_tech_report_sources([str(first), str(second)])
+            text, metadata = client_service.read_tech_report_sources(sources, config={})
+            prompt = client_service.build_tech_report_prompt(sources, text)
+
+        self.assertEqual(sources, [first.resolve(), second.resolve()])
+        self.assertIn("[입력 문서 1: architecture.txt]", text)
+        self.assertIn("[입력 문서 2: operations.md]", text)
+        self.assertLess(text.index("아키텍처 원문"), text.index("# 운영 원문"))
+        self.assertEqual(metadata["source_count"], 2)
+        self.assertEqual(metadata["source_type"], "multiple")
+        self.assertIn("문서 수: 2", prompt)
+        self.assertIn("architecture.txt (TXT)", prompt)
+        self.assertIn("operations.md (Markdown)", prompt)
+
+    def test_rejects_duplicate_tech_report_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "same.txt"
+            source.write_text("중복 원문", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Duplicate"):
+                client_service.resolve_tech_report_sources([str(source), str(source)])
+
+    def test_repairs_only_missing_required_report_sections(self) -> None:
+        initial = """# 기술 보고서
+
+## 1. 개요
+개요 내용
+## 3. 주요 모듈
+모듈 내용
+## 5. 결론
+결론 내용
+"""
+        responses = {
+            2: "데이터 흐름 보완 내용",
+            4: "## 4. 기존 기술 대비 차별점 및 제약사항\n\n제약사항 보완 내용",
+        }
+
+        def fake_model(_config, _prompt, *, label, **_kwargs):
+            section_number = int(label.split("section-")[1].split("-")[0])
+            return responses[section_number]
+
+        with patch.object(client_service, "call_model", side_effect=fake_model) as model:
+            repaired = client_service.repair_missing_tech_report_sections(
+                {"chapter_retry": 2},
+                initial,
+                [Path("first.txt"), Path("second.txt")],
+                "통합 입력 원문",
+            )
+
+        self.assertEqual(model.call_count, 2)
+        self.assertEqual(client_service.missing_tech_report_sections(repaired), [])
+        for heading in client_service.required_tech_report_sections():
+            self.assertIn(heading, repaired)
+        self.assertIn("데이터 흐름 보완 내용", repaired)
+        self.assertIn("제약사항 보완 내용", repaired)
 
     def test_accepts_markdown_source_without_ocr(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
