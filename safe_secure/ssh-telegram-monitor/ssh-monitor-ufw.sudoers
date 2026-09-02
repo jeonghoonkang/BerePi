@@ -1,0 +1,3 @@
+# Install as /etc/sudoers.d/ssh-monitor-ufw with mode 0440.
+# The permitted helper must be installed root-owned and non-writable by tinyos.
+tinyos ALL=(root) NOPASSWD: /usr/local/sbin/ssh-monitor-ufw-block *

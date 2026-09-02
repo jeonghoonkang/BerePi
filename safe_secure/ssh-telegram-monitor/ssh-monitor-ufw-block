@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Root-owned, narrowly scoped helper for adding one validated UFW deny rule."""
+
+import ipaddress
+import shutil
+import subprocess
+import sys
+
+
+def run(*args):
+    return subprocess.run(
+        ["/usr/sbin/ufw"] + list(args),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def main():
+    if len(sys.argv) != 2:
+        print("usage: ssh-monitor-ufw-block PUBLIC_IP", file=sys.stderr)
+        return 2
+    try:
+        address = ipaddress.ip_address(sys.argv[1])
+    except ValueError:
+        print("invalid IP", file=sys.stderr)
+        return 2
+    if not address.is_global:
+        print("refused non-public IP", file=sys.stderr)
+        return 2
+    if not shutil.which("ufw"):
+        print("ufw not installed", file=sys.stderr)
+        return 1
+
+    ip_text = str(address)
+    status = run("status")
+    if status.returncode != 0:
+        print((status.stderr or status.stdout).strip(), file=sys.stderr)
+        return status.returncode
+    for line in status.stdout.splitlines():
+        if ip_text in line and "DENY" in line:
+            print("이미 차단됨")
+            return 0
+
+    result = run("insert", "1", "deny", "from", ip_text, "to", "any", "comment", "ssh-monitor")
+    if result.returncode != 0:
+        print((result.stderr or result.stdout).strip(), file=sys.stderr)
+        return result.returncode
+    if "inactive" in status.stdout.lower():
+        print("규칙 추가됨(UFW 비활성)")
+    else:
+        print("차단됨")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -37,6 +37,21 @@ class MonitorTests(unittest.TestCase):
         self.assertGreater(app.MONITOR_LOG_BACKUPS, 0)
         self.assertGreater(app.DAILY_LOG_BACKUPS, 0)
 
+    def test_ufw_candidates_exclude_private(self):
+        day = dt.date.today() - dt.timedelta(days=3)
+        start, end = app.local_day_bounds(day)
+        for index in range(60):
+            self.db.execute(
+                "INSERT INTO events VALUES(?,?,?,?,?,?,?)",
+                ("private-%d" % index, start + 100 + index, "failed", "root", "10.0.0.58", "password", 0),
+            )
+            self.db.execute(
+                "INSERT INTO events VALUES(?,?,?,?,?,?,?)",
+                ("public-%d" % index, start + 200 + index, "failed", "root", "8.8.8.8", "password", 0),
+            )
+        got = app.ufw_block_candidates(self.db, start, end, threshold=50, limit=10)
+        self.assertEqual(got, [("8.8.8.8", 60)])
+
 
 if __name__ == "__main__":
     unittest.main()

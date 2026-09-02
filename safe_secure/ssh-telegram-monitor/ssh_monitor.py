@@ -27,11 +27,19 @@ REPORT_LOG = BASE_DIR / "daily-reports.log"
 APP_LOG = BASE_DIR / "monitor.log"
 TELEGRAM_CONFIG = Path(os.environ.get("TELEGRAM_SEND_CONFIG", Path.home() / ".config/telegram-send.conf"))
 TELEGRAM_SEND = Path.home() / ".local/bin/telegram-send"
+UFW_HELPER = Path(os.environ.get("SSH_MONITOR_UFW_HELPER", "/usr/local/sbin/ssh-monitor-ufw-block"))
 DB_LOCK = threading.RLock()
 MONITOR_LOG_MAX_BYTES = 5 * 1024 * 1024
 MONITOR_LOG_BACKUPS = 10
 DAILY_LOG_MAX_BYTES = 10 * 1024 * 1024
 DAILY_LOG_BACKUPS = 12
+UFW_BLOCK_THRESHOLD = int(os.environ.get("SSH_MONITOR_UFW_THRESHOLD", "50"))
+UFW_BLOCK_LIMIT = int(os.environ.get("SSH_MONITOR_UFW_LIMIT", "10"))
+UFW_ALLOW_NETWORKS = tuple(
+    ipaddress.ip_network(item.strip())
+    for item in os.environ.get("SSH_MONITOR_UFW_ALLOWLIST", "10.0.0.0/24,127.0.0.0/8,::1/128").split(",")
+    if item.strip()
+)
 
 IP_RE = r"(?P<ip>(?:\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F:]+)"
 FAILED_INVALID_RE = re.compile(r"Failed password for invalid user (?P<user>\S+) from " + IP_RE + r" port")
@@ -286,6 +294,50 @@ def daily_report(conn):
     return yesterday_text + "\n\n" + cumulative
 
 
+def ufw_block_candidates(conn, start, end, threshold=UFW_BLOCK_THRESHOLD, limit=UFW_BLOCK_LIMIT):
+    rows = conn.execute(
+        """SELECT ip,count(*) n FROM events
+           WHERE kind='failed' AND ts>=? AND ts<?
+           GROUP BY ip HAVING n>=? ORDER BY n DESC,ip LIMIT ?""",
+        (start, end, threshold, limit * 3),
+    ).fetchall()
+    candidates = []
+    for ip_text, attempts in rows:
+        try:
+            address = ipaddress.ip_address(ip_text)
+        except ValueError:
+            continue
+        if not address.is_global or any(address in network for network in UFW_ALLOW_NETWORKS):
+            continue
+        candidates.append((ip_text, attempts))
+        if len(candidates) >= limit:
+            break
+    return candidates
+
+
+def block_daily_attackers(conn, start, end):
+    candidates = ufw_block_candidates(conn, start, end)
+    if not candidates:
+        return "🛡 UFW 자동 차단: 기준({:,}회)을 넘은 공인 IP 없음".format(UFW_BLOCK_THRESHOLD)
+    if not UFW_HELPER.exists():
+        return "⚠️ UFW 자동 차단 미설정: {} 설치 필요".format(UFW_HELPER)
+
+    results = []
+    for ip_text, attempts in candidates:
+        proc = subprocess.run(
+            ["sudo", "-n", str(UFW_HELPER), ip_text],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        detail = (proc.stdout or proc.stderr).strip().splitlines()
+        status = detail[-1] if detail else "오류"
+        if proc.returncode != 0:
+            status = "실패: " + status
+        results.append("{}({:,}회, {})".format(ip_text, attempts, status))
+    return "🛡 UFW 자동 차단\n" + "\n".join(results)
+
+
 def ip_report(conn, ip):
     try:
         ipaddress.ip_address(ip)
@@ -401,6 +453,9 @@ def main():
     elif args.command == "daily":
         sync_journal(conn, args.initial_days)
         report = daily_report(conn)
+        yesterday = dt.date.today() - dt.timedelta(days=1)
+        start, end = local_day_bounds(yesterday)
+        report += "\n\n" + block_daily_attackers(conn, start, end)
         append_daily_report(report)
         send_daily(report)
         print(report)
