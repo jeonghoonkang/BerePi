@@ -44,3 +44,12 @@ deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 ## Ubuntu distro upgrade, which takes much time
 - sudo do-release-upgrade
 - sudo apt-get dist-upgrade
+
+
+
+
+
+#### xenial
+- deb https://archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+- deb https://archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+- deb https://archive.ubuntu.com/ubuntu/ xenial-backports main restricted universe multiverse
