@@ -1229,6 +1229,18 @@ def target_failover_open(target: LLMTarget) -> bool:
         return metric_for(target.id).consecutive_errors >= FAILOVER_AFTER_ERRORS
 
 
+def failover_restart_notice(target: LLMTarget) -> str:
+    with STATE_LOCK:
+        consecutive_errors = metric_for(target.id).consecutive_errors
+    if consecutive_errors < FAILOVER_AFTER_ERRORS:
+        return ""
+    return (
+        f" Consecutive errors reached the failover threshold "
+        f"(consecutive_errors={consecutive_errors}, threshold={FAILOVER_AFTER_ERRORS}). "
+        "Restart the LLM Router to reset the error state."
+    )
+
+
 def available_target_candidates(targets: list[LLMTarget]) -> list[LLMTarget]:
     candidates = []
     for target in targets:
@@ -1314,7 +1326,7 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
             reason = "unknown" if availability is None else str(availability)
             raise ValueError(
                 f"Requested GPU API #{requested_number} ({target.name}) is not available "
-                f"(available_targets={reason})."
+                f"(available_targets={reason}).{failover_restart_notice(target)}"
             )
         queue_for_target = target_queue(target.id)
         if queue_for_target.qsize() >= QUEUE_MAX_PER_TARGET:
@@ -1341,7 +1353,8 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
                     reason = "unknown" if availability is None else str(availability)
                     raise ValueError(
                         f"Requested target {target.name} is not available "
-                        f"(available_targets={reason}); no eligible fallback model exists."
+                        f"(available_targets={reason}).{failover_restart_notice(target)} "
+                        "No eligible fallback model exists."
                     )
                 return target
         raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")

@@ -435,6 +435,43 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertEqual(explicitly_selected.id, fallback.id)
         self.assertNotEqual(selected.model, failed.model)
 
+    def test_explicit_failed_target_requests_router_restart(self) -> None:
+        failed = server_routing.LLMTarget(
+            id="failed-target",
+            name="Failed",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        same_model = server_routing.LLMTarget(
+            id="same-model-target",
+            name="Same model",
+            host="127.0.0.2",
+            port=11434,
+            model="model-a",
+        )
+        for target in (failed, same_model):
+            metric = server_routing.metric_for(target.id)
+            metric.available_targets = 1
+            server_routing.store_metric(target.id, metric)
+        metric = server_routing.metric_for(failed.id)
+        metric.consecutive_errors = server_routing.FAILOVER_AFTER_ERRORS
+        server_routing.store_metric(failed.id, metric)
+
+        with (
+            patch.object(server_routing, "load_targets", return_value=[failed, same_model]),
+            patch.object(server_routing, "ensure_target_queues"),
+        ):
+            with self.assertRaisesRegex(ValueError, "Restart the LLM Router") as raised:
+                server_routing.choose_target({"target_id": failed.id})
+
+        message = str(raised.exception)
+        self.assertIn(
+            f"consecutive_errors={server_routing.FAILOVER_AFTER_ERRORS}", message
+        )
+        self.assertIn(f"threshold={server_routing.FAILOVER_AFTER_ERRORS}", message)
+        self.assertIn("No eligible fallback model exists", message)
+
     def test_success_resets_consecutive_error_count(self) -> None:
         target = server_routing.LLMTarget(
             id="target-1",
