@@ -12,6 +12,29 @@ python3 ssh_monitor.py query 59.14.241.229 언제부터
 python3 ssh_monitor.py daily
 ```
 
+## 매일 자동 전송
+
+`ssh-telegram-daily.timer`는 매일 오전 7시에 보고서 전송을 시작합니다. 실행 부하를
+분산하기 위해 실제 실행 시각은 최대 5분까지 무작위로 지연될 수 있습니다. 장비가 해당
+시간에 꺼져 있었으면 `Persistent=true` 설정에 따라 다음 부팅 후 누락된 작업을 실행합니다.
+
+타이머를 설치하고 자동 실행을 활성화하려면 다음 명령을 사용합니다.
+
+```bash
+sudo cp ssh-telegram-daily.service ssh-telegram-daily.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ssh-telegram-daily.timer
+```
+
+이미 타이머를 설치한 장비에서 시간 설정을 갱신한 경우 파일을 다시 복사한 다음 타이머를
+재시작합니다.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ssh-telegram-daily.timer
+systemctl list-timers ssh-telegram-daily.timer
+```
+
 데이터와 로그는 `~/.local/share/ssh-telegram-monitor/`에 저장됩니다.
 
 - `events.sqlite3`: 누적 이벤트 DB
