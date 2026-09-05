@@ -25,6 +25,7 @@ class MonitorTests(unittest.TestCase):
         text = app.answer_query(self.db, "3일전 상황")
         self.assertIn("실패: 2회", text)
         self.assertIn("성공 인증: 1회", text)
+        self.assertIn("성공 ID: tinyos(1)", text)
 
     def test_ip(self):
         text = app.answer_query(self.db, "203.0.113.1 언제부터")

@@ -261,11 +261,16 @@ def period_stats(conn, start=None, end=None):
         "kind='failed' GROUP BY username ORDER BY n DESC,username LIMIT 5",
         params,
     ).fetchall()
-    return row, top_ips, top_users
+    accepted_users = conn.execute(
+        "SELECT username,count(*) n FROM events" + clause + (" AND " if clause else " WHERE ") +
+        "kind='accepted' GROUP BY username ORDER BY n DESC,username LIMIT 5",
+        params,
+    ).fetchall()
+    return row, top_ips, top_users, accepted_users
 
 
 def format_period(conn, title, start=None, end=None):
-    row, top_ips, top_users = period_stats(conn, start, end)
+    row, top_ips, top_users, accepted_users = period_stats(conn, start, end)
     total, failed, accepted, unique_ips, invalid, root, first_ts, last_ts = row
     failed, accepted, invalid, root = [int(x or 0) for x in (failed, accepted, invalid, root)]
     lines = [
@@ -274,6 +279,10 @@ def format_period(conn, title, start=None, end=None):
         "없는 계정: {:,}회 | root 시도: {:,}회".format(invalid, root),
         "성공 인증: {:,}회".format(accepted),
     ]
+    if accepted_users:
+        lines[-1] += " | 성공 ID: " + ", ".join(
+            "{}({:,})".format(user or "?", n) for user, n in accepted_users
+        )
     if top_ips:
         lines.append("상위 IP: " + ", ".join("{}({:,})".format(ip, n) for ip, n in top_ips))
     if top_users:
