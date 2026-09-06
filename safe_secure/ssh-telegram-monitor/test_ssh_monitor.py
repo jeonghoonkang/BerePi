@@ -45,6 +45,18 @@ class MonitorTests(unittest.TestCase):
         self.assertIn("user0: 1회", success_ids)
         self.assertIn("user6: 1회", success_ids)
 
+    def test_on_demand_report_includes_today_and_cumulative(self):
+        report = app.on_demand_report(self.db)
+
+        self.assertIn("요청 시각:", report)
+        self.assertIn("오늘 " + dt.date.today().isoformat(), report)
+        self.assertIn("누적(최근 30일 백필 이후)", report)
+
+    def test_split_telegram_messages_preserves_complete_lines(self):
+        parts = app.split_telegram_messages("1234\n5678\n90", max_chars=9)
+
+        self.assertEqual(parts, ["1234\n5678", "90"])
+
     def test_ip(self):
         text = app.answer_query(self.db, "203.0.113.1 언제부터")
         self.assertIn("실패: 2회", text)

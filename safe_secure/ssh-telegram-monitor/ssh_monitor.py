@@ -305,6 +305,17 @@ def daily_report(conn):
     return yesterday_text + "\n\n" + cumulative
 
 
+def on_demand_report(conn):
+    """Build a read-only report covering today so far and the retained history."""
+    today = dt.date.today()
+    start, end = local_day_bounds(today)
+    today_text = format_period(conn, "오늘 " + today.isoformat(), start, end)
+    cumulative = format_period(conn, "누적(최근 30일 백필 이후)")
+    return "⏱ 요청 시각: {}\n\n{}\n\n{}".format(
+        fmt_ts(int(time.time())), today_text, cumulative
+    )
+
+
 def accepted_user_stats(conn, start=None, end=None):
     where = ["kind='accepted'"]
     params = []
@@ -454,8 +465,8 @@ def send_daily(text):
     subprocess.run(cmd, input=text, text=True, check=True)
 
 
-def send_daily_messages(text, max_chars=4000):
-    """Send complete lines in separate Telegram messages under the platform limit."""
+def split_telegram_messages(text, max_chars=4000):
+    """Split text on line boundaries into messages under the Telegram limit."""
     parts = []
     current = []
     current_length = 0
@@ -469,7 +480,12 @@ def send_daily_messages(text, max_chars=4000):
         current_length += len(line) + (1 if len(current) > 1 else 0)
     if current:
         parts.append("\n".join(current))
-    for part in parts:
+    return parts
+
+
+def send_daily_messages(text, max_chars=4000):
+    """Send complete lines in separate Telegram messages under the platform limit."""
+    for part in split_telegram_messages(text, max_chars):
         send_daily(part)
 
 
@@ -494,8 +510,23 @@ def run_bot(conn):
             logging.exception("Telegram query failed")
             update.effective_message.reply_text("SSH 통계 조회 중 오류가 발생했습니다. monitor.log를 확인하세요.")
 
+    def handle_now(update, context):
+        if not update.effective_chat or update.effective_chat.id != allowed_chat_id:
+            logging.warning("Ignored Telegram query from unauthorized chat %s", getattr(update.effective_chat, "id", None))
+            return
+        try:
+            with DB_LOCK:
+                sync_journal(conn)
+                response = on_demand_report(conn)
+            for part in split_telegram_messages(response):
+                update.effective_message.reply_text(part)
+        except Exception:
+            logging.exception("Telegram on-demand report failed")
+            update.effective_message.reply_text("SSH 즉시 보고서 생성 중 오류가 발생했습니다. monitor.log를 확인하세요.")
+
     updater.dispatcher.add_handler(CommandHandler("ssh", handle))
     updater.dispatcher.add_handler(CommandHandler("ssh_help", handle))
+    updater.dispatcher.add_handler(CommandHandler("ssh_now", handle_now))
     updater.dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
     logging.info("Telegram query bot started for chat_id=%s", allowed_chat_id)
     updater.start_polling(drop_pending_updates=False)
@@ -504,7 +535,7 @@ def run_bot(conn):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("sync", "daily", "query", "bot"))
+    parser.add_argument("command", choices=("sync", "daily", "send", "query", "bot"))
     parser.add_argument("query", nargs="*")
     parser.add_argument("--initial-days", type=int, default=30)
     args = parser.parse_args()
@@ -523,6 +554,12 @@ def main():
         append_daily_report(report)
         send_daily(report)
         send_daily_messages(successful_login_report(conn))
+        print(report)
+    elif args.command == "send":
+        sync_journal(conn, args.initial_days)
+        query = " ".join(args.query).strip()
+        report = answer_query(conn, query) if query else on_demand_report(conn)
+        send_daily_messages(report)
         print(report)
     elif args.command == "query":
         sync_journal(conn, args.initial_days)

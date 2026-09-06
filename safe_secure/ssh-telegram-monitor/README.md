@@ -9,8 +9,20 @@ Telegram 개인 채팅에서는 날짜나 IP를 질문할 수 있습니다.
 python3 ssh_monitor.py sync
 python3 ssh_monitor.py query 3일전
 python3 ssh_monitor.py query 59.14.241.229 언제부터
+python3 ssh_monitor.py send
+python3 ssh_monitor.py send 오늘
+python3 ssh_monitor.py send 59.14.241.229 언제부터
 python3 ssh_monitor.py daily
 ```
+
+`send`는 실행한 순간 최신 SSH 로그를 동기화한 뒤 Telegram으로 바로 전송합니다. 조회어를
+생략하면 오늘 현재까지의 통계와 누적 통계를 함께 보내며, `오늘`, `어제`, `누적`, 날짜 또는
+IP를 지정하면 해당 조회 결과만 보냅니다. 수동 `send`는 통계 확인만 수행하고 UFW 자동
+차단은 실행하지 않습니다.
+
+Telegram에서 즉시 전체 현황을 확인하려면 `/ssh_now`를 입력하십시오. 특정 기간이나 IP는
+기존처럼 `/ssh 오늘`, `/ssh 3일전`, `/ssh 누적`, `/ssh 59.14.241.229 언제부터`로 확인할
+수 있습니다. 두 명령 모두 허용된 개인 채팅에서만 응답합니다.
 
 ## 매일 자동 전송
 
