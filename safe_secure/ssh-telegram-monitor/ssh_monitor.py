@@ -269,7 +269,7 @@ def period_stats(conn, start=None, end=None):
     return row, top_ips, top_users, accepted_users
 
 
-def format_period(conn, title, start=None, end=None):
+def format_period(conn, title, start=None, end=None, show_accepted_users=True):
     row, top_ips, top_users, accepted_users = period_stats(conn, start, end)
     total, failed, accepted, unique_ips, invalid, root, first_ts, last_ts = row
     failed, accepted, invalid, root = [int(x or 0) for x in (failed, accepted, invalid, root)]
@@ -279,7 +279,7 @@ def format_period(conn, title, start=None, end=None):
         "없는 계정: {:,}회 | root 시도: {:,}회".format(invalid, root),
         "성공 인증: {:,}회".format(accepted),
     ]
-    if accepted_users:
+    if show_accepted_users and accepted_users:
         lines[-1] += " | 성공 ID: " + ", ".join(
             "{}({:,})".format(user or "?", n) for user, n in accepted_users
         )
@@ -298,9 +298,45 @@ def daily_report(conn):
     today = dt.date.today()
     yesterday = today - dt.timedelta(days=1)
     start, end = local_day_bounds(yesterday)
-    yesterday_text = format_period(conn, "어제 " + yesterday.isoformat(), start, end)
-    cumulative = format_period(conn, "누적(최근 30일 백필 이후)")
+    yesterday_text = format_period(
+        conn, "어제 " + yesterday.isoformat(), start, end, show_accepted_users=False
+    )
+    cumulative = format_period(conn, "누적(최근 30일 백필 이후)", show_accepted_users=False)
     return yesterday_text + "\n\n" + cumulative
+
+
+def accepted_user_stats(conn, start=None, end=None):
+    where = ["kind='accepted'"]
+    params = []
+    if start is not None:
+        where.append("ts>=?")
+        params.append(start)
+    if end is not None:
+        where.append("ts<?")
+        params.append(end)
+    return conn.execute(
+        "SELECT username,count(*) n FROM events WHERE " + " AND ".join(where) +
+        " GROUP BY username ORDER BY n DESC,username",
+        params,
+    ).fetchall()
+
+
+def successful_login_report(conn):
+    yesterday = dt.date.today() - dt.timedelta(days=1)
+    start, end = local_day_bounds(yesterday)
+    periods = [
+        ("어제 " + yesterday.isoformat(), accepted_user_stats(conn, start, end)),
+        ("누적(최근 30일 백필 이후)", accepted_user_stats(conn)),
+    ]
+    lines = ["✅ SSH 성공 로그인 ID 전체 목록"]
+    for title, users in periods:
+        lines.append("")
+        lines.append(title)
+        if users:
+            lines.extend("• {}: {:,}회".format(user or "?", count) for user, count in users)
+        else:
+            lines.append("• 성공 로그인 없음")
+    return "\n".join(lines)
 
 
 def ufw_block_candidates(conn, start, end, threshold=UFW_BLOCK_THRESHOLD, limit=UFW_BLOCK_LIMIT):
@@ -418,6 +454,25 @@ def send_daily(text):
     subprocess.run(cmd, input=text, text=True, check=True)
 
 
+def send_daily_messages(text, max_chars=4000):
+    """Send complete lines in separate Telegram messages under the platform limit."""
+    parts = []
+    current = []
+    current_length = 0
+    for line in text.splitlines():
+        added_length = len(line) + (1 if current else 0)
+        if current and current_length + added_length > max_chars:
+            parts.append("\n".join(current))
+            current = []
+            current_length = 0
+        current.append(line)
+        current_length += len(line) + (1 if len(current) > 1 else 0)
+    if current:
+        parts.append("\n".join(current))
+    for part in parts:
+        send_daily(part)
+
+
 def run_bot(conn):
     from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
 
@@ -467,6 +522,7 @@ def main():
         report += "\n\n" + block_daily_attackers(conn, start, end)
         append_daily_report(report)
         send_daily(report)
+        send_daily_messages(successful_login_report(conn))
         print(report)
     elif args.command == "query":
         sync_journal(conn, args.initial_days)

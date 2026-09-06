@@ -27,6 +27,24 @@ class MonitorTests(unittest.TestCase):
         self.assertIn("성공 인증: 1회", text)
         self.assertIn("성공 ID: tinyos(1)", text)
 
+    def test_daily_report_sends_success_ids_separately(self):
+        day = dt.date.today() - dt.timedelta(days=1)
+        ts, _ = app.local_day_bounds(day)
+        for index in range(7):
+            self.db.execute(
+                "INSERT INTO events VALUES(?,?,?,?,?,?,?)",
+                ("accepted-%d" % index, ts + index, "accepted", "user%d" % index,
+                 "10.0.0.58", "publickey", 0),
+            )
+
+        daily = app.daily_report(self.db)
+        success_ids = app.successful_login_report(self.db)
+
+        self.assertNotIn("성공 ID:", daily)
+        self.assertIn("SSH 성공 로그인 ID 전체 목록", success_ids)
+        self.assertIn("user0: 1회", success_ids)
+        self.assertIn("user6: 1회", success_ids)
+
     def test_ip(self):
         text = app.answer_query(self.db, "203.0.113.1 언제부터")
         self.assertIn("실패: 2회", text)
