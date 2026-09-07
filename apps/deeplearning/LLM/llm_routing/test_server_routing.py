@@ -1,5 +1,6 @@
 import unittest
 from io import BytesIO
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 import server_routing
@@ -80,11 +81,116 @@ class DispatchInfoTests(unittest.TestCase):
             server_routing.INDEX_HTML,
         )
 
+    def test_ocr_tab_supports_clipboard_and_file_upload(self) -> None:
+        html = server_routing.INDEX_HTML
+
+        self.assertIn('data-tab="ocr">이미지 OCR</button>', html)
+        for element_id in (
+            "ocr_target",
+            "ocr_paste_zone",
+            "ocr_image",
+            "ocr_prompt",
+            "ocr_result",
+            "ocr_raw_result",
+        ):
+            self.assertIn(f'id="{element_id}"', html)
+        self.assertIn("navigator.clipboard.read()", html)
+        self.assertIn("images: [dataUrl.base64]", html)
+        self.assertIn("async function runOcr()", html)
+
+    def test_ollama_backend_payload_preserves_ocr_images(self) -> None:
+        target = server_routing.LLMTarget(
+            id="vision-target",
+            name="Vision Target",
+            host="127.0.0.1",
+            port=8082,
+            model="vision-model",
+            api_type="ollama",
+        )
+
+        url, payload = server_routing.build_backend_payload(
+            target,
+            {
+                "prompt": "이미지의 문자를 추출해 주세요.",
+                "images": ["aW1hZ2U="],
+                "target_id": target.id,
+                "client_id": "web-ui-ocr",
+            },
+        )
+
+        self.assertEqual(url, "http://127.0.0.1:8082/api/generate")
+        self.assertEqual(payload["images"], ["aW1hZ2U="])
+        self.assertNotIn("target_id", payload)
+        self.assertNotIn("client_id", payload)
+
+    def test_openai_backend_payload_converts_ocr_images(self) -> None:
+        target = server_routing.LLMTarget(
+            id="openai-vision",
+            name="OpenAI Vision",
+            host="127.0.0.1",
+            port=8000,
+            model="vision-model",
+            api_type="openai",
+        )
+
+        url, payload = server_routing.build_backend_payload(
+            target,
+            {"prompt": "read text", "images": ["aW1hZ2U="]},
+        )
+
+        self.assertEqual(url, "http://127.0.0.1:8000/v1/chat/completions")
+        content = payload["messages"][0]["content"]
+        self.assertEqual(content[0], {"type": "text", "text": "read text"})
+        self.assertEqual(
+            content[1],
+            {
+                "type": "image_url",
+                "image_url": {"url": "data:image/png;base64,aW1hZ2U="},
+            },
+        )
+
+    def test_index_html_keeps_javascript_newline_escape(self) -> None:
+        self.assertIn(
+            "routing_messages || [String(err)]).join('\\n')",
+            server_routing.INDEX_HTML,
+        )
+
     def test_gcp_tab_uses_dedicated_endpoint(self) -> None:
         self.assertIn('data-tab="gcp">GCP 테스트</button>', server_routing.INDEX_HTML)
         self.assertIn('id="gcp_test_prompt"', server_routing.INDEX_HTML)
+        self.assertIn('id="gcp_base_url"', server_routing.INDEX_HTML)
+        self.assertIn("data.base_url || config.base_url", server_routing.INDEX_HTML)
         self.assertIn("api('/api/gcp/generate'", server_routing.INDEX_HTML)
         self.assertIn("자동 LLM 라우팅 대상에는 포함되지 않습니다", server_routing.INDEX_HTML)
+
+    def test_runtime_gpu_cards_show_api_number(self) -> None:
+        self.assertIn('class="api-number">#${esc(t.api_number', server_routing.INDEX_HTML)
+        self.assertIn('<dt>API 번호</dt><dd>#${esc(t.api_number', server_routing.INDEX_HTML)
+
+    def test_router_card_has_thicker_border(self) -> None:
+        self.assertIn('.runtime-card.router-card { border-width:3px; }', server_routing.INDEX_HTML)
+        self.assertIn('<div class="runtime-card router-card">', server_routing.INDEX_HTML)
+
+    def test_prompt_target_list_is_at_bottom(self) -> None:
+        answer_position = server_routing.INDEX_HTML.index('id="test_answer"')
+        compare_position = server_routing.INDEX_HTML.index('id="compareRows"')
+        target_list_position = server_routing.INDEX_HTML.index('class="target-list-bottom"')
+        self.assertLess(answer_position, compare_position)
+        self.assertLess(compare_position, target_list_position)
+
+    def test_markdown_viewer_has_preview_source_and_rich_blocks(self) -> None:
+        self.assertIn("setMarkdownMode('test_answer','preview')", server_routing.INDEX_HTML)
+        self.assertIn("setMarkdownMode('test_answer','source')", server_routing.INDEX_HTML)
+        self.assertIn("copyMarkdown('test_answer')", server_routing.INDEX_HTML)
+        self.assertIn("html.push('<hr>')", server_routing.INDEX_HTML)
+        self.assertIn("<blockquote><p>", server_routing.INDEX_HTML)
+        self.assertIn("<table><thead><tr>", server_routing.INDEX_HTML)
+
+    def test_edit_target_loads_numbered_gpu_options(self) -> None:
+        self.assertIn('GPU 번호 선택', server_routing.INDEX_HTML)
+        self.assertIn('async function editTarget(t)', server_routing.INDEX_HTML)
+        self.assertIn('await loadModels(true);', server_routing.INDEX_HTML)
+        self.assertIn('async function loadModels(preserveSelectionOnError = false)', server_routing.INDEX_HTML)
 
     def test_gcp_status_does_not_expose_api_key(self) -> None:
         settings = MagicMock()
@@ -102,6 +208,60 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertTrue(result["configured"])
         self.assertEqual(result["model_id"], "gemma-4-31b-it")
         self.assertNotIn("api_key", result)
+
+    def test_api_number_selects_exact_gpu_target(self) -> None:
+        first = server_routing.LLMTarget(
+            id="gpu-1", name="GPU 1", host="127.0.0.1", port=11434, api_number=1
+        )
+        second = server_routing.LLMTarget(
+            id="gpu-2", name="GPU 2", host="127.0.0.2", port=11434, api_number=2
+        )
+        with (
+            patch.object(server_routing, "load_targets", return_value=[first, second]),
+            patch.object(server_routing, "ensure_target_queues"),
+            patch.object(server_routing, "target_has_known_availability", return_value=True),
+            patch.object(server_routing, "target_failover_open", return_value=False),
+            patch.object(server_routing, "target_queue", return_value=MagicMock(qsize=lambda: 0)),
+        ):
+            selected = server_routing.choose_target({"api_number": 2, "prompt": "hello"})
+
+        self.assertEqual(selected.id, "gpu-2")
+
+    def test_gcp_target_id_selects_google_ai_studio(self) -> None:
+        settings = MagicMock(
+            model_id="gemma-4-31b-it",
+            base_url="https://generativelanguage.googleapis.com",
+        )
+        with patch.object(server_routing, "GoogleAIStudioClient", return_value=settings):
+            selected = server_routing.choose_target(
+                {"target_id": "google-ai-studio-endpoint", "prompt": "hello"}
+            )
+
+        self.assertEqual(selected.id, "google-ai-studio-endpoint")
+        self.assertEqual(selected.api_type, "google_ai_studio")
+        self.assertEqual(selected.model, "gemma-4-31b-it")
+
+    def test_direct_api_number_disables_cross_gpu_failover(self) -> None:
+        target = server_routing.LLMTarget(
+            id="gpu-2", name="GPU 2", host="127.0.0.2", port=11434, api_number=2
+        )
+        handler = MagicMock(headers={}, client_address=("127.0.0.1", 12345))
+        with (
+            patch.object(server_routing, "choose_target", return_value=target),
+            patch.object(server_routing, "prompt_failover_targets") as failover,
+            patch.object(
+                server_routing,
+                "dispatch_prompt_to_target",
+                return_value={"ok": True, "llm_dispatch_count": 1},
+            ) as dispatch,
+        ):
+            result = server_routing.route_prompt(
+                handler, {"api_number": 2, "prompt": "hello"}
+            )
+
+        failover.assert_not_called()
+        dispatch.assert_called_once_with(handler, {"api_number": 2, "prompt": "hello"}, target)
+        self.assertTrue(result["ok"])
 
     def test_sse_event_format(self) -> None:
         encoded = server_routing.sse_event_bytes("dispatch_info", {"value": "한글"})
@@ -234,6 +394,43 @@ class DispatchInfoTests(unittest.TestCase):
         self.assertEqual(explicitly_selected.id, fallback.id)
         self.assertNotEqual(selected.model, failed.model)
 
+    def test_explicit_failed_target_requests_router_restart(self) -> None:
+        failed = server_routing.LLMTarget(
+            id="failed-target",
+            name="Failed",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        same_model = server_routing.LLMTarget(
+            id="same-model-target",
+            name="Same model",
+            host="127.0.0.2",
+            port=11434,
+            model="model-a",
+        )
+        for target in (failed, same_model):
+            metric = server_routing.metric_for(target.id)
+            metric.available_targets = 1
+            server_routing.store_metric(target.id, metric)
+        metric = server_routing.metric_for(failed.id)
+        metric.consecutive_errors = server_routing.FAILOVER_AFTER_ERRORS
+        server_routing.store_metric(failed.id, metric)
+
+        with (
+            patch.object(server_routing, "load_targets", return_value=[failed, same_model]),
+            patch.object(server_routing, "ensure_target_queues"),
+        ):
+            with self.assertRaisesRegex(ValueError, "Restart the LLM Router") as raised:
+                server_routing.choose_target({"target_id": failed.id})
+
+        message = str(raised.exception)
+        self.assertIn(
+            f"consecutive_errors={server_routing.FAILOVER_AFTER_ERRORS}", message
+        )
+        self.assertIn(f"threshold={server_routing.FAILOVER_AFTER_ERRORS}", message)
+        self.assertIn("No eligible fallback model exists", message)
+
     def test_success_resets_consecutive_error_count(self) -> None:
         target = server_routing.LLMTarget(
             id="target-1",
@@ -295,6 +492,126 @@ class DispatchInfoTests(unittest.TestCase):
                     server_routing.metric_for(target.id).consecutive_errors,
                     expected,
                 )
+
+    def test_backend_unauthorized_is_reported_as_authentication_failure(self) -> None:
+        http_error = urllib.error.HTTPError(
+            "http://backend/v1/chat/completions",
+            401,
+            "Unauthorized",
+            {},
+            BytesIO(b'{"error":"bad credentials"}'),
+        )
+        with patch("urllib.request.urlopen", side_effect=http_error):
+            with self.assertRaises(server_routing.BackendAuthenticationError) as raised:
+                server_routing.request_json(
+                    "http://backend/v1/chat/completions",
+                    {"model": "model-a", "prompt": "hello"},
+                )
+        http_error.close()
+
+        self.assertEqual(raised.exception.status_code, 401)
+
+    def test_authentication_failure_calls_next_model_once(self) -> None:
+        first = server_routing.LLMTarget(
+            id="target-1",
+            name="First",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        second = server_routing.LLMTarget(
+            id="target-2",
+            name="Second",
+            host="127.0.0.2",
+            port=11434,
+            model="model-b",
+        )
+        auth_error = server_routing.PromptDispatchError(
+            "Backend request failed: authentication failed",
+            1,
+            first,
+        )
+        auth_error.__cause__ = server_routing.BackendAuthenticationError(401)
+        handler = MagicMock(headers={}, client_address=("127.0.0.1", 12345))
+
+        with (
+            patch.object(server_routing, "load_targets", return_value=[first, second]),
+            patch.object(server_routing, "choose_target", return_value=first),
+            patch.object(
+                server_routing,
+                "dispatch_prompt_to_target",
+                side_effect=[
+                    auth_error,
+                    {
+                        "ok": True,
+                        "model": second.model,
+                        "llm_dispatch_count": 1,
+                        "failover_from_models": [],
+                    },
+                ],
+            ) as dispatch,
+        ):
+            result = server_routing.route_prompt(handler, {"prompt": "hello"})
+
+        self.assertEqual([call.args[2].id for call in dispatch.call_args_list], [first.id, second.id])
+        self.assertEqual(result["llm_dispatch_count"], 2)
+        self.assertTrue(result["failover_applied"])
+        self.assertTrue(result["model_failures"][0]["authentication_failed"])
+        self.assertIn("암호", result["routing_messages"][0])
+        self.assertIn("다음 모델", result["routing_messages"][0])
+
+    def test_all_models_fail_once_and_stop_at_last_model(self) -> None:
+        first = server_routing.LLMTarget(
+            id="target-1",
+            name="First",
+            host="127.0.0.1",
+            port=11434,
+            model="model-a",
+        )
+        duplicate_model = server_routing.LLMTarget(
+            id="target-duplicate",
+            name="Duplicate",
+            host="127.0.0.2",
+            port=11434,
+            model="model-a",
+        )
+        last = server_routing.LLMTarget(
+            id="target-2",
+            name="Last",
+            host="127.0.0.3",
+            port=11434,
+            model="model-b",
+        )
+        first_error = server_routing.PromptDispatchError("first failed", 1, first)
+        first_error.__cause__ = server_routing.BackendAuthenticationError(401)
+        last_error = server_routing.PromptDispatchError("last failed", 1, last)
+        handler = MagicMock(headers={}, client_address=("127.0.0.1", 12345))
+
+        with (
+            patch.object(
+                server_routing,
+                "load_targets",
+                return_value=[first, duplicate_model, last],
+            ),
+            patch.object(server_routing, "choose_target", return_value=first),
+            patch.object(
+                server_routing,
+                "dispatch_prompt_to_target",
+                side_effect=[first_error, last_error],
+            ) as dispatch,
+        ):
+            with self.assertRaises(server_routing.AllModelsFailedError) as raised:
+                server_routing.route_prompt(handler, {"prompt": "hello"})
+
+        error = raised.exception
+        self.assertEqual([call.args[2].id for call in dispatch.call_args_list], [first.id, last.id])
+        self.assertEqual(error.dispatch_count, 2)
+        self.assertEqual(error.target.id, last.id)
+        self.assertTrue(error.response_fields["all_models_failed"])
+        self.assertTrue(error.response_fields["execution_stopped"])
+        self.assertEqual(error.response_fields["last_model"], last.model)
+        self.assertIn("반복 호출하지 않고", str(error))
+        self.assertIn("실행을 중지", str(error))
 
     def test_unknown_availability_target_is_skipped(self) -> None:
         unknown = server_routing.LLMTarget(

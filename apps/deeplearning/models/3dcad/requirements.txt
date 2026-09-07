@@ -1,0 +1,9 @@
+numpy>=1.24
+PyYAML>=6.0
+torch>=2.1
+tqdm>=4.66
+pytest>=7.0
+
+# CAD kernel is installed from conda-forge (see environment.yml).
+# pythonocc-core is intentionally not listed here because it is not reliably
+# distributed on PyPI.

@@ -1,21 +1,66 @@
-# Authoer: BerePi
 #!/bin/bash
+# Author: BerePi
 
 # 기본 설정으로 실행
-# ./video_converter.sh
+# ./video_convert.sh
 # 다른 설정 파일 지정 (옵션)
-# CONFIG_FILE="/path/to/custom.conf" ./video_converter.sh
+# 설정 파일은 스크립트와 같은 디렉터리의 video_convert.conf를 사용
 
 # 설정 파일 로드
-SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CONFIG_FILE="${BASH_SOURCE%.*}.conf"  # 스크립트와 동일한 이름의 .conf 파일 사용
+CONFIG_FILE="$(readlink -f "$CONFIG_FILE")"
+echo "사용 설정 파일: $CONFIG_FILE"
+echo "이 스크립트는 위 경로의 conf 파일 설정을 기준으로 동작합니다."
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "설정 파일을 찾을 수 없습니다: $CONFIG_FILE" >&2
     exit 1
 fi
 
-#옵션 로드, 변수
-source $CONFIG_FILE
+source "$CONFIG_FILE"
+
+# 각 원본 파일 디렉터리 아래에 생성할 MP4 출력 서브 디렉터리
+OUTPUT_SUBDIR="${OUTPUT_SUBDIR:-mp4}"
+if [ -z "$OUTPUT_SUBDIR" ] || [[ "$OUTPUT_SUBDIR" == */* ]]; then
+    echo "OUTPUT_SUBDIR은 슬래시가 없는 디렉터리 이름이어야 합니다: $OUTPUT_SUBDIR" >&2
+    exit 1
+fi
+
+get_output_path() {
+    local input="$1"
+    local dir filename
+    dir=$(dirname "$input")
+    filename=$(basename "$input")
+    printf '%s/%s/%s.mp4\n' "$dir" "$OUTPUT_SUBDIR" "${filename%.*}"
+}
+
+single() {
+    dir=$(dirname "$1")
+    echo $dir
+    filename=$(basename "$1")
+    echo $filename
+    output=$(get_output_path "$1")
+    mkdir -p "$(dirname "$output")" || return 1
+   
+    echo  $output
+
+    ffmpeg -i "$1" \
+    -threads "$THREADS" \
+    -c:v libx264 \
+    -crf "$CRF" \
+    -preset "$PRESET" \
+    -c:a aac \
+    -b:a "$AUDIO_BITRATE" \
+    -strict -2 \
+    "$output" >/dev/null 2>&1
+}
+
+if [ -f "$1" ]; then
+    echo "$1"
+    single "$1"
+    echo "run single conversion"
+    exit 1
+fi
+
 
 # 변수 할당
 #SEARCH_DIR="$directories_SEARCH_DIR"
@@ -36,6 +81,7 @@ echo "Current PWD: $(pwd)"
 
 # 디렉토리 생성
 mkdir -p "$LOG_DIR" || exit 1
+echo "mkdir log dir "$LOG_DIR
 
 # 중복 실행 방지
 if [ -f "$LOCK_FILE" ]; then
@@ -87,14 +133,14 @@ format_size() {
 
 # 함수: 로그 기록
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SCRIPT_DIR: $SCRIPT_DIR] $1" >> "$MAIN_LOG"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$MAIN_LOG"
 }
 
 # 시작 로그
 log "=== 변환 작업 시작 ==="
 
 # 1. 변환 대상 파일 목록 생성 (MKV, AVI, FLV)
-find "$SEARCH_DIR" -type f \( -name "*.mkv" -o -name "*.avi" -o -name "*.flv" \) > "$FILE_LIST_LOG"
+find "$SEARCH_DIR" -type f \( -name "*.mkv" -o -name "*.avi" -o -name "*.flv" -o -name "*.wmv" -o -name "*.mov" -o -name "*.MTS" -o -name "*.m2ts" -o -name "*.rvmb" -o -name "*.skm" -o -name "*.AVI" -o -name "*.MOV" \) > "$FILE_LIST_LOG"
 
 #break_point for test run
 #cat "$FILE_LIST_LOG" > "file_list_devel_opment.txt"
@@ -107,7 +153,7 @@ failed=0
 
 declare -a files_to_convert
 while IFS= read -r file || [[ -n "$file" ]]; do 
-    output="${file%.*}.mp4" 
+    output=$(get_output_path "$file")
     if [ ! -f "$output" ]; then 
         files_to_convert+=("$file") 
         ((processed++)) 
@@ -117,25 +163,33 @@ while IFS= read -r file || [[ -n "$file" ]]; do
     fi 
 done < "$FILE_LIST_LOG"
 
+echo "checked all file list to convert"
+
 # 2. 파일별 변환 실행
 log "변환 시작: 총 ${#files_to_convert[@]}개 파일"
 
+echo "file list to convert"
 echo ${files_to_convert[@]}
 
-exit 1
-
-for file in "${files_to_convert[@]}"; do #경로중 빈칸 에러를 제외하기 위해, 배열에"" 를 사용함 
+for file in "${files_to_convert[@]}"; do
+    echo "loop for file list"
     ((processed++))
     echo "#### For IF Loop ##### processed "$processed" skipped "$skipped
     echo "#### 현재처리중인 파일: $file"
     dir=$(dirname "$file")
     filename=$(basename "$file")
-    output="$dir/${filename%.*}.mp4"
+    output=$(get_output_path "$file")
 
     # MP4가 이미 있으면 건너뜀
     if [ -f "$output" ]; then
         log "건너뜀: $file MP4가 이미 존재"
         ((skipped++))
+        continue
+    fi
+
+    if ! mkdir -p "$(dirname "$output")"; then
+        log "실패: MP4 출력 디렉터리를 만들 수 없음: $(dirname "$output")"
+        ((failed++))
         continue
     fi
 
@@ -166,12 +220,13 @@ for file in "${files_to_convert[@]}"; do #경로중 빈칸 에러를 제외하�
     else
         log "실패: $file ffmpeg 오류"
     fi
-#done < file_list_devel_opment.txt
 done < "$FILE_LIST_LOG"
+#done < file_modified.txt
 
 # 종료 로그
 log "=== 변환 작업 완료 ==="
 
 # 락 파일 제거
 rm $LOCK_FILE
+echo $SEARCH_DIR
 flock -u 9

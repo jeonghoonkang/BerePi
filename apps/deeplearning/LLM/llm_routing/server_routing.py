@@ -100,6 +100,7 @@ GPU_METRIC_KEYWORDS = (
     "vllm:num_requests_waiting",
 )
 TARGET_HISTORY_LIMIT = 100
+GCP_TARGET_ID = "google-ai-studio-endpoint"
 
 
 @dataclass
@@ -108,6 +109,7 @@ class LLMTarget:
     name: str
     host: str
     port: int
+    api_number: int = 0
     proxy_port: int = 0
     model: str = ""
     api_type: str = "ollama"
@@ -185,6 +187,34 @@ class PromptDispatchError(Exception):
         self.target = target
 
 
+class BackendAuthenticationError(RuntimeError):
+    def __init__(self, status_code: int, detail: str = "") -> None:
+        super().__init__(f"Backend authentication failed (HTTP {status_code}).")
+        self.status_code = status_code
+        self.detail = detail
+
+
+class AllModelsFailedError(PromptDispatchError):
+    def __init__(
+        self,
+        message: str,
+        dispatch_count: int,
+        target: LLMTarget,
+        failures: list[dict[str, Any]],
+        routing_messages: list[str],
+    ) -> None:
+        super().__init__(message, dispatch_count, target)
+        self.response_fields = {
+            "all_models_failed": True,
+            "execution_stopped": True,
+            "last_model": target.model,
+            "model_failures": failures,
+            "routing_messages": routing_messages,
+            **dispatch_target_fields(target),
+            **dispatch_info_fields(target),
+        }
+
+
 def dispatch_count_fields(count: int) -> dict[str, int]:
     normalized = max(0, int(count))
     return {
@@ -199,10 +229,23 @@ def dispatch_target_fields(target: LLMTarget | None) -> dict[str, Any]:
             "llm_dispatch_model_number": None,
             "llm_dispatch_target": None,
         }
-    enabled_targets = [item for item in load_targets() if item.enabled]
-    number = next((index + 1 for index, item in enumerate(enabled_targets) if item.id == target.id), None)
+    configured_targets = load_targets()
+    configured_target = next(
+        (item for item in configured_targets if item.id == target.id),
+        None,
+    )
+    number = target.api_number or (
+        (configured_target.api_number or None) if configured_target else None
+    )
+    if number is None:
+        enabled_targets = [item for item in configured_targets if item.enabled]
+        number = next(
+            (index + 1 for index, item in enumerate(enabled_targets) if item.id == target.id),
+            None,
+        )
     target_info = {
         "number": number,
+        "api_number": number,
         "target_id": target.id,
         "target_name": target.name,
         "target_host": target.host,
@@ -371,16 +414,26 @@ def prompt_api_authenticated(handler: BaseHTTPRequestHandler, payload: dict[str,
 def load_targets() -> list[LLMTarget]:
     raw = load_json(CONFIG_PATH, {"targets": []})
     targets: list[LLMTarget] = []
+    used_api_numbers: set[int] = set()
+    next_api_number = 1
     for item in raw.get("targets", []):
         if not isinstance(item, dict):
             continue
         try:
+            requested_api_number = int(item.get("api_number") or 0)
+            if requested_api_number <= 0 or requested_api_number in used_api_numbers:
+                while next_api_number in used_api_numbers:
+                    next_api_number += 1
+                requested_api_number = next_api_number
+            used_api_numbers.add(requested_api_number)
+            next_api_number = max(next_api_number, requested_api_number + 1)
             targets.append(
                 LLMTarget(
                     id=str(item.get("id") or uuid.uuid4().hex),
                     name=str(item.get("name") or item.get("model") or "LLM"),
                     host=str(item.get("host") or "127.0.0.1"),
                     port=int(item.get("port") or 11434),
+                    api_number=requested_api_number,
                     proxy_port=int(item.get("proxy_port") or 0),
                     model=str(item.get("model") or ""),
                     api_type=str(item.get("api_type") or "ollama"),
@@ -432,6 +485,29 @@ def target_history_item(target: LLMTarget) -> dict[str, Any]:
     return item
 
 
+MASKED_SECRET = "********"
+
+
+def mask_secrets_for_api(value: Any) -> Any:
+    """Return an API-safe copy with password fields masked recursively."""
+    if isinstance(value, dict):
+        return {
+            key: (
+                MASKED_SECRET
+                if key.lower() == "password" and field_value
+                else ""
+                if key.lower() == "password"
+                else mask_secrets_for_api(field_value)
+            )
+            for key, field_value in value.items()
+        }
+    if isinstance(value, list):
+        return [mask_secrets_for_api(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(mask_secrets_for_api(item) for item in value)
+    return value
+
+
 def load_target_history() -> list[dict[str, Any]]:
     raw = load_json(CONFIG_PATH, {"targets": [], "target_history": []})
     history = raw.get("target_history", [])
@@ -454,6 +530,22 @@ def save_targets(targets: list[LLMTarget]) -> None:
     if not isinstance(history, list):
         history = []
     save_json(CONFIG_PATH, {"targets": [target.__dict__ for target in targets], "target_history": history})
+
+
+def persist_assigned_api_numbers() -> None:
+    """Write automatically assigned legacy target numbers once so they remain stable."""
+    raw = load_json(CONFIG_PATH, {"targets": []})
+    raw_targets = [item for item in raw.get("targets", []) if isinstance(item, dict)]
+    targets = load_targets()
+    stored_numbers: list[int] = []
+    for item in raw_targets:
+        try:
+            stored_numbers.append(int(item.get("api_number") or 0))
+        except (TypeError, ValueError):
+            stored_numbers.append(0)
+    assigned_numbers = [target.api_number for target in targets]
+    if stored_numbers != assigned_numbers:
+        save_targets(targets)
 
 
 def remember_target_history(target: LLMTarget) -> None:
@@ -535,6 +627,8 @@ def request_json(
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace").strip()
         detail = body[:500] if body else exc.reason
+        if exc.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+            raise BackendAuthenticationError(exc.code, str(detail)) from exc
         raise RuntimeError(f"HTTP {exc.code} from backend: {detail}") from exc
     if not body.strip():
         return {}
@@ -553,6 +647,13 @@ def request_text(url: str, timeout: int = 5, headers: dict[str, str] | None = No
 def target_by_id(target_id: str) -> LLMTarget | None:
     for target in load_targets():
         if target.id == target_id:
+            return target
+    return None
+
+
+def target_by_api_number(api_number: int) -> LLMTarget | None:
+    for target in load_targets():
+        if target.api_number == api_number:
             return target
     return None
 
@@ -1011,7 +1112,20 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         messages = request_payload.get("messages")
         if not isinstance(messages, list):
-            messages = [{"role": "user", "content": prompt}]
+            images = request_payload.get("images")
+            if isinstance(images, list) and images:
+                content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+                content.extend(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{image}"},
+                    }
+                    for image in images
+                    if str(image or "").strip()
+                )
+                messages = [{"role": "user", "content": content}]
+            else:
+                messages = [{"role": "user", "content": prompt}]
         payload = {
             "model": model,
             "messages": messages,
@@ -1030,6 +1144,8 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
         payload["selected_gpu"] = target.selected_gpu
     payload["stream"] = False
     payload.pop("target_id", None)
+    for key in ("api_number", "gpu_number", "target_number", "model_number"):
+        payload.pop(key, None)
     payload.pop("client_id", None)
     payload.pop("user_id", None)
     payload.pop("password", None)
@@ -1113,6 +1229,18 @@ def target_failover_open(target: LLMTarget) -> bool:
         return metric_for(target.id).consecutive_errors >= FAILOVER_AFTER_ERRORS
 
 
+def failover_restart_notice(target: LLMTarget) -> str:
+    with STATE_LOCK:
+        consecutive_errors = metric_for(target.id).consecutive_errors
+    if consecutive_errors < FAILOVER_AFTER_ERRORS:
+        return ""
+    return (
+        f" Consecutive errors reached the failover threshold "
+        f"(consecutive_errors={consecutive_errors}, threshold={FAILOVER_AFTER_ERRORS}). "
+        "Restart the LLM Router to reset the error state."
+    )
+
+
 def available_target_candidates(targets: list[LLMTarget]) -> list[LLMTarget]:
     candidates = []
     for target in targets:
@@ -1133,13 +1261,81 @@ def least_loaded_target(targets: list[LLMTarget]) -> LLMTarget:
     return target
 
 
+def requested_api_number(payload: dict[str, Any]) -> int | None:
+    """Return an explicitly requested GPU API number, accepting legacy-friendly aliases."""
+    values = [
+        payload.get(key)
+        for key in ("api_number", "gpu_number", "target_number", "model_number")
+        if payload.get(key) not in (None, "")
+    ]
+    if not values:
+        return None
+    try:
+        number = int(values[0])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("api_number must be a positive integer.") from exc
+    if number <= 0:
+        raise ValueError("api_number must be a positive integer.")
+    if any(str(value) != str(values[0]) for value in values[1:]):
+        raise ValueError("Conflicting GPU API numbers were supplied.")
+    return number
+
+
+def google_ai_studio_target() -> LLMTarget:
+    settings = GoogleAIStudioClient()
+    base_url = (
+        settings.base_url
+        if isinstance(getattr(settings, "base_url", None), str)
+        else "https://generativelanguage.googleapis.com"
+    )
+    parsed = urllib.parse.urlparse(base_url)
+    return LLMTarget(
+        id=GCP_TARGET_ID,
+        name="Google AI Studio",
+        host=parsed.hostname or "generativelanguage.googleapis.com",
+        port=parsed.port or (443 if parsed.scheme == "https" else 80),
+        model=settings.model_id,
+        api_type="google_ai_studio",
+        gpu_info="GCP managed",
+        gpu_type="cloud",
+        notes="Google AI Studio target selectable through target_id",
+    )
+
+
 def choose_target(payload: dict[str, Any]) -> LLMTarget:
+    requested_id = str(payload.get("target_id") or "").strip()
+    if requested_id == GCP_TARGET_ID:
+        return google_ai_studio_target()
     targets = [target for target in load_targets() if target.enabled]
     if not targets:
         raise ValueError("No enabled LLM targets are configured.")
     ensure_target_queues(targets)
     known_targets = [target for target in targets if target_has_known_availability(target)]
-    requested_id = str(payload.get("target_id") or "")
+    requested_number = requested_api_number(payload)
+    if requested_number is not None:
+        target = next(
+            (item for item in targets if item.api_number == requested_number),
+            None,
+        )
+        if target is None:
+            raise ValueError(
+                f"Requested api_number is not enabled or does not exist: {requested_number}"
+            )
+        if target not in known_targets or target_failover_open(target):
+            availability = metric_for(target.id).available_targets
+            reason = "unknown" if availability is None else str(availability)
+            raise ValueError(
+                f"Requested GPU API #{requested_number} ({target.name}) is not available "
+                f"(available_targets={reason}).{failover_restart_notice(target)}"
+            )
+        queue_for_target = target_queue(target.id)
+        if queue_for_target.qsize() >= QUEUE_MAX_PER_TARGET:
+            raise QueueFullError(
+                f"Requested GPU API #{requested_number} queue is full. "
+                f"max_per_target={QUEUE_MAX_PER_TARGET}",
+                target,
+            )
+        return target
     if requested_id:
         for target in targets:
             if target.id == requested_id:
@@ -1157,7 +1353,8 @@ def choose_target(payload: dict[str, Any]) -> LLMTarget:
                     reason = "unknown" if availability is None else str(availability)
                     raise ValueError(
                         f"Requested target {target.name} is not available "
-                        f"(available_targets={reason}); no eligible fallback model exists."
+                        f"(available_targets={reason}).{failover_restart_notice(target)} "
+                        "No eligible fallback model exists."
                     )
                 return target
         raise ValueError(f"Requested target_id is not enabled or does not exist: {requested_id}")
@@ -1305,7 +1502,10 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         elif target.api_type == "google_ai_studio":
             gcp_payload = dict(payload)
             gcp_payload["model"] = target.model
-            normalized = GoogleAIStudioClient().generate(gcp_payload, effective_timeout)
+            gcp_client = GoogleAIStudioClient()
+            normalized = gcp_client.generate(gcp_payload, effective_timeout)
+            normalized["base_url"] = gcp_client.base_url
+            normalized["endpoint_url"] = gcp_client.endpoint_url
         else:
             supported_models = cached_target_models(target)
             dispatched_model = choose_supported_model(
@@ -1409,14 +1609,98 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
         raise
 
 
-def route_prompt(
+def is_backend_authentication_error(error: BaseException) -> bool:
+    current: BaseException | None = error
+    visited: set[int] = set()
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        if isinstance(current, BackendAuthenticationError):
+            return True
+        if isinstance(current, urllib.error.HTTPError) and current.code in {
+            HTTPStatus.UNAUTHORIZED,
+            HTTPStatus.FORBIDDEN,
+        }:
+            return True
+        status_code = getattr(current, "status_code", None)
+        if status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+            return True
+        lowered = str(current).lower()
+        if any(
+            marker in lowered
+            for marker in (
+                "invalid api key",
+                "invalid api password",
+                "invalid password",
+                "unauthorized",
+                "authentication failed",
+            )
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def prompt_failover_targets(initial_target: LLMTarget) -> list[LLMTarget]:
+    enabled_targets = [target for target in load_targets() if target.enabled]
+    initial_index = next(
+        (index for index, target in enumerate(enabled_targets) if target.id == initial_target.id),
+        None,
+    )
+    # Dedicated Bedrock/GCP endpoints are intentionally isolated from the
+    # configured automatic-routing targets.
+    if initial_index is None:
+        return [initial_target]
+
+    ordered = (
+        enabled_targets[initial_index + 1 :]
+        + enabled_targets[:initial_index]
+    )
+    candidates = [initial_target]
+    attempted_models = {model_dispatch_key(initial_target)}
+    for target in ordered:
+        model_key = model_dispatch_key(target)
+        if model_key in attempted_models:
+            continue
+        attempted_models.add(model_key)
+        metric = metric_for(target.id)
+        if metric.available_targets == 0 or target_failover_open(target):
+            continue
+        candidates.append(target)
+    return candidates
+
+
+def model_failure_fields(
+    target: LLMTarget,
+    error: BaseException,
+    attempt: int,
+) -> tuple[dict[str, Any], str]:
+    authentication_failed = is_backend_authentication_error(error)
+    model_name = target.model or target.name
+    if authentication_failed:
+        message = f"모델 '{model_name}' 호출 인증 정보(암호)가 올바르지 않습니다."
+        failure_type = "authentication"
+    else:
+        message = f"모델 '{model_name}' 호출이 실패했습니다: {error}"
+        failure_type = "backend"
+    return (
+        {
+            "attempt": attempt,
+            "target_id": target.id,
+            "target_name": target.name,
+            "model": target.model,
+            "type": failure_type,
+            "authentication_failed": authentication_failed,
+            "message": message,
+        },
+        message,
+    )
+
+
+def dispatch_prompt_to_target(
     handler: BaseHTTPRequestHandler,
     payload: dict[str, Any],
-    selected_target: LLMTarget | None = None,
+    target: LLMTarget,
 ) -> dict[str, Any]:
-    if not prompt_text(payload).strip():
-        raise ValueError("prompt or messages is required.")
-    target = selected_target or choose_target(payload)
     requested_target_id = str(payload.get("target_id") or "")
     requested_target = target_by_id(requested_target_id) if requested_target_id else None
     failed_models = sorted(
@@ -1497,6 +1781,76 @@ def route_prompt(
     return result
 
 
+def route_prompt(
+    handler: BaseHTTPRequestHandler,
+    payload: dict[str, Any],
+    selected_target: LLMTarget | None = None,
+) -> dict[str, Any]:
+    if not prompt_text(payload).strip():
+        raise ValueError("prompt or messages is required.")
+
+    initial_target = selected_target or choose_target(payload)
+    candidates = (
+        [initial_target]
+        if requested_api_number(payload) is not None
+        else prompt_failover_targets(initial_target)
+    )
+    failures: list[dict[str, Any]] = []
+    routing_messages: list[str] = []
+    total_dispatch_count = 0
+
+    for index, target in enumerate(candidates):
+        try:
+            result = dispatch_prompt_to_target(handler, payload, target)
+        except (PromptDispatchError, QueueFullError) as exc:
+            dispatch_count = (
+                exc.dispatch_count if isinstance(exc, PromptDispatchError) else 0
+            )
+            total_dispatch_count += dispatch_count
+            failure, message = model_failure_fields(target, exc, index + 1)
+            failures.append(failure)
+            has_next_model = index + 1 < len(candidates)
+            if has_next_model:
+                message = f"{message} 다음 모델을 호출합니다."
+            routing_messages.append(message)
+            if has_next_model:
+                continue
+
+            model_name = target.model or target.name
+            stopped_message = (
+                "모든 모델 호출이 실패했습니다. 동일 모델을 반복 호출하지 않고 "
+                f"마지막 모델 '{model_name}'에서 실행을 중지했습니다."
+            )
+            routing_messages.append(stopped_message)
+            raise AllModelsFailedError(
+                stopped_message,
+                total_dispatch_count,
+                target,
+                failures,
+                routing_messages,
+            ) from exc
+
+        total_dispatch_count += int(result.get("llm_dispatch_count") or 1)
+        result.update(dispatch_count_fields(total_dispatch_count))
+        if failures:
+            result["failover_applied"] = True
+            result["model_failures"] = failures
+            result["routing_messages"] = routing_messages
+            result["failover_from_models"] = list(
+                dict.fromkeys(
+                    model
+                    for model in [
+                        *(str(item.get("model") or "") for item in failures),
+                        *result.get("failover_from_models", []),
+                    ]
+                    if model
+                )
+            )
+        return result
+
+    raise RuntimeError("No LLM model candidates were available.")
+
+
 def route_bedrock_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
     """Route only the dedicated Bedrock endpoint to AWS."""
     settings = BedrockClient()
@@ -1518,18 +1872,7 @@ def route_bedrock_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any
 
 def route_gcp_prompt(handler: BaseHTTPRequestHandler, payload: dict[str, Any]) -> dict[str, Any]:
     """Route only the dedicated GCP endpoint to Google AI Studio."""
-    settings = GoogleAIStudioClient()
-    target = LLMTarget(
-        id="google-ai-studio-endpoint",
-        name="Google AI Studio",
-        host="generativelanguage.googleapis.com",
-        port=443,
-        model=settings.model_id,
-        api_type="google_ai_studio",
-        gpu_info="GCP managed",
-        gpu_type="cloud",
-        notes="Dedicated /api/gcp/generate Google AI Studio endpoint",
-    )
+    target = google_ai_studio_target()
     request_payload = dict(payload)
     request_payload.pop("target_id", None)
     return route_prompt(handler, request_payload, selected_target=target)
@@ -1539,11 +1882,12 @@ def gcp_status_payload() -> dict[str, Any]:
     """Return non-secret Google AI Studio readiness information."""
     try:
         status = GoogleAIStudioClient().configuration_status()
-        return {"ok": bool(status.get("configured")), **status}
+        return {"ok": bool(status.get("configured")), "target_id": GCP_TARGET_ID, **status}
     except Exception as exc:  # noqa: BLE001
         return {
             "ok": False,
             "configured": False,
+            "target_id": GCP_TARGET_ID,
             "model_id": "",
             "api_version": "",
             "base_url": "",
@@ -1712,6 +2056,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
         "llm_dispatch_model_number": data.get("llm_dispatch_model_number"),
         "llm_dispatch_target": data.get("llm_dispatch_target"),
         "dispatch_info": data.get("dispatch_info"),
+        "model_failures": data.get("model_failures", []),
+        "routing_messages": data.get("routing_messages", []),
         "routing": {
             "target_id": data.get("target_id"),
             "target_name": data.get("target_name"),
@@ -1729,6 +2075,8 @@ def openai_chat_response(data: dict[str, Any]) -> dict[str, Any]:
             "llm_dispatch_target": data.get("llm_dispatch_target"),
             "dispatch_info": data.get("dispatch_info"),
             "response_seconds": data.get("response_seconds"),
+            "model_failures": data.get("model_failures", []),
+            "messages": data.get("routing_messages", []),
         },
     }
 
@@ -2431,16 +2779,18 @@ def status_payload() -> dict[str, Any]:
         )
     try:
         google_ai_studio = GoogleAIStudioClient().configuration_status()
+        google_ai_studio["target_id"] = GCP_TARGET_ID
     except Exception as exc:  # noqa: BLE001
         google_ai_studio = {
             "configured": False,
+            "target_id": GCP_TARGET_ID,
             "model_id": "",
             "api_version": "",
             "base_url": "",
             "key_source": "not_configured",
             "error": str(exc),
         }
-    return {
+    payload = {
         "started_at": dt.datetime.fromtimestamp(STARTED_AT).astimezone().isoformat(),
         "uptime": seconds_to_uptime(time.time() - STARTED_AT),
         "status_refresh_seconds": STATUS_REFRESH_SECONDS,
@@ -2463,6 +2813,7 @@ def status_payload() -> dict[str, Any]:
         },
         "local": local_system_stats(),
     }
+    return mask_secrets_for_api(payload)
 
 
 LOGIN_HTML = """<!doctype html>
@@ -2544,7 +2895,9 @@ INDEX_HTML = """<!doctype html>
     .metric .value { font-size:18px; font-weight:800; overflow-wrap:anywhere; }
     .runtime-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:14px; }
     .runtime-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:14px; }
+    .runtime-card.router-card { border-width:3px; }
     .runtime-card h3 { margin:0 0 10px; font-size:15px; line-height:1.25; overflow-wrap:anywhere; }
+    .runtime-card .api-number { display:inline-block; margin-right:6px; padding:2px 7px; border-radius:999px; background:var(--accent); color:#fff; font-size:12px; }
     .runtime-card dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 10px; margin:0; font-size:13px; }
     .runtime-card dt { color:var(--muted); }
     .runtime-card dd { margin:0; font-weight:700; overflow-wrap:anywhere; text-align:right; }
@@ -2566,21 +2919,49 @@ INDEX_HTML = """<!doctype html>
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
     .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
     .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
-    .response-box { margin:0; min-height:630px; max-height:630px; overflow:auto; background:#f1f3f5; color:#24292f; border:1px solid #d0d7de; border-radius:8px; padding:14px; line-height:1.48; }
-    .markdown-view { white-space:normal; overflow-wrap:anywhere; }
-    .markdown-view h1, .markdown-view h2, .markdown-view h3 { margin:12px 0 8px; line-height:1.25; }
-    .markdown-view p { margin:0 0 10px; color:#24292f; }
-    .markdown-view ul, .markdown-view ol { margin:0 0 10px 22px; padding:0; }
-    .markdown-view code { background:#e5e7eb; border-radius:4px; padding:1px 4px; }
-    .markdown-view pre { max-height:none; background:#e5e7eb; color:#24292f; border:1px solid #d0d7de; }
+    .response-box { margin:0; min-height:630px; max-height:630px; overflow:auto; background:#fff; color:#1f2937; border:1px solid #cbd5e1; border-radius:10px; padding:22px 24px; line-height:1.68; box-shadow:inset 0 1px 2px rgba(15,23,42,.04); }
+    .markdown-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .markdown-header h3 { margin-bottom:8px; }
+    .markdown-toolbar { display:flex; gap:6px; }
+    .markdown-toolbar button { min-height:30px; padding:0 9px; font-size:12px; }
+    .markdown-view { white-space:normal; overflow-wrap:anywhere; font-size:15px; }
+    .markdown-view h1, .markdown-view h2, .markdown-view h3, .markdown-view h4, .markdown-view h5, .markdown-view h6 { margin:1.25em 0 .55em; line-height:1.28; color:#0f172a; }
+    .markdown-view h1 { font-size:1.75em; border-bottom:2px solid #e2e8f0; padding-bottom:.3em; }
+    .markdown-view h2 { font-size:1.45em; border-bottom:1px solid #e2e8f0; padding-bottom:.25em; }
+    .markdown-view h3 { font-size:1.2em; }
+    .markdown-view p { margin:0 0 1em; color:#1f2937; }
+    .markdown-view ul, .markdown-view ol { margin:0 0 1em 1.6em; padding:0; }
+    .markdown-view li { margin:.25em 0; }
+    .markdown-view code { background:#eef2f7; color:#be123c; border-radius:4px; padding:2px 5px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+    .markdown-view pre { max-height:none; margin:0 0 1em; background:#0f172a; color:#e2e8f0; border:1px solid #1e293b; border-radius:8px; padding:14px 16px; white-space:pre; }
+    .markdown-view pre code { background:transparent; color:inherit; padding:0; }
+    .markdown-view blockquote { margin:0 0 1em; padding:.5em 1em; border-left:4px solid var(--accent); background:#f0fdfa; color:#475569; }
+    .markdown-view blockquote p { margin:0; color:inherit; }
+    .markdown-view table { margin:0 0 1em; display:block; overflow-x:auto; }
+    .markdown-view th { background:#f1f5f9; color:#334155; }
+    .markdown-view th, .markdown-view td { border:1px solid #cbd5e1; padding:7px 10px; }
+    .markdown-view hr { border:0; border-top:1px solid #cbd5e1; margin:1.4em 0; }
+    .markdown-view a { color:#0369a1; text-decoration:underline; text-underline-offset:2px; }
+    .markdown-view.source-mode { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
+    .target-list-bottom { margin-top:28px; padding-top:14px; border-top:2px solid var(--line); }
     .raw-view { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
     .compare-response { max-width:420px; max-height:120px; overflow:auto; white-space:pre-wrap; }
+    .ocr-grid { display:grid; grid-template-columns:minmax(280px,.9fr) minmax(0,1.1fr); gap:14px; margin-top:12px; }
+    .ocr-source-tabs { display:flex; gap:8px; margin:12px 0; }
+    .ocr-source-tab.active { color:#fff; background:var(--accent); border-color:var(--accent); }
+    .ocr-source-panel { display:none; }
+    .ocr-source-panel.active { display:block; }
+    .ocr-paste-zone { display:grid; place-items:center; min-height:120px; padding:18px; border:2px dashed var(--line); border-radius:8px; background:#fff; color:var(--muted); text-align:center; cursor:text; outline:none; }
+    .ocr-paste-zone:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(15,118,110,.14); }
+    .ocr-preview { min-height:220px; margin-top:12px; padding:10px; display:grid; place-items:center; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--muted); overflow:auto; }
+    .ocr-preview img { display:block; max-width:100%; max-height:520px; object-fit:contain; }
+    .ocr-result { min-height:420px; max-height:620px; }
     button { min-height:36px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-weight:700; padding:0 12px; }
     button.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
     button.danger { color:#fff; background:var(--bad); border-color:var(--bad); }
     .ok { color:var(--accent); font-weight:700; } .error { color:var(--bad); font-weight:700; } .warn { color:var(--warn); font-weight:700; }
     pre { margin:0; white-space:pre-wrap; overflow:auto; max-height:420px; background:#101820; color:#ecf3f5; border-radius:8px; padding:12px; }
-    @media (max-width:900px) { .grid, .form-grid { grid-template-columns:1fr 1fr; } header { display:block; } }
+    @media (max-width:900px) { .grid, .form-grid { grid-template-columns:1fr 1fr; } .ocr-grid { grid-template-columns:1fr; } header { display:block; } }
     @media (max-width:620px) { .grid, .form-grid { grid-template-columns:1fr; } }
   </style>
 </head>
@@ -2601,6 +2982,7 @@ INDEX_HTML = """<!doctype html>
     <button data-tab="service">서비스</button>
     <button data-tab="local">로컬머신</button>
     <button data-tab="test">프롬프트 테스트</button>
+    <button data-tab="ocr">이미지 OCR</button>
     <button data-tab="gcp">GCP 테스트</button>
   </nav>
   <section id="llms" class="active">
@@ -2617,7 +2999,9 @@ INDEX_HTML = """<!doctype html>
         <button class="primary" onclick="saveTarget()">저장</button>
         <input id="gpu_type" placeholder="GPU 종류">
         <input id="gpu_info" placeholder="GPU 정보">
-        <select id="selected_gpu"><option value="">GPU 자동 선택</option></select>
+        <label>GPU 번호 선택
+          <select id="selected_gpu"><option value="">GPU 자동 선택</option></select>
+        </label>
         <input id="selected_gpu_label" type="hidden">
         <input id="access_id" placeholder="접근 ID">
         <input id="password" placeholder="PASS" type="password">
@@ -2637,7 +3021,7 @@ INDEX_HTML = """<!doctype html>
       <input id="target_id" type="hidden">
     </div>
     <div id="duplicateNotice" class="notice"></div>
-    <table><thead><tr><th>상태</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>동작시간</th><th>응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
+    <table><thead><tr><th>상태</th><th>API 번호</th><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th><th>처리 수</th><th>동작시간</th><th>응답</th><th>관리</th></tr></thead><tbody id="targetRows"></tbody></table>
   </section>
   <section id="service">
     <div class="grid" id="serviceMetrics"></div>
@@ -2664,7 +3048,6 @@ INDEX_HTML = """<!doctype html>
   <section id="test">
     <div class="panel">
       <select id="test_target"></select>
-      <div id="autoTargetSummary" class="model-status"></div>
       <textarea id="test_prompt" placeholder="전송할 prompt">다른 내용 없이 ok 만 회신</textarea>
       <div class="test-toolbar">
         <button class="primary" onclick="sendPrompt()">전송</button>
@@ -2678,11 +3061,16 @@ INDEX_HTML = """<!doctype html>
       <div class="metric"><div class="label">응답 시간</div><div id="test_response_time" class="value">-</div></div>
       <div class="metric"><div class="label">선택 결과</div><div id="test_selected_target" class="value">-</div></div>
     </div>
-    <h3>자동 선택 대상 모델/GPU</h3>
-    <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
     <div class="test-output">
       <div>
-        <h3>회신</h3>
+        <div class="markdown-header">
+          <h3>회신</h3>
+          <div class="markdown-toolbar">
+            <button onclick="setMarkdownMode('test_answer','preview')">미리보기</button>
+            <button onclick="setMarkdownMode('test_answer','source')">Markdown</button>
+            <button onclick="copyMarkdown('test_answer')">복사</button>
+          </div>
+        </div>
         <div id="test_answer" class="response-box markdown-view"></div>
       </div>
       <div>
@@ -2692,6 +3080,59 @@ INDEX_HTML = """<!doctype html>
     </div>
     <h3>전체 모델 비교</h3>
     <table><thead><tr><th>상태</th><th>LLM</th><th>모델</th><th>GPU</th><th>소요 시간</th><th>수신 내용</th></tr></thead><tbody id="compareRows"></tbody></table>
+    <div class="target-list-bottom">
+      <h3>자동 선택 대상 모델/GPU</h3>
+      <div id="autoTargetSummary" class="model-status"></div>
+      <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
+    </div>
+  </section>
+  <section id="ocr">
+    <div class="panel">
+      <h2 style="margin-top:0">이미지 OCR</h2>
+      <p>클립보드의 스크린샷을 붙여넣거나 이미지 파일을 업로드하여 선택한 LLM에서 문자를 추출합니다.</p>
+      <div class="ocr-grid">
+        <div>
+          <label for="ocr_target">OCR 실행 대상</label>
+          <select id="ocr_target"></select>
+          <div class="ocr-source-tabs" role="tablist" aria-label="OCR 이미지 입력 방식">
+            <button class="ocr-source-tab active" data-ocr-source="ocr_clipboard_panel" type="button" role="tab" aria-selected="true">클립보드 스크린샷</button>
+            <button class="ocr-source-tab" data-ocr-source="ocr_upload_panel" type="button" role="tab" aria-selected="false">이미지 파일 업로드</button>
+          </div>
+          <div id="ocr_clipboard_panel" class="ocr-source-panel active" role="tabpanel">
+            <div id="ocr_paste_zone" class="ocr-paste-zone" tabindex="0">이 영역을 클릭한 뒤 Ctrl+V 또는 Cmd+V로 스크린샷을 붙여넣으세요.</div>
+            <div class="test-toolbar">
+              <button type="button" onclick="readOcrClipboard()">클립보드 이미지 가져오기</button>
+              <button class="primary" type="button" onclick="runOcr()">붙여넣은 이미지 OCR 실행</button>
+            </div>
+          </div>
+          <div id="ocr_upload_panel" class="ocr-source-panel" role="tabpanel">
+            <label for="ocr_image">이미지 파일 선택</label>
+            <input id="ocr_image" type="file" accept="image/*">
+            <div class="test-toolbar">
+              <button class="primary" type="button" onclick="runOcr()">업로드 이미지 OCR 실행</button>
+            </div>
+          </div>
+          <div id="ocr_preview" class="ocr-preview">선택된 이미지가 없습니다.</div>
+          <div id="ocr_status" class="model-status">대기</div>
+        </div>
+        <div>
+          <label for="ocr_prompt">OCR 지시문</label>
+          <textarea id="ocr_prompt">이미지에서 읽을 수 있는 모든 문자를 정확하게 추출해 주세요. 원문의 줄바꿈과 표 구조를 가능한 한 유지하고, 설명 없이 추출된 문자만 출력해 주세요.</textarea>
+          <div class="markdown-header">
+            <h3>OCR 결과</h3>
+            <div class="markdown-toolbar">
+              <button onclick="setMarkdownMode('ocr_result','preview')">미리보기</button>
+              <button onclick="setMarkdownMode('ocr_result','source')">Markdown</button>
+              <button onclick="copyMarkdown('ocr_result')">복사</button>
+              <button onclick="clearOcr()">지우기</button>
+            </div>
+          </div>
+          <div id="ocr_result" class="response-box markdown-view ocr-result"></div>
+          <h3>원본 응답</h3>
+          <pre id="ocr_raw_result"></pre>
+        </div>
+      </div>
+    </div>
   </section>
   <section id="gcp">
     <div class="panel">
@@ -2707,6 +3148,7 @@ INDEX_HTML = """<!doctype html>
     <div class="test-metrics">
       <div class="metric"><div class="label">API Key</div><div id="gcp_key_status" class="value">확인 중</div></div>
       <div class="metric"><div class="label">모델</div><div id="gcp_model" class="value">-</div></div>
+      <div class="metric"><div class="label">API base_url</div><div id="gcp_base_url" class="value">-</div></div>
       <div class="metric"><div class="label">상태</div><div id="gcp_test_status" class="value">대기</div></div>
       <div class="metric"><div class="label">응답 시간</div><div id="gcp_test_elapsed" class="value">-</div></div>
     </div>
@@ -2725,6 +3167,7 @@ INDEX_HTML = """<!doctype html>
 <script>
 let state = {};
 let selectedTestTargetId = localStorage.getItem('llmRoutingTestTargetId') || '';
+let ocrImageFile = null;
 for (const btn of document.querySelectorAll('nav button')) {
   btn.onclick = () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
@@ -2737,29 +3180,41 @@ function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 function inlineMarkdown(text) {
   return esc(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+    .replace(/(^|[^*])\\*([^*]+)\\*/g, '$1<em>$2</em>')
+    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+|mailto:[^\\s)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 function renderMarkdown(text) {
   const lines = String(text || '').split(/\\r?\\n/);
   const html = [];
   let inCode = false;
   let codeLines = [];
-  let inList = false;
+  let codeLanguage = '';
+  let listType = '';
   function closeList() {
-    if (inList) {
-      html.push('</ul>');
-      inList = false;
+    if (listType) {
+      html.push(`</${listType}>`);
+      listType = '';
     }
   }
-  for (const line of lines) {
-    if (line.trim().startsWith('```')) {
+  function tableCells(line) {
+    return line.trim().replace(/^\\||\\|$/g, '').split('|').map(cell => cell.trim());
+  }
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fence = line.trim().match(/^```\\s*([\\w+-]*)/);
+    if (fence) {
       if (inCode) {
-        html.push(`<pre><code>${esc(codeLines.join('\\n'))}</code></pre>`);
+        const languageClass = codeLanguage ? ` class="language-${esc(codeLanguage)}"` : '';
+        html.push(`<pre><code${languageClass}>${esc(codeLines.join('\\n'))}</code></pre>`);
         codeLines = [];
+        codeLanguage = '';
         inCode = false;
       } else {
         closeList();
         inCode = true;
+        codeLanguage = fence[1] || '';
       }
       continue;
     }
@@ -2767,36 +3222,87 @@ function renderMarkdown(text) {
       codeLines.push(line);
       continue;
     }
-    const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+    const heading = line.match(/^(#{1,6})\\s+(.+)$/);
     if (heading) {
       closeList();
       html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
       continue;
     }
-    const bullet = line.match(/^\\s*[-*]\\s+(.+)$/);
-    if (bullet) {
-      if (!inList) {
-        html.push('<ul>');
-        inList = true;
+    if (/^\\s*([-*_])(?:\\s*\\1){2,}\\s*$/.test(line)) {
+      closeList();
+      html.push('<hr>');
+      continue;
+    }
+    if (line.includes('|') && index + 1 < lines.length && /^\\s*\\|?\\s*:?-{3,}/.test(lines[index + 1])) {
+      closeList();
+      const headers = tableCells(line);
+      html.push(`<table><thead><tr>${headers.map(cell => `<th>${inlineMarkdown(cell)}</th>`).join('')}</tr></thead><tbody>`);
+      index += 2;
+      while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+        const cells = tableCells(lines[index]);
+        html.push(`<tr>${cells.map(cell => `<td>${inlineMarkdown(cell)}</td>`).join('')}</tr>`);
+        index += 1;
       }
-      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      html.push('</tbody></table>');
+      index -= 1;
+      continue;
+    }
+    const listItem = line.match(/^\\s*([-*+] |\\d+\\. )(.+)$/);
+    if (listItem) {
+      const nextListType = /^\\d/.test(listItem[1]) ? 'ol' : 'ul';
+      if (listType !== nextListType) {
+        closeList();
+        html.push(`<${nextListType}>`);
+        listType = nextListType;
+      }
+      const task = listItem[2].match(/^\\[([ xX])\\]\\s+(.+)$/);
+      html.push(task
+        ? `<li class="task-item"><input type="checkbox" disabled${task[1].toLowerCase() === 'x' ? ' checked' : ''}> ${inlineMarkdown(task[2])}</li>`
+        : `<li>${inlineMarkdown(listItem[2])}</li>`);
       continue;
     }
     closeList();
+    const quote = line.match(/^>\\s?(.*)$/);
+    if (quote) {
+      html.push(`<blockquote><p>${inlineMarkdown(quote[1])}</p></blockquote>`);
+      continue;
+    }
     if (!line.trim()) {
-      html.push('<br>');
+      continue;
     } else {
       html.push(`<p>${inlineMarkdown(line)}</p>`);
     }
   }
   if (inCode) {
-    html.push(`<pre><code>${esc(codeLines.join('\\n'))}</code></pre>`);
+    const languageClass = codeLanguage ? ` class="language-${esc(codeLanguage)}"` : '';
+    html.push(`<pre><code${languageClass}>${esc(codeLines.join('\\n'))}</code></pre>`);
   }
   closeList();
   return html.join('');
 }
+function setMarkdownContent(id, text) {
+  const element = document.getElementById(id);
+  element.dataset.markdown = String(text || '');
+  element.classList.remove('source-mode');
+  element.innerHTML = renderMarkdown(element.dataset.markdown);
+}
+function setMarkdownMode(id, mode) {
+  const element = document.getElementById(id);
+  const markdown = element.dataset.markdown || '';
+  if (mode === 'source') {
+    element.classList.add('source-mode');
+    element.textContent = markdown;
+  } else {
+    element.classList.remove('source-mode');
+    element.innerHTML = renderMarkdown(markdown);
+  }
+}
+async function copyMarkdown(id) {
+  const markdown = document.getElementById(id).dataset.markdown || '';
+  await navigator.clipboard.writeText(markdown);
+}
 function setAnswer(text) {
-  document.getElementById('test_answer').innerHTML = renderMarkdown(text);
+  setMarkdownContent('test_answer', text);
 }
 function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
 function formatDuration(seconds) {
@@ -2840,7 +3346,11 @@ async function api(path, options) {
     throw new Error('login required');
   }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    const error = new Error(data.error || res.statusText);
+    error.data = data;
+    throw error;
+  }
   return data;
 }
 async function logout() {
@@ -2858,6 +3368,7 @@ function renderGcpStatus() {
   keyStatus.textContent = configured ? '설정됨' : '미설정';
   keyStatus.className = `value ${configured ? 'ok' : 'error'}`;
   document.getElementById('gcp_model').textContent = config.model_id || '-';
+  document.getElementById('gcp_base_url').textContent = config.base_url || '-';
   document.getElementById('gcp_test_button').disabled = !configured;
   document.getElementById('gcp_config_notice').textContent = configured
     ? `API Key가 설정되어 있습니다 (${config.key_source || 'configured'}). ${config.model_id || ''} 모델을 테스트할 수 있습니다.`
@@ -2885,7 +3396,7 @@ function renderTargets() {
     metric('최근 LLM 동작시각', latestTargetActivity(targets, metrics))
   ].join('');
   document.getElementById('runtimeCards').innerHTML = [
-    `<div class="runtime-card">
+    `<div class="runtime-card router-card">
       <h3>LLM Router</h3>
       <dl>
         <dt>uptime</dt><dd>${esc(state.uptime || '-')}</dd>
@@ -2899,9 +3410,13 @@ function renderTargets() {
     ...targets.map(t => {
       const m = metrics[t.id] || {};
       const cls = m.status === 'ok' ? 'ok' : (m.status === 'error' ? 'error' : 'warn');
+      const selectedGpuDevice = m.selected_gpu_device || t.selected_gpu_label || m.gpu_info || t.gpu_info || '-';
       return `<div class="runtime-card">
-        <h3>${esc(t.name || t.model || t.id)}</h3>
+        <h3><span class="api-number">#${esc(t.api_number || '-')}</span>${esc(t.name || t.model || t.id)}</h3>
         <dl>
+          <dt>API 번호</dt><dd>#${esc(t.api_number || '-')}</dd>
+          <dt>모델</dt><dd>${esc(t.model || '-')}</dd>
+          <dt>GPU</dt><dd>${esc(selectedGpuDevice)}</dd>
           <dt>상태</dt><dd><span class="${cls}">${esc(m.status || 'unknown')}</span></dd>
           <dt>사용 여부</dt><dd>${esc(t.enabled ? '사용' : '비사용')}</dd>
           <dt>서비스 uptime</dt><dd>${esc(m.uptime || '-')}</dd>
@@ -2924,6 +3439,7 @@ function renderTargets() {
     const duplicateBadge = duplicateIds.has(t.id) ? '<br><span class="duplicate-badge">중복</span>' : '';
     return `<tr class="${duplicateIds.has(t.id) ? 'duplicate-row' : ''}">
       <td><span class="${cls}">${esc(m.status || 'unknown')}</span><br>${t.enabled ? 'enabled' : 'disabled'}${duplicateBadge}</td>
+      <td><strong>#${esc(t.api_number || '-')}</strong><br><small>/api/generate/${esc(t.api_number || '')}</small></td>
       <td>${esc(t.name)}<br><small>${esc(t.id)}</small></td>
       <td>${esc(t.host)}:${esc(t.port)}<br><small>${esc(t.api_type)}${t.proxy_port ? ` / proxy :${esc(t.proxy_port)}` : ''}</small>${ifconfigIps}</td>
       <td>${esc(t.model)}</td>
@@ -3022,15 +3538,25 @@ async function testWebdavSettings() {
 }
 function renderTestTargets() {
   const select = document.getElementById('test_target');
+  const ocrSelect = document.getElementById('ocr_target');
   const previousValue = select.value || selectedTestTargetId;
   const enabledTargets = (state.targets || []).filter(t=>t.enabled);
-  select.innerHTML = '<option value="">자동 선택</option>' + (state.targets || []).filter(t=>t.enabled).map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
-  if (previousValue && enabledTargets.some(t => t.id === previousValue)) {
+  const gcp = state.google_ai_studio || {};
+  const selectableTargets = [...enabledTargets];
+  if (gcp.configured && gcp.target_id) {
+    selectableTargets.push({id:gcp.target_id, name:'Google AI Studio', model:gcp.model_id});
+  }
+  select.innerHTML = '<option value="">자동 선택</option>' + selectableTargets.map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
+  ocrSelect.innerHTML = '<option value="">자동 선택</option>' + enabledTargets.map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${esc(t.model)})</option>`).join('');
+  if (previousValue && selectableTargets.some(t => t.id === previousValue)) {
     select.value = previousValue;
   } else {
     select.value = '';
     selectedTestTargetId = '';
     localStorage.removeItem('llmRoutingTestTargetId');
+  }
+  if (previousValue && enabledTargets.some(t => t.id === previousValue)) {
+    ocrSelect.value = previousValue;
   }
   renderAutoTargetRows(enabledTargets);
 }
@@ -3071,7 +3597,7 @@ function setGpuOptions(gpus, selectedGpu = '') {
     select.value = currentGpu;
   }
 }
-function editTarget(t) {
+async function editTarget(t) {
   for (const key of ['target_id','name','host','port','proxy_port','model','api_type','gpu_type','gpu_info','selected_gpu','selected_gpu_label','access_id','password','notes']) {
     const id = key === 'target_id' ? 'target_id' : key;
     const value = key === 'target_id' ? t.id : t[key];
@@ -3080,7 +3606,8 @@ function editTarget(t) {
   document.getElementById('enabled').checked = Boolean(t.enabled);
   setModelOptions([], t.model || '');
   setGpuOptions([], t.selected_gpu || '');
-  document.getElementById('model_status').textContent = '';
+  document.getElementById('model_status').textContent = '편집할 서버의 모델/GPU 목록을 조회합니다...';
+  await loadModels(true);
 }
 function applyTargetHistory() {
   const select = document.getElementById('target_history');
@@ -3104,7 +3631,7 @@ function clearForm() {
   setGpuOptions([]);
   document.getElementById('model_status').textContent = '';
 }
-async function loadModels() {
+async function loadModels(preserveSelectionOnError = false) {
   const status = document.getElementById('model_status');
   const payload = {};
   for (const id of ['host','port','api_type','access_id','password']) payload[id] = document.getElementById(id).value;
@@ -3116,8 +3643,10 @@ async function loadModels() {
     const gpuText = (data.gpus || []).length ? `, GPU ${(data.gpus || []).length}개` : '';
     status.textContent = `${(data.models || []).length}개 모델${gpuText}를 찾았습니다.`;
   } catch (err) {
-    setModelOptions([]);
-    setGpuOptions([]);
+    if (!preserveSelectionOnError) {
+      setModelOptions([]);
+      setGpuOptions([]);
+    }
     status.textContent = String(err);
   }
 }
@@ -3141,6 +3670,96 @@ async function setTargetEnabled(id, enabled) {
 async function deleteTarget(id) {
   await api('/api/delete-target', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
   await refresh();
+}
+function showOcrSource(panelId) {
+  document.querySelectorAll('.ocr-source-tab').forEach(tab => {
+    const active = tab.dataset.ocrSource === panelId;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('.ocr-source-panel').forEach(panel => panel.classList.toggle('active', panel.id === panelId));
+  if (panelId === 'ocr_clipboard_panel') document.getElementById('ocr_paste_zone').focus();
+}
+function imageFromClipboardEvent(event) {
+  const item = Array.from(event.clipboardData?.items || []).find(value => String(value.type || '').startsWith('image/'));
+  return item ? item.getAsFile() : null;
+}
+async function imageData(file) {
+  if (!file) throw new Error('OCR에 사용할 이미지를 먼저 선택하거나 붙여넣어 주세요.');
+  if (!String(file.type || '').startsWith('image/')) throw new Error('이미지 파일만 사용할 수 있습니다.');
+  if (file.size > 15 * 1024 * 1024) throw new Error('이미지 크기는 15MB 이하여야 합니다.');
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      resolve({dataUrl, base64: dataUrl.includes(',') ? dataUrl.split(',', 2)[1] : dataUrl});
+    };
+    reader.onerror = () => reject(reader.error || new Error('이미지를 읽지 못했습니다.'));
+    reader.readAsDataURL(file);
+  });
+}
+async function setOcrImage(file, sourceLabel) {
+  const data = await imageData(file);
+  ocrImageFile = file;
+  document.getElementById('ocr_preview').innerHTML = `<img src="${data.dataUrl}" alt="OCR preview">`;
+  document.getElementById('ocr_status').textContent = `${sourceLabel}: ${file.name || 'clipboard image'} (${Math.ceil(file.size / 1024)}KB)`;
+}
+async function readOcrClipboard() {
+  const status = document.getElementById('ocr_status');
+  try {
+    if (!navigator.clipboard?.read) throw new Error('clipboard read unavailable');
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = item.types.find(value => value.startsWith('image/'));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      await setOcrImage(new File([blob], `clipboard_${Date.now()}.png`, {type}), '클립보드 이미지');
+      return;
+    }
+    throw new Error('클립보드에 이미지가 없습니다.');
+  } catch (err) {
+    document.getElementById('ocr_paste_zone').focus();
+    status.textContent = `${String(err)} Ctrl+V 또는 Cmd+V로 붙여넣어 주세요.`;
+  }
+}
+async function runOcr() {
+  const status = document.getElementById('ocr_status');
+  const startedAt = performance.now();
+  status.textContent = '이미지를 준비하는 중입니다...';
+  setMarkdownContent('ocr_result', '');
+  document.getElementById('ocr_raw_result').textContent = 'Running...';
+  try {
+    const dataUrl = await imageData(ocrImageFile);
+    const prompt = document.getElementById('ocr_prompt').value.trim();
+    if (!prompt) throw new Error('OCR 지시문을 입력해 주세요.');
+    const payload = {
+      prompt,
+      images: [dataUrl.base64],
+      target_id: document.getElementById('ocr_target').value,
+      client_id: 'web-ui-ocr'
+    };
+    status.textContent = 'OCR 처리 중...';
+    const data = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const elapsed = (performance.now() - startedAt) / 1000;
+    setMarkdownContent('ocr_result', data.response || 'OCR 결과가 없습니다.');
+    document.getElementById('ocr_raw_result').textContent = JSON.stringify(data, null, 2);
+    status.textContent = `OCR 완료: ${elapsed.toFixed(2)}초 / ${selectedTargetLabel(data)}`;
+  } catch (err) {
+    const elapsed = (performance.now() - startedAt) / 1000;
+    const message = err.data?.error || String(err);
+    setMarkdownContent('ocr_result', message);
+    document.getElementById('ocr_raw_result').textContent = err.data ? JSON.stringify(err.data, null, 2) : String(err);
+    status.textContent = `OCR 오류 (${elapsed.toFixed(2)}초)`;
+  }
+  await refresh();
+}
+function clearOcr() {
+  ocrImageFile = null;
+  document.getElementById('ocr_image').value = '';
+  document.getElementById('ocr_preview').textContent = '선택된 이미지가 없습니다.';
+  document.getElementById('ocr_status').textContent = '대기';
+  setMarkdownContent('ocr_result', '');
+  document.getElementById('ocr_raw_result').textContent = '';
 }
 async function sendPrompt() {
   const select = document.getElementById('test_target');
@@ -3173,9 +3792,14 @@ async function sendPrompt() {
     document.getElementById('test_status').textContent = '오류';
     document.getElementById('test_elapsed').textContent = `${elapsedSeconds.toFixed(2)}s`;
     document.getElementById('test_response_time').textContent = '-';
-    document.getElementById('test_selected_target').textContent = '-';
-    setAnswer('');
-    document.getElementById('test_result').textContent = String(err);
+    const errorData = err.data || {};
+    document.getElementById('test_selected_target').textContent = errorData.llm_dispatch_target
+      ? `${errorData.llm_dispatch_target.target_name || ''} / ${errorData.last_model || errorData.llm_dispatch_target.model || ''}`
+      : '-';
+    setAnswer((errorData.routing_messages || [String(err)]).join('\\n'));
+    document.getElementById('test_result').textContent = err.data
+      ? JSON.stringify(err.data, null, 2)
+      : String(err);
   } finally {
     window.clearInterval(elapsedTimer);
   }
@@ -3202,6 +3826,7 @@ function renderCompareResults(results) {
 }
 function promptResponseDetails(data) {
   const selectedGpu = data.selected_gpu_device || data.selected_gpu_label || data.selected_gpu || 'auto';
+  const routingMessages = (data.routing_messages || []).map(message => `> ${message}`);
   const lines = [
     `### ${data.target_name || ''}`,
     `- Target: ${data.target_host || ''}:${data.target_port || ''}`,
@@ -3211,6 +3836,8 @@ function promptResponseDetails(data) {
     `- Selected GPU: ${selectedGpu}`,
     `- Elapsed: ${Number(data.response_seconds || 0).toFixed(2)}s`,
     '',
+    ...routingMessages,
+    ...(routingMessages.length ? [''] : []),
     data.response || ''
   ];
   return lines.join('\\n');
@@ -3287,7 +3914,10 @@ async function sendGcpPrompt() {
     const elapsedSeconds = (performance.now() - startedAt) / 1000;
     document.getElementById('gcp_test_status').textContent = '완료';
     document.getElementById('gcp_test_elapsed').textContent = `${Number(data.response_seconds || elapsedSeconds).toFixed(2)}s`;
-    document.getElementById('gcp_test_answer').innerHTML = renderMarkdown(data.response || '');
+    document.getElementById('gcp_base_url').textContent = data.base_url || config.base_url || '-';
+    document.getElementById('gcp_test_answer').innerHTML = renderMarkdown(
+      `**API base_url:** ${data.base_url || config.base_url || '-'}\n\n${data.response || ''}`
+    );
     document.getElementById('gcp_test_result').textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     document.getElementById('gcp_test_status').textContent = '오류';
@@ -3312,6 +3942,30 @@ document.getElementById('test_target').addEventListener('change', (event) => {
     localStorage.setItem('llmRoutingTestTargetId', selectedTestTargetId);
   } else {
     localStorage.removeItem('llmRoutingTestTargetId');
+  }
+});
+document.querySelectorAll('.ocr-source-tab').forEach(tab => {
+  tab.addEventListener('click', () => showOcrSource(tab.dataset.ocrSource));
+});
+document.getElementById('ocr_image').addEventListener('change', async event => {
+  const file = event.target.files?.[0] || null;
+  try {
+    if (file) await setOcrImage(file, '업로드 이미지');
+  } catch (err) {
+    document.getElementById('ocr_status').textContent = String(err);
+  }
+});
+document.getElementById('ocr_paste_zone').addEventListener('paste', async event => {
+  const file = imageFromClipboardEvent(event);
+  if (!file) {
+    document.getElementById('ocr_status').textContent = '붙여넣은 내용에 이미지가 없습니다.';
+    return;
+  }
+  event.preventDefault();
+  try {
+    await setOcrImage(file, '클립보드 이미지');
+  } catch (err) {
+    document.getElementById('ocr_status').textContent = String(err);
   }
 });
 document.getElementById('model_select').addEventListener('change', (event) => {
@@ -3417,6 +4071,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     **dispatch_count_fields(exc.dispatch_count),
                     **dispatch_metadata,
                     **dispatch_info,
+                    **getattr(exc, "response_fields", {}),
                 },
             )
         except QueueFullError as exc:
@@ -3493,6 +4148,13 @@ class RoutingHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self.read_json()
+            request_path = urllib.parse.urlparse(self.path).path.rstrip("/") or "/"
+            numbered_generate = re.fullmatch(
+                r"/(?:api/)?generate/(\d+)(/stream)?",
+                request_path,
+            )
+            if numbered_generate:
+                payload["api_number"] = int(numbered_generate.group(1))
             if self.path == "/api/login":
                 if valid_admin_password(str(payload.get("password") or "")):
                     body = json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
@@ -3521,11 +4183,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 "/api/generate/stream",
                 "/generate/stream",
                 "/api/chat/stream",
-            }:
+            } or numbered_generate:
                 if not prompt_api_authenticated(self, payload):
                     self.write_json({"ok": False, "error": "invalid api password"}, HTTPStatus.UNAUTHORIZED)
                     return
-                if self.path.endswith("/stream") or payload.get("stream") is True:
+                if request_path.endswith("/stream") or payload.get("stream") is True:
                     self.write_prompt_sse(payload)
                     return
                 self.write_json(route_prompt(self, payload))
@@ -3585,6 +4247,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
                     **dispatch_count_fields(exc.dispatch_count),
                     **dispatch_target_fields(exc.target),
                     **dispatch_info_fields(exc.target),
+                    **getattr(exc, "response_fields", {}),
                 },
                 HTTPStatus.BAD_GATEWAY,
             )
@@ -3624,11 +4287,28 @@ class RoutingHandler(BaseHTTPRequestHandler):
         port = int(payload.get("port") or 0)
         if port <= 0:
             raise ValueError("port is required.")
+        targets = load_targets()
+        existing_target = next((target for target in targets if target.id == target_id), None)
+        used_api_numbers = {
+            target.api_number for target in targets if target.id != target_id
+        }
+        requested_number = int(payload.get("api_number") or 0)
+        api_number = requested_number or (
+            existing_target.api_number if existing_target else max(used_api_numbers, default=0) + 1
+        )
+        if api_number <= 0:
+            raise ValueError("api_number must be a positive integer.")
+        if api_number in used_api_numbers:
+            raise ValueError(f"api_number is already assigned: {api_number}")
+        submitted_password = str(payload.get("password") or "")
+        if submitted_password == MASKED_SECRET:
+            submitted_password = existing_target.password if existing_target else ""
         new_target = LLMTarget(
             id=target_id,
             name=name,
             host=host,
             port=port,
+            api_number=api_number,
             proxy_port=int(payload.get("proxy_port") or 0),
             model=str(payload.get("model") or "").strip(),
             api_type=str(payload.get("api_type") or "ollama").strip(),
@@ -3637,12 +4317,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
             selected_gpu=str(payload.get("selected_gpu") or "").strip(),
             selected_gpu_label=str(payload.get("selected_gpu_label") or "").strip(),
             access_id=str(payload.get("access_id") or "").strip(),
-            password=str(payload.get("password") or ""),
+            password=submitted_password,
             enabled=bool_value(payload.get("enabled"), True),
             weight=max(1, int(payload.get("weight") or 1)),
             notes=str(payload.get("notes") or "").strip(),
         )
-        targets = load_targets()
         replaced = False
         for index, target in enumerate(targets):
             if target.id == target_id:
@@ -3656,7 +4335,7 @@ class RoutingHandler(BaseHTTPRequestHandler):
             TARGET_MODEL_LIST_CACHE.pop(target_id, None)
         remember_target_history(new_target)
         sync_ollama_proxy_servers()
-        return new_target.__dict__
+        return mask_secrets_for_api(new_target.__dict__)
 
     def set_target_enabled(self, payload: dict[str, Any]) -> dict[str, Any]:
         target_id = str(payload.get("id") or "").strip()
@@ -3695,6 +4374,7 @@ def main() -> int:
     HOST = args.host
     PORT = args.port
     ensure_default_config()
+    persist_assigned_api_numbers()
     ensure_admin_password()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     start_webdav_reporter()

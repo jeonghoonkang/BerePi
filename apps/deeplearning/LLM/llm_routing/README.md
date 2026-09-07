@@ -1,6 +1,7 @@
 # LLM Routing
 
 외부에서 들어오는 prompt 요청을 여러 LLM 서버 중 하나로 전달하고, 받은 결과를 요청한 클라이언트로 되돌려주는 라우팅 서버입니다.
+openai, ollama api 를 지원 합니다. 
 
 ## 기능
 
@@ -15,7 +16,7 @@
 
 ```bash
 cd /Users/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/llm_routing
-chmod +x run.sh start.sh stop.sh
+chmod +x run.sh start.sh stop.sh pull_and_start.sh
 ./run.sh
 ```
 
@@ -24,6 +25,14 @@ chmod +x run.sh start.sh stop.sh
 ```bash
 ./start.sh
 ./stop.sh
+```
+
+Git에서 현재 브랜치의 최신 코드를 fast-forward 방식으로 받은 뒤 백그라운드로
+시작하려면 다음 스크립트를 사용합니다. `git pull`이 실패하면 서비스는 시작되지
+않습니다.
+
+```bash
+./pull_and_start.sh
 ```
 
 기본 포트는 `4004`입니다.
@@ -141,6 +150,43 @@ curl -X POST http://127.0.0.1:4004/api/generate \
   -H 'Authorization: Bearer my-secret-password' \
   -d '{"client_id":"client-a","target_id":"TARGET_ID","prompt":"hello"}'
 ```
+
+Google AI Studio도 일반 generate API에서 전용 `target_id`로 지정할 수 있습니다.
+
+```bash
+curl -X POST http://127.0.0.1:4004/api/generate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","target_id":"google-ai-studio-endpoint","prompt":"Gemma 4로 답변해줘"}'
+```
+
+이 ID는 `/api/status`의 `google_ai_studio.target_id`에서도 확인할 수 있습니다.
+
+각 GPU 대상에는 고정 `api_number`가 부여되며 관리 화면의 **API 번호** 열에서
+확인할 수 있습니다. 번호를 지정하면 자동 유휴 GPU 선택 대신 해당 GPU의 큐로
+직접 전송하며, 실패해도 다른 GPU로 자동 우회하지 않습니다.
+
+URL로 GPU API 번호 지정:
+
+```bash
+curl -X POST http://127.0.0.1:4004/api/generate/2 \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","prompt":"GPU API 2에서 실행"}'
+```
+
+JSON 필드로 GPU API 번호 지정:
+
+```bash
+curl -X POST http://127.0.0.1:4004/api/generate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer my-secret-password' \
+  -d '{"client_id":"client-a","api_number":2,"prompt":"GPU API 2에서 실행"}'
+```
+
+스트리밍 직접 호출은 `/api/generate/2/stream`을 사용합니다. `gpu_number`,
+`target_number`, `model_number`도 `api_number`의 별칭으로 인식합니다. 번호를
+생략하면 기존처럼 동작 중이지 않은 GPU를 우선하여 자동 선택합니다.
 
 다른 머신에서 호출할 때는 `127.0.0.1` 대신 LLM Routing 서버 IP 또는 DNS 이름을 사용합니다.
 
@@ -413,6 +459,18 @@ bash run.sh
 
 응답에는 `failover_applied`, `failover_from_models`,
 `failover_after_errors` 필드가 포함되어 실제 전환 여부를 확인할 수 있습니다.
+
+한 요청의 backend 호출이 실패하면 라우터는 설정 순서상 다음에 있는 서로 다른
+모델을 호출합니다. 같은 `model` 값은 한 요청에서 한 번만 호출하므로 모든 후보가
+실패해도 처음 모델로 돌아가 반복하지 않습니다. HTTP 401/403 또는 잘못된 API
+password/key 오류는 인증 실패로 분류됩니다.
+
+다음 모델이 성공하면 응답의 `model_failures`에 앞선 실패 모델과 실패 유형이,
+`routing_messages`에 인증 정보(암호) 오류 및 다음 모델 호출 안내가 포함됩니다.
+모든 모델이 실패하면 HTTP 502 응답에 `all_models_failed: true`,
+`execution_stopped: true`, `last_model`, `model_failures`, `routing_messages`가
+포함되며 마지막 모델에서 실행을 중지합니다.
+
 ### `available_targets=unknown` 대상 제외
 
 라우터는 target의 `/health`, `/api/tags` 또는 `/v1/models` 응답에서 사용 가능한

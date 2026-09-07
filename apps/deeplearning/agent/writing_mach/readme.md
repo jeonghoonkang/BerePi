@@ -16,6 +16,8 @@
 
 ## 실행
 
+`client_service.py`를 실행할 때마다 실행 명령이 `history_cmd.txt`의 맨 위에 기록되며 최신 1,000개까지 유지됩니다. 명령행의 `--llm-password`와 `--web-password` 값은 `***`로 마스킹됩니다.
+
 ```powershell
 cd E:\devel\BerePi\apps\deeplearning\agent\writing_mach
 py -3 .\client_service.py
@@ -64,9 +66,9 @@ py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start
 py -3 .\client_service.py --config .\data\my_client_config.json --run-on-start --exit-after-run
 ```
 
-## PDF/TXT 기술 보고서 생성 (`--tech_report`)
+## PDF/TXT/Markdown 기술 보고서 생성 (`--tech_report`)
 
-PDF 또는 UTF-8 TXT 원문을 분석해 약 20페이지 분량의 한국어 엔지니어링 보고서를 생성합니다. 이 모드는 웹 서비스를 시작하지 않고 보고서를 생성한 뒤 종료합니다.
+PDF 또는 UTF-8 TXT/Markdown 원문을 분석해 약 20페이지 분량의 한국어 엔지니어링 보고서를 생성합니다. 이 모드는 웹 서비스를 시작하지 않고 보고서를 생성한 뒤 종료합니다.
 
 ```powershell
 py -3 .\client_service.py --config .\data\client_config.json --tech-report .\input\기술자료.pdf
@@ -78,7 +80,13 @@ URL 추출기 등으로 만든 문자열 TXT 파일도 직접 사용할 수 있�
 py -3 .\client_service.py --config .\data\client_config.json --tech-report .\input\기술원문.txt
 ```
 
-입력 경로를 생략하면 프로젝트의 `input` 폴더에서 가장 최근 PDF 또는 TXT 파일을 자동 선택합니다.
+Markdown 파일도 동일하게 원문 문자열을 직접 전달합니다.
+
+```powershell
+py -3 .\client_service.py --config .\config\client_config.json --tech-report .\input\this_input.md
+```
+
+입력 경로를 생략하면 프로젝트의 `input` 폴더에서 가장 최근 PDF, TXT, `.md` 또는 `.markdown` 파일을 자동 선택합니다.
 
 모델 요청이 timeout으로 실패하면 다음 재시도의 제한 시간을 10% 늘립니다. 기본
 100초 기준으로 `100 → 110 → 121 ...` 순서로 증가하며 최대 300초를 넘지 않습니다.

@@ -1,0 +1,8 @@
+[Unit]
+Description=Send daily SSH attack statistics to Telegram
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/tinyos/devel_opment/BerePi/safe_secure/ssh-telegram-monitor/ssh_monitor.py daily

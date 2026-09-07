@@ -1,0 +1,15 @@
+seed: 42
+data_dir: data/processed
+label_csv: data/labels.csv
+output_dir: runs/mold_classifier
+num_classes: 4
+uv_resolution: 10
+batch_size: 4
+epochs: 50
+learning_rate: 0.001
+weight_decay: 0.0001
+hidden_dim: 128
+message_passing_steps: 4
+dropout: 0.15
+train_ratio: 0.8
+num_workers: 0

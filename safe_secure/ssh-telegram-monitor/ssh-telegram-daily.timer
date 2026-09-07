@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SSH Telegram report every day at 07:00
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+RandomizedDelaySec=5m
+Unit=ssh-telegram-daily.service
+
+[Install]
+WantedBy=timers.target

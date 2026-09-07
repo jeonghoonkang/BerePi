@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -49,6 +50,42 @@ class FakeDocument:
 
 
 class TechReportPdfTests(unittest.TestCase):
+    def test_cli_accepts_multiple_tech_report_sources(self) -> None:
+        with patch(
+            "sys.argv",
+            ["client_service.py", "--tech_report", "first.txt", "second.md"],
+        ):
+            args = client_service.parse_args()
+
+        self.assertEqual(args.tech_report, ["first.txt", "second.md"])
+
+    def test_command_history_is_newest_first_limited_and_masks_passwords(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            history = Path(directory) / "history_cmd.txt"
+            history.write_text("oldest\nolder\n", encoding="utf-8")
+
+            client_service.record_command_history(
+                ["python", "client_service.py", "--llm-password", "secret", "--run-on-start"],
+                history,
+                limit=2,
+                executed_at=datetime(2026, 8, 28, 14, 30, tzinfo=timezone.utc),
+            )
+
+            entries = history.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(entries[0].startswith("[2026-08-28T14:30:00+00:00] "))
+        self.assertIn("python client_service.py", entries[0])
+        self.assertIn("--llm-password ***", entries[0])
+        self.assertNotIn("secret", entries[0])
+        self.assertEqual(entries[1], "oldest")
+
+    def test_command_history_masks_equals_style_web_password(self) -> None:
+        sanitized = client_service.sanitize_command_argv(
+            ["python", "client_service.py", "--web-password=secret"]
+        )
+        self.assertEqual(sanitized[-1], "--web-password=***")
+
     def test_uploads_markdown_and_pdf_to_output_webdav(self) -> None:
         class FakeWebDavResponse:
             status = 201
@@ -237,6 +274,93 @@ class TechReportPdfTests(unittest.TestCase):
         self.assertIn("형식: TXT", prompt)
         self.assertIn("약 20페이지", prompt)
         self.assertIn("기술 원문", prompt)
+
+    def test_resolves_and_combines_multiple_text_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "architecture.txt"
+            second = Path(directory) / "operations.md"
+            first.write_text("아키텍처 원문", encoding="utf-8")
+            second.write_text("# 운영 원문", encoding="utf-8")
+
+            sources = client_service.resolve_tech_report_sources([str(first), str(second)])
+            text, metadata = client_service.read_tech_report_sources(sources, config={})
+            prompt = client_service.build_tech_report_prompt(sources, text)
+
+        self.assertEqual(sources, [first.resolve(), second.resolve()])
+        self.assertIn("[입력 문서 1: architecture.txt]", text)
+        self.assertIn("[입력 문서 2: operations.md]", text)
+        self.assertLess(text.index("아키텍처 원문"), text.index("# 운영 원문"))
+        self.assertEqual(metadata["source_count"], 2)
+        self.assertEqual(metadata["source_type"], "multiple")
+        self.assertIn("문서 수: 2", prompt)
+        self.assertIn("architecture.txt (TXT)", prompt)
+        self.assertIn("operations.md (Markdown)", prompt)
+
+    def test_rejects_duplicate_tech_report_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "same.txt"
+            source.write_text("중복 원문", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Duplicate"):
+                client_service.resolve_tech_report_sources([str(source), str(source)])
+
+    def test_repairs_only_missing_required_report_sections(self) -> None:
+        initial = """# 기술 보고서
+
+## 1. 개요
+개요 내용
+## 3. 주요 모듈
+모듈 내용
+## 5. 결론
+결론 내용
+"""
+        responses = {
+            2: "데이터 흐름 보완 내용",
+            4: "## 4. 기존 기술 대비 차별점 및 제약사항\n\n제약사항 보완 내용",
+        }
+
+        def fake_model(_config, _prompt, *, label, **_kwargs):
+            section_number = int(label.split("section-")[1].split("-")[0])
+            return responses[section_number]
+
+        with patch.object(client_service, "call_model", side_effect=fake_model) as model:
+            repaired = client_service.repair_missing_tech_report_sections(
+                {"chapter_retry": 2},
+                initial,
+                [Path("first.txt"), Path("second.txt")],
+                "통합 입력 원문",
+            )
+
+        self.assertEqual(model.call_count, 2)
+        self.assertEqual(client_service.missing_tech_report_sections(repaired), [])
+        for heading in client_service.required_tech_report_sections():
+            self.assertIn(heading, repaired)
+        self.assertIn("데이터 흐름 보완 내용", repaired)
+        self.assertIn("제약사항 보완 내용", repaired)
+
+    def test_accepts_markdown_source_without_ocr(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "this_input.md"
+            source.write_text("# DX 라이브러리\n\n- 데이터 진단\n", encoding="utf-8")
+
+            selected = client_service.resolve_tech_report_pdf(str(source))
+            text, metadata = client_service.read_tech_report_source(selected, config={})
+            prompt = client_service.build_tech_report_prompt(selected, text)
+
+        self.assertEqual(selected, source.resolve())
+        self.assertIn("# DX 라이브러리", text)
+        self.assertEqual(metadata["source_type"], "md")
+        self.assertEqual(metadata["ocr_engine"], "not-used")
+        self.assertIn("형식: Markdown", prompt)
+
+    def test_default_source_can_select_latest_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_dir = Path(directory)
+            source = input_dir / "latest.markdown"
+            source.write_text("# 최신 입력", encoding="utf-8")
+            with patch.object(client_service, "INPUT_DIR", input_dir):
+                selected = client_service.resolve_tech_report_pdf("")
+
+        self.assertEqual(selected, source.resolve())
 
     def test_cloud_vision_payload_contains_image_data_url(self) -> None:
         config = {
