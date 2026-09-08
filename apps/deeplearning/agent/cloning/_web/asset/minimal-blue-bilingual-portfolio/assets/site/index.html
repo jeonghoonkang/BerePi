@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Primary Meta Tags -->
+    <title>한서우 (Seowoo Han) | Applied AI Engineer · AX Educator · Codex Ambassador</title>
+    <meta name="title" content="한서우 (Seowoo Han) | Applied AI Engineer · AX Educator · Codex Ambassador">
+    <meta name="description"
+        content="Applied AI 엔지니어 한서우의 포트폴리오입니다. 컴퓨터 비전·OCR 제품, AX 교육, OpenAI Codex Ambassador 활동, 프로젝트·글·기사·발표 영상을 한글과 영어로 기록합니다.">
+    <meta name="keywords"
+        content="한서우, Seowoo Han, Developer Experience, DevX, AI Engineer, OpenAI Codex, Codex Ambassador, AI-native applications, technical content, developer community, Computer Vision, Deep Learning">
+    <meta name="author" content="Seowoo Han">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://swhan0329.github.io/">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://swhan0329.github.io/">
+    <meta property="og:title" content="한서우 (Seowoo Han) | Applied AI Engineer · AX Educator · Codex Ambassador">
+    <meta property="og:description"
+        content="Applied AI·컴퓨터 비전 제품, AX 교육, Codex Ambassador 활동과 공개 프로젝트를 모은 한서우의 포트폴리오입니다.">
+    <meta property="og:image" content="https://swhan0329.github.io/assets/og_image.png">
+    <meta property="og:locale" content="ko_KR">
+    <meta property="og:locale:alternate" content="en_US">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://swhan0329.github.io/">
+    <meta property="twitter:title" content="한서우 (Seowoo Han) | Applied AI Engineer · AX Educator · Codex Ambassador">
+    <meta property="twitter:description"
+        content="Applied AI·컴퓨터 비전 제품, AX 교육, Codex Ambassador 활동과 공개 프로젝트를 모은 한서우의 포트폴리오입니다.">
+    <meta property="twitter:image" content="https://swhan0329.github.io/assets/og_image.png">
+
+    <!-- Structured Data (JSON-LD) for AIO / SEO -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "ProfilePage",
+        "@id": "https://swhan0329.github.io/#profile-page",
+        "url": "https://swhan0329.github.io/",
+        "name": "한서우 (Seowoo Han) Portfolio",
+        "inLanguage": ["ko", "en"],
+        "dateModified": "2026-07-28",
+        "mainEntity": {
+        "@type": "Person",
+        "@id": "https://swhan0329.github.io/#seowoo-han",
+        "name": "한서우",
+        "alternateName": ["Seowoo Han", "swhan0329"],
+        "jobTitle": ["Applied AI Engineer", "AX Educator", "OpenAI Codex Ambassador"],
+        "description": "Applied AI and full-stack engineer, AX practitioner and educator, and OpenAI Codex Ambassador connecting computer vision, OCR, agentic workflows, learning programs, and developer communities.",
+        "url": "https://swhan0329.github.io/",
+        "image": "https://swhan0329.github.io/assets/profile.jpg",
+        "sameAs": [
+            "https://github.com/swhan0329",
+            "https://linkedin.com/in/swhan0329",
+            "https://www.threads.com/@crazy.codex",
+            "https://scholar.google.com/citations?user=W2dERbwAAAAJ",
+            "https://seowoohan.substack.com/"
+        ],
+        "alumniOf": [
+            {
+                "@type": "CollegeOrUniversity",
+                "name": "Korea University",
+                "department": "Computer Science"
+            },
+            {
+                "@type": "CollegeOrUniversity", 
+                "name": "Carnegie Mellon University",
+                "department": "AI Intensive Program"
+            }
+        ],
+        "knowsAbout": ["Applied AI Engineering", "Developer Experience", "OpenAI Codex", "Agentic Workflows", "AX Education", "Developer Community", "Computer Vision", "OCR", "Multimodal AI", "RAG"],
+        "worksFor": {
+            "@type": "Organization",
+            "name": "B GARAGE"
+        }
+        }
+    }
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/jpeg" href="assets/profile.jpg">
+    <link rel="apple-touch-icon" href="assets/profile.jpg">
+
+    <!-- Additional SEO -->
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="google-site-verification" content="xM2oWBjZNTfDdpTgAvrZlD0A5Oc13-tJCxT1XEgHEkA">
+
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="vendor/ee7ba94afea4.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/custom.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="container">
+            <nav class="nav" id="nav">
+                <a href="#about" data-i18n="nav.about">About</a>
+                <a href="#portfolio" data-i18n="nav.portfolio">Portfolio</a>
+                <a href="#projects" data-i18n="nav.projects">Projects</a>
+                <a href="#ecosystem" data-i18n="nav.ecosystem">Codex & DevX</a>
+                <a href="#experience" data-i18n="nav.experience">Experience</a>
+                <a href="#teaching" data-i18n="nav.more">More</a>
+            </nav>
+            <div class="header-actions">
+                <button class="lang-toggle" id="langToggle" aria-label="Toggle Language">
+                    <span class="lang-text">EN</span>
+                </button>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle Theme">
+                    <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                <button class="menu-toggle" id="menuToggle" aria-label="Toggle Menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero + About Section Combined -->
+    <section class="hero" id="about">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <p class="hero-greeting" data-i18n="hero.greeting">안녕하세요,</p>
+                    <h1 class="hero-name" data-i18n="hero.name">한서우입니다.</h1>
+                    <p class="hero-title" data-i18n="hero.title">Applied AI Engineer · AX Educator · Developer Experience</p>
+                    <div class="hero-badges">
+                        <a href="#ecosystem" class="hero-badge">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path
+                                    d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4091-.6765zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0974-2.3616l2.603-1.5018 2.6032 1.5018v3.0036l-2.6032 1.5018-2.603-1.5018z" />
+                            </svg>
+                            <span data-i18n="ambassador.codex">Codex Ambassador</span>
+                        </a>
+                    </div>
+                    <p class="hero-education" data-i18n-html="hero.education">
+                        고려대학교 컴퓨터학과 박사 수료 · <a href="https://www.donga.com/news/Society/article/all/20190820/97026745/1"
+                            class="edu-link" target="_blank" rel="noopener">CMU AI 프로그램 (전액 장학, IITP 지원)</a>
+                    </p>
+                    <p class="hero-description" data-i18n="hero.description">
+                        Applied AI와 컴퓨터 비전을 실제 제품과 운영에 연결합니다. AX 교육과 OpenAI Codex Ambassador 활동을 통해 사람들이 AI를 자기 업무에서 검증하고 다시 사용할 수 있는 워크플로우를 만듭니다.
+                    </p>
+                    <div class="hero-cta">
+                        <a href="https://seowoo-link-hub.swhan0329.chatgpt.site/" class="btn btn-primary"
+                            target="_blank" rel="noopener" data-i18n="hero.links">대표 링크</a>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <img src="assets/profile.jpg" alt="Seowoo Han" />
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Portfolio Overview -->
+    <section class="section portfolio-overview section-alt" id="portfolio">
+        <div class="container">
+            <div class="section-heading-row">
+                <div>
+                    <p class="section-kicker" data-i18n="portfolio.kicker">Selected portfolio</p>
+                    <h2 class="section-title" data-i18n="portfolio.title">기술을 실제 제품, 업무, 학습 경험으로 연결합니다</h2>
+                </div>
+                <p class="section-summary" data-i18n="portfolio.intro">엔지니어링, AX 교육, Codex 커뮤니티, 공개 콘텐츠를 따로 나열하지 않고 제가 맡은 역할과 확인 가능한 결과물로 연결했습니다.</p>
+            </div>
+            <div class="portfolio-grid">
+                <a class="portfolio-card portfolio-card-featured" href="#experience">
+                    <span class="portfolio-index">01</span>
+                    <span class="portfolio-eyebrow" data-i18n="portfolio.engineering.eyebrow">Engineering</span>
+                    <h3 data-i18n="portfolio.engineering.title">Applied AI를 제품과 운영에 붙이는 엔지니어링</h3>
+                    <p data-i18n="portfolio.engineering.desc">드론 영상, OCR, 객체 탐지, 멀티모달 데이터가 실제 사용자 흐름에서 작동하도록 입력·예외·검증 단계를 설계합니다.</p>
+                    <span class="portfolio-link" data-i18n="portfolio.engineering.cta">경력과 프로젝트 보기 →</span>
+                </a>
+                <a class="portfolio-card" href="https://swhan0329.github.io/codex-101/" target="_blank" rel="noopener">
+                    <span class="portfolio-index">02</span>
+                    <span class="portfolio-eyebrow" data-i18n="portfolio.codex.eyebrow">Codex & DevX</span>
+                    <h3 data-i18n="portfolio.codex.title">Codex 101과 실전 개발자 워크플로우</h3>
+                    <p data-i18n="portfolio.codex.desc">한국어와 영어 가이드, 데모, 온보딩 자료를 만들어 새로운 기능을 실제 개발 흐름에 연결합니다.</p>
+                    <span class="portfolio-link" data-i18n="portfolio.codex.cta">Codex 101 열기 ↗</span>
+                </a>
+                <a class="portfolio-card" href="https://www.linkedin.com/posts/swhan0329_%EC%A7%80%EB%82%9C%EC%A3%BC%EC%97%90%EB%8A%94-day1-company%EC%9D%98-ax-skillathon%EC%97%90%EC%84%9C-%EA%B0%95%EC%82%AC%EB%A1%9C-%EC%B0%B8%EC%97%AC%ED%95%B4-ugcPost-7487659756220739585-vfO4/" target="_blank" rel="noopener">
+                    <span class="portfolio-index">03</span>
+                    <span class="portfolio-eyebrow" data-i18n="portfolio.ax.eyebrow">AX & Education</span>
+                    <h3 data-i18n="portfolio.ax.title">업무 하나를 직접 바꾸는 AX 교육</h3>
+                    <p data-i18n="portfolio.ax.desc">기능 소개보다 문제 정의, 실행, 사람의 검토와 재시도를 중심으로 실습형 강의와 워크숍을 설계합니다.</p>
+                    <span class="portfolio-link" data-i18n="portfolio.ax.cta">AX Skillathon 기록 보기 ↗</span>
+                </a>
+                <a class="portfolio-card" href="https://workflow-show-tell-seoul-2026.swhan0329.chatgpt.site/" target="_blank" rel="noopener">
+                    <span class="portfolio-index">04</span>
+                    <span class="portfolio-eyebrow" data-i18n="portfolio.community.eyebrow">Community</span>
+                    <h3 data-i18n="portfolio.community.title">다른 사람의 작업이 다음 실험이 되는 커뮤니티</h3>
+                    <p data-i18n="portfolio.community.desc">Workflow Show & Tell과 Codex 워크숍에서 사례를 모으고, 사람과 프로그램을 연결하며 결과를 공개 기록으로 남깁니다.</p>
+                    <span class="portfolio-link" data-i18n="portfolio.community.cta">결과 페이지 보기 ↗</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Experience Section -->
+    <section class="section section-alt" id="experience">
+        <div class="container">
+            <h2 class="section-title" data-i18n="experience.title">Experience</h2>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-date">2024 - Present</span>
+                        <h3>Computer Vision Engineer</h3>
+                        <h4>B GARAGE, Korea</h4>
+                        <p class="exp-narrative" data-i18n="exp.bgarage.narrative">Automated warehouse inventory
+                            inspection with drones. Developed vision AI systems to extract label information from
+                            drone-captured images in warehouse environments, and now enhancing perception systems for
+                            safe autonomous drone navigation.</p>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-date">2023 - 2024</span>
+                        <h3>CTO</h3>
+                        <h4>VISIT Inc., Korea</h4>
+                        <p class="exp-narrative" data-i18n="exp.visit.narrative">Led the enhancement of RoundPic, an
+                            existing 360° panoramic camera app. With a team of 5 engineers, advanced its AI-based
+                            inpainting and stitching algorithms to reduce visible seams in panoramic images, helping grow
+                            the customer base 3x in just 2 months.</p>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-date">2022 - 2023</span>
+                        <h3>CTO & Technical Lead</h3>
+                        <h4>ViewMagine, Korea</h4>
+                        <p class="exp-narrative" data-i18n="exp.viewmagine.narrative">Directed technical strategy for
+                            AI-powered infrastructure inspection. Our VODA system detects building cracks at 0.01mm
+                            precision using drone imagery. Represented the company at CES 2023 in Las Vegas, showcasing
+                            our drone-based crack detection technology.</p>
+                        <div class="exp-links">
+                            <a href="https://youtube.com/watch?v=D--wEbFZArw" class="exp-link" target="_blank"
+                                rel="noopener">🎥 <span data-i18n="exp.cesInterview">CES 2023 AVING Interview</span></a>
+                            <a href="https://www.linkedin.com/posts/swhan0329_ces2023-viewmagine-voda-activity-7017703987927851008-xxx"
+                                class="exp-link" target="_blank" rel="noopener">📝 <span
+                                    data-i18n="exp.linkedinPost">LinkedIn Post</span></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-date">2020 - 2022</span>
+                        <h3>Computer Vision Engineer</h3>
+                        <h4 data-i18n="exp.keti.company">Korea Electronics Technology Institute</h4>
+                        <p class="exp-narrative" data-i18n="exp.keti.narrative">Developed real-time traffic monitoring
+                            AI for smart city infrastructure. Built detection pipelines using YOLO and DeepSORT,
+                            achieving 98% accuracy on multi-CCTV feeds. This research led to 2 international
+                            publications.</p>
+                        <div class="exp-links">
+                            <a href="https://github.com/chamchi99/Highway-CCTV-KETI_Public" class="exp-link"
+                                target="_blank" rel="noopener">💻 <span data-i18n="exp.githubRepo">GitHub Repo</span></a>
+                            <a href="https://aihub.or.kr/aihubdata/data/view.do?currMenu=115&amp;topMenu=100&amp;searchKeyword=%EA%B5%90%ED%86%B5%EB%AC%B8%EC%A0%9C%20%ED%95%B4%EA%B2%B0%EC%9D%84%20%EC%9C%84%ED%95%9C%20CCTV%20%EA%B5%90%ED%86%B5%20%EC%98%81%EC%83%81(%EA%B3%A0%EC%86%8D%EB%8F%84%EB%A1%9C)&amp;aihubDataSe=data&amp;dataSetSn=164"
+                                class="exp-link" target="_blank" rel="noopener">🗂️ <span
+                                    data-i18n="exp.aihubDataset">AIHub Dataset</span></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Codex & Developer Experience Section -->
+    <section class="section" id="ecosystem">
+        <div class="container">
+            <h2 class="section-title" data-i18n="ecosystem.title">Codex & Developer Experience</h2>
+            <div class="ambassador-grid">
+                <div class="ambassador-card ambassador-card-primary">
+                    <div class="ambassador-card-header">
+                        <div class="ambassador-logo">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                                <path
+                                    d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4091-.6765zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0974-2.3616l2.603-1.5018 2.6032 1.5018v3.0036l-2.6032 1.5018-2.603-1.5018z" />
+                            </svg>
+                        </div>
+                        <div class="ambassador-info">
+                            <span class="ambassador-title">Codex Ambassador</span>
+                            <span class="ambassador-org">OpenAI</span>
+                        </div>
+                        <span class="ambassador-date">2026.02 ~</span>
+                    </div>
+                    <p class="ambassador-desc" data-i18n="ecosystem.ambassador.desc">Contributing to the AI developer
+                        ecosystem in Korea through mentoring, content creation, and community building.</p>
+                    <div class="ambassador-proof-list">
+                        <div class="ambassador-proof-item">
+                            <span class="proof-label" data-i18n="ecosystem.proof.guide.label">Guide</span>
+                            <p data-i18n="ecosystem.proof.guide">Created Codex 101, a bilingual Korean/English practical guide for OpenAI Codex workflows, featured in the OpenAI Developers Showcase.</p>
+                        </div>
+                        <div class="ambassador-proof-item">
+                            <span class="proof-label" data-i18n="ecosystem.proof.community.label">Community</span>
+                            <p data-i18n="ecosystem.proof.community">Connected OpenAI Korea with the IT's Study community to plan a practical learning program, while also hosting Codex meetups, demos, workshops, and onboarding sessions for Korean developers and builders.</p>
+                        </div>
+                        <div class="ambassador-proof-item">
+                            <span class="proof-label" data-i18n="ecosystem.proof.feedback.label">Feedback</span>
+                            <p data-i18n="ecosystem.proof.feedback">Synthesized Korean Codex user feedback from 115 survey responses and 57 open-ended comments into structured DevX insights.</p>
+                        </div>
+                    </div>
+                    <div class="ambassador-latest">
+                        <div class="ambassador-latest-header">
+                            <span class="proof-label" data-i18n="ecosystem.latest.label">Latest field notes</span>
+                            <span class="ambassador-date" data-i18n="ecosystem.latest.date">June 2026</span>
+                        </div>
+                        <ul class="ambassador-latest-list">
+                            <li>
+                                <a href="https://www.linkedin.com/pulse/codex%25EB%25A1%259C-roboflow-mcp-%25ED%2599%259C%25EC%259A%25A9%25ED%2595%25B4%25EC%2584%259C-%25EB%2583%2589%25EC%259E%25A5%25EA%25B3%25A0-%25EC%259C%25A0%25ED%2586%25B5%25EA%25B8%25B0%25ED%2595%259C-%25EC%259B%25B9%25EC%2595%25B1-%25EB%25A7%258C%25EB%2593%25A4%25EA%25B8%25B0-seowoo-han-b16vc/"
+                                    class="latest-note-link" target="_blank" rel="noopener">
+                                    <span class="latest-note-kicker" data-i18n="ecosystem.latest.roboflow.kicker">Roboflow MCP</span>
+                                    <strong data-i18n="ecosystem.latest.roboflow.title">Fridge expiry-date web app with Codex + Roboflow MCP</strong>
+                                    <span data-i18n="ecosystem.latest.roboflow.desc">A practical walkthrough of MCP tool discovery, read-only dataset search, safe key handling, and turning computer-vision inference into an app workflow.</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="https://www.latpeed.com/products/W6f-t"
+                                    class="latest-note-link" target="_blank" rel="noopener">
+                                    <span class="latest-note-kicker" data-i18n="ecosystem.latest.onboarding.kicker">Codex onboarding</span>
+                                    <strong data-i18n="ecosystem.latest.onboarding.title">Delegate Your Work with the ChatGPT App - Fifth Revised Edition</strong>
+                                    <span data-i18n="ecosystem.latest.onboarding.desc">A free guide to delegating real work with the ChatGPT app. Non-developers can start with Chat or Work, and developers with Codex; their capabilities overlap, so choose the interface that suits your work. The September 5, 2026 fifth revised edition covers GPT-6 Astra, model choices, 21 new screenshots, and ways to continue tasks and review outputs.</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="https://workflow-show-tell-seoul-2026.swhan0329.chatgpt.site/en"
+                                    class="latest-note-link" target="_blank" rel="noopener">
+                                    <span class="latest-note-kicker" data-i18n="ecosystem.latest.workflowShowTell.kicker">Workflow Show & Tell Seoul</span>
+                                    <strong data-i18n="ecosystem.latest.workflowShowTell.title">2026 results page</strong>
+                                    <span data-i18n="ecosystem.latest.workflowShowTell.desc">A public record of the event outcomes, participant workflows, and the community experience around practical AI work.</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="ambassador-accordions">
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.linkedin">📝 LinkedIn</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://www.linkedin.com/posts/swhan0329_%EC%A7%80%EB%82%9C%EC%A3%BC%EC%97%90%EB%8A%94-day1-company%EC%9D%98-ax-skillathon%EC%97%90%EC%84%9C-%EA%B0%95%EC%82%AC%EB%A1%9C-%EC%B0%B8%EC%97%AC%ED%95%B4-ugcPost-7487659756220739585-vfO4/?utm_source=share&amp;utm_medium=member_desktop&amp;rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.day1AxSkillathon">Day1 Company AX Skillathon: Codex and Skill workshop</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/posts/swhan0329_codex-openai-openaibuildweek-activity-7482600740432277504-KO4P?utm_source=share&amp;utm_medium=member_desktop&amp;rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.workflowShowTellRecap">Workflow Show & Tell Seoul 2026 post-event reflection</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/posts/yeonju-oh-a23673278_%EC%9D%B4%EB%B2%88-%EC%9E%87%EC%B8%A0-%EC%8A%A4%ED%84%B0%EB%94%94-%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%A8%EC%9D%84-%EC%95%84%EB%82%8C%EC%97%86%EC%9D%B4-%EB%93%A0%EB%93%A0%ED%9E%88-%EC%A7%80%EC%9B%90%ED%95%B4%EC%A3%BC%EC%8B%9C%EB%8A%94-openai-%EC%BD%94%EB%A6%AC%EC%95%84-share-7483014549416140800-4T96/?utm_source=share&amp;utm_medium=member_desktop&amp;rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.itsStudyPlanning">IT's Study: OpenAI Korea collaboration and program planning</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/feed/update/urn:li:activity:7477162038297849856/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.codexImpactRecap">2026.06.27 Codex Impact Workshop recap</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/pulse/codex%25EB%25A1%259C-roboflow-mcp-%25ED%2599%259C%25EC%259A%25A9%25ED%2595%25B4%25EC%2584%259C-%25EB%2583%2589%25EC%259E%25A5%25EA%25B3%25A0-%25EC%259C%25A0%25ED%2586%25B5%25EA%25B8%25B0%25ED%2595%259C-%25EC%259B%25B9%25EC%2595%25B1-%25EB%25A7%258C%25EB%2593%25A4%25EA%25B8%25B0-seowoo-han-b16vc/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.roboflowMcpPost">2026.06.08 Codex + Roboflow MCP article</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/feed/update/urn:li:activity:7468451562659528704/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.codexOnboardingPdf">2026.06 Codex onboarding PDF post</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/posts/swhan0329_codex-activity-7440355201712115712-1Rbl"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.codexWebinar">OpenAI webinar: multi-agent workflows with Codex</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/posts/swhan0329_codex-ai-activity-7437681236069830656-xkBe?utm_source=share&utm_medium=member_desktop&rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.meetupRecruitment">Codex Community Meetup - Seoul 3.11 (Host Recap)</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/posts/swhan0329_codex-for-open-source-activity-7435851906536738816-ABzO"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.codexForOpenSource">Codex for Open Source program announcement</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/posts/swhan0329_openai-codex-ambassador%EB%A1%9C%EC%84%9C-%EC%9D%B4%EB%B2%88-1%EB%B0%95-2%EC%9D%BC-ralphton-activity-7434041820080435201-8Sks"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.ralphtonRecap">2026.02.28-03.01 Ralphton (Field Recap)</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/feed/update/urn:li:activity:7433348157406789632/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.aiAgentStory">Why I wrote Understanding AI Agent Concepts</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/posts/swhan0329_codex-101-openai-codex-complete-guide-activity-7431475189676396544-ut_R"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.codex101Story">Why I built Codex 101</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/posts/swhan0329_openai-codex-ambassador%EB%A1%9C-%ED%95%A9%EB%A5%98%ED%95%98%EA%B2%8C-%EB%90%98%EC%97%88%EC%8A%B5%EB%8B%88%EB%8B%A4-%EC%A0%84-%EC%84%B8%EA%B3%84%EC%97%90%EC%84%9C-activity-7427542824914706432-7fmg"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.codexAnnouncement">Codex Ambassador announcement</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.articles">📰 Articles</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://swhan0329.github.io/codex-101/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.codex101">Codex 101 - OpenAI Codex Complete Guide</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/pulse/codex%25EB%25A1%259C-roboflow-mcp-%25ED%2599%259C%25EC%259A%25A9%25ED%2595%25B4%25EC%2584%259C-%25EB%2583%2589%25EC%259E%25A5%25EA%25B3%25A0-%25EC%259C%25A0%25ED%2586%25B5%25EA%25B8%25B0%25ED%2595%259C-%25EC%259B%25B9%25EC%2595%25B1-%25EB%25A7%258C%25EB%2593%25A4%25EA%25B8%25B0-seowoo-han-b16vc/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.roboflowMcp">Codex + Roboflow MCP fridge expiry-date app</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/pulse/ai-agent-%EA%B0%9C%EB%85%90-%EC%9D%B4%ED%95%B4%ED%95%98%EA%B8%B0-seowoo-han-apz8c/?trackingId=%2FwrWr%2B5u1n6ZslKA7BeNjg%3D%3D"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.aiAgent">Understanding AI Agent Concepts</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/pulse/openai-codex-best-practices-%ED%95%9C%EA%B5%AD%EC%96%B4-%EC%A0%95%EB%A6%AC-seowoo-han-srtzc/?trackingId=ITDl8ftLQ6SjDlWqJBzpeQ%3D%3D"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.codexBestPractices">OpenAI Codex Best Practices (Korean Summary)</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/pulse/%EC%97%90%EC%9D%B4%EC%A0%84%ED%8A%B8-%EC%8B%9C%EB%8C%80-%EC%9A%B0%EB%A6%AC%EA%B0%80-%EC%84%A4%EA%B3%84%ED%95%B4%EC%95%BC-%ED%95%A0-%EA%B2%83%EC%9D%80-%EB%AA%A8%EB%8D%B8%EC%9D%B4-%EC%95%84%EB%8B%88%EB%9D%BC-%EC%8B%9C%EC%8A%A4%ED%85%9C%EC%9D%B4%EB%8B%A4-seowoo-han-bzxzc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.agentWorkflow">Agent workflow evolution with OmC, OmX, and Codex</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/pulse/dear-humans-%EB%94%B8%EA%B9%8D%EC%9D%98-%EC%8B%9C%EB%8C%80%EC%97%90-%EC%9A%B0%EB%A6%AC%EB%8A%94-%EC%99%9C-%EC%97%AC%EC%A0%84%ED%9E%88-%EC%9E%90%EA%B8%B0-%EC%82%B6%EC%9D%84-%EC%82%B4%EC%95%84%EB%B4%90%EC%95%BC-%ED%95%A0%EA%B9%8C-seowoo-han-uqajc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.dearHumans">Dear Humans, What AI Still Can't Answer for Us</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/pulse/codex-%EC%89%AC%EC%9A%B4%EB%A7%90%EB%A1%9C-%EC%84%A4%EB%AA%85%ED%95%98%EC%9E%90%EB%A9%B4-seowoo-han-fxvdc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.codexSimple">Codex, Explained Simply</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/pulse/how-plugins-actually-work-codex-seowoo-han-8cu6c"
+                                    data-href-en="https://www.linkedin.com/pulse/how-plugins-actually-work-codex-seowoo-han-8cu6c"
+                                    data-href-ko="https://kr.linkedin.com/pulse/codex%EC%97%90%EC%84%9C-plugin%EC%9D%B4-%EC%8B%A4%EC%A0%9C%EB%A1%9C-%EC%96%B4%EB%96%BB%EA%B2%8C-%EB%8F%99%EC%9E%91%ED%95%98%EB%8A%94%EA%B0%80-seowoo-han-u7rac"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.article.plugins">How Plugins Actually Work in Codex</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.youtube">▶️ YouTube</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://www.youtube.com/watch?v=JaY8mKOBZ0M"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.youtube.plainBusinessmanEp1">평범한 사업가 1화 - Codex 앱 기본 사용과 작업 흐름</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.youtube.com/watch?v=bfevQSV9Euc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.youtube.plainBusinessmanEp2">평범한 사업가 2화 - Sites·Ultra·Side Chat 실전 워크플로우</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.youtube.com/watch?v=-J5KoSMfPLk"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.parentsDayOfficialVideo">Official OpenAI video: AI Parents' Day</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.mediaCoverage">🗞️ Media Coverage</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://www.venturesquare.net/en/1094073/"
+                                    data-href-en="https://www.venturesquare.net/en/1094073/"
+                                    data-href-ko="https://www.venturesquare.net/1094053/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.media.codexImpactVentureSquare">Codex Impact Workshop - VentureSquare</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.thebutter.org/news/articleView.html?idxno=2871"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.media.codexImpactTheButter">Codex Impact Workshop - The Butter</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://youtu.be/iUG3mPOMtf4?si=3CbQb17kPGOUaOAf"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.media.parentsDayYtnYoutube">"AI instead of carnations" - YTN video</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://tv.naver.com/v/99166769"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.media.parentsDayNaverTv">"Building an app with my child using AI" - Naver TV</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://m.ytn.co.kr/news_view.amp.php?version=1&amp;param=0134_202605091617484007"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.media.parentsDayYtnArticle">ChatGPT and voice commands for seniors - YTN</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.lectures">🎤 Lectures &amp; Talks</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://www.linkedin.com/posts/swhan0329_%EC%A7%80%EB%82%9C%EC%A3%BC%EC%97%90%EB%8A%94-day1-company%EC%9D%98-ax-skillathon%EC%97%90%EC%84%9C-%EA%B0%95%EC%82%AC%EB%A1%9C-%EC%B0%B8%EC%97%AC%ED%95%B4-ugcPost-7487659756220739585-vfO4/"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.lecture.day1AxSkillathon">2026.07.13 Day1 Company AX Skillathon - Codex and Skill Workshop</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/posts/swhan0329_%EB%B3%B8%EA%B0%80%EC%97%90-%EA%B0%94%EB%8B%A4%EA%B0%80-%EC%95%84%EB%B2%84%EC%A7%80%EC%97%90%EA%B2%8C-%EA%B0%91%EC%9E%90%EA%B8%B0-10%EB%A7%8C%EC%9B%90%EC%9D%84-%EB%B0%9B%EC%95%98%EC%8A%B5%EB%8B%88%EB%8B%A4-%EC%95%84%EB%B2%84%EC%A7%80%EA%B0%80-%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%A8%EA%B9%8C%EC%A7%80-activity-7488730183798038528-D8XQ"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.lecture.companyAxOnboarding">2026.07.25 Enterprise AX Onboarding at Safety Inspection Company S - Practical Codex Training</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://fastcampus.co.kr/openai"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.lecture.parentsDayAi">2026.05.08 OpenAI x FastCampus AI Parents' Day - Main Codex Lecture</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.events">🎪 Events</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://www.linkedin.com/posts/swhan0329_codex-openai-openaibuildweek-activity-7482600740432277504-KO4P?utm_source=share&amp;utm_medium=member_desktop&amp;rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.event.workflowShowTellRecap">2026.07.13 Workflow Show &amp; Tell Seoul</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://workflow-show-tell-seoul-2026.swhan0329.chatgpt.site/en"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.event.workflowShowTell">2026 Workflow Show & Tell Seoul — results page</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://community.flatto.io/events/codex-impact-workshop-1"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.event.codexImpactWorkshop">2026.06.27 Codex Impact Workshop</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/posts/swhan0329_codex-ai-activity-7437681236069830656-xkBe?utm_source=share&utm_medium=member_desktop&rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.event.meetupHost">2026.03.11 Codex Community Meetup - Seoul (Solo Host)</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://kr.linkedin.com/posts/swhan0329_openai-codex-ambassador%EB%A1%9C%EC%84%9C-%EC%9D%B4%EB%B2%88-1%EB%B0%95-2%EC%9D%BC-ralphton-activity-7434041820080435201-8Sks"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.event.ralphtonSponsor">2026.02.28-03.01 Ralphton (Community Sponsorship)</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                        height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ambassador-card ambassador-card-secondary">
+                    <div class="ambassador-card-header">
+                        <div class="ambassador-logo">
+                            <span style="font-size: 1.3rem;">☕</span>
+                        </div>
+                        <div class="ambassador-info">
+                            <span class="ambassador-title">Tech a Break</span>
+                            <span class="ambassador-org">Substack</span>
+                        </div>
+                        <span class="ambassador-date" data-i18n="ecosystem.techabreak.date">Season 1 Complete</span>
+                    </div>
+                    <p class="ambassador-desc" data-i18n="ecosystem.techabreak.desc">The interview-format Season 1 has concluded. Tech a Break now documents Seowoo Han's thoughts.</p>
+                    <div class="ambassador-accordions">
+                        <div class="ambassador-accordion">
+                            <button class="ambassador-accordion-toggle"
+                                onclick="this.parentElement.classList.toggle('open')">
+                                <span data-i18n="ecosystem.btn.series">✉️ Series</span>
+                                <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" width="14" height="14">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                            <div class="ambassador-accordion-content">
+                                <a href="https://seowoohan.substack.com/" class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.techabreak.substack">Read Tech a Break</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                                <a href="https://www.linkedin.com/posts/swhan0329_substack-qucswmrwatps-activity-7442398658802720768-b2Ij?utm_source=share&utm_medium=member_desktop&rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                    class="accordion-link" target="_blank" rel="noopener">
+                                    <span data-i18n="ecosystem.link.techabreak.story">Why I started Tech a Break</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" width="12" height="12">
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- E-book Section -->
+    <section class="section ebook-section" id="ebook">
+        <div class="container">
+            <div class="ebook-home-header">
+                <span class="proof-label" data-i18n="ebooks.label">자료실</span>
+                <h2 class="section-title" data-i18n="ebook.home.title">E-books</h2>
+                <p data-i18n="ebook.home.desc">
+                    AI 시대의 일과 커리어를 돌아보는 에세이부터 Codex 실전 가이드와 IT 용어집까지, 직접 만든 전자책을 모았습니다.
+                </p>
+            </div>
+
+            <div class="ebook-home-grid">
+                <a href="https://www.latpeed.com/products/0q32f" class="ebook-home-card ebook-home-card-primary ebook-home-card-link"
+                    target="_blank" rel="noopener" data-sale-deadline="2026-09-30T23:59:00+09:00">
+                    <div class="ebook-home-cover ebook-home-cover-square">
+                        <img src="assets/ebooks/working-harder-disappeared-ebook-cover.png"
+                            alt="열심히 살수록 내가 사라졌다 전자책 표지">
+                    </div>
+                    <div class="ebook-home-copy">
+                        <div class="ebook-kicker-row">
+                            <span class="proof-label" data-i18n="arrow.label">유료 전자책</span>
+                            <span class="ebook-price" data-i18n="arrow.price">16,900원</span>
+                        </div>
+                        <h3 data-i18n="arrow.title">열심히 살수록 내가 사라졌다</h3>
+                        <p data-i18n="arrow.desc">
+                            AI 시대의 일과 커리어를 돌아보며, 남의 기대와 직함 밖에서 내 기준을 세우는 과정을 담은 에세이입니다. 자신의 경험을 다시 해석할 질문과 워크북도 함께 제공합니다.
+                        </p>
+                        <ul class="ebook-home-points">
+                            <li data-i18n="arrow.preview.item1">반복해서 해결한 문제로 강점 찾기</li>
+                            <li data-i18n="arrow.preview.item3">역할·보상·종료 조건으로 경계 세우기</li>
+                            <li data-i18n="arrow.preview.item5">다음 30일의 가장 작은 실험 정하기</li>
+                        </ul>
+                        <div class="ebook-home-meta">
+                            <span data-i18n="arrow.meta.format">PDF · 100쪽</span>
+                            <span data-i18n="arrow.meta.included">워크북 포함</span>
+                        </div>
+                        <div class="ebook-actions">
+                            <span class="btn btn-primary js-sale-cta" data-i18n="arrow.cta">판매 페이지 보기</span>
+                            <small class="ebook-sale-deadline" data-i18n="arrow.deadline">많은 분들이 관심 가져주셔서 2026년 9월 30일까지 판매를 연장합니다.</small>
+                        </div>
+                    </div>
+                </a>
+
+                <article class="ebook-home-card ebook-home-card-codex">
+                    <div class="ebook-home-cover">
+                        <img src="assets/ebooks/chatgpt-app-5th-cover.png" alt="ChatGPT App으로 내 업무 맡기기 제5차 개정판 e-book cover">
+                    </div>
+                    <div class="ebook-home-copy">
+                        <div class="ebook-kicker-row">
+                            <span class="proof-label" data-i18n="ebook.label">무료 PDF</span>
+                            <span class="ebook-price" data-i18n="ebook.price">0원 무료</span>
+                        </div>
+                        <h3 data-i18n="ebook.title">ChatGPT App으로 내 업무 맡기기 - 제5차 개정판</h3>
+                        <p data-i18n="ebook.desc">ChatGPT 앱으로 실제 업무를 맡기는 무료 가이드입니다. 비개발자는 Chat·Work, 개발자는 Codex에서 시작해 보세요. 두 공간의 업무 범위는 겹치므로 익숙한 화면을 선택하면 됩니다. 2026.09.05 제5차 개정판은 GPT-6 Astra와 모델 선택, 새 화면 21장, 업무를 이어가고 결과를 검토하는 방법을 담았습니다.</p>
+                        <ul class="ebook-home-points">
+                            <li data-i18n="ebook.home.codex.point1">Chat·Work·Codex에서 내 업무에 맞는 시작점 찾기</li>
+                            <li data-i18n="ebook.home.codex.point2">Astra Medium부터 시작하고 Voice·Chrome·Sites 살펴보기</li>
+                            <li data-i18n="ebook.home.codex.point3">이전 대화·Gmail 계정 연결과 문서 검증·반복 업무 익히기</li>
+                        </ul>
+                        <div class="ebook-home-meta">
+                            <span data-i18n="ebook.meta.format">PDF · 96쪽</span>
+                            <span data-i18n="ebook.meta.version">제5차 개정판 · 2026.09.05</span>
+                        </div>
+                        <div class="ebook-actions">
+                            <a href="https://www.latpeed.com/products/W6f-t"
+                                class="btn btn-primary js-download-track" target="_blank" rel="noopener"
+                                data-counter-key="swhan0329_github_io_codex_work_downloads"
+                                data-i18n="ebook.getFreeOnLatpeed">판매 페이지 보기</a>
+                            <div class="ebook-count" data-counter-key="swhan0329_github_io_codex_work_downloads">
+                                <span data-i18n="ebook.downloadCountLabel">다운로드</span>
+                                <strong data-count-value>0</strong>
+                            </div>
+                            <a href="https://swhan0329.github.io/ebooks/codex-work/" class="ebook-home-detail-link" data-i18n="ebooks.detailCta">상세 보기</a>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="ebook-home-card">
+                    <div class="ebook-home-cover">
+                        <img src="assets/ebooks/pangyo-dictionary-book-mockup-v5.jpg" alt="판교어 사전 e-book book mockup">
+                    </div>
+                    <div class="ebook-home-copy">
+                        <div class="ebook-kicker-row">
+                            <span class="proof-label" data-i18n="pangyo.label">무료 PDF</span>
+                            <span class="ebook-price" data-i18n="pangyo.price">0원 무료</span>
+                        </div>
+                        <h3 data-i18n="pangyo.title">판교어 사전</h3>
+                        <p data-i18n="pangyo.desc">
+                            AI로 직접 만들기 시작한 비개발자와 사무직을 위한 IT 실전 용어집입니다. 스펙, API, 배포, QA, MVP처럼 만들다 보면 계속 마주치는 말을 가볍게 익히고, 개발자와 더 편하게 이야기할 수 있도록 정리했습니다.
+                        </p>
+                        <ul class="ebook-home-points">
+                            <li data-i18n="pangyo.preview.item1">회의·소통: 얼라인, 싱크, 컨펌, 팔로업, 스크럼</li>
+                            <li data-i18n="pangyo.preview.item3">개발 실전: 배포, 롤백, QA, 코드리뷰, API, 바이브코딩</li>
+                            <li data-i18n="pangyo.preview.item5">AI·스타트업 씬: LLM, RAG, 피칭, 밸류에이션, PMF</li>
+                        </ul>
+                        <div class="ebook-home-meta">
+                            <span data-i18n="pangyo.meta.format">PDF · 18 pages</span>
+                            <span data-i18n="pangyo.meta.version">2026.07.02</span>
+                        </div>
+                        <div class="ebook-count" data-counter-key="swhan0329_github_io_pangyo_dictionary_downloads">
+                            <span data-i18n="ebook.downloadCountLabel">다운로드</span>
+                            <strong data-count-value>0</strong>
+                        </div>
+                        <div class="ebook-actions">
+                            <a href="https://swhan0329.github.io/ebooks/pangyo-dictionary/" class="btn btn-primary" data-i18n="ebooks.detailCta">상세 보기</a>
+                            <a href="https://drive.google.com/uc?export=download&amp;id=1zhmlIp4DhQfUR2cjSlQj-nCV4YbMPi0i"
+                                class="btn btn-secondary js-download-track" target="_blank" rel="noopener"
+                                data-counter-key="swhan0329_github_io_pangyo_dictionary_downloads"
+                                data-i18n="ebook.download">PDF 다운로드</a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="ebook-home-footer">
+                <a href="https://swhan0329.github.io/ebooks/" class="btn btn-secondary" data-i18n="ebook.all">전체 e-book 보기</a>
+                <p data-i18n="ebook.note">무료 PDF는 바로 내려받을 수 있고, 유료 전자책은 판매 페이지에서 구성과 구매 안내를 확인할 수 있습니다.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Projects Section -->
+    <section class="section section-alt" id="projects">
+        <div class="container">
+            <div class="section-heading-row">
+                <div>
+                    <p class="section-kicker" data-i18n="projects.kicker">Project archive</p>
+                    <h2 class="section-title" data-i18n="projects.title">AI-native Projects</h2>
+                </div>
+                <p class="section-summary" data-i18n="projects.portfolioIntro">제품, 클라이언트 작업, 임팩트 프로젝트와 초기 실험을 확인된 범위와 공개 링크로 구분해 기록합니다.</p>
+            </div>
+            <div class="projects-grid">
+                <article class="project-card project-featured">
+                    <span class="project-order" data-i18n="projects.order.beatpaws">01 · Codex demo / teaching asset</span>
+                    <div class="project-header">
+                        <div class="project-icon">🎮</div>
+                        <div class="project-title-block">
+                            <h3 data-i18n="projects.beatpaws.title">BeatPaws with Codex</h3>
+                            <span class="project-badge" data-i18n="projects.badge.codexDemo">Codex Demo</span>
+                            <span class="project-badge badge-personal" data-i18n="projects.badge.personal">Personal</span>
+                        </div>
+                    </div>
+                    <p class="project-desc-full" data-i18n="projects.beatpaws.desc">
+                        Built a playable web rhythm game with Codex for Vibe Jam 2026, then turned the build process into a developer-facing talk about iteration loops, playtesting, feedback, and shipping AI-written code as a real product.
+                    </p>
+                    <div class="project-tags">
+                        <span>Codex</span>
+                        <span>Web Game</span>
+                        <span>Developer Demo</span>
+                        <span>Technical Talk</span>
+                    </div>
+                    <div class="project-links">
+                        <a href="https://beatpaws.vercel.app/" class="project-link" target="_blank" rel="noopener">
+                            <span data-i18n="projects.tryApp">Try App</span> →
+                        </a>
+                        <a href="https://www.linkedin.com/posts/swhan0329_ai%EA%B0%80-%EA%B2%8C%EC%9E%84%EC%9D%84-%EB%A7%8C%EB%93%A4-%EC%88%98-%EC%9E%88%EB%8B%A4%EB%8A%94-%EB%A7%90%EA%B3%BC-%EA%B7%B8-%EA%B2%8C%EC%9E%84%EC%9D%B4-%EB%81%9D%EA%B9%8C%EC%A7%80-%EB%B3%BC-%EB%A7%8C%ED%95%9C-%EA%B2%B0%EA%B3%BC%EB%AC%BC-share-7461429718467125248-ZeFq?utm_source=share&utm_medium=member_desktop&rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                            class="project-link" target="_blank" rel="noopener">
+                            <span data-i18n="projects.devStory">Dev Story</span>
+                        </a>
+                    </div>
+                </article>
+
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.kibbl">02 · AI product architecture</span>
+                    <div class="project-icon">🥗</div>
+                    <h3>Kibbl.ai</h3>
+                    <span class="project-badge badge-client" data-i18n="projects.badge.client">Client Work</span>
+                    <p data-i18n="projects.kibbl.desc">Designed an AI-powered food analysis architecture combining computer vision, LLMs, vector search, structured nutrition data, and RESTful APIs.</p>
+                    <div class="project-tags">
+                        <span>LLM</span>
+                        <span>RAG</span>
+                        <span>Vector Search</span>
+                        <span>REST API</span>
+                    </div>
+                </article>
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.zet">03 · Agent/client workflow</span>
+                    <div class="project-icon">🎬</div>
+                    <h3>ZET</h3>
+                    <span class="project-badge badge-client" data-i18n="projects.badge.client">Client Work</span>
+                    <p data-i18n="projects.zet.desc">Built AI agent-based creative automation workflows that generated ad strategy, scene structures, visual layouts, and brand-aligned campaign concepts.</p>
+                    <div class="project-tags">
+                        <span>Agents</span>
+                        <span>Creative Automation</span>
+                        <span>Prompt Systems</span>
+                        <span>Brand Analysis</span>
+                    </div>
+                </article>
+
+                <article class="project-card project-featured project-impact">
+                    <span class="project-order" data-i18n="projects.order.dva">04 · Production impact work</span>
+                    <div class="project-header">
+                        <div class="project-icon">🐬</div>
+                        <div class="project-title-block">
+                            <h3>DVA LAB</h3>
+                            <span class="project-badge">Tech For Impact</span>
+                            <span class="project-badge badge-support" data-i18n="projects.badge.kakao">Kakao Impact Support</span>
+                        </div>
+                    </div>
+                    <p class="project-desc-full" data-i18n="projects.dva.desc">
+                        A 2-year nonprofit collaboration as part of a Tech for Impact pilot cohort. Developed an AI web solution to detect and track tourism boats, protecting the habitat of Jeju's Indo-Pacific bottlenose dolphins.
+                    </p>
+                    <div class="project-tags">
+                        <span>Computer Vision</span>
+                        <span>Object Detection</span>
+                        <span>BEV Transform</span>
+                        <span>Drone Video Analysis</span>
+                    </div>
+                    <div class="project-media">
+                        <h4 data-i18n="projects.dva.media">Media & Articles</h4>
+                        <div class="media-links">
+                            <a href="https://youtu.be/aEznWgaDP84" class="media-link" target="_blank" rel="noopener">
+                                <span data-i18n="projects.dva.documentary">Mini Documentary</span>
+                            </a>
+                            <a href="https://modulabs.co.kr/blog/dva-lab?categoryId=12&page=2" class="media-link" target="_blank" rel="noopener">
+                                <span data-i18n="projects.dva.modulabs">Modulabs Blog</span>
+                            </a>
+                            <a href="https://brunch.co.kr/@andkakao/269" class="media-link" target="_blank" rel="noopener">
+                                <span data-i18n="projects.dva.brunch">Kakao Impact Brunch</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.impactbridge">05 · Impact MVP</span>
+                    <div class="project-icon">🌉</div>
+                    <h3 data-i18n="projects.impactbridge.title">ImpactBridge</h3>
+                    <span class="project-badge badge-personal" data-i18n="projects.badge.personal">Personal</span>
+                    <span class="project-badge badge-support" data-i18n="projects.badge.kakao">Kakao Impact Support</span>
+                    <p data-i18n="projects.impactbridge.desc">Platform connecting social innovators with tech talent. Supported by Kakao Impact.</p>
+                    <div class="project-tags">
+                        <span>Next.js</span>
+                        <span>Social Impact</span>
+                        <span>MVP</span>
+                    </div>
+                    <a href="https://www.linkedin.com/feed/update/urn:li:activity:7375395335394877440/"
+                        class="talk-link" target="_blank" rel="noopener">
+                        <span data-i18n="projects.devStory">Dev Story</span>
+                    </a>
+                </article>
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.retext">06 · Accessibility AI</span>
+                    <div class="project-icon">📄</div>
+                    <h3>ReText</h3>
+                    <span class="project-badge badge-personal" data-i18n="projects.badge.personal">Personal</span>
+                    <p data-i18n="projects.retext.desc">AI document summarization for seniors and visually impaired users. Accessibility-first UX.</p>
+                    <div class="project-tags">
+                        <span>Firebase</span>
+                        <span>FastAPI</span>
+                        <span>Accessibility</span>
+                    </div>
+                    <a href="https://www.linkedin.com/feed/update/urn:li:activity:7357702183284363264/"
+                        class="talk-link" target="_blank" rel="noopener">
+                        <span data-i18n="projects.devStory">Dev Story</span>
+                    </a>
+                </article>
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.explore">07 · Archived early experiment</span>
+                    <div class="project-icon">🧠</div>
+                    <h3>Explore-myself</h3>
+                    <span class="project-badge badge-personal" data-i18n="projects.badge.personal">Personal</span>
+                    <p data-i18n="projects.explore.desc">Archived early prototype for generating personal-branding sentences, built quickly with React and AWS Lambda.</p>
+                    <div class="project-tags">
+                        <span>React</span>
+                        <span>AWS Lambda</span>
+                        <span>Archived Prototype</span>
+                    </div>
+                    <a href="https://www.linkedin.com/posts/swhan0329_sideproject-ai-project-activity-7271459702931099648-Cd0q"
+                        class="talk-link" target="_blank" rel="noopener">
+                        <span data-i18n="projects.devStory">Dev Story</span>
+                    </a>
+                </article>
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.findleader">08 · Archived civic-tech experiment</span>
+                    <div class="project-icon">🗳️</div>
+                    <h3 data-i18n="projects.findleader.title">Find My Leader</h3>
+                    <span class="project-badge badge-personal" data-i18n="projects.badge.personal">Personal</span>
+                    <p data-i18n="projects.findleader.desc">Archived civic-tech experiment that helped voters compare candidate positions and reached 2,000+ users during the campaign window.</p>
+                    <div class="project-tags">
+                        <span>Next.js</span>
+                        <span>Civic UX</span>
+                        <span>Archived Prototype</span>
+                    </div>
+                    <a href="https://www.linkedin.com/posts/swhan0329_%EB%8B%A4%EB%93%A4-%ED%88%AC%ED%91%9C%EB%8A%94-%EC%9E%98-%ED%95%98%EC%85%A8%EB%82%98%EC%9A%94-%EC%A0%80%EB%8A%94-%EC%9D%B4%EB%B2%88-%EB%8C%80%EC%84%A0%EC%9D%84-%EB%A7%9E%EC%95%84-%EC%9E%91%EC%9D%80-%EC%8B%A4%ED%97%98%EC%9D%84-%ED%95%98%EB%82%98-%ED%95%B4%EB%B4%A4%EC%8A%B5%EB%8B%88%EB%8B%A4-activity-7335623486867996672-nKnb"
+                        class="talk-link" target="_blank" rel="noopener">
+                        <span data-i18n="projects.experiment">Experiment Review</span>
+                    </a>
+                </article>
+                <article class="project-card">
+                    <span class="project-order" data-i18n="projects.order.webarter">09 · Startup/product leadership</span>
+                    <div class="project-icon">📱</div>
+                    <h3>Webarter</h3>
+                    <span class="project-badge badge-team" data-i18n="projects.badge.team">Team Project</span>
+                    <p data-i18n="projects.webarter.desc">Co-founded as CTO. Social network for US college students with ML-powered recommender systems.</p>
+                    <div class="project-tags">
+                        <span>Flutter</span>
+                        <span>ML</span>
+                        <span>Firebase</span>
+                        <span>US Startup</span>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- Teaching Section -->
+    <section class="section" id="teaching">
+        <div class="container">
+            <h2 class="section-title" data-i18n="teaching.title">Teaching & Education</h2>
+            <p class="section-intro" data-i18n="teaching.intro">Sharing knowledge in AI and Computer Vision through
+                various educational platforms.</p>
+
+            <div class="teaching-categories">
+                <!-- Instructor Role -->
+                <div class="teaching-category">
+                    <div class="category-header">
+                        <span class="category-icon">🎓</span>
+                        <h3 data-i18n="teaching.cat.instructor">Instructor</h3>
+                    </div>
+                    <div class="category-content">
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.cv">Computer Vision</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.fastcampus">FastCampus</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.chatgpt">ChatGPT & Generative
+                                AI</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.teamsparta">TeamSparta</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.ethics">AI Ethics</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.modulabs">MODULABS</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.career">AI Career</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.wantedlab">WantedLab</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.programming">AI Programming</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.elice">Elice</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tutor/Mentor Role -->
+                <div class="teaching-category">
+                    <div class="category-header">
+                        <span class="category-icon">🤝</span>
+                        <h3 data-i18n="teaching.cat.mentor">Tutor & Mentor</h3>
+                    </div>
+                    <div class="category-content">
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.cv">Computer Vision</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.cv_mentor">Likelion, Upstage,
+                                Day1Company</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.ocr">OCR Challenges</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.ocr_mentor">Upstage,
+                                Day1Company</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.ds">Data Science & AI</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.naver">NAVER Connect
+                                Foundation</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.bootcamp">AI Bootcamp</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.sparta">Sparta Coding
+                                Club, Codeit</span>
+                        </div>
+                        <div class="teaching-item">
+                            <span class="teaching-topic" data-i18n="teaching.topic.career.mentor">Career</span>
+                            <span class="teaching-platforms" data-i18n="teaching.platform.modulabs">MODULABS</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Partner Logos -->
+            <div class="teaching-partners">
+                <a href="https://likelion.net" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.likelion">Likelion</a>
+                <a href="https://upstage.ai" class="partner-logo" target="_blank" rel="noopener">Upstage</a>
+                <a href="https://connect.or.kr" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.naver">NAVER Connect</a>
+                <a href="https://fastcampus.co.kr" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.fastcampus">FastCampus</a>
+                <a href="https://modulabs.co.kr" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.modulabs">MODULABS</a>
+                <a href="https://wanted.co.kr" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.wanted">WantedLab</a>
+                <a href="https://spartacodingclub.kr" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.sparta">Sparta Coding Club</a>
+                <a href="https://elice.io" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.elice">Elice</a>
+                <a href="https://day1company.co.kr" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.day1">Day1Company</a>
+                <a href="https://www.codeit.kr/" class="partner-logo" target="_blank" rel="noopener"
+                    data-i18n="partner.codeit">Codeit</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Invited Talks Section -->
+    <section class="section section-alt" id="talks">
+        <div class="container">
+            <h2 class="section-title" data-i18n="talks.title">Invited Talks</h2>
+            <div class="talks-list">
+                <!-- 2026 Talks -->
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2026</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3 data-i18n="talks.beatpaws.title">Building BeatPaws with Codex</h3>
+                        <p class="talk-subtitle" data-i18n="talks.beatpaws.subtitle">Dankook University Tech for !mpact
+                            for Campus</p>
+                        <p class="talk-desc" data-i18n="talks.beatpaws.desc">A one-hour session on building BeatPaws, a
+                            web rhythm game made with Codex for Vibe Jam 2026, and how AI-written code becomes a real
+                            playable product through small loops, playtesting, feedback, and iteration.</p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_ai%EA%B0%80-%EA%B2%8C%EC%9E%84%EC%9D%84-%EB%A7%8C%EB%93%A4-%EC%88%98-%EC%9E%88%EB%8B%A4%EB%8A%94-%EB%A7%90%EA%B3%BC-%EA%B7%B8-%EA%B2%8C%EC%9E%84%EC%9D%B4-%EB%81%9D%EA%B9%8C%EC%A7%80-%EB%B3%BC-%EB%A7%8C%ED%95%9C-%EA%B2%B0%EA%B3%BC%EB%AC%BC-share-7461429718467125248-ZeFq?utm_source=share&utm_medium=member_desktop&rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                            <a href="https://youtu.be/ydRquv2vVQc" class="talk-link" target="_blank" rel="noopener"
+                                data-href-en="https://youtu.be/ydRquv2vVQc" data-href-ko="https://youtu.be/twDvyKQyqaw">
+                                <span>▶️</span>
+                                <span data-i18n="talks.beatpaws.youtube">영어 강의 발표 영상</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2026</span>
+                        <span class="talk-type talk-type-panel" data-i18n="talks.type.panel">Panel Talk</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3 data-i18n="talks.iwd.title">International Women's Day: Female Leadership in AI</h3>
+                        <p class="talk-subtitle" data-i18n="talks.iwd.subtitle">Canadian & UK Embassies in Seoul</p>
+                        <p class="talk-desc" data-i18n="talks.iwd.desc">Invited panel speaker for the March 9, 2026
+                            event co-hosted by the Canadian and UK Embassies in Seoul, joined by 35 participants
+                            including students and early-career AI professionals.</p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_iwd-iwd2026-womenintech-activity-7437622134375436288-NEjo?utm_source=share&utm_medium=member_desktop&rcm=ACoAACimJR0Br8v_4BtYUPP6uMnFeuVVGbc8Zsc"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- 2025 Talks -->
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2025</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>Young Developers Meet-up, LeadHer</h3>
+                        <p class="talk-subtitle" data-i18n="talks.leadher.subtitle">Personal Branding in the AI Era</p>
+                        <p class="talk-desc" data-i18n="talks.leadher.desc">A talk for 80+ women developers on how
+                            personal branding, not job titles, will define our careers in the AI era. Balancing measured
+                            skepticism with cautious optimism while actively adapting to change.</p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_womenintech-aiengineer-personalbranding-activity-7371732632256024576-L3PD"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                            <a href="https://event-us.kr/leadher/event/110225" class="talk-link" target="_blank"
+                                rel="noopener">
+                                <span>🔗</span>
+                                <span data-i18n="talks.eventInfo">행사 소개</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2025</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3 data-i18n="talks.aiconf.title">돕는AI컨퍼런스 2025</h3>
+                        <p class="talk-subtitle" data-i18n="talks.aiconf.subtitle">카카오임팩트 x 사회가치페스타</p>
+                        <p class="talk-desc" data-i18n="talks.aiconf.desc">Presentation on AI for social good and tech
+                            for impact initiatives.</p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_aiforgood-techforimpact-rbrqviqzcstk-activity-7366989533860564995-nFH4"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                            <a href="https://www.youtube.com/watch?v=gDvTuswIEz8" class="talk-link" target="_blank"
+                                rel="noopener">
+                                <span>▶️</span>
+                                <span data-i18n="talks.watchReplay">발표 다시보기</span>
+                            </a>
+                            <a href="https://aicon.kakaoimpact.org/?detail=program&id=2" class="talk-link"
+                                target="_blank" rel="noopener">
+                                <span>🔗</span>
+                                <span data-i18n="talks.eventInfo">행사 소개</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2025</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>CODE; Without Barriers</h3>
+                        <p class="talk-subtitle" data-i18n="talks.code.subtitle">The Secret of Developer Leadership</p>
+                        <p class="talk-desc" data-i18n="talks.code.desc">A session on balancing "I" and "We" in
+                            leadership. Leadership has no fixed formula—everyone leads differently, and followership is
+                            just as essential.</p>
+                        <a href="https://www.linkedin.com/posts/swhan0329_reeqyssxh-tzirxgsqksxh-syotfnrlkupi-activity-7342676514146000898-T2MT"
+                            class="talk-link" target="_blank" rel="noopener">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path
+                                    d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                            </svg>
+                            <span data-i18n="talks.talkReview">발표 후기</span>
+                        </a>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2025</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>모두팝 x 테크포임팩트</h3>
+                        <p class="talk-subtitle" data-i18n="talks.modupop.subtitle">DVA LAB: Marine Ecosystem AI
+                            Monitoring</p>
+                        <p class="talk-desc" data-i18n="talks.modupop.desc">Vision AI-based drone video analysis web
+                            service for Jeju dolphin protection - ship speed estimation using BEV transformation.</p>
+                        <a href="https://www.linkedin.com/posts/swhan0329_%EB%AA%A8%EB%91%90%ED%8C%9Dx%ED%85%8C%ED%81%AC%ED%8F%AC%EC%9E%84%ED%8C%A9%ED%8A%B8-%EB%93%9C%EB%A1%A0-%EC%98%81%EC%83%81-%EA%B8%B0%EB%B0%98-%EC%84%A0%EB%B0%95-%EC%86%8D%EB%8F%84-%EC%B6%94%EC%A0%95-bev-%EB%B3%80%ED%99%98%EC%9C%BC%EB%A1%9C-activity-7339222505192116224-HTiP"
+                            class="talk-link" target="_blank" rel="noopener">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path
+                                    d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                            </svg>
+                            <span data-i18n="talks.talkReview">발표 후기</span>
+                        </a>
+                    </div>
+                </article>
+
+                <!-- 2024 Talks -->
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2024</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>Jeju Web Conference 2024</h3>
+                        <p class="talk-desc" data-i18n="talks.jeju.desc">Talk on protecting Indo-Pacific bottlenose
+                            dolphins near Jeju using AI-based ship detection and tracking technology.</p>
+                        <a href="https://www.linkedin.com/posts/swhan0329_jejuwebconference-techforimpact-dvalab-activity-7277849842054262784-Uur0"
+                            class="talk-link" target="_blank" rel="noopener">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path
+                                    d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                            </svg>
+                            <span data-i18n="talks.talkReview">발표 후기</span>
+                        </a>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2024</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>DigiLab Challenge</h3>
+                        <p class="talk-subtitle" data-i18n="talks.digilab.subtitle">Changing the World with Technology
+                        </p>
+                        <p class="talk-desc" data-i18n="talks.digilab.desc">Presentation on AI-driven conservation
+                            efforts for Indo-Pacific bottlenose dolphins, inspired by real-time drone vision systems.
+                        </p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_digilab-techforimpact-ai-activity-7262696858932273152-PnJf"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                            <a href="https://digilab-hackathon.com/" class="talk-link" target="_blank" rel="noopener">
+                                <span>🔗</span>
+                                <span data-i18n="talks.eventInfo">행사 소개</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- 2024 Talk -->
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2024</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>Women Techmakers Korea 2024</h3>
+                        <p class="talk-desc" data-i18n="talks.wtm.desc">Presentation on how emerging technologies can
+                            shape the future, drawing lessons from DVA LAB's social impact projects.</p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_technology-ai-wtm2024-activity-7188089754867974144-qXbX"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                            <a href="https://www.growthnchallenge.us/skillup/530" class="talk-link" target="_blank"
+                                rel="noopener">
+                                <span>🔗</span>
+                                <span data-i18n="talks.eventInfo">행사 소개</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- 2023 Talks -->
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2023</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3 data-i18n="talks.posco.title">POSCO E&C Smart Construction Academy</h3>
+                        <p class="talk-desc" data-i18n="talks.posco.desc">Invited lecture on AI applications and
+                            positive influence in construction technology.</p>
+                        <a href="https://www.linkedin.com/posts/swhan0329_ai-positiveinfluence-lecture-activity-7083953070253998080-6zqo"
+                            class="talk-link" target="_blank" rel="noopener">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path
+                                    d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                            </svg>
+                            <span data-i18n="talks.talkReview">발표 후기</span>
+                        </a>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2023</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>MODUCON 2023</h3>
+                        <p class="talk-desc" data-i18n="talks.moducon.desc">Presentation on the journey of uniting
+                            individual talents to solve social problems through collaborative AI projects, inspired by
+                            DVA LAB.</p>
+                        <a href="https://www.linkedin.com/posts/swhan0329_moducon2023-ai-computervision-activity-7139786676737867776-NrDK"
+                            class="talk-link" target="_blank" rel="noopener">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                <path
+                                    d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                            </svg>
+                            <span data-i18n="talks.talkReview">발표 후기</span>
+                        </a>
+                    </div>
+                </article>
+
+                <article class="talk-item">
+                    <div class="talk-meta">
+                        <span class="talk-year">2023</span>
+                    </div>
+                    <div class="talk-content">
+                        <h3>Google Bootcamp Alumni Meetup</h3>
+                        <p class="talk-subtitle">AI Week 2023</p>
+                        <p class="talk-desc" data-i18n="talks.google.desc">Founded a social media startup targeting U.S.
+                            college students, focused on breaking filter bubbles and encouraging diverse perspectives.
+                        </p>
+                        <div class="talk-links">
+                            <a href="https://www.linkedin.com/posts/swhan0329_googlebootcamp-networking-share-activity-7086932943239073793-7UAJ"
+                                class="talk-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                    <path
+                                        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                                </svg>
+                                <span data-i18n="talks.talkReview">발표 후기</span>
+                            </a>
+                            <a href="https://developers-kr.googleblog.com/2023/08/blog-post.html" class="talk-link"
+                                target="_blank" rel="noopener">
+                                <span>🔗 Google Blog</span>
+                            </a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- Featured Media Section -->
+    <section class="section section-alt" id="media">
+        <div class="container">
+            <h2 class="section-title" data-i18n="media.title">미디어 &amp; 아카이브</h2>
+            <div class="media-grid">
+                <div class="media-card">
+                    <a href="https://www.youtube.com/watch?v=e2dJoe8kKwc" class="media-thumbnail" target="_blank" rel="noopener" aria-label="Watch the WantedLab profile interview" data-aria-en="Watch the WantedLab profile interview" data-aria-ko="원티드랩 인물도감 인터뷰 영상 보기">
+                        <img src="vendor/9967c49ea4ac.jpg" alt="WantedLab profile interview video thumbnail" data-alt-en="WantedLab profile interview video thumbnail" data-alt-ko="원티드랩 인물도감 인터뷰 영상 썸네일" width="1280" height="720" loading="lazy">
+                        <span class="media-play" aria-hidden="true">▶</span>
+                    </a>
+                    <h3 data-i18n="media.profile.title">원티드랩 인물도감</h3>
+                    <p data-i18n="media.profile.desc">일을 통해 의미를 찾고 커뮤니티를 만들어가는 여정에 대한 인터뷰</p>
+                    <div class="media-buttons">
+                        <a href="https://scratched-shallot-e15.notion.site/P-003-4500795fe8f24be198d88b0bbec37618"
+                            class="media-btn" target="_blank" rel="noopener">
+                            <span>📖</span> <span data-i18n="media.btn.article">인물도감 보러가기</span>
+                        </a>
+                        <a href="https://www.youtube.com/watch?v=e2dJoe8kKwc" class="media-btn" target="_blank"
+                            rel="noopener">
+                            <span>▶️</span> <span data-i18n="media.btn.youtube">유튜브 보러가기</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="media-card">
+                    <a href="https://youtu.be/aEznWgaDP84" class="media-thumbnail" target="_blank" rel="noopener" aria-label="Watch the DVA LAB mini documentary" data-aria-en="Watch the DVA LAB mini documentary" data-aria-ko="DVA LAB 미니다큐 영상 보기">
+                        <img src="vendor/c88071fa6bee.jpg" alt="DVA LAB mini documentary video thumbnail" data-alt-en="DVA LAB mini documentary video thumbnail" data-alt-ko="DVA LAB 미니다큐 영상 썸네일" width="1280" height="720" loading="lazy">
+                        <span class="media-play" aria-hidden="true">▶</span>
+                    </a>
+                    <h3 data-i18n="media.modulabs.title">DVA LAB 스토리</h3>
+                    <p data-i18n="media.modulabs.desc">기술 실험을 위한 "안전한 온실"을 만들고 커뮤니티 주도 AI 프로젝트를 이끄는 이야기.</p>
+                    <div class="media-buttons">
+                        <a href="https://youtu.be/aEznWgaDP84" class="media-btn" target="_blank" rel="noopener">
+                            <span>▶️</span> <span data-i18n="projects.dva.documentary">미니다큐</span>
+                        </a>
+                        <a href="https://modulabs.co.kr/blog/dva-lab?categoryId=12&amp;page=2" class="media-btn" target="_blank" rel="noopener">
+                            <span>📖</span> <span data-i18n="projects.dva.modulabs">모두의연구소 블로그</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="media-card">
+                    <a href="https://www.youtube.com/watch?v=JaY8mKOBZ0M" class="media-thumbnail" target="_blank" rel="noopener" aria-label="Watch 평범한 사업가 AI Podcast episode 87" data-aria-en="Watch 평범한 사업가 AI Podcast episode 87" data-aria-ko="평범한 사업가 AI 팟캐스트 87화 보기">
+                        <img src="vendor/22172a674d6d.jpg" alt="평범한 사업가 AI Podcast episode 87 thumbnail" data-alt-en="평범한 사업가 AI Podcast episode 87 thumbnail" data-alt-ko="평범한 사업가 AI 팟캐스트 87화 썸네일" width="1280" height="720" loading="lazy">
+                        <span class="media-play" aria-hidden="true">▶</span>
+                    </a>
+                    <h3 data-i18n="media.plainBusinessmanEp1.title">평범한 사업가 AI 팟캐스트 #87</h3>
+                    <p data-i18n="media.plainBusinessmanEp1.desc">Codex 앱의 기본 사용과 작업 흐름을 설명한 인터뷰.</p>
+                    <div class="media-buttons">
+                        <a href="https://www.youtube.com/watch?v=JaY8mKOBZ0M" class="media-btn" target="_blank" rel="noopener">
+                            <span>▶️</span> <span data-i18n="media.btn.youtube">유튜브 보러가기</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="media-card">
+                    <a href="https://www.youtube.com/watch?v=bfevQSV9Euc" class="media-thumbnail" target="_blank" rel="noopener" aria-label="Watch 평범한 사업가 AI Podcast episode 92" data-aria-en="Watch 평범한 사업가 AI Podcast episode 92" data-aria-ko="평범한 사업가 AI 팟캐스트 92화 보기">
+                        <img src="vendor/f4d99889f41c.jpg" alt="평범한 사업가 AI Podcast episode 92 thumbnail" data-alt-en="평범한 사업가 AI Podcast episode 92 thumbnail" data-alt-ko="평범한 사업가 AI 팟캐스트 92화 썸네일" width="1280" height="720" loading="lazy">
+                        <span class="media-play" aria-hidden="true">▶</span>
+                    </a>
+                    <h3 data-i18n="media.plainBusinessmanEp2.title">평범한 사업가 AI 팟캐스트 #92</h3>
+                    <p data-i18n="media.plainBusinessmanEp2.desc">Sites·Ultra·Side Chat을 실제 업무 흐름으로 연결한 인터뷰.</p>
+                    <div class="media-buttons">
+                        <a href="https://www.youtube.com/watch?v=bfevQSV9Euc" class="media-btn" target="_blank" rel="noopener">
+                            <span>▶️</span> <span data-i18n="media.btn.youtube">유튜브 보러가기</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Publications Section -->
+    <section class="section section-alt" id="publications">
+        <div class="container">
+            <h2 class="section-title" data-i18n="publications.title">Publications</h2>
+            <div class="publications-list">
+                <div class="publication-category">
+                    <h3 data-i18n="publications.intlJournals">International Journals</h3>
+                    <article class="publication-item">
+                        <span class="pub-badge">SCI</span>
+                        <div class="pub-content">
+                            <h4>A 360-degree panoramic image inpainting network using a cube map</h4>
+                            <p class="pub-authors">SW Han and DY Suh</p>
+                            <p class="pub-venue">Computers, Materials & Continua, 2021</p>
+                            <a href="https://www.techscience.com/cmc/v66n1/40442/html" class="pub-link" target="_blank"
+                                rel="noopener">📖 <span data-i18n="publications.viewPaper">논문 보기</span></a>
+                        </div>
+                    </article>
+                </div>
+                <div class="publication-category">
+                    <h3 data-i18n="publications.intlConfs">International Conferences</h3>
+                    <article class="publication-item">
+                        <div class="pub-content">
+                            <h4>Deep Learning for Overseeing Indo-Pacific Bottlenose Dolphin Tourism Law Enforcement
+                            </h4>
+                            <p class="pub-authors">DW Kim, WH Jeon, JY Lee, ... SW Han</p>
+                            <p class="pub-venue">IEEE Conference of Artificial Intelligence (CAI) 2024 Workshop,
+                                Singapore</p>
+                            <a href="https://openreview.net/pdf?id=bnduW0yJrV" class="pub-link" target="_blank"
+                                rel="noopener">📖 <span data-i18n="publications.viewPaper">논문 보기</span></a>
+                        </div>
+                    </article>
+                    <article class="publication-item">
+                        <div class="pub-content">
+                            <h4>Perspective Projection Algorithm Enabling Mobile Device's Indoor Positioning</h4>
+                            <p class="pub-authors">SW Han, YJ Lee, JH Yun, CY Han, DH Lee and DY Suh</p>
+                            <p class="pub-venue">Journal of Computer and Communications, Bangkok, Thailand, 2017</p>
+                            <a href="https://www.scirp.org/journal/paperinformation?paperid=81435" class="pub-link"
+                                target="_blank" rel="noopener">📖 <span data-i18n="publications.viewPaper">논문
+                                    보기</span></a>
+                        </div>
+                    </article>
+                </div>
+                <div class="publication-category">
+                    <h3 data-i18n="publications.domestic">Domestic Publications</h3>
+                    <article class="publication-item">
+                        <div class="pub-content">
+                            <h4>Parking Control System with Fake License Plate Classification Model</h4>
+                            <p class="pub-authors">JH Shin, JY Lee, and SW Han</p>
+                            <p class="pub-venue">Journal of the Institute of Electronics and Information Engineers, 2023
+                            </p>
+                            <a href="https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView.kci?sereArticleSearchBean.artiId=ART002987038"
+                                class="pub-link" target="_blank" rel="noopener">📖 <span
+                                    data-i18n="publications.viewPaper">논문 보기</span></a>
+                        </div>
+                    </article>
+                    <article class="publication-item">
+                        <div class="pub-content">
+                            <h4>Algorithm to Improve Accuracy of Location Estimation for AR Games</h4>
+                            <p class="pub-authors">SW Han and DY Suh</p>
+                            <p class="pub-venue">Journal of Broadcast Engineering, 2019</p>
+                            <a href="https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView.kci?sereArticleSearchBean.artiId=ART002435806"
+                                class="pub-link" target="_blank" rel="noopener">📖 <span
+                                    data-i18n="publications.viewPaper">논문 보기</span></a>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Life Section -->
+    <section class="section" id="life">
+        <div class="container">
+            <h2 class="section-title" data-i18n="life.title">Life & Hobbies</h2>
+            <div class="life-grid">
+                <div class="life-card">
+                    <div class="life-icon">✈️</div>
+                    <h3 data-i18n="life.travel.title">Travel</h3>
+                    <p data-i18n="life.travel.desc">I have traveled to countries including Switzerland, the UK, the Czech Republic, Germany, France, the United States, Thailand, Guam, Japan, China, and South Africa. I enjoy stepping outside familiar surroundings and experiencing different cultures and ways of life.</p>
+                </div>
+                <div class="life-card">
+                    <div class="life-icon">🏕️</div>
+                    <h3 data-i18n="life.camping.title">Camping</h3>
+                    <p data-i18n="life.camping.desc">I enjoy spending time in nature, stepping away from screens, and slowing down.</p>
+                </div>
+                <div class="life-card">
+                    <div class="life-icon">🌌</div>
+                    <h3 data-i18n="life.nightsky.title">Stargazing</h3>
+                    <p data-i18n="life.nightsky.desc">I am interested in earth science and enjoy observing the stars, the moon, and how the sky changes with the seasons.</p>
+                </div>
+                <div class="life-card">
+                    <div class="life-icon">💻</div>
+                    <h3 data-i18n="life.coding.title">Side Projects</h3>
+                    <p data-i18n="life.coding.desc">When an idea comes to mind, I build a small version first and develop it by using it myself.</p>
+                </div>
+                <div class="life-card">
+                    <div class="life-icon">📷</div>
+                    <h3 data-i18n="life.photo.title">Photography</h3>
+                    <p data-i18n="life.photo.desc">I photograph scenes from trips and everyday life as a way to preserve the moments I care about.</p>
+                </div>
+                <div class="life-card">
+                    <div class="life-icon">📚</div>
+                    <h3 data-i18n="life.books.title">Reading</h3>
+                    <p data-i18n="life.books.desc">I read across genres, from technology to essays, to discover new perspectives and questions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Seowoo Han. <span data-i18n="footer.rights">All rights reserved.</span></p>
+        </div>
+    </footer>
+
+    <script src="js/i18n.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>

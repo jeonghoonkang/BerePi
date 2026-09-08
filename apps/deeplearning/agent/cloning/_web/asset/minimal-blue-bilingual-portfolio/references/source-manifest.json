@@ -1,0 +1,139 @@
+{
+  "source": "https://swhan0329.github.io/",
+  "capturedAt": "2026-09-08T04:36:28.274Z",
+  "files": [
+    {
+      "url": "https://swhan0329.github.io/",
+      "path": "index.html",
+      "bytes": 130963,
+      "sha256": "8bd32f19e0255558151c4c9d111015e5e094bb91293607c8592f00e9fdc3e682",
+      "localSha256": "50d96ee052abcdead4b4c380844035d0f1c113379af7bba9e917c2ae70d0bd20"
+    },
+    {
+      "url": "https://swhan0329.github.io/assets/profile.jpg",
+      "path": "assets/profile.jpg",
+      "bytes": 918799,
+      "sha256": "11c770f87811674d2c2311c81cc1cdc91175634ff5dec1f3a87313c71778e9b6",
+      "localSha256": "11c770f87811674d2c2311c81cc1cdc91175634ff5dec1f3a87313c71778e9b6"
+    },
+    {
+      "url": "https://swhan0329.github.io/css/style.css?v=20260729-latpeed-cta",
+      "path": "css/style.css",
+      "bytes": 56208,
+      "sha256": "bc3b75120e025b3d419a830e667665a1820bc4c5c4e98f53d88f6e35f4577ac7",
+      "localSha256": "bc3b75120e025b3d419a830e667665a1820bc4c5c4e98f53d88f6e35f4577ac7"
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
+      "path": "vendor/ee7ba94afea4.css",
+      "bytes": 1145,
+      "sha256": "c9df434f9c7e8ff5c1791cd4fc4670c9352b9931b5c6a927f1a3c05afe951310",
+      "localSha256": "260b135fe5f98908d62589d44bd431b99b1008fcb2d50b2746624425d6410ab2"
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuOKfMZg.ttf",
+      "path": "vendor/ee9558be9f8a.ttf",
+      "bytes": 325748,
+      "sha256": "d0f4bc7faca468376e3db9b5e57afcdc2192134c9ac82a9511f32767b56853a4",
+      "localSha256": "d0f4bc7faca468376e3db9b5e57afcdc2192134c9ac82a9511f32767b56853a4"
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf",
+      "path": "vendor/a699af1dea30.ttf",
+      "bytes": 324820,
+      "sha256": "1b08e7fc267a5c7e1d614100f604b83e7e8a0be241f0f288faa2b3ac93a683ba",
+      "localSha256": "1b08e7fc267a5c7e1d614100f604b83e7e8a0be241f0f288faa2b3ac93a683ba"
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZg.ttf",
+      "path": "vendor/e45972c7e9f2.ttf",
+      "bytes": 325304,
+      "sha256": "8c883f63b2c4157d997319f2c8bc6995ed4357ef371940d31ca159004a4aae63",
+      "localSha256": "8c883f63b2c4157d997319f2c8bc6995ed4357ef371940d31ca159004a4aae63"
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf",
+      "path": "vendor/87e867b52640.ttf",
+      "bytes": 326048,
+      "sha256": "e7a1aaf7eda9f2fad4131725fa556265ec75ca7b2d756260173a040363e8d4f7",
+      "localSha256": "e7a1aaf7eda9f2fad4131725fa556265ec75ca7b2d756260173a040363e8d4f7"
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf",
+      "path": "vendor/6f49e1b28bce.ttf",
+      "bytes": 326468,
+      "sha256": "b37284b5701b6b168dfc770aa1a4ac492106422fd3ba76bc7641e37434e8019c",
+      "localSha256": "b37284b5701b6b168dfc770aa1a4ac492106422fd3ba76bc7641e37434e8019c"
+    },
+    {
+      "url": "https://swhan0329.github.io/assets/ebooks/working-harder-disappeared-ebook-cover.png",
+      "path": "assets/ebooks/working-harder-disappeared-ebook-cover.png",
+      "bytes": 1146665,
+      "sha256": "cb40800348bb40f3ba9681805c5687dfcec65eab2fbd65caefbfb63d397202e9",
+      "localSha256": "cb40800348bb40f3ba9681805c5687dfcec65eab2fbd65caefbfb63d397202e9"
+    },
+    {
+      "url": "https://swhan0329.github.io/assets/ebooks/chatgpt-app-5th-cover.png",
+      "path": "assets/ebooks/chatgpt-app-5th-cover.png",
+      "bytes": 1325386,
+      "sha256": "7bf75a6332f2114a7f0aeecb5e67ec8b9fc17677fd179aaadb2bb42e61748f30",
+      "localSha256": "7bf75a6332f2114a7f0aeecb5e67ec8b9fc17677fd179aaadb2bb42e61748f30"
+    },
+    {
+      "url": "https://swhan0329.github.io/assets/ebooks/pangyo-dictionary-book-mockup-v5.jpg",
+      "path": "assets/ebooks/pangyo-dictionary-book-mockup-v5.jpg",
+      "bytes": 164050,
+      "sha256": "b1b20eaf3fb99eae440d5ceda0a84738586ac8a7103c1df5a27e08e028c211b9",
+      "localSha256": "b1b20eaf3fb99eae440d5ceda0a84738586ac8a7103c1df5a27e08e028c211b9"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/e2dJoe8kKwc/maxresdefault.jpg",
+      "path": "vendor/9967c49ea4ac.jpg",
+      "bytes": 98052,
+      "sha256": "11e0f9751041839af82e57290fc904dd6c696c9cc81236622e240c0e665089aa",
+      "localSha256": "11e0f9751041839af82e57290fc904dd6c696c9cc81236622e240c0e665089aa"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/aEznWgaDP84/maxresdefault.jpg",
+      "path": "vendor/c88071fa6bee.jpg",
+      "bytes": 86103,
+      "sha256": "5f30bc86b7eccc7468b9bb37d0a7ace9fa8c2379c95b4ece011dbfcdcf39c99a",
+      "localSha256": "5f30bc86b7eccc7468b9bb37d0a7ace9fa8c2379c95b4ece011dbfcdcf39c99a"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/JaY8mKOBZ0M/maxresdefault.jpg",
+      "path": "vendor/22172a674d6d.jpg",
+      "bytes": 169628,
+      "sha256": "a281212d882db6bbbe978971f0485638236dc205688ca860eb201949ea40f3d2",
+      "localSha256": "a281212d882db6bbbe978971f0485638236dc205688ca860eb201949ea40f3d2"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/bfevQSV9Euc/maxresdefault.jpg",
+      "path": "vendor/f4d99889f41c.jpg",
+      "bytes": 212209,
+      "sha256": "baeff5eeb1fca2b83dc5be15a71eb06eda6eafd7f424f0a6489b5e2f64778514",
+      "localSha256": "baeff5eeb1fca2b83dc5be15a71eb06eda6eafd7f424f0a6489b5e2f64778514"
+    },
+    {
+      "url": "https://swhan0329.github.io/js/i18n.js?v=20260905-ebook-5th",
+      "path": "js/i18n.js",
+      "bytes": 68712,
+      "sha256": "9f49542805b2cafaaa5d4524730e6f50c7e3f429ca0830995657c4d90581f455",
+      "localSha256": "9f49542805b2cafaaa5d4524730e6f50c7e3f429ca0830995657c4d90581f455"
+    },
+    {
+      "url": "https://swhan0329.github.io/js/main.js?v=20260728-portfolio-aio",
+      "path": "js/main.js",
+      "bytes": 8614,
+      "sha256": "92b2a1f2832e84322ad39a57d0e3a295c37c8b8a9ce6324acebb98f87b7fb7e7",
+      "localSha256": "b8f28b5d3546548288587f61e8b971f436279a704b3fc0b6c6dafc3219a8d13f"
+    }
+  ],
+  "modifications": [
+    "Localized stylesheet, scripts, images, and CSS font URLs.",
+    "Remote counter fetches replaced with a local zero-value response.",
+    "Relative subpage navigation points to original website; subpages are outside this capture.",
+    "Added noindex and custom.css override entrypoint."
+  ],
+  "externalNavigation": "Preserved; same-origin subpages point to the original website."
+}
