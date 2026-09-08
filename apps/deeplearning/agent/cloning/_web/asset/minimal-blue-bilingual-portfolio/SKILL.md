@@ -19,6 +19,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\reuse.ps1 -Destination E:\dev
 
 `Destination`은 아직 존재하지 않는 경로를 사용한다. 생성된 `index.html`을 열어 수정 결과를 확인한다.
 
+Ubuntu 또는 WSL Bash에서는 동일한 디렉터리에서 실행한다.
+
+```bash
+bash scripts/reuse.sh "$HOME/my-portfolio"
+```
+
+두 환경의 실행·미리보기·재다운로드 방법은 [readme.md](readme.md)를 참고한다.
+
 ## 재사용 순서
 
 1. `assets/site`를 새 프로젝트로 복사한다. `references/original`은 원본 비교용이므로 수정하지 않는다.
@@ -34,6 +42,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\reuse.ps1 -Destination E:\dev
 - `references/source-manifest.json`: URL, 다운로드 시각, 크기, 원본·로컬 SHA-256, 변경 사항.
 - `scripts/download.mjs`: Node.js 20 이상에서 `node scripts/download.mjs <새 저장 경로>`로 다시 다운로드한다. 기존 사이트는 덮어쓰지 않는다. 중단된 다운로드는 다른 새 경로에서 재시도한다.
 - `scripts/reuse.ps1`: 원본 자료 없이 실행용 사이트만 새 디렉터리로 복사한다.
+- `scripts/reuse.sh`: Ubuntu/WSL Bash에서 실행용 사이트를 새 디렉터리로 복사한다. 공백이 있는 경로도 인용해서 전달할 수 있다.
 
 홈페이지의 하위 페이지와 외부 서비스는 복제하지 않았다. 전자책 상세 등의 링크는 원본 URL로 연결한다. 다운로드 카운터는 로컬에서 0을 표시하며 원본 통계를 읽거나 증가시키지 않는다. 판매 기간 처리 등 나머지 원본 동작은 유지된다.
 

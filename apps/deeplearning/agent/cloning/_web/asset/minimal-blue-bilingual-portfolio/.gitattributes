@@ -1,2 +1,4 @@
 # Preserve captured bytes and source-manifest SHA-256 values on every platform.
 * -text
+# Shell entrypoints must stay LF even when checked out using Windows Git.
+*.sh text eol=lf
