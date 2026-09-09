@@ -29,3 +29,7 @@
 weekly
 maxsize 1G
 </pre>
+
+
+### find dir size 
+- sudo du -x -h --threshold=50G /home 2>/dev/null | sort -hr

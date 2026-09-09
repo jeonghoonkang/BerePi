@@ -47,9 +47,7 @@ deb http://kr.archive.ubuntu.com/ubuntu/ focal main restricted
 
 
 
-
-
 #### xenial
-- deb https://archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
-- deb https://archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
-- deb https://archive.ubuntu.com/ubuntu/ xenial-backports main restricted universe multiverse
+- deb https://archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse                                                                                                                
+- deb https://archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse                                                                                                        
+- deb https://archive.ubuntu.com/ubuntu/ xenial-backports main restricted universe multiverse  
