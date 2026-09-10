@@ -37,6 +37,53 @@ Git에서 현재 브랜치의 최신 코드를 fast-forward 방식으로 받은 
 
 기본 포트는 `4004`입니다.
 
+### curl로 모델 / GPU 개수와 상세 상태 조회
+
+Bash, curl, Python 3.6 이상에서 실행합니다. 별도 Python 패키지는 필요 없습니다.
+
+```bash
+bash list_models_gpus.sh                         # http://127.0.0.1:4004
+bash list_models_gpus.sh http://10.0.0.24:4004     # 원격 라우터 주소
+bash list_models_gpus.sh http://10.0.0.24:4004 --json
+```
+
+등록·활성·배정 가능 대상 수, 사용 가능한 고유 모델명과 대상 ID, 명시적으로 선택된 GPU 목록과
+개수를 출력합니다. 이어서 각 대상의 주소, 모델, API 종류, GPU 설정, 배정 가능 여부를 표시합니다.
+상세 인증 응답에서는 GPU 정보, 상태, uptime, 처리·대기 큐 수, 누적 요청 수, 평균·최근 응답시간,
+마지막 상태 확인 시각 및 오류도 출력합니다.
+
+상세 정보는 라우터 비밀번호를 환경 변수로 전달하세요. 백엔드 Gemma 사용자 비밀번호와는 다릅니다.
+
+```bash
+read -r -s -p 'Routing password: ' LLM_ROUTING_PASSWORD
+export LLM_ROUTING_PASSWORD
+bash list_models_gpus.sh http://10.0.0.24:4004
+unset LLM_ROUTING_PASSWORD
+```
+
+내부적으로 `curl /api/status`를 호출합니다. 인증 없는 응답은 공개 요약이므로 상세 항목이 제한되며,
+잘못된 비밀번호도 서버 구현에 따라 공개 요약으로 응답합니다. 출력에 `공개 응답` 안내가 나오면 인증을
+확인하세요. 비밀번호는 curl 인자가 아닌 표준입력 설정으로 전달하고, 대상의 인증정보 필드는 출력하지 않습니다.
+`LLM_ROUTING_URL`로 기본 URL, `LLM_ROUTING_STATUS_TIMEOUT`으로 조회 제한 시간(기본 120초)을 지정할 수 있습니다.
+
+집계 기준:
+
+- 사용 가능은 서버의 `dispatch_eligible=true` 기준이며, 큐가 비어 있다는 뜻은 아닙니다.
+- API 상태는 서버의 health 검사 주기에 따라 캐시될 수 있습니다. 미확인을 사용 가능으로 추정하지 않습니다.
+- 모델 개수는 등록된 모델명의 중복을 제거한 수입니다. 백엔드의 모든 설치 모델 목록은 아닙니다.
+- GPU는 배정 가능한 대상의 명시된 번호/UUID를 `host + GPU ID` 기준으로 중복 제거합니다.
+  포트만 다른 동일 호스트의 같은 GPU는 한 개입니다. 호스트 별칭이 다르면 중복될 수 있습니다.
+- `auto`, `all`, 미지정 설정은 실제 GPU 수를 알 수 없어 미확인 대상으로 별도 표시합니다.
+  CPU와 클라우드 대상은 GPU 수에 넣지 않습니다. 이 API만으로 전체 물리 GPU 개수를 확정하지 않습니다.
+
+Windows에서는 WSL로 실행할 수 있습니다.
+
+```powershell
+wsl -d Ubuntu-18.04 -- bash /mnt/e/devel/BerePi/apps/deeplearning/LLM/llm_routing/list_models_gpus.sh http://10.0.0.24:4004
+```
+
+조회·집계 테스트: `python3 -m unittest test_list_models_gpus -v`
+
 ```bash
 LLM_ROUTING_PORT=4005 ./run.sh
 ```
