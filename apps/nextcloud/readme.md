@@ -4,6 +4,118 @@
 이 디렉토리는 Nextcloud 파일 동기화 시스템과 관련된 다양한 응용 소프트웨어를 포함합니다. 
 Nextcloud는 자체 호스팅 파일 동기화 및 공유 솔루션으로, 여러 클라이언트 도구, 서버 설정, 관리 스크립트, 플러그인 등을 제공합니다.
 
+## Nextcloud 파일 디렉토리 위치 이동
+
+이 저장소의 Docker 구성은 호스트 디렉토리를 컨테이너의 `/var/www/html`에 연결합니다. 따라서 호스트 경로만 변경하고, Nextcloud 내부 경로인 `/var/www/html/data`는 유지하는 것이 안전합니다.
+
+### 1. 사전 확인 및 백업
+
+`compose_script` 디렉토리에서 작업한다고 가정합니다. 사용하는 Compose 프로젝트가 다르면 해당 프로젝트 디렉토리와 서비스 이름을 바꾸세요.
+
+```bash
+cd apps/nextcloud/compose_script
+docker compose ps
+docker compose exec -u www-data app php occ config:system:get datadirectory
+docker compose exec -u www-data app php occ maintenance:mode --on
+docker compose exec db mariadb-dump -u root -p nextcloud > nextcloud_before_move.sql
+```
+
+DB 비밀번호 입력이 필요한 경우 `db.env`의 설정을 사용합니다. 데이터 디렉토리의 현재 호스트 경로와 디스크 여유 공간도 확인합니다.
+
+```bash
+grep '^VOL_PATH=' .env
+df -h
+du -sh "$(grep '^VOL_PATH=' .env | cut -d= -f2)/nextcloud_volume/data"
+```
+
+### 2. 권장 방법: 전체 Nextcloud 볼륨 이동
+
+현재 [docker-compose.yml](compose_script/docker-compose.yml)는 `${VOL_PATH}/nextcloud_volume` 전체를 `/var/www/html`에 연결합니다. 이 경우 전체 디렉토리를 옮기면 `config/config.php`, 앱, 데이터의 경로가 함께 보존됩니다.
+
+```bash
+OLD_VOL_PATH=/home/tinyos/devel/nextcloud/vol
+NEW_VOL_PATH=/mnt/nextcloud/vol
+
+docker compose down
+sudo mkdir -p "$NEW_VOL_PATH"
+sudo rsync -aHAX --info=progress2 \
+   "$OLD_VOL_PATH/nextcloud_volume/" \
+   "$NEW_VOL_PATH/nextcloud_volume/"
+sudo rsync -aHAX \
+   "$OLD_VOL_PATH/mariadb_volume/" \
+   "$NEW_VOL_PATH/mariadb_volume/"
+sudo rsync -aHAX \
+   "$OLD_VOL_PATH/nginx_proxy/" \
+   "$NEW_VOL_PATH/nginx_proxy/"
+```
+
+복사 후 `compose_script/.env`의 `VOL_PATH`를 새 경로로 변경합니다.
+
+```dotenv
+VOL_PATH=/mnt/nextcloud/vol
+```
+
+이후 컨테이너를 시작하고 상태를 확인합니다.
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose exec -u www-data app php occ config:system:get datadirectory
+docker compose exec -u www-data app php occ maintenance:mode --off
+```
+
+`datadirectory` 출력은 계속 `/var/www/html/data`여야 합니다. 호스트 경로를 `config.php`에 직접 넣지 마세요.
+
+### 3. 데이터 디렉토리만 별도 디스크로 이동
+
+설정과 앱은 기존 `${VOL_PATH}/nextcloud_volume`에 두고 사용자 파일만 분리하려면 `docker-compose.yml`의 `app.volumes`에 데이터 마운트를 추가합니다.
+
+```yaml
+      volumes:
+         - ${VOL_PATH}/nextcloud_volume:/var/www/html
+         - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
+```
+
+`.env`에는 새 호스트 경로를 지정합니다.
+
+```dotenv
+NEXTCLOUD_DATA_PATH=/mnt/nextcloud/data
+```
+
+기존 데이터는 유지보수 모드와 컨테이너 중지 상태에서 복사합니다.
+
+```bash
+OLD_VOL_PATH=/home/tinyos/devel/nextcloud/vol
+
+docker compose down
+sudo mkdir -p /mnt/nextcloud/data
+sudo rsync -aHAX --info=progress2 \
+   "$OLD_VOL_PATH/nextcloud_volume/data/" \
+   /mnt/nextcloud/data/
+sudo chown -R 33:33 /mnt/nextcloud/data
+docker compose up -d
+docker compose exec -u www-data app php occ files:scan --all
+docker compose exec -u www-data app php occ maintenance:mode --off
+```
+
+`33:33`은 Debian/Ubuntu 계열 이미지의 `www-data` UID/GID입니다. 다른 이미지에서는 다음 명령으로 실제 값을 확인한 뒤 사용합니다.
+
+```bash
+docker compose exec app id www-data
+```
+
+### 4. 이동 후 검증 및 정리
+
+웹 로그인, 기존 파일 열기, 파일 업로드/다운로드, 공유 링크를 확인합니다. 문제가 있으면 즉시 유지보수 모드를 켜고 컨테이너를 중지한 뒤 원래 경로로 되돌립니다.
+
+```bash
+docker compose exec -u www-data app php occ maintenance:mode --on
+docker compose logs --tail=100 app
+docker compose exec -u www-data app php occ status
+```
+
+정상 동작을 확인하기 전에는 기존 호스트 디렉토리를 삭제하지 마세요. `http_yml`, `simple_http`, `multi_nc` 구성을 사용하는 경우에도 같은 원칙으로 해당 compose 파일의 `/var/www/html` 호스트 경로만 변경하면 됩니다.
+
 ## clipboardnextcloud.py 실행
 -  python3 -m streamlit run clipboardnextcloud.py --server.headless true
 
