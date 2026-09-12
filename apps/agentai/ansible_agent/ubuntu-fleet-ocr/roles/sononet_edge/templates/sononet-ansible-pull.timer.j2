@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Sononet ansible-pull periodically
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec={{ sononet_pull_interval }}
+RandomizedDelaySec={{ sononet_pull_random_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+

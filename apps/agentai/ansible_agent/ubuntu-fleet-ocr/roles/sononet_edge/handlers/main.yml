@@ -1,0 +1,11 @@
+---
+- name: Restart Sononet timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: restarted
+    daemon_reload: true
+  loop:
+    - sononet-ansible-pull.timer
+    - sononet-pipeline.timer
+    - sononet-heartbeat.timer

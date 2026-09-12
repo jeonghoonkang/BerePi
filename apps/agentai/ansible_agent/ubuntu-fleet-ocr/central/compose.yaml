@@ -1,0 +1,33 @@
+services:
+  control-api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      FLEET_HMAC_SECRET: ${FLEET_HMAC_SECRET:?set FLEET_HMAC_SECRET}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
+      FLEET_DB_PATH: /data/fleet.sqlite3
+    volumes:
+      - fleet-data:/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      FLEET_DOMAIN: ${FLEET_DOMAIN:?set FLEET_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - control-api
+
+volumes:
+  fleet-data:
+  caddy-data:
+  caddy-config:
+

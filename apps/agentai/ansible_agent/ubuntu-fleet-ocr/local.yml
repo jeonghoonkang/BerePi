@@ -1,0 +1,9 @@
+---
+- name: Configure Sononet edge device
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  roles:
+    - sononet_edge
+

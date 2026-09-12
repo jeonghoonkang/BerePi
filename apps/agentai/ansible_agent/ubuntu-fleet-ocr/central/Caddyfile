@@ -1,0 +1,5 @@
+{$FLEET_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy control-api:8080
+}
+

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck disable=SC1091
+set -a
+source {{ sononet_config_dir }}/device.env
+set +a
+
+args=(
+  -U "${SONONET_REPO_URL}"
+  -C "${SONONET_REPO_BRANCH:-{{ sononet_repo_branch }}}"
+  -d {{ sononet_home }}/ansible
+  -i localhost,
+  -c local
+  --clean
+  --force
+  local.yml
+)
+
+if [[ ${SONONET_VERIFY_COMMIT:-0} == 1 ]]; then
+  args=(--verify-commit "${args[@]}")
+fi
+
+set +e
+/usr/bin/ansible-pull "${args[@]}"
+status=$?
+set -e
+
+if [[ ${status} -eq 0 ]]; then
+  /usr/bin/python3 {{ sononet_app_dir }}/report_event.py \
+    ansible_pull_complete info "Configuration converged successfully" >/dev/null 2>&1 || true
+else
+  /usr/bin/python3 {{ sononet_app_dir }}/report_event.py \
+    ansible_pull_failed error "Configuration convergence failed with exit ${status}" >/dev/null 2>&1 || true
+fi
+exit "${status}"

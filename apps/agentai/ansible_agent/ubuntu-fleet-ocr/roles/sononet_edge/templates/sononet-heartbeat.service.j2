@@ -1,0 +1,20 @@
+[Unit]
+Description=Report Sononet device health
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ sononet_user }}
+Group={{ sononet_group }}
+EnvironmentFile={{ sononet_config_dir }}/device.env
+Environment=HOME={{ sononet_home }}
+WorkingDirectory={{ sononet_home }}
+ExecStart=/usr/bin/python3 {{ sononet_app_dir }}/health_reporter.py
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ sononet_home }}
+

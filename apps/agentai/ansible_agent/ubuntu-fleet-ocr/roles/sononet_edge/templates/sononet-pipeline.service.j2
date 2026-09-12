@@ -1,0 +1,22 @@
+[Unit]
+Description=Sononet Nextcloud and Gemma OCR pipeline
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ sononet_user }}
+Group={{ sononet_group }}
+EnvironmentFile={{ sononet_config_dir }}/device.env
+Environment=HOME={{ sononet_home }}
+WorkingDirectory={{ sononet_home }}
+RuntimeDirectory=sononet
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/flock -n /run/sononet/pipeline.lock {{ sononet_app_dir }}/pipeline.sh
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ sononet_home }}
+

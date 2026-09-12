@@ -1,0 +1,129 @@
+---
+- name: Validate supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+      - sononet_repo_url | length > 0
+    fail_msg: This role requires Ubuntu/Debian and SONONET_REPO_URL.
+
+- name: Install runtime packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - git
+      - nextcloud-desktop-cmd
+      - python3
+      - sqlite3
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create service group
+  ansible.builtin.group:
+    name: "{{ sononet_group }}"
+    system: true
+
+- name: Create service user
+  ansible.builtin.user:
+    name: "{{ sononet_user }}"
+    group: "{{ sononet_group }}"
+    home: "{{ sononet_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+    system: true
+
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ sononet_app_dir }}", owner: root, group: root, mode: '0755' }
+    - { path: "{{ sononet_config_dir }}", owner: root, group: root, mode: '0750' }
+    - { path: "{{ sononet_home }}", owner: "{{ sononet_user }}", group: "{{ sononet_group }}", mode: '0750' }
+    - { path: "{{ sononet_sync_dir }}", owner: "{{ sononet_user }}", group: "{{ sononet_group }}", mode: '0750' }
+
+- name: Check device secrets file
+  ansible.builtin.stat:
+    path: "{{ sononet_config_dir }}/device.env"
+  register: sononet_device_env
+
+- name: Require device secrets file
+  ansible.builtin.assert:
+    that:
+      - sononet_device_env.stat.exists
+      - sononet_device_env.stat.mode == '0600'
+    fail_msg: /etc/sononet/device.env must exist with mode 0600.
+
+- name: Install application scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ sononet_app_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - nextcloud_sync.sh
+    - pipeline.sh
+    - ocr_worker.py
+    - health_reporter.py
+    - report_event.py
+  notify: Restart Sononet timers
+
+- name: Install ansible-pull wrapper
+  ansible.builtin.template:
+    src: sononet-ansible-pull.sh.j2
+    dest: /usr/local/sbin/sononet-ansible-pull
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Install systemd service units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - sononet-ansible-pull.service
+    - sononet-ansible-pull.timer
+    - sononet-pipeline.service
+    - sononet-pipeline.timer
+    - sononet-heartbeat.service
+    - sononet-heartbeat.timer
+  notify: Restart Sononet timers
+
+- name: Read deployed configuration revision
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ playbook_dir }}"
+      - rev-parse
+      - HEAD
+  register: sononet_git_revision
+  changed_when: false
+  failed_when: false
+
+- name: Store deployed configuration revision
+  ansible.builtin.copy:
+    content: "{{ sononet_git_revision.stdout | default('unknown', true) }}\n"
+    dest: "{{ sononet_home }}/config-revision"
+    owner: "{{ sononet_user }}"
+    group: "{{ sononet_group }}"
+    mode: '0644'
+
+- name: Enable and start Sononet timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - sononet-ansible-pull.timer
+    - sononet-pipeline.timer
+    - sononet-heartbeat.timer

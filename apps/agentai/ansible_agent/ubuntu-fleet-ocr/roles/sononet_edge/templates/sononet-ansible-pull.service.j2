@@ -1,0 +1,12 @@
+[Unit]
+Description=Sononet periodic configuration convergence
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -n /run/lock/sononet-ansible-pull.lock /usr/local/sbin/sononet-ansible-pull
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+

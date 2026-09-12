@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Sononet OCR pipeline periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ sononet_pipeline_interval }}
+RandomizedDelaySec={{ sononet_pipeline_random_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+

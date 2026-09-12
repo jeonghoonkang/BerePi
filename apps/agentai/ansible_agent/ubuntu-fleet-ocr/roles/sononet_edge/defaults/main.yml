@@ -1,0 +1,17 @@
+---
+sononet_user: sononet
+sononet_group: sononet
+sononet_home: /var/lib/sononet
+sononet_app_dir: /usr/local/lib/sononet
+sononet_config_dir: /etc/sononet
+sononet_sync_dir: "{{ lookup('env', 'NEXTCLOUD_LOCAL_DIR') | default(sononet_home + '/sync', true) }}"
+
+sononet_repo_url: "{{ lookup('env', 'SONONET_REPO_URL') }}"
+sononet_repo_branch: "{{ lookup('env', 'SONONET_REPO_BRANCH') | default('stable', true) }}"
+
+sononet_pull_interval: 30min
+sononet_pull_random_delay: 10min
+sononet_pipeline_interval: 10min
+sononet_pipeline_random_delay: 2min
+sononet_heartbeat_interval: 5min
+sononet_heartbeat_random_delay: 1min

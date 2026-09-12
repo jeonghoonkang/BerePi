@@ -1,0 +1,12 @@
+[Unit]
+Description=Report Sononet health periodically
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ sononet_heartbeat_interval }}
+RandomizedDelaySec={{ sononet_heartbeat_random_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
