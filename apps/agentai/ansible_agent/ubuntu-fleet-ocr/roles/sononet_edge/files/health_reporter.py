@@ -4,15 +4,67 @@
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 import json
 import os
 import platform
+import re
 import shutil
 import sqlite3
 import subprocess
+import sys
+import tempfile
+import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any
+
+
+def atomic_write(path: Path, text: str) -> None:
+    descriptor, temporary = tempfile.mkstemp(prefix=".identity-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as output:
+            output.write(text)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def get_instance_id(path: Path) -> str:
+    # Independent of the user-entered device ID, IP address, and hostname.
+    lock_fd = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd, "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if path.exists():
+            value = path.read_text().strip()
+            if not re.fullmatch(r"[a-f0-9]{32}", value):
+                raise ValueError("Invalid local instance-id; restore this installation's backup")
+            return value
+        value = uuid.uuid4().hex
+        atomic_write(path, value + "\n")
+        return value
+
+
+def record_id_check(response: dict[str, Any], device_id: str, instance_id: str,
+                    status_path: Path) -> None:
+    check = response.get("id_check")
+    if not isinstance(check, dict) or check.get("status") not in ("clear", "conflict", "unverified"):
+        check = {"status": "unverified", "checked_at": None}
+    result = {**check, "device_id": device_id, "instance_id": instance_id}
+    atomic_write(status_path, json.dumps(result) + "\n")
+    if check["status"] == "conflict":
+        print(json.dumps({"event": "device_id_conflict", **result}), file=sys.stderr)
+    elif check["status"] == "unverified":
+        print(json.dumps({"event": "device_id_check_unverified", **result}), file=sys.stderr)
 
 
 def unit_status(unit: str) -> dict[str, str]:
@@ -51,13 +103,21 @@ def ocr_summary(database_path: Path) -> dict[str, Any]:
 
 def main() -> int:
     device_id = os.environ["SONONET_DEVICE_ID"]
-    api_url = os.environ["FLEET_API_URL"].rstrip("/")
-    token = os.environ["DEVICE_TOKEN"]
+    api_url = os.environ.get("FLEET_API_URL", "").rstrip("/")
+    token = os.environ.get("DEVICE_TOKEN", "")
+    state_root = Path("/var/lib/sononet")
+    instance_id = get_instance_id(state_root / "instance-id")
+    if not api_url or not token:
+        record_id_check({}, device_id, instance_id, state_root / "id-conflict.json")
+        print(json.dumps({"event": "heartbeat_skipped", "device_id": device_id,
+                          "reason": "Set FLEET_API_URL and DEVICE_TOKEN to enable reporting and ID conflict checks"}))
+        return 0
     sync_root = Path(os.environ.get("NEXTCLOUD_LOCAL_DIR", "/var/lib/sononet/sync"))
     usage = shutil.disk_usage(sync_root)
     revision_path = Path("/var/lib/sononet/config-revision")
     payload = {
         "device_id": device_id,
+        "instance_id": instance_id,
         "observed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "hostname": platform.node(),
         "os": platform.platform(),
@@ -88,8 +148,16 @@ def main() -> int:
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        body = response.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        if not isinstance(body, dict):
+            raise ValueError("Invalid heartbeat response")
+    except (urllib.error.URLError, OSError, ValueError):
+        record_id_check({}, device_id, instance_id, state_root / "id-conflict.json")
+        print(json.dumps({"event": "heartbeat_failed", "device_id": device_id}), file=sys.stderr)
+        return 1
+    record_id_check(body, device_id, instance_id, state_root / "id-conflict.json")
     print(json.dumps({"event": "heartbeat_sent", "device_id": device_id, "response": body}))
     return 0
 

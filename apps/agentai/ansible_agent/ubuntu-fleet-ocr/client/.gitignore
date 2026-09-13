@@ -1,0 +1,5 @@
+device.env
+*.env
+!*.env.example
+registration.json
+registration.json.lock

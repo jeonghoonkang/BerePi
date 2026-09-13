@@ -14,7 +14,7 @@ args=(
   -c local
   --clean
   --force
-  local.yml
+  "${SONONET_PLAYBOOK_PATH:-local.yml}"
 )
 
 if [[ ${SONONET_VERIFY_COMMIT:-0} == 1 ]]; then

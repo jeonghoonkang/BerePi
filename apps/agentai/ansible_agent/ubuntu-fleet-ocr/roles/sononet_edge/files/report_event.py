@@ -15,6 +15,8 @@ def main() -> int:
     if len(sys.argv) != 4:
         print(f"usage: {sys.argv[0]} EVENT SEVERITY MESSAGE", file=sys.stderr)
         return 2
+    if not os.environ.get("FLEET_API_URL") or not os.environ.get("DEVICE_TOKEN"):
+        return 0  # Locally configured clients may not have Fleet credentials yet.
     event, severity, message = sys.argv[1:]
     revision_path = Path("/var/lib/sononet/config-revision")
     payload = {

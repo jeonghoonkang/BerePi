@@ -42,7 +42,7 @@ pull_args=(
   -i localhost,
   -c local
   --clean
-  local.yml
+  "${SONONET_PLAYBOOK_PATH:-local.yml}"
 )
 
 if [[ ${SONONET_VERIFY_COMMIT:-0} == 1 ]]; then

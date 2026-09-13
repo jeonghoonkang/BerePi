@@ -5,6 +5,8 @@ services:
     environment:
       FLEET_HMAC_SECRET: ${FLEET_HMAC_SECRET:?set FLEET_HMAC_SECRET}
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
+      FLEET_ENROLLMENT_TOKEN: ${FLEET_ENROLLMENT_TOKEN:-}
+      FLEET_ID_CONFLICT_WINDOW_SECONDS: ${FLEET_ID_CONFLICT_WINDOW_SECONDS:-86400}
       FLEET_DB_PATH: /data/fleet.sqlite3
     volumes:
       - fleet-data:/data
@@ -30,4 +32,3 @@ volumes:
   fleet-data:
   caddy-data:
   caddy-config:
-

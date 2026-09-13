@@ -1,4 +1,4 @@
-# 소노넷 Ubuntu Fleet OCR Starter
+# Ubuntu Fleet OCR Starter
 
 여러 Ubuntu 장비가 **외부로만 접속**하여 중앙 설정을 주기적으로 적용하고,
 Nextcloud 사진을 동기화한 뒤 Gemma 4 31B로 OCR하며, 장비 상태를 중앙에
@@ -25,6 +25,9 @@ Gemma 4 31B vLLM API <-------------------------------+
 ## 디렉터리 구조
 
 ```text
+client/install.sh                        BerePi/master 다운로드 및 최초 실행
+client/register_device.py                수동 ID 인증 / 선택적 자동 번호 발급
+client/device.env.example                BerePi용 장비 설정 예시
 bootstrap/install.sh                     최초 1회 설치
 local.yml                                ansible-pull 진입점
 roles/sononet_edge/                      Ubuntu 클라이언트 역할
@@ -46,7 +49,21 @@ docker compose up -d --build
 curl https://fleet.example.com/healthz
 ```
 
-장비 토큰은 중앙 서버의 `FLEET_HMAC_SECRET`으로 생성합니다.
+클라이언트의 기본 실행은 ID를 직접 입력하는 `SONONET_ID_MODE=manual`입니다.
+`client/install.sh ... --device-id LAB-001`로 지정하면 서버의 자동 번호 발급을 사용하지 않습니다.
+기본값에서는 ID 서버에 접속하지 않고 입력한 ID를 저장해 설치합니다.
+서버에서 ID를 할당받을 수도 있다는 안내를 출력하며 `--server-id`로 선택할 수 있습니다.
+입력한 ID의 인증 토큰만 받으려면 서버 주소·`FLEET_ENROLLMENT_TOKEN`을 설정하고
+`SONONET_FETCH_DEVICE_TOKEN=1`을 명시적으로 지정합니다.
+중복 ID도 사용을 허용하며, 상태 서버 주소·장비 토큰을 설정하면 5분 주기 heartbeat에서
+서로 다른 장비의 동일 ID 사용을 감지하여 경고합니다. 관리자 조회는 `/v1/id-conflicts`입니다.
+
+자동 번호 발급을 선택하려면 `SONONET_ID_MODE=auto`로 설정하고 ID·장비 토큰을 비웁니다.
+자세한 인증·충돌 검사·자동 발급 설정은 [클라이언트 안내](client/README.md)를 참조하십시오.
+`FLEET_ENROLLMENT_TOKEN`이 비어 있으면 신규 자동 등록·수동 ID 인증 API가 비활성화되며,
+기존 토큰을 가진 장비의 상태 보고와 충돌 검사는 계속됩니다.
+
+기존 수동 등록 방식을 유지하는 경우 장비 토큰은 중앙 서버의 `FLEET_HMAC_SECRET`으로 생성합니다.
 
 ```bash
 cd central
@@ -81,6 +98,13 @@ Nextcloud 비밀번호, 장비 토큰, Hugging Face 토큰을 넣지 않습니�
 병합하는 방식을 권장합니다.
 
 ## 3. 장비 최초 설치
+
+BerePi의 `master`에서 직접 내려받아 설치하려면
+[client/README.md](client/README.md)를 따르십시오. 장비에 `client/install.sh`,
+장비 설정을 복사하면 직접 지정한 ID를 저장하고 코드를 다운로드하여
+설치한 후 OCR을 시작합니다.
+서버 발급·인증을 선택할 때는 `client/register_device.py`도 필요합니다.
+아래 절차는 fleet-ocr을 별도 Git 저장소로 준비한 경우의 기존 설치 방법입니다.
 
 장비마다 예시 설정을 복사하고 값을 채웁니다.
 비밀번호에 공백이나 셸 특수문자가 있으면 값을 작은따옴표로 감싸십시오.
