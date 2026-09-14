@@ -18,6 +18,7 @@ class OllamaCompatibilityTests(unittest.TestCase):
         self.assertIn("remember_history: Boolean(rememberHistory.checked)", html)
         self.assertIn("/api/conversation-history/items?page=", html)
         self.assertIn("storedRememberHistory === null", html)
+        self.assertIn('return String(value ?? "")', html)
 
     def test_api_requests_remember_history_by_default(self) -> None:
         self.assertTrue(server.remember_history_requested(None))

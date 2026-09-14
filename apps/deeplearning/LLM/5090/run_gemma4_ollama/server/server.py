@@ -1182,7 +1182,7 @@ if __name__ == "__main__":
     }
 
     function escapeHtml(value) {
-      return value
+      return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
