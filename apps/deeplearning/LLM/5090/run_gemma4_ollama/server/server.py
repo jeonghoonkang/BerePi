@@ -40,6 +40,18 @@ OLLAMA_PID_FILE = Path(os.getenv("OLLAMA_PID_FILE", Path(__file__).resolve().wit
 GPU_SELECTION_FILE = Path(os.getenv("GPU_SELECTION_FILE", Path(__file__).resolve().with_name("gpu-selection")))
 MODEL_SELECTION_FILE = Path(os.getenv("MODEL_SELECTION_FILE", Path(__file__).resolve().with_name("model-selection")))
 PROMPT_HISTORY_FILE = Path(os.getenv("PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("prompt_history.txt")))
+CONVERSATION_HISTORY_FILE = Path(
+    os.getenv(
+        "GEMMA4_CONVERSATION_HISTORY_FILE",
+        Path(__file__).resolve().with_name("conversation_history.json"),
+    )
+)
+CONVERSATION_HISTORY_BACKUP_FILE = Path(
+    os.getenv(
+        "GEMMA4_CONVERSATION_HISTORY_BACKUP_FILE",
+        Path(__file__).resolve().with_name("conversation_history_backup.txt"),
+    )
+)
 USER_PROMPT_HISTORY_FILE = Path(
   os.getenv("USER_PROMPT_HISTORY_FILE", Path(__file__).resolve().with_name("history_user_prompt.txt"))
 )
@@ -68,6 +80,13 @@ AI_SERVER_LIST_TIMEOUT_SECONDS = float(os.getenv("AI_SERVER_LIST_TIMEOUT_SECONDS
 AI_SERVER_LIST_TOKEN = os.getenv("AI_SERVER_LIST_TOKEN", "").strip() or os.getenv("GITHUB_TOKEN", "").strip()
 PROMPT_HISTORY_LIMIT = 100
 PROMPT_HISTORY_LOCK = threading.RLock()
+CONVERSATION_HISTORY_LIMIT = 1000
+CONVERSATION_HISTORY_TOTAL_LIMIT = 10000
+CONVERSATION_HISTORY_BACKUP_LIMIT = (
+    CONVERSATION_HISTORY_TOTAL_LIMIT - CONVERSATION_HISTORY_LIMIT
+)
+CONVERSATION_HISTORY_PAGE_SIZE = 25
+CONVERSATION_HISTORY_LOCK = threading.RLock()
 USER_PROMPT_HISTORY_LIMIT = 2000
 USER_PROMPT_HISTORY_LOCK = threading.RLock()
 ACCESS_LOG_LIMIT = 1000
@@ -582,6 +601,49 @@ INDEX_HTML = """<!doctype html>
       overflow-wrap: anywhere;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    .conversation-history-paths {
+      width: 100%;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+    .conversation-history-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .conversation-history-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px 14px;
+    }
+    .conversation-history-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .conversation-history-role {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #334155;
+      font-weight: 800;
+    }
+    .conversation-history-role.user { background: #ccfbf1; color: #115e59; }
+    .conversation-history-role.assistant { background: #dbeafe; color: #1e40af; }
+    .conversation-history-content {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.55;
+    }
     @media (max-width: 760px) {
       header { display: block; }
       header button { margin-top: 14px; }
@@ -614,6 +676,7 @@ INDEX_HTML = """<!doctype html>
 
     <nav class="page-tabs" aria-label="Service feature tabs">
       <button class="page-tab active" data-tab="serverPanel" type="button">Server</button>
+      <button class="page-tab" data-tab="historyPanel" type="button">History</button>
       <button class="page-tab" data-tab="ocrPanel" type="button">OCR</button>
       <button class="page-tab" data-tab="yoloPanel" type="button">YOLO Detection</button>
       <button class="page-tab" data-tab="accessLogPanel" type="button">Access Log</button>
@@ -680,7 +743,14 @@ INDEX_HTML = """<!doctype html>
       <div class="row">
         <button class="primary" id="send" type="button" onclick="window.sendPrompt(event)">Send Prompt</button>
         <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
+        <label class="check-label" for="rememberHistory">
+          <input id="rememberHistory" type="checkbox">
+          Remember History
+        </label>
+        <button id="clearConversationHistory" type="button">Clear History + Backup</button>
         <span id="busy"></span>
+        <span id="conversationHistoryStatus"></span>
+        <div id="conversationHistoryPaths" class="conversation-history-paths">Checking history file paths...</div>
       </div>
       <div class="history-row">
         <select class="history-select" id="promptHistory"></select>
@@ -776,6 +846,20 @@ if __name__ == "__main__":
 </pre>
     </section>
     </div>
+
+    <section class="tab-panel" id="historyPanel">
+      <h2>Conversation History</h2>
+      <p>Shows current and backup conversation messages newest first, 25 messages per page.</p>
+      <div class="access-toolbar">
+        <button id="conversationHistoryPrev" type="button" disabled>Previous</button>
+        <span id="conversationHistoryPage">1 / 1 Page</span>
+        <button id="conversationHistoryNext" type="button" disabled>Next</button>
+        <button class="primary" id="refreshConversationHistory" type="button">Refresh</button>
+        <span id="conversationHistoryPageStatus">Loading history...</span>
+      </div>
+      <div id="conversationHistoryTabPaths" class="conversation-history-paths">Checking history file paths...</div>
+      <div id="conversationHistoryItems" class="conversation-history-list"></div>
+    </section>
 
     <section class="tab-panel" id="ocrPanel">
       <h2>이미지 OCR</h2>
@@ -939,6 +1023,16 @@ if __name__ == "__main__":
     const prompt1 = document.getElementById("prompt1");
     const prompt2 = document.getElementById("prompt2");
     const promptHistory = document.getElementById("promptHistory");
+    const rememberHistory = document.getElementById("rememberHistory");
+    const clearConversationHistoryButton = document.getElementById("clearConversationHistory");
+    const conversationHistoryStatus = document.getElementById("conversationHistoryStatus");
+    const conversationHistoryPaths = document.getElementById("conversationHistoryPaths");
+    const conversationHistoryItems = document.getElementById("conversationHistoryItems");
+    const conversationHistoryPageStatus = document.getElementById("conversationHistoryPageStatus");
+    const conversationHistoryPageLabel = document.getElementById("conversationHistoryPage");
+    const conversationHistoryPrev = document.getElementById("conversationHistoryPrev");
+    const conversationHistoryNext = document.getElementById("conversationHistoryNext");
+    const conversationHistoryTabPaths = document.getElementById("conversationHistoryTabPaths");
     const loginSessionButton = document.getElementById("loginSession");
     const logoutSessionButton = document.getElementById("logoutSession");
     const sessionStatus = document.getElementById("sessionStatus");
@@ -975,6 +1069,8 @@ if __name__ == "__main__":
     const userPromptHistoryStatus = document.getElementById("userPromptHistoryStatus");
     const demoImageUrl = "/sample/beatles_single_abbey.png";
     const demoImageName = "beatles_single_abbey.png";
+    let conversationHistoryPage = 1;
+    let conversationHistoryTotalPages = 1;
 
     function metric(label, value, cls = "") {
       return `<div class="metric"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
@@ -1390,6 +1486,9 @@ if __name__ == "__main__":
         refreshAccessLog();
         refreshUserPromptHistory();
       }
+      if (panelId === "historyPanel") {
+        refreshConversationHistoryPage(conversationHistoryPage);
+      }
     }
 
     function colorForUser(user) {
@@ -1461,6 +1560,87 @@ if __name__ == "__main__":
       } catch (err) {
         userPromptHistoryRows.innerHTML = "";
         userPromptHistoryStatus.textContent = String(err);
+      }
+    }
+
+    function updateConversationHistorySummary(data) {
+      const detail = `Current ${data.current_count || 0}/${data.current_limit || 1000} | Backup ${data.backup_count || 0}/${data.backup_limit || 9000} | Total ${data.total_count || 0}/${data.total_limit || 10000}`;
+      conversationHistoryStatus.textContent = rememberHistory.checked
+        ? detail
+        : `History disabled | Stored: ${detail}`;
+      const paths = `Current history: ${data.current_path || "-"}\nBackup history: ${data.backup_path || "-"}`;
+      conversationHistoryPaths.textContent = paths;
+      conversationHistoryTabPaths.textContent = paths;
+      clearConversationHistoryButton.disabled = Number(data.total_count || 0) === 0;
+    }
+
+    async function refreshConversationHistorySummary() {
+      try {
+        const res = await fetch("/api/conversation-history");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Conversation history unavailable");
+        updateConversationHistorySummary(data);
+      } catch (err) {
+        conversationHistoryStatus.textContent = String(err);
+      }
+    }
+
+    function conversationRoleLabel(role) {
+      return role === "assistant" ? "Assistant" : (role === "user" ? "User" : "System");
+    }
+
+    function renderConversationHistoryPage(data) {
+      conversationHistoryPage = Number(data.page || 1);
+      conversationHistoryTotalPages = Number(data.total_pages || 1);
+      conversationHistoryPageLabel.textContent = `${conversationHistoryPage} / ${conversationHistoryTotalPages} Page`;
+      conversationHistoryPrev.disabled = conversationHistoryPage <= 1;
+      conversationHistoryNext.disabled = conversationHistoryPage >= conversationHistoryTotalPages;
+      conversationHistoryPageStatus.textContent = `Total ${data.total_count || 0} | Current ${data.current_count || 0} | Backup ${data.backup_count || 0} | 25 per page`;
+      updateConversationHistorySummary(data);
+      const items = Array.isArray(data.items) ? data.items : [];
+      conversationHistoryItems.innerHTML = items.length
+        ? items.map((item) => `<article class="conversation-history-item">
+            <div class="conversation-history-head">
+              <strong>#${escapeHtml(item.number || "")}</strong>
+              <span class="conversation-history-role ${escapeHtml(item.role || "")}">${escapeHtml(conversationRoleLabel(item.role))}</span>
+              <span>${escapeHtml(item.saved_at || "-")}</span>
+              <span>User: ${escapeHtml(item.user_id || "-")}</span>
+              <span>Model: ${escapeHtml(item.model || "-")}</span>
+            </div>
+            <div class="conversation-history-content">${escapeHtml(item.content || "")}</div>
+          </article>`).join("")
+        : `<div class="conversation-history-item">No conversation history.</div>`;
+    }
+
+    async function refreshConversationHistoryPage(page = 1) {
+      conversationHistoryPageStatus.textContent = "Loading history...";
+      try {
+        const nextPage = Math.max(1, Number(page || 1));
+        const res = await fetch(`/api/conversation-history/items?page=${nextPage}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Conversation history unavailable");
+        renderConversationHistoryPage(data);
+      } catch (err) {
+        conversationHistoryPageStatus.textContent = String(err);
+      }
+    }
+
+    async function clearConversationHistory() {
+      clearConversationHistoryButton.disabled = true;
+      try {
+        const res = await fetch("/api/conversation-history/clear", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(authPayload())
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "History clear failed");
+        updateConversationHistorySummary(data);
+        await refreshConversationHistoryPage(1);
+      } catch (err) {
+        conversationHistoryStatus.textContent = String(err);
+      } finally {
+        refreshConversationHistorySummary();
       }
     }
 
@@ -1916,6 +2096,7 @@ if __name__ == "__main__":
         const payload = {
           prompt: prompts.join("\\n\\n"),
           prompts,
+          remember_history: Boolean(rememberHistory.checked),
           ...auth,
         };
         const generatePromise = fetch("/api/generate", {
@@ -1944,6 +2125,7 @@ if __name__ == "__main__":
         sendButton.disabled = false;
         sendButton.textContent = sendButtonLabel;
         refreshPromptHistory();
+        refreshConversationHistorySummary();
         refreshStatus();
       }
     }
@@ -2175,12 +2357,30 @@ if __name__ == "__main__":
     document.getElementById("saveModel").addEventListener("click", saveModelSelection);
     document.getElementById("refreshAccessLog").addEventListener("click", refreshAccessLog);
     document.getElementById("refreshUserPromptHistory").addEventListener("click", refreshUserPromptHistory);
+    document.getElementById("refreshConversationHistory").addEventListener("click", () => refreshConversationHistoryPage(conversationHistoryPage));
+    conversationHistoryPrev.addEventListener("click", () => refreshConversationHistoryPage(Math.max(1, conversationHistoryPage - 1)));
+    conversationHistoryNext.addEventListener("click", () => refreshConversationHistoryPage(Math.min(conversationHistoryTotalPages, conversationHistoryPage + 1)));
+    clearConversationHistoryButton.addEventListener("click", clearConversationHistory);
+    rememberHistory.addEventListener("change", () => {
+      try {
+        sessionStorage.setItem("gemma4RememberHistory", String(rememberHistory.checked));
+      } catch (_err) {
+        // The checkbox still works when session storage is unavailable.
+      }
+      refreshConversationHistorySummary();
+    });
     loginSessionButton.addEventListener("click", loginSession);
     logoutSessionButton.addEventListener("click", logoutSession);
     saveUserButton.addEventListener("click", saveUser);
     bindAuthSync();
+    try {
+      rememberHistory.checked = sessionStorage.getItem("gemma4RememberHistory") === "true";
+    } catch (_err) {
+      rememberHistory.checked = false;
+    }
     renderPythonCode();
     refreshPromptHistory();
+    refreshConversationHistorySummary();
     refreshStatus();
     refreshSessionStatus();
   </script>
@@ -2424,6 +2624,179 @@ def remember_prompts(prompts: list[str]) -> None:
     with PROMPT_HISTORY_LOCK:
         existing = read_prompt_history()
         save_prompt_history(cleaned + existing)
+
+
+def normalize_conversation_message(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    role = str(value.get("role") or "").strip().lower()
+    if role not in {"system", "user", "assistant"}:
+        return None
+    message = {
+        "role": role,
+        "content": str(value.get("content") or ""),
+        "saved_at": str(
+            value.get("saved_at")
+            or time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ),
+    }
+    for key in ("user_id", "model"):
+        item = str(value.get(key) or "").strip()
+        if item:
+            message[key] = item
+    return message
+
+
+def read_conversation_history() -> list[dict[str, str]]:
+    with CONVERSATION_HISTORY_LOCK:
+        try:
+            raw = json.loads(CONVERSATION_HISTORY_FILE.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return []
+    source = raw.get("messages", []) if isinstance(raw, dict) else []
+    if not isinstance(source, list):
+        return []
+    messages = [normalize_conversation_message(item) for item in source]
+    return [item for item in messages if item is not None][
+        -CONVERSATION_HISTORY_LIMIT:
+    ]
+
+
+def read_conversation_history_backup() -> list[dict[str, str]]:
+    with CONVERSATION_HISTORY_LOCK:
+        try:
+            lines = CONVERSATION_HISTORY_BACKUP_FILE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+        except (FileNotFoundError, OSError):
+            return []
+    messages: list[dict[str, str]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            message = normalize_conversation_message(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+        if message is not None:
+            messages.append(message)
+    return messages[-CONVERSATION_HISTORY_BACKUP_LIMIT:]
+
+
+def save_conversation_history(messages: list[dict[str, str]]) -> None:
+    with CONVERSATION_HISTORY_LOCK:
+        CONVERSATION_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        retained = messages[-CONVERSATION_HISTORY_LIMIT:]
+        CONVERSATION_HISTORY_FILE.write_text(
+            json.dumps({"messages": retained}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+
+def save_conversation_history_backup(messages: list[dict[str, str]]) -> None:
+    with CONVERSATION_HISTORY_LOCK:
+        CONVERSATION_HISTORY_BACKUP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        retained = messages[-CONVERSATION_HISTORY_BACKUP_LIMIT:]
+        body = "".join(
+            json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n"
+            for message in retained
+        )
+        CONVERSATION_HISTORY_BACKUP_FILE.write_text(body, encoding="utf-8")
+
+
+def conversation_history_payload() -> dict[str, Any]:
+    with CONVERSATION_HISTORY_LOCK:
+        current = read_conversation_history()
+        backup = read_conversation_history_backup()
+    return {
+        "ok": True,
+        "current_count": len(current),
+        "current_limit": CONVERSATION_HISTORY_LIMIT,
+        "backup_count": len(backup),
+        "backup_limit": CONVERSATION_HISTORY_BACKUP_LIMIT,
+        "total_count": len(current) + len(backup),
+        "total_limit": CONVERSATION_HISTORY_TOTAL_LIMIT,
+        "current_path": str(CONVERSATION_HISTORY_FILE),
+        "backup_path": str(CONVERSATION_HISTORY_BACKUP_FILE),
+    }
+
+
+def append_conversation_history(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    additions = [normalize_conversation_message(message) for message in messages]
+    additions = [message for message in additions if message is not None]
+    if not additions:
+        return conversation_history_payload()
+    with CONVERSATION_HISTORY_LOCK:
+        current = read_conversation_history()
+        combined = current + additions
+        overflow = combined[:-CONVERSATION_HISTORY_LIMIT]
+        current = combined[-CONVERSATION_HISTORY_LIMIT:]
+        backup = (read_conversation_history_backup() + overflow)[
+            -CONVERSATION_HISTORY_BACKUP_LIMIT:
+        ]
+        save_conversation_history_backup(backup)
+        save_conversation_history(current)
+    return conversation_history_payload()
+
+
+def clear_conversation_history() -> dict[str, Any]:
+    with CONVERSATION_HISTORY_LOCK:
+        save_conversation_history([])
+        save_conversation_history_backup([])
+    return conversation_history_payload()
+
+
+def conversation_history_page_payload(page: int) -> dict[str, Any]:
+    with CONVERSATION_HISTORY_LOCK:
+        backup = read_conversation_history_backup()
+        current = read_conversation_history()
+    messages = list(reversed(backup + current))
+    total_count = len(messages)
+    total_pages = max(
+        1,
+        (total_count + CONVERSATION_HISTORY_PAGE_SIZE - 1)
+        // CONVERSATION_HISTORY_PAGE_SIZE,
+    )
+    normalized_page = min(max(1, int(page)), total_pages)
+    offset = (normalized_page - 1) * CONVERSATION_HISTORY_PAGE_SIZE
+    items = [
+        {"number": total_count - index, **message}
+        for index, message in enumerate(
+            messages[offset : offset + CONVERSATION_HISTORY_PAGE_SIZE],
+            start=offset,
+        )
+    ]
+    return {
+        "ok": True,
+        "current_count": len(current),
+        "current_limit": CONVERSATION_HISTORY_LIMIT,
+        "backup_count": len(backup),
+        "backup_limit": CONVERSATION_HISTORY_BACKUP_LIMIT,
+        "total_count": total_count,
+        "total_limit": CONVERSATION_HISTORY_TOTAL_LIMIT,
+        "current_path": str(CONVERSATION_HISTORY_FILE),
+        "backup_path": str(CONVERSATION_HISTORY_BACKUP_FILE),
+        "items": items,
+        "page": normalized_page,
+        "page_size": CONVERSATION_HISTORY_PAGE_SIZE,
+        "total_pages": total_pages,
+    }
+
+
+def conversation_prompt(messages: list[dict[str, Any]], prompt: str) -> str:
+    lines = [
+        f"{str(message.get('role') or 'user')}: {str(message.get('content') or '')}"
+        for message in messages
+        if isinstance(message, dict)
+    ]
+    lines.append(f"user: {prompt}")
+    return "\n".join(lines)
+
+
+def remember_history_requested(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def read_user_prompt_history() -> list[dict[str, str]]:
@@ -3091,9 +3464,12 @@ def print_prompt_request_received(
 
 def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
   started_at = time.perf_counter()
-  result = request_json("/api/generate", payload=payload)
+  ollama_payload = {
+    key: value for key, value in payload.items() if not str(key).startswith("_")
+  }
+  result = request_json("/api/generate", payload=ollama_payload)
   result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
-  result["model"] = payload["model"]
+  result["model"] = ollama_payload["model"]
   selected_gpu = read_selected_gpu()
   gpus, _ = list_gpus()
   result["selected_gpu"] = selected_gpu
@@ -3106,6 +3482,45 @@ def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
     f"IP: {result['server_ip']} | Port: {result['server_port']}"
   )
   return attach_thinking_fields(result)
+
+
+def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
+    execution_payload = dict(payload)
+    if remember_history_requested(payload.get("_remember_history")):
+        user_prompt = str(
+            payload.get("_history_user_prompt") or payload.get("prompt") or ""
+        )
+        execution_payload["prompt"] = conversation_prompt(
+            read_conversation_history(), user_prompt
+        )
+    return execution_payload
+
+
+def remember_conversation_result(
+    payload: dict[str, Any], result: dict[str, Any]
+) -> None:
+    if not remember_history_requested(payload.get("_remember_history")):
+        return
+    try:
+        result["conversation_history"] = append_conversation_history(
+            [
+                {
+                    "role": "user",
+                    "content": payload.get("_history_user_prompt", ""),
+                    "user_id": payload.get("_history_user_id", ""),
+                    "model": result.get("model", ""),
+                },
+                {
+                    "role": "assistant",
+                    "content": result.get("visible_response")
+                    or result.get("response", ""),
+                    "user_id": payload.get("_history_user_id", ""),
+                    "model": result.get("model", ""),
+                },
+            ]
+        )
+    except OSError as exc:
+        result["conversation_history_error"] = str(exc)
 
 
 def trim_prompt_jobs_locked() -> None:
@@ -3169,7 +3584,8 @@ def prompt_worker_loop() -> None:
                 job.result = cancelled_prompt_response(job)
             else:
                 processing_started_at = time.time()
-                result = run_ollama_generate(job.payload)
+                result = run_ollama_generate(prompt_payload_for_execution(job.payload))
+                remember_conversation_result(job.payload, result)
                 stats = record_prompt_processing_time(
                     float(result.get("elapsed_seconds") or 0.0),
                     str(result.get("model") or job.payload["model"]),
@@ -3995,6 +4411,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        parsed_path = urllib.parse.urlparse(self.path)
         if self.path in {"/", "/index.html"}:
             body = render_index_html().encode("utf-8")
             self.send_response(HTTPStatus.OK)
@@ -4032,6 +4449,17 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/prompt-history":
             self.send_json({"history": read_prompt_history()})
             return
+        if self.path == "/api/conversation-history":
+            self.send_json(conversation_history_payload())
+            return
+        if parsed_path.path == "/api/conversation-history/items":
+            params = urllib.parse.parse_qs(parsed_path.query)
+            try:
+                page = int((params.get("page") or ["1"])[0])
+            except (TypeError, ValueError):
+                page = 1
+            self.send_json(conversation_history_page_payload(page))
+            return
         if self.path == "/api/access-log":
             self.send_json({"limit": ACCESS_LOG_LIMIT, "entries": list(reversed(read_access_log(ACCESS_LOG_LIMIT)))})
             return
@@ -4048,7 +4476,6 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/api/workspace/files":
             self.send_json({"workspace_dir": str(ensure_workspace_dir()), "files": list_workspace_files()})
             return
-        parsed_path = urllib.parse.urlparse(self.path)
         if parsed_path.path == "/api/prompt-result":
             params = urllib.parse.parse_qs(parsed_path.query)
             try:
@@ -4236,6 +4663,19 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+        if self.path == "/api/conversation-history/clear":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                user_id, password = self.request_credentials(incoming)
+                if not is_authorized_user(user_id, password):
+                    self.send_auth_error("invalid user id or password")
+                    return
+                self.send_json(clear_conversation_history())
+            except (OSError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
         if self.path == "/api/workspace/upload":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -4296,6 +4736,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             remember_user_prompt(user_id, prompt)
             selected_model = str(incoming.get("model") or read_selected_model())
             images = images_from_request(incoming)
+            remember_history = remember_history_requested(
+                incoming.get("remember_history")
+            )
             print_prompt_request_received(
                 user_id=user_id,
                 client_ip=self.client_address[0] if self.client_address else "",
@@ -4310,6 +4753,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 "options": request_options(incoming),
                 "keep_alive": request_keep_alive(incoming),
                 "stream": False,
+                "_remember_history": remember_history,
+                "_history_user_prompt": prompt,
+                "_history_user_id": user_id,
             }
             if images:
                 payload["images"] = images

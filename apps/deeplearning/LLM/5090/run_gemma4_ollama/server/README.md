@@ -14,6 +14,7 @@
 - 텍스트·이미지 프롬프트 처리
 - `api_key.conf` 기반 사용자 인증
 - 프롬프트 이력, 사용자별 이력 및 접속 로그 저장
+- 모델 선택과 관계없는 프롬프트 대화 히스토리 저장 및 재사용
 - 웹 UI에서 GPU와 모델 선택
 - 프롬프트 컨텍스트용 작업 파일 업로드
 - 서비스 포트별 독립 Ollama 인스턴스 실행
@@ -138,6 +139,12 @@ GET  /api/prompt-result?id=JOB_ID
 POST /api/cancel-pending-prompts
 ```
 
+웹 UI의 `Remember History`를 선택하면 모델 선택과 관계없이 대화 문맥을 다음 프롬프트에 함께 전달합니다. 사용자와 어시스턴트 메시지를 각각 1개로 계산하며, 최신 1,000개는 `conversation_history.json`에 저장합니다. 이를 초과한 이전 메시지는 JSONL 텍스트 형식의 `conversation_history_backup.txt`로 이동합니다. 현재 1,000개와 백업 9,000개를 합쳐 최대 10,000개까지만 보존하며, 초과 시 가장 오래된 백업부터 삭제합니다.
+
+체크박스 주변에는 두 파일의 실제 절대 경로와 저장 개수가 표시됩니다. `History` 탭에서는 현재·백업 메시지를 합쳐 최신순으로 한 페이지에 25개씩 조회할 수 있습니다. `Clear History + Backup`은 인증 정보 확인 후 두 파일을 모두 초기화합니다.
+
+저장 경로는 `GEMMA4_CONVERSATION_HISTORY_FILE`, `GEMMA4_CONVERSATION_HISTORY_BACKUP_FILE` 환경 변수로 변경할 수 있습니다. API 클라이언트는 `/api/generate` 또는 `/api/enqueue-generate` 요청에 `"remember_history": true`를 추가하면 같은 히스토리를 사용할 수 있습니다.
+
 ## 이미지·OCR 요청
 
 이미지는 Ollama 호환 Base64 문자열 배열로 전달합니다.
@@ -189,10 +196,13 @@ POST /api/save-user
 
 ```text
 GET  /api/prompt-history
+GET  /api/conversation-history
+GET  /api/conversation-history/items?page=1
 GET  /api/user-prompt-history
 GET  /api/access-log
 GET  /api/workspace/files
 POST /api/workspace/upload
+POST /api/conversation-history/clear
 ```
 
 파일 업로드 예시:
