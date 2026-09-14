@@ -5,6 +5,8 @@ server.pid
 llm_targets.json
 admin_password.conf
 webdav_settings.json
+prompt_test_history.json
+prompt_test_history_backup.txt
 cloud_bedrock/bedrock_settings.json
 cloud_gcp/gcp_settings.json
 cloud_gcp/service-account*.json

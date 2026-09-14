@@ -1,5 +1,7 @@
+import tempfile
 import unittest
 from io import BytesIO
+from pathlib import Path
 import urllib.error
 from unittest.mock import MagicMock, patch
 
@@ -81,6 +83,57 @@ class DispatchInfoTests(unittest.TestCase):
             server_routing.INDEX_HTML,
         )
 
+    def test_prompt_test_can_remember_and_clear_conversation_history(self) -> None:
+        html = server_routing.INDEX_HTML
+
+        self.assertIn('id="test_remember_history" type="checkbox"', html)
+        self.assertIn('id="test_clear_history"', html)
+        self.assertIn("function promptTestPayload(clientId)", html)
+        self.assertIn("rememberPromptExchange(prompt, data.response, data)", html)
+        self.assertIn("sessionStorage.getItem('llmRoutingRememberPromptHistory')", html)
+        self.assertIn("api('/api/prompt-test-history'", html)
+        self.assertNotIn("function promptHistoryKey()", html)
+
+    def test_prompt_history_rolls_over_to_text_backup_and_caps_total(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            current_path = Path(temp_dir) / "history.json"
+            backup_path = Path(temp_dir) / "history_backup.txt"
+            current = [
+                {"role": "user", "content": f"current-{index}"}
+                for index in range(server_routing.PROMPT_TEST_HISTORY_LIMIT)
+            ]
+            backup = [
+                {"role": "assistant", "content": f"backup-{index}"}
+                for index in range(server_routing.PROMPT_TEST_HISTORY_BACKUP_LIMIT)
+            ]
+            with (
+                patch.object(server_routing, "PROMPT_TEST_HISTORY_PATH", current_path),
+                patch.object(server_routing, "PROMPT_TEST_HISTORY_BACKUP_PATH", backup_path),
+            ):
+                server_routing.save_json(current_path, {"messages": current})
+                server_routing.save_prompt_test_history_backup(backup)
+
+                result = server_routing.append_prompt_test_history(
+                    {"messages": [
+                        {"role": "user", "content": "new-user"},
+                        {"role": "assistant", "content": "new-assistant"},
+                    ]}
+                )
+
+                self.assertEqual(result["current_count"], 1000)
+                self.assertEqual(result["backup_count"], 9000)
+                self.assertEqual(result["total_count"], 10000)
+                self.assertEqual(result["messages"][-1]["content"], "new-assistant")
+                backup_messages = server_routing.load_prompt_test_history_backup()
+                self.assertEqual(backup_messages[-1]["content"], "current-1")
+                self.assertEqual(len(backup_path.read_text(encoding="utf-8").splitlines()), 9000)
+
+                cleared = server_routing.clear_prompt_test_history()
+                self.assertEqual(cleared["current_count"], 0)
+                self.assertEqual(cleared["backup_count"], 0)
+                self.assertEqual(current_path.read_text(encoding="utf-8").count("content"), 0)
+                self.assertEqual(backup_path.read_text(encoding="utf-8"), "")
+
     def test_ocr_tab_supports_clipboard_and_file_upload(self) -> None:
         html = server_routing.INDEX_HTML
 
@@ -148,6 +201,33 @@ class DispatchInfoTests(unittest.TestCase):
                 "image_url": {"url": "data:image/png;base64,aW1hZ2U="},
             },
         )
+
+    def test_ollama_backend_payload_flattens_chat_history(self) -> None:
+        target = server_routing.LLMTarget(
+            id="ollama-chat",
+            name="Ollama Chat",
+            host="127.0.0.1",
+            port=11434,
+            model="chat-model",
+            api_type="ollama",
+        )
+
+        _url, payload = server_routing.build_backend_payload(
+            target,
+            {
+                "messages": [
+                    {"role": "user", "content": "내 이름은 베레야."},
+                    {"role": "assistant", "content": "알겠습니다."},
+                    {"role": "user", "content": "내 이름은?"},
+                ]
+            },
+        )
+
+        self.assertEqual(
+            payload["prompt"],
+            "user: 내 이름은 베레야.\nassistant: 알겠습니다.\nuser: 내 이름은?",
+        )
+        self.assertNotIn("messages", payload)
 
     def test_index_html_keeps_javascript_newline_escape(self) -> None:
         self.assertIn(

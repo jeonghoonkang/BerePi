@@ -94,7 +94,9 @@ LLM_ROUTING_PORT=4005 ./run.sh
 http://SERVER_IP:4004
 ```
 
-프롬프트 테스트 탭에서 `전송`은 선택한 대상 또는 자동 선택 대상으로 prompt를 1회 보냅니다. `전체 모델 비교`는 활성화된 모든 LLM 대상 queue에 동일 prompt를 한 번에 넣고, 각 모델별 수신 내용과 소요 시간을 표로 비교합니다. 비교 결과의 GPU 칸에는 저장된 `selected_gpu_label`이 있으면 선택된 system device label을 우선 표시합니다.
+프롬프트 테스트 탭에서 `전송`은 선택한 대상 또는 자동 선택 대상으로 prompt를 1회 보냅니다. `대화 히스토리 기억`을 선택하면 모델 선택과 관계없이 최신 메시지 1,000개를 `prompt_test_history.json`에 유지하여 다음 요청에 함께 전송합니다. 1,000개를 초과한 이전 메시지는 JSONL 텍스트 형식의 `prompt_test_history_backup.txt`로 이동하며, 현재 기록 1,000개와 백업 9,000개를 합쳐 최대 10,000개까지만 보존합니다. 체크를 해제하면 기록 사용과 추가만 중단하며 저장 파일은 유지됩니다. `백업 포함 전체 지우기`를 누르면 현재 기록과 백업이 모두 초기화됩니다. `전체 모델 비교`는 활성화된 모든 LLM 대상 queue에 동일 prompt를 한 번에 넣고, 각 모델별 수신 내용과 소요 시간을 표로 비교합니다. 비교 실행 시 기존 히스토리는 입력 문맥으로 사용할 수 있지만 모델별 응답이 다르므로 비교 결과 자체는 히스토리에 추가하지 않습니다. 비교 결과의 GPU 칸에는 저장된 `selected_gpu_label`이 있으면 선택된 system device label을 우선 표시합니다.
+
+히스토리 파일 위치는 각각 `LLM_ROUTING_PROMPT_TEST_HISTORY`, `LLM_ROUTING_PROMPT_TEST_HISTORY_BACKUP` 환경 변수로 변경할 수 있습니다.
 
 ## 관리 화면 접근 Password 적용 방법
 

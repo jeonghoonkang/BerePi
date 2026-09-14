@@ -38,6 +38,15 @@ LOG_DIR = Path(os.getenv("LLM_ROUTING_LOG_DIR", APP_DIR / "logs"))
 ACCESS_LOG_PATH = Path(os.getenv("LLM_ROUTING_ACCESS_LOG", LOG_DIR / "access.jsonl"))
 ADMIN_PASSWORD_PATH = Path(os.getenv("LLM_ROUTING_ADMIN_PASSWORD_FILE", APP_DIR / "admin_password.conf"))
 WEBDAV_CONFIG_PATH = Path(os.getenv("LLM_ROUTING_WEBDAV_CONFIG", APP_DIR / "webdav_settings.json"))
+PROMPT_TEST_HISTORY_PATH = Path(
+    os.getenv("LLM_ROUTING_PROMPT_TEST_HISTORY", APP_DIR / "prompt_test_history.json")
+)
+PROMPT_TEST_HISTORY_BACKUP_PATH = Path(
+    os.getenv(
+        "LLM_ROUTING_PROMPT_TEST_HISTORY_BACKUP",
+        APP_DIR / "prompt_test_history_backup.txt",
+    )
+)
 HOST = os.getenv("LLM_ROUTING_HOST", "0.0.0.0")
 PORT = int(os.getenv("LLM_ROUTING_PORT", "4004"))
 PROXY_HOST = os.getenv("LLM_ROUTING_PROXY_HOST", HOST)
@@ -100,6 +109,11 @@ GPU_METRIC_KEYWORDS = (
     "vllm:num_requests_waiting",
 )
 TARGET_HISTORY_LIMIT = 100
+PROMPT_TEST_HISTORY_LIMIT = 1000
+PROMPT_TEST_HISTORY_TOTAL_LIMIT = 10000
+PROMPT_TEST_HISTORY_BACKUP_LIMIT = (
+    PROMPT_TEST_HISTORY_TOTAL_LIMIT - PROMPT_TEST_HISTORY_LIMIT
+)
 GCP_TARGET_ID = "google-ai-studio-endpoint"
 
 
@@ -514,6 +528,113 @@ def load_target_history() -> list[dict[str, Any]]:
     if not isinstance(history, list):
         return []
     return [item for item in history if isinstance(item, dict)]
+
+
+def normalize_prompt_test_history_message(item: Any) -> dict[str, str] | None:
+    if not isinstance(item, dict):
+        return None
+    role = str(item.get("role") or "").strip().lower()
+    if role not in {"system", "user", "assistant"}:
+        return None
+    content = str(item.get("content") or "")
+    normalized = {
+        "role": role,
+        "content": content,
+        "saved_at": str(item.get("saved_at") or now_text()),
+    }
+    for key in ("target_id", "target_name", "model"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            normalized[key] = value
+    return normalized
+
+
+def load_prompt_test_history() -> list[dict[str, str]]:
+    raw = load_json(PROMPT_TEST_HISTORY_PATH, {"messages": []})
+    source = raw.get("messages", []) if isinstance(raw, dict) else []
+    if not isinstance(source, list):
+        return []
+    messages = [normalize_prompt_test_history_message(item) for item in source]
+    return [item for item in messages if item is not None][
+        -PROMPT_TEST_HISTORY_LIMIT:
+    ]
+
+
+def load_prompt_test_history_backup() -> list[dict[str, str]]:
+    if not PROMPT_TEST_HISTORY_BACKUP_PATH.exists():
+        return []
+    try:
+        lines = PROMPT_TEST_HISTORY_BACKUP_PATH.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    messages: list[dict[str, str]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            item = normalize_prompt_test_history_message(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+        if item is not None:
+            messages.append(item)
+    return messages[-PROMPT_TEST_HISTORY_BACKUP_LIMIT:]
+
+
+def save_prompt_test_history_backup(messages: list[dict[str, str]]) -> None:
+    PROMPT_TEST_HISTORY_BACKUP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    retained = messages[-PROMPT_TEST_HISTORY_BACKUP_LIMIT:]
+    text = "".join(
+        json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n"
+        for item in retained
+    )
+    PROMPT_TEST_HISTORY_BACKUP_PATH.write_text(text, encoding="utf-8")
+
+
+def prompt_test_history_payload() -> dict[str, Any]:
+    with STATE_LOCK:
+        messages = load_prompt_test_history()
+        backup_count = len(load_prompt_test_history_backup())
+    return {
+        "ok": True,
+        "messages": messages,
+        "current_count": len(messages),
+        "current_limit": PROMPT_TEST_HISTORY_LIMIT,
+        "backup_count": backup_count,
+        "backup_limit": PROMPT_TEST_HISTORY_BACKUP_LIMIT,
+        "total_count": len(messages) + backup_count,
+        "total_limit": PROMPT_TEST_HISTORY_TOTAL_LIMIT,
+        "backup_path": str(PROMPT_TEST_HISTORY_BACKUP_PATH),
+    }
+
+
+def append_prompt_test_history(payload: dict[str, Any]) -> dict[str, Any]:
+    source = payload.get("messages")
+    if not isinstance(source, list):
+        raise ValueError("messages must be a list.")
+    additions = [normalize_prompt_test_history_message(item) for item in source]
+    additions = [item for item in additions if item is not None]
+    if not additions:
+        raise ValueError("At least one valid history message is required.")
+    with STATE_LOCK:
+        current = load_prompt_test_history()
+        combined = current + additions
+        overflow = combined[:-PROMPT_TEST_HISTORY_LIMIT]
+        current = combined[-PROMPT_TEST_HISTORY_LIMIT:]
+        backup = (load_prompt_test_history_backup() + overflow)[
+            -PROMPT_TEST_HISTORY_BACKUP_LIMIT:
+        ]
+        # Persist the overflow first so a backup write failure cannot discard
+        # messages that are about to leave the active history.
+        save_prompt_test_history_backup(backup)
+        save_json(PROMPT_TEST_HISTORY_PATH, {"messages": current})
+    return prompt_test_history_payload()
+
+
+def clear_prompt_test_history() -> dict[str, Any]:
+    with STATE_LOCK:
+        save_json(PROMPT_TEST_HISTORY_PATH, {"messages": []})
+        save_prompt_test_history_backup([])
+    return prompt_test_history_payload()
 
 
 def duplicate_target_ids(targets: list[LLMTarget]) -> set[str]:
@@ -1138,6 +1259,10 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
 
     payload = dict(request_payload)
     payload["prompt"] = prompt
+    # Ollama's /api/generate endpoint does not consume chat messages.  When a
+    # caller supplies messages (for example, the prompt-test history UI),
+    # prompt_text() has already converted them to a role-labelled transcript.
+    payload.pop("messages", None)
     if model:
         payload["model"] = model
     if target.selected_gpu:
@@ -3053,6 +3178,11 @@ INDEX_HTML = """<!doctype html>
         <button class="primary" onclick="sendPrompt()">전송</button>
         <button onclick="compareAllPrompts()">전체 모델 비교</button>
         <button onclick="clearPromptTest()">결과 지우기</button>
+        <label class="check-row" title="모델 선택과 관계없이 서버에 대화 내용을 기억합니다.">
+          <input id="test_remember_history" type="checkbox" onchange="togglePromptHistory()"> 대화 히스토리 기억
+        </label>
+        <button id="test_clear_history" onclick="clearPromptHistory()" disabled>백업 포함 전체 지우기</button>
+        <span id="test_history_status" class="model-status">히스토리 사용 안 함</span>
       </div>
     </div>
     <div class="test-metrics">
@@ -3168,6 +3298,8 @@ INDEX_HTML = """<!doctype html>
 let state = {};
 let selectedTestTargetId = localStorage.getItem('llmRoutingTestTargetId') || '';
 let ocrImageFile = null;
+let promptTestHistory = [];
+let promptTestHistoryCounts = {current_count:0, current_limit:1000, backup_count:0, backup_limit:9000, total_count:0, total_limit:10000};
 for (const btn of document.querySelectorAll('nav button')) {
   btn.onclick = () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
@@ -3303,6 +3435,91 @@ async function copyMarkdown(id) {
 }
 function setAnswer(text) {
   setMarkdownContent('test_answer', text);
+}
+function loadPromptHistoryEnabled() {
+  try {
+    return sessionStorage.getItem('llmRoutingRememberPromptHistory') === 'true';
+  } catch (_err) {
+    return false;
+  }
+}
+function promptHistoryEnabled() {
+  return document.getElementById('test_remember_history').checked;
+}
+function applyPromptTestHistoryData(data) {
+  promptTestHistory = Array.isArray(data.messages) ? data.messages : [];
+  promptTestHistoryCounts = {...promptTestHistoryCounts, ...data};
+  updatePromptHistoryStatus();
+}
+async function loadPromptTestHistory() {
+  try {
+    applyPromptTestHistoryData(await api('/api/prompt-test-history'));
+  } catch (err) {
+    document.getElementById('test_history_status').textContent = `히스토리 조회 실패: ${String(err)}`;
+  }
+}
+function updatePromptHistoryStatus() {
+  const enabled = promptHistoryEnabled();
+  const counts = promptTestHistoryCounts;
+  const detail = `현재 ${counts.current_count}/${counts.current_limit}개 · 백업 ${counts.backup_count}/${counts.backup_limit}개 · 합계 ${counts.total_count}/${counts.total_limit}개`;
+  document.getElementById('test_history_status').textContent = enabled
+    ? detail
+    : `히스토리 사용 안 함 · 저장 ${detail}`;
+  document.getElementById('test_clear_history').disabled = Number(counts.total_count || 0) === 0;
+}
+async function togglePromptHistory() {
+  const enabled = promptHistoryEnabled();
+  try {
+    sessionStorage.setItem('llmRoutingRememberPromptHistory', String(enabled));
+  } catch (_err) {
+    // The checkbox and in-memory history still work without session storage.
+  }
+  if (enabled) await loadPromptTestHistory();
+  updatePromptHistoryStatus();
+}
+async function clearPromptHistory() {
+  const button = document.getElementById('test_clear_history');
+  button.disabled = true;
+  try {
+    const data = await api('/api/prompt-test-history', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'clear'})
+    });
+    applyPromptTestHistoryData(data);
+  } catch (err) {
+    document.getElementById('test_history_status').textContent = `히스토리 삭제 실패: ${String(err)}`;
+  } finally {
+    updatePromptHistoryStatus();
+  }
+}
+function promptTestPayload(clientId) {
+  const prompt = document.getElementById('test_prompt').value;
+  const payload = {client_id: clientId};
+  if (!promptHistoryEnabled() || !prompt.trim()) {
+    payload.prompt = prompt;
+    return payload;
+  }
+  payload.messages = [
+    ...promptTestHistory.map(message => ({role: message.role, content: message.content})),
+    {role: 'user', content: prompt}
+  ];
+  return payload;
+}
+async function rememberPromptExchange(prompt, response, data) {
+  if (!promptHistoryEnabled()) return;
+  const metadata = {target_id:data.target_id || '', target_name:data.target_name || '', model:data.model || ''};
+  try {
+    const saved = await api('/api/prompt-test-history', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'append', messages:[
+        {role:'user', content:prompt, ...metadata},
+        {role:'assistant', content:String(response || ''), ...metadata}
+      ]})
+    });
+    applyPromptTestHistoryData(saved);
+  } catch (err) {
+    document.getElementById('test_history_status').textContent = `응답 완료 · 히스토리 저장 실패: ${String(err)}`;
+  }
 }
 function metric(label, value) { return `<div class="metric"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`; }
 function formatDuration(seconds) {
@@ -3769,7 +3986,9 @@ async function sendPrompt() {
   } else {
     localStorage.removeItem('llmRoutingTestTargetId');
   }
-  const payload = {prompt: document.getElementById('test_prompt').value, target_id: selectedTestTargetId, client_id: 'web-ui'};
+  if (promptHistoryEnabled()) await loadPromptTestHistory();
+  const prompt = document.getElementById('test_prompt').value;
+  const payload = {...promptTestPayload('web-ui'), target_id: selectedTestTargetId};
   const startedAt = performance.now();
   let elapsedTimer = window.setInterval(() => {
     document.getElementById('test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
@@ -3787,6 +4006,7 @@ async function sendPrompt() {
     document.getElementById('test_selected_target').textContent = selectedTargetLabel(data);
     setAnswer(promptResponseDetails(data));
     document.getElementById('test_result').textContent = JSON.stringify(data, null, 2);
+    await rememberPromptExchange(prompt, data.response, data);
   } catch (err) {
     const elapsedSeconds = (performance.now() - startedAt) / 1000;
     document.getElementById('test_status').textContent = '오류';
@@ -3843,7 +4063,8 @@ function promptResponseDetails(data) {
   return lines.join('\\n');
 }
 async function compareAllPrompts() {
-  const payload = {prompt: document.getElementById('test_prompt').value, client_id: 'web-ui-compare'};
+  if (promptHistoryEnabled()) await loadPromptTestHistory();
+  const payload = promptTestPayload('web-ui-compare');
   const startedAt = performance.now();
   let elapsedTimer = window.setInterval(() => {
     document.getElementById('test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
@@ -3944,6 +4165,9 @@ document.getElementById('test_target').addEventListener('change', (event) => {
     localStorage.removeItem('llmRoutingTestTargetId');
   }
 });
+document.getElementById('test_remember_history').checked =
+  loadPromptHistoryEnabled();
+loadPromptTestHistory();
 document.querySelectorAll('.ocr-source-tab').forEach(tab => {
   tab.addEventListener('click', () => showOcrSource(tab.dataset.ocrSource));
 });
@@ -4132,6 +4356,11 @@ class RoutingHandler(BaseHTTPRequestHandler):
         if self.path == "/api/gcp/status":
             self.write_json(gcp_status_payload())
             return
+        if self.path == "/api/prompt-test-history":
+            if not self.require_auth():
+                return
+            self.write_json(prompt_test_history_payload())
+            return
         self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_OPTIONS(self) -> None:
@@ -4218,6 +4447,15 @@ class RoutingHandler(BaseHTTPRequestHandler):
                 self.write_json(openai_chat_response(route_prompt(self, payload)))
                 return
             if not self.require_auth():
+                return
+            if self.path == "/api/prompt-test-history":
+                action = str(payload.get("action") or "append").strip().lower()
+                if action == "clear":
+                    self.write_json(clear_prompt_test_history())
+                elif action == "append":
+                    self.write_json(append_prompt_test_history(payload))
+                else:
+                    raise ValueError("action must be 'append' or 'clear'.")
                 return
             if self.path == "/api/compare":
                 self.write_json(compare_prompt(self, payload))
