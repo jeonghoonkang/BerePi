@@ -744,7 +744,7 @@ INDEX_HTML = """<!doctype html>
         <button class="primary" id="send" type="button" onclick="window.sendPrompt(event)">Send Prompt</button>
         <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
         <label class="check-label" for="rememberHistory">
-          <input id="rememberHistory" type="checkbox">
+          <input id="rememberHistory" type="checkbox" checked>
           Remember History
         </label>
         <button id="clearConversationHistory" type="button">Clear History + Backup</button>
@@ -2374,9 +2374,12 @@ if __name__ == "__main__":
     saveUserButton.addEventListener("click", saveUser);
     bindAuthSync();
     try {
-      rememberHistory.checked = sessionStorage.getItem("gemma4RememberHistory") === "true";
+      const storedRememberHistory = sessionStorage.getItem("gemma4RememberHistory");
+      rememberHistory.checked = storedRememberHistory === null
+        ? true
+        : storedRememberHistory === "true";
     } catch (_err) {
-      rememberHistory.checked = false;
+      rememberHistory.checked = true;
     }
     renderPythonCode();
     refreshPromptHistory();
@@ -2793,7 +2796,9 @@ def conversation_prompt(messages: list[dict[str, Any]], prompt: str) -> str:
     return "\n".join(lines)
 
 
-def remember_history_requested(value: Any) -> bool:
+def remember_history_requested(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -3486,7 +3491,7 @@ def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
 
 def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
     execution_payload = dict(payload)
-    if remember_history_requested(payload.get("_remember_history")):
+    if remember_history_requested(payload.get("_remember_history"), default=False):
         user_prompt = str(
             payload.get("_history_user_prompt") or payload.get("prompt") or ""
         )
@@ -3499,7 +3504,9 @@ def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
 def remember_conversation_result(
     payload: dict[str, Any], result: dict[str, Any]
 ) -> None:
-    if not remember_history_requested(payload.get("_remember_history")):
+    if not remember_history_requested(
+        payload.get("_remember_history"), default=False
+    ):
         return
     try:
         result["conversation_history"] = append_conversation_history(

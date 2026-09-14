@@ -11,12 +11,19 @@ class OllamaCompatibilityTests(unittest.TestCase):
     def test_index_contains_conversation_history_controls_and_tab(self) -> None:
         html = server.INDEX_HTML
 
-        self.assertIn('id="rememberHistory" type="checkbox"', html)
+        self.assertIn('id="rememberHistory" type="checkbox" checked', html)
         self.assertIn('data-tab="historyPanel"', html)
         self.assertIn('id="conversationHistoryPaths"', html)
         self.assertIn('id="conversationHistoryItems"', html)
         self.assertIn("remember_history: Boolean(rememberHistory.checked)", html)
         self.assertIn("/api/conversation-history/items?page=", html)
+        self.assertIn("storedRememberHistory === null", html)
+
+    def test_api_requests_remember_history_by_default(self) -> None:
+        self.assertTrue(server.remember_history_requested(None))
+        self.assertTrue(server.remember_history_requested(True))
+        self.assertFalse(server.remember_history_requested(False))
+        self.assertFalse(server.remember_history_requested("off"))
 
     def test_conversation_history_rollover_total_cap_and_pagination(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

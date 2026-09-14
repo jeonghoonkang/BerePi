@@ -139,11 +139,11 @@ GET  /api/prompt-result?id=JOB_ID
 POST /api/cancel-pending-prompts
 ```
 
-웹 UI의 `Remember History`를 선택하면 모델 선택과 관계없이 대화 문맥을 다음 프롬프트에 함께 전달합니다. 사용자와 어시스턴트 메시지를 각각 1개로 계산하며, 최신 1,000개는 `conversation_history.json`에 저장합니다. 이를 초과한 이전 메시지는 JSONL 텍스트 형식의 `conversation_history_backup.txt`로 이동합니다. 현재 1,000개와 백업 9,000개를 합쳐 최대 10,000개까지만 보존하며, 초과 시 가장 오래된 백업부터 삭제합니다.
+서버와 웹 UI는 기본적으로 `Remember History`가 활성화되며, 모델 선택과 관계없이 대화 문맥을 다음 프롬프트에 함께 전달합니다. 웹 UI에서 체크를 OFF한 요청만 히스토리를 사용하거나 저장하지 않습니다. 사용자와 어시스턴트 메시지를 각각 1개로 계산하며, 최신 1,000개는 `conversation_history.json`에 저장합니다. 이를 초과한 이전 메시지는 JSONL 텍스트 형식의 `conversation_history_backup.txt`로 이동합니다. 현재 1,000개와 백업 9,000개를 합쳐 최대 10,000개까지만 보존하며, 초과 시 가장 오래된 백업부터 삭제합니다.
 
 체크박스 주변에는 두 파일의 실제 절대 경로와 저장 개수가 표시됩니다. `History` 탭에서는 현재·백업 메시지를 합쳐 최신순으로 한 페이지에 25개씩 조회할 수 있습니다. `Clear History + Backup`은 인증 정보 확인 후 두 파일을 모두 초기화합니다.
 
-저장 경로는 `GEMMA4_CONVERSATION_HISTORY_FILE`, `GEMMA4_CONVERSATION_HISTORY_BACKUP_FILE` 환경 변수로 변경할 수 있습니다. API 클라이언트는 `/api/generate` 또는 `/api/enqueue-generate` 요청에 `"remember_history": true`를 추가하면 같은 히스토리를 사용할 수 있습니다.
+저장 경로는 `GEMMA4_CONVERSATION_HISTORY_FILE`, `GEMMA4_CONVERSATION_HISTORY_BACKUP_FILE` 환경 변수로 변경할 수 있습니다. `/api/generate`와 `/api/enqueue-generate` API 요청은 `remember_history` 필드가 없어도 기본적으로 히스토리를 사용하고 저장합니다. 명시적으로 `"remember_history": false`를 보낸 요청만 히스토리 사용과 저장에서 제외됩니다.
 
 ## 이미지·OCR 요청
 
