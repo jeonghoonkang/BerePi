@@ -114,6 +114,7 @@ PROMPT_TEST_HISTORY_TOTAL_LIMIT = 10000
 PROMPT_TEST_HISTORY_BACKUP_LIMIT = (
     PROMPT_TEST_HISTORY_TOTAL_LIMIT - PROMPT_TEST_HISTORY_LIMIT
 )
+PROMPT_TEST_HISTORY_PAGE_SIZE = 25
 GCP_TARGET_ID = "google-ai-studio-endpoint"
 
 
@@ -603,6 +604,40 @@ def prompt_test_history_payload() -> dict[str, Any]:
         "backup_limit": PROMPT_TEST_HISTORY_BACKUP_LIMIT,
         "total_count": len(messages) + backup_count,
         "total_limit": PROMPT_TEST_HISTORY_TOTAL_LIMIT,
+        "current_path": str(PROMPT_TEST_HISTORY_PATH),
+        "backup_path": str(PROMPT_TEST_HISTORY_BACKUP_PATH),
+    }
+
+
+def prompt_test_history_page_payload(page: int) -> dict[str, Any]:
+    with STATE_LOCK:
+        backup = load_prompt_test_history_backup()
+        current = load_prompt_test_history()
+    messages = list(reversed(backup + current))
+    total_count = len(messages)
+    total_pages = max(
+        1,
+        (total_count + PROMPT_TEST_HISTORY_PAGE_SIZE - 1)
+        // PROMPT_TEST_HISTORY_PAGE_SIZE,
+    )
+    normalized_page = min(max(1, int(page)), total_pages)
+    offset = (normalized_page - 1) * PROMPT_TEST_HISTORY_PAGE_SIZE
+    items = []
+    for index, message in enumerate(
+        messages[offset : offset + PROMPT_TEST_HISTORY_PAGE_SIZE],
+        start=offset,
+    ):
+        items.append({"number": total_count - index, **message})
+    return {
+        "ok": True,
+        "items": items,
+        "page": normalized_page,
+        "page_size": PROMPT_TEST_HISTORY_PAGE_SIZE,
+        "total_pages": total_pages,
+        "total_count": total_count,
+        "current_count": len(current),
+        "backup_count": len(backup),
+        "current_path": str(PROMPT_TEST_HISTORY_PATH),
         "backup_path": str(PROMPT_TEST_HISTORY_BACKUP_PATH),
     }
 
@@ -3042,6 +3077,16 @@ INDEX_HTML = """<!doctype html>
     .duplicate-row { background:#fff4e5; }
     .duplicate-badge { display:inline-block; margin-top:4px; color:#7a4f00; font-weight:800; }
     .test-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+    .history-paths { flex-basis:100%; white-space:pre-wrap; overflow-wrap:anywhere; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; color:var(--muted); }
+    .history-page-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 14px; }
+    .history-page-info { color:var(--muted); font-weight:700; }
+    .history-items { display:grid; gap:10px; }
+    .history-item { border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:12px 14px; }
+    .history-item-header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; color:var(--muted); font-size:12px; }
+    .history-role { display:inline-block; padding:2px 7px; border-radius:999px; background:#e2e8f0; color:#334155; font-weight:800; }
+    .history-role.user { background:#ccfbf1; color:#115e59; }
+    .history-role.assistant { background:#dbeafe; color:#1e40af; }
+    .history-content { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.55; }
     .test-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
     .test-output { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:12px; }
     .response-box { margin:0; min-height:630px; max-height:630px; overflow:auto; background:#fff; color:#1f2937; border:1px solid #cbd5e1; border-radius:10px; padding:22px 24px; line-height:1.68; box-shadow:inset 0 1px 2px rgba(15,23,42,.04); }
@@ -3107,6 +3152,7 @@ INDEX_HTML = """<!doctype html>
     <button data-tab="service">서비스</button>
     <button data-tab="local">로컬머신</button>
     <button data-tab="test">프롬프트 테스트</button>
+    <button data-tab="history">히스토리</button>
     <button data-tab="ocr">이미지 OCR</button>
     <button data-tab="gcp">GCP 테스트</button>
   </nav>
@@ -3183,6 +3229,7 @@ INDEX_HTML = """<!doctype html>
         </label>
         <button id="test_clear_history" onclick="clearPromptHistory()" disabled>백업 포함 전체 지우기</button>
         <span id="test_history_status" class="model-status">히스토리 사용 안 함</span>
+        <div id="test_history_paths" class="history-paths">히스토리 파일 경로 확인 중...</div>
       </div>
     </div>
     <div class="test-metrics">
@@ -3215,6 +3262,19 @@ INDEX_HTML = """<!doctype html>
       <div id="autoTargetSummary" class="model-status"></div>
       <table><thead><tr><th>LLM</th><th>주소</th><th>모델</th><th>GPU</th><th>Queue</th></tr></thead><tbody id="autoTargetRows"></tbody></table>
     </div>
+  </section>
+  <section id="history">
+    <div class="panel">
+      <div class="history-page-toolbar">
+        <button id="history_prev" onclick="changePromptHistoryPage(-1)" disabled>이전</button>
+        <span id="history_page_info" class="history-page-info">1 / 1 페이지</span>
+        <button id="history_next" onclick="changePromptHistoryPage(1)" disabled>다음</button>
+        <button onclick="loadPromptHistoryPage(promptHistoryPage)">새로고침</button>
+        <span id="history_count_info" class="model-status">히스토리 확인 중...</span>
+      </div>
+      <div id="history_file_paths" class="history-paths">히스토리 파일 경로 확인 중...</div>
+    </div>
+    <div id="history_items" class="history-items" style="margin-top:14px"></div>
   </section>
   <section id="ocr">
     <div class="panel">
@@ -3300,12 +3360,15 @@ let selectedTestTargetId = localStorage.getItem('llmRoutingTestTargetId') || '';
 let ocrImageFile = null;
 let promptTestHistory = [];
 let promptTestHistoryCounts = {current_count:0, current_limit:1000, backup_count:0, backup_limit:9000, total_count:0, total_limit:10000};
+let promptHistoryPage = 1;
+let promptHistoryTotalPages = 1;
 for (const btn of document.querySelectorAll('nav button')) {
   btn.onclick = () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'history') loadPromptHistoryPage(promptHistoryPage);
   };
 }
 function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -3458,6 +3521,47 @@ async function loadPromptTestHistory() {
     document.getElementById('test_history_status').textContent = `히스토리 조회 실패: ${String(err)}`;
   }
 }
+function promptHistoryRoleLabel(role) {
+  return role === 'assistant' ? '어시스턴트' : (role === 'user' ? '사용자' : '시스템');
+}
+function renderPromptHistoryPage(data) {
+  promptHistoryPage = Number(data.page || 1);
+  promptHistoryTotalPages = Number(data.total_pages || 1);
+  document.getElementById('history_page_info').textContent =
+    `${promptHistoryPage} / ${promptHistoryTotalPages} 페이지`;
+  document.getElementById('history_prev').disabled = promptHistoryPage <= 1;
+  document.getElementById('history_next').disabled = promptHistoryPage >= promptHistoryTotalPages;
+  document.getElementById('history_count_info').textContent =
+    `전체 ${data.total_count || 0}개 · 현재 ${data.current_count || 0}개 · 백업 ${data.backup_count || 0}개 · 페이지당 ${data.page_size || 25}개`;
+  document.getElementById('history_file_paths').textContent =
+    `현재 히스토리: ${data.current_path || '-'}\n백업 히스토리: ${data.backup_path || '-'}`;
+  const items = Array.isArray(data.items) ? data.items : [];
+  document.getElementById('history_items').innerHTML = items.length
+    ? items.map(item => `<article class="history-item">
+        <div class="history-item-header">
+          <strong>#${esc(item.number || '')}</strong>
+          <span class="history-role ${esc(item.role || '')}">${esc(promptHistoryRoleLabel(item.role))}</span>
+          <span>${esc(item.saved_at || '-')}</span>
+          <span>${esc(item.target_name || item.target_id || '-')}</span>
+          <span>${esc(item.model || '-')}</span>
+        </div>
+        <div class="history-content">${esc(item.content || '')}</div>
+      </article>`).join('')
+    : '<div class="panel model-status">저장된 히스토리가 없습니다.</div>';
+}
+async function loadPromptHistoryPage(page = 1) {
+  document.getElementById('history_count_info').textContent = '히스토리 불러오는 중...';
+  try {
+    const data = await api(`/api/prompt-test-history/items?page=${Math.max(1, Number(page || 1))}`);
+    renderPromptHistoryPage(data);
+  } catch (err) {
+    document.getElementById('history_count_info').textContent = `히스토리 조회 실패: ${String(err)}`;
+  }
+}
+function changePromptHistoryPage(direction) {
+  const nextPage = Math.min(promptHistoryTotalPages, Math.max(1, promptHistoryPage + direction));
+  if (nextPage !== promptHistoryPage) loadPromptHistoryPage(nextPage);
+}
 function updatePromptHistoryStatus() {
   const enabled = promptHistoryEnabled();
   const counts = promptTestHistoryCounts;
@@ -3465,6 +3569,10 @@ function updatePromptHistoryStatus() {
   document.getElementById('test_history_status').textContent = enabled
     ? detail
     : `히스토리 사용 안 함 · 저장 ${detail}`;
+  const currentPath = counts.current_path || '-';
+  const backupPath = counts.backup_path || '-';
+  document.getElementById('test_history_paths').textContent =
+    `현재 히스토리: ${currentPath}\n백업 히스토리: ${backupPath}`;
   document.getElementById('test_clear_history').disabled = Number(counts.total_count || 0) === 0;
 }
 async function togglePromptHistory() {
@@ -3485,6 +3593,7 @@ async function clearPromptHistory() {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'clear'})
     });
     applyPromptTestHistoryData(data);
+    await loadPromptHistoryPage(1);
   } catch (err) {
     document.getElementById('test_history_status').textContent = `히스토리 삭제 실패: ${String(err)}`;
   } finally {
@@ -4343,6 +4452,8 @@ class RoutingHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def do_GET(self) -> None:
+        parsed_path = urllib.parse.urlparse(self.path)
+        request_path = parsed_path.path.rstrip("/") or "/"
         if self.path == "/" or self.path.startswith("/?"):
             self.write_html(INDEX_HTML if self.is_authenticated() else LOGIN_HTML)
             return
@@ -4360,6 +4471,16 @@ class RoutingHandler(BaseHTTPRequestHandler):
             if not self.require_auth():
                 return
             self.write_json(prompt_test_history_payload())
+            return
+        if request_path == "/api/prompt-test-history/items":
+            if not self.require_auth():
+                return
+            query = urllib.parse.parse_qs(parsed_path.query)
+            try:
+                page = int((query.get("page") or ["1"])[0])
+            except (TypeError, ValueError):
+                page = 1
+            self.write_json(prompt_test_history_page_payload(page))
             return
         self.write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 

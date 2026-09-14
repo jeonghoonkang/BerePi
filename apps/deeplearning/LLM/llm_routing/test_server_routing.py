@@ -88,11 +88,44 @@ class DispatchInfoTests(unittest.TestCase):
 
         self.assertIn('id="test_remember_history" type="checkbox"', html)
         self.assertIn('id="test_clear_history"', html)
+        self.assertIn('id="test_history_paths"', html)
         self.assertIn("function promptTestPayload(clientId)", html)
         self.assertIn("rememberPromptExchange(prompt, data.response, data)", html)
         self.assertIn("sessionStorage.getItem('llmRoutingRememberPromptHistory')", html)
         self.assertIn("api('/api/prompt-test-history'", html)
         self.assertNotIn("function promptHistoryKey()", html)
+
+    def test_history_tab_lists_25_messages_per_page(self) -> None:
+        html = server_routing.INDEX_HTML
+
+        self.assertIn('data-tab="history">히스토리</button>', html)
+        self.assertIn('id="history_items"', html)
+        self.assertIn('id="history_prev"', html)
+        self.assertIn('id="history_next"', html)
+        self.assertIn("/api/prompt-test-history/items?page=", html)
+        self.assertEqual(server_routing.PROMPT_TEST_HISTORY_PAGE_SIZE, 25)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            current_path = Path(temp_dir) / "history.json"
+            backup_path = Path(temp_dir) / "history_backup.txt"
+            messages = [
+                {"role": "user", "content": f"message-{index}"}
+                for index in range(60)
+            ]
+            with (
+                patch.object(server_routing, "PROMPT_TEST_HISTORY_PATH", current_path),
+                patch.object(server_routing, "PROMPT_TEST_HISTORY_BACKUP_PATH", backup_path),
+            ):
+                server_routing.save_json(current_path, {"messages": messages})
+                page_one = server_routing.prompt_test_history_page_payload(1)
+                page_three = server_routing.prompt_test_history_page_payload(3)
+
+        self.assertEqual(len(page_one["items"]), 25)
+        self.assertEqual(page_one["total_pages"], 3)
+        self.assertEqual(page_one["items"][0]["content"], "message-59")
+        self.assertEqual(page_three["page"], 3)
+        self.assertEqual(len(page_three["items"]), 10)
+        self.assertEqual(page_three["items"][-1]["content"], "message-0")
 
     def test_prompt_history_rolls_over_to_text_backup_and_caps_total(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -123,6 +156,8 @@ class DispatchInfoTests(unittest.TestCase):
                 self.assertEqual(result["current_count"], 1000)
                 self.assertEqual(result["backup_count"], 9000)
                 self.assertEqual(result["total_count"], 10000)
+                self.assertEqual(result["current_path"], str(current_path))
+                self.assertEqual(result["backup_path"], str(backup_path))
                 self.assertEqual(result["messages"][-1]["content"], "new-assistant")
                 backup_messages = server_routing.load_prompt_test_history_backup()
                 self.assertEqual(backup_messages[-1]["content"], "current-1")

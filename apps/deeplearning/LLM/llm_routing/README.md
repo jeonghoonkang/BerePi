@@ -98,6 +98,8 @@ http://SERVER_IP:4004
 
 히스토리 파일 위치는 각각 `LLM_ROUTING_PROMPT_TEST_HISTORY`, `LLM_ROUTING_PROMPT_TEST_HISTORY_BACKUP` 환경 변수로 변경할 수 있습니다.
 
+관리 화면의 `히스토리` 탭은 현재 기록과 백업 기록을 합쳐 최신순으로 표시합니다. 사용자/어시스턴트 메시지는 개별 항목으로 구분되며 한 페이지에 25개씩 이전/다음 버튼으로 조회할 수 있습니다.
+
 ## 관리 화면 접근 Password 적용 방법
 
 처음 LLM Routing 페이지에 접속하면 password 입력 화면이 표시됩니다. 관리 화면 password는 `admin_password.conf` 파일 또는 `LLM_ROUTING_ADMIN_PASSWORD` 환경 변수로 적용할 수 있습니다.
