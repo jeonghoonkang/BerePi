@@ -13,7 +13,6 @@ import re
 import argparse
 
 
-
 def get_env(key, default=None):
     val = os.getenv(key)
     if val is None:
@@ -32,6 +31,14 @@ def validate_env():
             'NEXTCLOUD_URL, NEXTCLOUD_USERNAME, and NEXTCLOUD_PASSWORD environment variables must be set'
         )
     return url, user, password, photo_dir
+
+
+def _load_processed_set(processed_log):
+    processed = set()
+    if processed_log and os.path.exists(processed_log):
+        with open(processed_log, "r", encoding="utf-8") as f:
+            processed = set(l.strip() for l in f if l.strip())
+    return processed
 
 
 def parse_exif_pillow(data):
@@ -123,6 +130,91 @@ def parse_exif_exiftool(data):
     return date_taken, location
 
 
+def list_local_photos(
+    directory,
+    progress_cb=None,
+    exif_method="exiftool",
+    measure_speed=False,
+    processed_log=None,
+):
+    """Walk a local directory and return metadata for JPEG files."""
+
+    files = []
+    processed = _load_processed_set(processed_log)
+
+    for root, _dirs, filenames in os.walk(directory):
+        rel_root = os.path.relpath(root, directory)
+        for name in filenames:
+            if not name.lower().endswith((".jpg", ".jpeg")):
+                continue
+
+            rel_path = name if rel_root == "." else os.path.join(rel_root, name)
+            if rel_path in processed:
+                continue
+
+            if progress_cb:
+                progress_cb(rel_path)
+            else:
+                print(f"Scanning {rel_path}")
+
+            full_path = os.path.join(root, name)
+            try:
+                with open(full_path, "rb") as f:
+                    data = f.read()
+            except Exception:
+                data = None
+
+            date_taken = None
+            location = None
+            timing = {}
+            if data:
+                if measure_speed:
+                    start = time.perf_counter()
+                    dt_pillow, loc_pillow = parse_exif_pillow(data)
+                    pillow_time = time.perf_counter() - start
+
+                    start = time.perf_counter()
+                    dt_tool, loc_tool = parse_exif_exiftool(data)
+                    tool_time = time.perf_counter() - start
+
+                    timing = {
+                        "pillow_ms": round(pillow_time * 1000, 3),
+                        "exiftool_ms": round(tool_time * 1000, 3),
+                        "diff_ms": round((tool_time - pillow_time) * 1000, 3),
+                    }
+                    if exif_method == "exiftool":
+                        date_taken, location = dt_tool, loc_tool
+                    else:
+                        date_taken, location = dt_pillow, loc_pillow
+                else:
+                    if exif_method == "exiftool":
+                        date_taken, location = parse_exif_exiftool(data)
+                    else:
+                        date_taken, location = parse_exif_pillow(data)
+
+            stat_info = os.stat(full_path)
+            last_mod = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat_info.st_mtime))
+            size = stat_info.st_size
+
+            entry = {
+                "path": rel_path,
+                "last_modified": last_mod,
+                "size": size,
+                "date_taken": date_taken,
+                "location": location,
+            }
+            if measure_speed and timing:
+                entry.update(timing)
+            files.append(entry)
+
+            if processed_log and (exif_method == "exiftool" or measure_speed):
+                if rel_path not in processed:
+                    processed.add(rel_path)
+                    with open(processed_log, "a", encoding="utf-8") as f:
+                        f.write(rel_path + "\n")
+
+    return files
+
 def list_photos(
     nc_url,
     username,
@@ -132,7 +224,6 @@ def list_photos(
     exif_method="pillow",
     measure_speed=False,
     processed_log=None,
-
 ):
     """Iteratively walk the photo directory and return metadata for JPEG files.
 
@@ -266,7 +357,6 @@ def list_photos(
                     with open(processed_log, "a", encoding="utf-8") as f:
                         f.write(relative + "\n")
 
-
     return files
 
 
@@ -291,28 +381,43 @@ def main():
         "--processed-log",
         help="file to track processed JPEGs when using exiftool",
     )
-
+    parser.add_argument(
+        "--local-dir",
+        help="process JPEGs from a local directory instead of Nextcloud",
+    )
     args = parser.parse_args()
 
-    url, user, password, photo_dir = validate_env()
     exif_method = (
         "exiftool" if args.use_exiftool else get_env("EXIF_METHOD", "pillow").lower()
     )
     measure_speed = args.compare_speed or get_env("COMPARE_SPEED", "0") == "1"
     processed_log = args.processed_log or get_env("PROCESSED_LOG")
 
+    local_dir = args.local_dir or get_env("LOCAL_PHOTO_DIR")
+    if local_dir and exif_method == "exiftool":
+        url = user = password = photo_dir = None
+    else:
+        url, user, password, photo_dir = validate_env()
 
     try:
-        photos = list_photos(
-            url,
-            user,
-            password,
-            photo_dir,
-            exif_method=exif_method,
-            measure_speed=measure_speed,
-            processed_log=processed_log,
+        if local_dir and exif_method == "exiftool":
+            photos = list_local_photos(
+                local_dir,
+                exif_method=exif_method,
+                measure_speed=measure_speed,
+                processed_log=processed_log,
+            )
+        else:
+            photos = list_photos(
+                url,
+                user,
+                password,
+                photo_dir,
+                exif_method=exif_method,
+                measure_speed=measure_speed,
+                processed_log=processed_log,
+            )
 
-        )
         result = json.dumps(photos, indent=2, ensure_ascii=False)
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:
@@ -321,6 +426,7 @@ def main():
             print(result)
     except Exception:
         traceback.print_exc()
+
 
 if __name__ == '__main__':
     main()

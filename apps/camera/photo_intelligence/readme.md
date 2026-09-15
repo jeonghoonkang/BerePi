@@ -18,6 +18,9 @@ options can override the EXIF parser and enable speed measurement:
 - `COMPARE_SPEED` (optional) - set to `1` to measure both methods
 - `PROCESSED_LOG` (optional) - path to a file that tracks processed JPEGs when
   using exiftool
+- `LOCAL_PHOTO_DIR` (optional) - when using exiftool you may provide a local
+  directory instead of connecting to Nextcloud. In this mode, Nextcloud
+  credentials are not required.
 
 
 Install the [Pillow](https://python-pillow.org/) package to enable EXIF processing or
@@ -47,12 +50,18 @@ python3 nc_photo_list.py -o result.json
 
 # record processed files so reruns skip them
 python3 nc_photo_list.py --use-exiftool --processed-log processed.txt
+
+# use exiftool on a local directory
+python3 nc_photo_list.py --use-exiftool --local-dir ./my_photos
+
 ```
 
 For an interactive interface using [Streamlit](https://streamlit.io/) install the
 extra dependency and run the Streamlit app. The UI lets you choose the EXIF
-parsing method and optionally measure both to compare speeds. The current
-directory being scanned is displayed as the script runs:
+parsing method and optionally measure both to compare speeds. You can also
+specify a local directory when using exiftool so Nextcloud credentials are not
+needed. The current directory being scanned is displayed as the script runs:
+
 
 ```bash
 pip install streamlit pillow
