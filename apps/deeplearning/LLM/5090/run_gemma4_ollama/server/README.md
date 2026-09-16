@@ -143,6 +143,12 @@ POST /api/cancel-pending-prompts
 
 체크박스 주변에는 두 파일의 실제 절대 경로와 저장 개수가 표시됩니다. `History` 탭에서는 현재·백업 메시지를 합쳐 최신순으로 한 페이지에 25개씩 조회할 수 있습니다. `Clear History + Backup`은 인증 정보 확인 후 두 파일을 모두 초기화합니다.
 
+각 대화 메시지(질문·답변), 백업, `history_user_prompt.txt`의 요청 기록에는 `room_id`(방), `user_id`(인증 계정), `client_ip`(서버에서 관측한 접속 IP), `source`(출처), `sender_id`(발신자)를 함께 저장합니다. 응답 생성에는 이 다섯 값이 모두 같은 최신 대화만 포함합니다. IP가 바뀌면 별도 문맥이 됩니다. 기존 기록은 그대로 조회할 수 있지만 누락된 구분자를 추정하지 않으며 새 요청의 문맥에는 포함하지 않습니다. 저장 개수 제한은 전체 기록에 적용됩니다.
+
+웹 UI의 `Room ID` 입력으로 방을 지정하며, 생략한 API 요청은 `default` 방을 사용합니다. API 요청에 `room_id`, `source`, `sender_id`를 보낼 수 있으며, 출처 기본값은 `api`, 발신자 기본값은 인증 계정입니다. 웹은 `web`, 텔레그램은 `telegram` 출처를 사용합니다. 텔레그램 봇은 방 ID에 `채팅 ID:토픽 ID`(일반 대화의 토픽은 0), 발신자에 Telegram 사용자 ID를 전달합니다. 텔레그램 접속 IP는 봇 서버의 IP이며 사용자 단말의 IP가 아닙니다.
+
+`History` 탭에서는 대표 구분자를 최대 두 개 선택하여 각 메시지에 표시하고 값으로 필터링할 수 있습니다. 기본 표시는 방·사용자이며 텔레그램 개인별 구분에는 발신자를 선택합니다. 필터는 현재·백업 전체에 적용한 뒤 25개씩 페이지를 나눕니다. `전체`는 필터를 해제하고, `미지정 (기존 기록)`은 해당 정보가 없는 기록만 표시합니다. 방 입력과 필터 선택은 브라우저의 localStorage에 저장되어 새로고침 후 유지됩니다. 조회 API도 `/api/conversation-history/items?page=1&room_id=default&user_id=admin`처럼 같은 구분자를 지원합니다. 빈 값(`room_id=`)은 미지정 기록을 조회합니다. 필터는 조회 범위만 변경하며 `Clear History + Backup`은 여전히 전체 기록을 초기화합니다.
+
 저장 경로는 `GEMMA4_CONVERSATION_HISTORY_FILE`, `GEMMA4_CONVERSATION_HISTORY_BACKUP_FILE` 환경 변수로 변경할 수 있습니다. `/api/generate`와 `/api/enqueue-generate` API 요청은 `remember_history` 필드가 없어도 기본적으로 히스토리를 사용하고 저장합니다. 명시적으로 `"remember_history": false`를 보낸 요청만 히스토리 사용과 저장에서 제외됩니다.
 
 ## 이미지·OCR 요청

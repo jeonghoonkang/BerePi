@@ -74,7 +74,7 @@ def encode_image_base64(image_path: Path) -> str:
     return base64.b64encode(image_path.read_bytes()).decode("ascii")
 
 
-def prompt_payload(prompt: str, images: Optional[list[str]] = None) -> dict:
+def prompt_payload(prompt: str, images: Optional[list[str]] = None, identity: Optional[dict] = None) -> dict:
     payload = {"prompt": prompt, "prompts": [prompt], "stream": False}
     if LLM_MODEL:
         payload["model"] = LLM_MODEL
@@ -83,6 +83,7 @@ def prompt_payload(prompt: str, images: Optional[list[str]] = None) -> dict:
     if GEMMA4_USER_ID or GEMMA4_PASSWORD:
         payload["user_id"] = GEMMA4_USER_ID
         payload["password"] = GEMMA4_PASSWORD
+    payload.update(identity or {})
     return payload
 
 
@@ -114,8 +115,8 @@ def get_json(url: str, timeout: int = 30) -> dict:
         raise RuntimeError(f"API 서버에 연결할 수 없습니다: {exc.reason}") from exc
 
 
-def enqueue_llm_prompt(prompt: str, images: Optional[list[str]] = None) -> dict:
-    return post_json(LLM_ENQUEUE_URL, prompt_payload(prompt, images))
+def enqueue_llm_prompt(prompt: str, images: Optional[list[str]] = None, identity: Optional[dict] = None) -> dict:
+    return post_json(LLM_ENQUEUE_URL, prompt_payload(prompt, images, identity))
 
 
 def prompt_result_url(job_id: int) -> str:
@@ -904,7 +905,11 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         images, temp_image_paths = await image_payloads_from_update(update, context) if has_photo else ([], [])
         if has_photo:
             logger.info("Sending prompt to LLM with image_count=%s", len(images))
-        enqueue_response = enqueue_llm_prompt(prompt, images)
+        enqueue_response = enqueue_llm_prompt(prompt, images, {
+            "source": "telegram",
+            "room_id": f"{update.effective_chat.id}:{update.message.message_thread_id or 0}",
+            "sender_id": str(update.effective_user.id) if update.effective_user else "unknown",
+        })
         thinking_message = await update.message.reply_text(f"thinking...\n{queue_line_from_response(enqueue_response)}")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         job_id = int(enqueue_response.get("prompt_queue_id"))

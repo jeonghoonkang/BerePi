@@ -730,6 +730,8 @@ INDEX_HTML = """<!doctype html>
           <input id="password" type="password" autocomplete="current-password">
         </div>
       </div>
+      <label for="conversationRoom">Room ID</label>
+      <input id="conversationRoom" type="text" value="default" placeholder="Room ID">
       <div class="prompt-grid">
         <div class="prompt-box">
           <label for="prompt1">Prompt 1</label>
@@ -856,6 +858,12 @@ if __name__ == "__main__":
         <button id="conversationHistoryNext" type="button" disabled>Next</button>
         <button class="primary" id="refreshConversationHistory" type="button">Refresh</button>
         <span id="conversationHistoryPageStatus">Loading history...</span>
+      </div>
+      <div class="access-toolbar" id="historyFilters">
+        <label>구분자 1 <select id="historyField1" aria-label="구분자 1"></select></label>
+        <select id="historyValue1" aria-label="구분자 1 값"></select>
+        <label>구분자 2 <select id="historyField2" aria-label="구분자 2"></select></label>
+        <select id="historyValue2" aria-label="구분자 2 값"></select>
       </div>
       <div id="conversationHistoryTabPaths" class="conversation-history-paths">Checking history file paths...</div>
       <div id="conversationHistoryItems" class="conversation-history-list"></div>
@@ -1589,14 +1597,65 @@ if __name__ == "__main__":
       return role === "assistant" ? "Assistant" : (role === "user" ? "User" : "System");
     }
 
+    const historyLabels = {room_id: "방", user_id: "사용자", client_ip: "IP", source: "출처", sender_id: "발신자"};
+    let historyFilterOptions = {};
+    let historyRequestVersion = 0;
+    let savedHistoryFilters = [];
+    try { savedHistoryFilters = JSON.parse(localStorage.getItem("gemma4HistoryFilters") || "[]"); } catch (_) {}
+    if (!Array.isArray(savedHistoryFilters)) savedHistoryFilters = [];
+    const historyFilters = [1, 2].map((index) => {
+      const field = document.getElementById(`historyField${index}`);
+      const value = document.getElementById(`historyValue${index}`);
+      field.innerHTML = '<option value="">선택 안 함</option>' + Object.entries(historyLabels).map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
+      field.value = savedHistoryFilters[index - 1]?.field ?? (index === 1 ? "room_id" : "user_id");
+      const storedValue = savedHistoryFilters[index - 1]?.value;
+      const filter = {field, value, selected: typeof storedValue === "string" ? storedValue : "all"};
+      field.addEventListener("change", () => {
+        filter.selected = "all";
+        historyFilters.forEach((other) => {
+          if (other !== filter && field.value && other.field.value === field.value) {
+            other.field.value = "";
+            other.selected = "all";
+          }
+        });
+        updateHistoryFilterOptions();
+        saveHistoryFilters();
+        refreshConversationHistoryPage(1);
+      });
+      value.addEventListener("change", () => { filter.selected = value.value; saveHistoryFilters(); refreshConversationHistoryPage(1); });
+      return filter;
+    });
+    function saveHistoryFilters() {
+      try { localStorage.setItem("gemma4HistoryFilters", JSON.stringify(historyFilters.map(({field, selected}) => ({field: field.value, value: selected})))); } catch (_) {}
+    }
+    function updateHistoryFilterOptions() {
+      historyFilters.forEach((filter) => {
+        const values = [...(historyFilterOptions[filter.field.value] || [])];
+        if (filter.selected.startsWith("value:")) {
+          const selected = filter.selected.slice(6);
+          if (!values.includes(selected)) values.push(selected);
+        }
+        filter.value.innerHTML = '<option value="all">전체</option>' + values.map((value) => `<option value="${escapeHtml("value:" + value)}">${escapeHtml(value || "미지정 (기존 기록)")}</option>`).join("");
+        filter.value.value = filter.selected;
+        filter.value.disabled = !filter.field.value;
+      });
+    }
+    updateHistoryFilterOptions();
+    const conversationRoom = document.getElementById("conversationRoom");
+    try { conversationRoom.value = localStorage.getItem("gemma4ConversationRoom") || "default"; } catch (_) {}
+    conversationRoom.addEventListener("change", () => {
+      try { localStorage.setItem("gemma4ConversationRoom", conversationRoom.value.trim() || "default"); } catch (_) {}
+    });
+
     function renderConversationHistoryPage(data) {
+      historyFilterOptions = data.filter_options || {};
+      updateHistoryFilterOptions();
       conversationHistoryPage = Number(data.page || 1);
       conversationHistoryTotalPages = Number(data.total_pages || 1);
       conversationHistoryPageLabel.textContent = `${conversationHistoryPage} / ${conversationHistoryTotalPages} Page`;
       conversationHistoryPrev.disabled = conversationHistoryPage <= 1;
       conversationHistoryNext.disabled = conversationHistoryPage >= conversationHistoryTotalPages;
       conversationHistoryPageStatus.textContent = `Total ${data.total_count || 0} | Current ${data.current_count || 0} | Backup ${data.backup_count || 0} | 25 per page`;
-      updateConversationHistorySummary(data);
       const items = Array.isArray(data.items) ? data.items : [];
       conversationHistoryItems.innerHTML = items.length
         ? items.map((item) => `<article class="conversation-history-item">
@@ -1604,7 +1663,7 @@ if __name__ == "__main__":
               <strong>#${escapeHtml(item.number || "")}</strong>
               <span class="conversation-history-role ${escapeHtml(item.role || "")}">${escapeHtml(conversationRoleLabel(item.role))}</span>
               <span>${escapeHtml(item.saved_at || "-")}</span>
-              <span>User: ${escapeHtml(item.user_id || "-")}</span>
+              ${[...new Set(historyFilters.map(({field}) => field.value).filter(Boolean))].map((key) => `<span>${historyLabels[key]}: ${escapeHtml(item[key] || "미지정")}</span>`).join("")}
               <span>Model: ${escapeHtml(item.model || "-")}</span>
             </div>
             <div class="conversation-history-content">${escapeHtml(item.content || "")}</div>
@@ -1614,14 +1673,19 @@ if __name__ == "__main__":
 
     async function refreshConversationHistoryPage(page = 1) {
       conversationHistoryPageStatus.textContent = "Loading history...";
+      const version = ++historyRequestVersion;
       try {
         const nextPage = Math.max(1, Number(page || 1));
-        const res = await fetch(`/api/conversation-history/items?page=${nextPage}`);
+        const params = new URLSearchParams();
+        historyFilters.forEach(({field, selected}) => {
+          if (field.value && selected.startsWith("value:")) params.set(field.value, selected.slice(6));
+        });
+        const res = await fetch(`/api/conversation-history/items?page=${nextPage}&${params}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Conversation history unavailable");
-        renderConversationHistoryPage(data);
+        if (version === historyRequestVersion) renderConversationHistoryPage(data);
       } catch (err) {
-        conversationHistoryPageStatus.textContent = String(err);
+        if (version === historyRequestVersion) conversationHistoryPageStatus.textContent = String(err);
       }
     }
 
@@ -2097,6 +2161,8 @@ if __name__ == "__main__":
           prompt: prompts.join("\\n\\n"),
           prompts,
           remember_history: Boolean(rememberHistory.checked),
+          room_id: document.getElementById("conversationRoom").value.trim() || "default",
+          source: "web",
           ...auth,
         };
         const generatePromise = fetch("/api/generate", {
@@ -2629,6 +2695,19 @@ def remember_prompts(prompts: list[str]) -> None:
         save_prompt_history(cleaned + existing)
 
 
+HISTORY_IDENTITY_FIELDS = ("room_id", "user_id", "client_ip", "source", "sender_id")
+
+
+def request_history_identity(incoming: dict[str, Any], user_id: str, client_ip: str) -> dict[str, str]:
+    return {
+        "room_id": str(incoming.get("room_id") or "default").strip() or "default",
+        "user_id": user_id,
+        "client_ip": client_ip,
+        "source": str(incoming.get("source") or "api").strip() or "api",
+        "sender_id": str(incoming.get("sender_id") or user_id).strip() or user_id,
+    }
+
+
 def normalize_conversation_message(value: Any) -> dict[str, str] | None:
     if not isinstance(value, dict):
         return None
@@ -2643,7 +2722,7 @@ def normalize_conversation_message(value: Any) -> dict[str, str] | None:
             or time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         ),
     }
-    for key in ("user_id", "model"):
+    for key in (*HISTORY_IDENTITY_FIELDS, "model"):
         item = str(value.get(key) or "").strip()
         if item:
             message[key] = item
@@ -2749,10 +2828,19 @@ def clear_conversation_history() -> dict[str, Any]:
     return conversation_history_payload()
 
 
-def conversation_history_page_payload(page: int) -> dict[str, Any]:
+def conversation_history_page_payload(page: int, filters: dict[str, str] | None = None) -> dict[str, Any]:
     with CONVERSATION_HISTORY_LOCK:
         backup = read_conversation_history_backup()
         current = read_conversation_history()
+    filters = {key: value for key, value in (filters or {}).items() if key in HISTORY_IDENTITY_FIELDS}
+    filter_options = {
+        key: sorted({message.get(key, "") for message in backup + current})
+        for key in HISTORY_IDENTITY_FIELDS
+    }
+    def matches(message: dict[str, str]) -> bool:
+        return all(message.get(key, "") == value for key, value in filters.items())
+    current = [message for message in current if matches(message)]
+    backup = [message for message in backup if matches(message)]
     messages = list(reversed(backup + current))
     total_count = len(messages)
     total_pages = max(
@@ -2780,6 +2868,7 @@ def conversation_history_page_payload(page: int) -> dict[str, Any]:
         "current_path": str(CONVERSATION_HISTORY_FILE),
         "backup_path": str(CONVERSATION_HISTORY_BACKUP_FILE),
         "items": items,
+        "filter_options": filter_options,
         "page": normalized_page,
         "page_size": CONVERSATION_HISTORY_PAGE_SIZE,
         "total_pages": total_pages,
@@ -2835,6 +2924,7 @@ def read_user_prompt_history() -> list[dict[str, str]]:
         "requested_at": requested_at,
         "user_id": user_id,
         "prompt": prompt,
+        **{key: str(value[key]) for key in HISTORY_IDENTITY_FIELDS if key in value},
       }
     )
   return entries[-USER_PROMPT_HISTORY_LIMIT:]
@@ -2847,7 +2937,7 @@ def save_user_prompt_history(entries: list[dict[str, str]]) -> None:
     USER_PROMPT_HISTORY_FILE.write_text(body, encoding="utf-8")
 
 
-def remember_user_prompt(user_id: str, prompt: str, requested_at: float | None = None) -> None:
+def remember_user_prompt(user_id: str, prompt: str, requested_at: float | None = None, *, identity: dict[str, str] | None = None) -> None:
   cleaned_user_id = str(user_id or "").strip()
   cleaned_prompt = str(prompt or "").strip()
   if not cleaned_user_id or not cleaned_prompt:
@@ -2858,6 +2948,7 @@ def remember_user_prompt(user_id: str, prompt: str, requested_at: float | None =
     "requested_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp)),
     "user_id": cleaned_user_id,
     "prompt": cleaned_prompt,
+    **(identity or {}),
   }
   with USER_PROMPT_HISTORY_LOCK:
     existing = read_user_prompt_history()
@@ -3495,9 +3586,13 @@ def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
         user_prompt = str(
             payload.get("_history_user_prompt") or payload.get("prompt") or ""
         )
-        execution_payload["prompt"] = conversation_prompt(
-            read_conversation_history(), user_prompt
-        )
+        identity = payload.get("_history_identity")
+        messages = read_conversation_history()
+        if identity is not None:
+            messages = [message for message in messages if all(
+                message.get(key, "") == identity.get(key, "") for key in HISTORY_IDENTITY_FIELDS
+            )]
+        execution_payload["prompt"] = conversation_prompt(messages, user_prompt)
     return execution_payload
 
 
@@ -3515,6 +3610,7 @@ def remember_conversation_result(
                     "role": "user",
                     "content": payload.get("_history_user_prompt", ""),
                     "user_id": payload.get("_history_user_id", ""),
+                    **payload.get("_history_identity", {}),
                     "model": result.get("model", ""),
                 },
                 {
@@ -3522,6 +3618,7 @@ def remember_conversation_result(
                     "content": result.get("visible_response")
                     or result.get("response", ""),
                     "user_id": payload.get("_history_user_id", ""),
+                    **payload.get("_history_identity", {}),
                     "model": result.get("model", ""),
                 },
             ]
@@ -4460,12 +4557,14 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             self.send_json(conversation_history_payload())
             return
         if parsed_path.path == "/api/conversation-history/items":
-            params = urllib.parse.parse_qs(parsed_path.query)
+            params = urllib.parse.parse_qs(parsed_path.query, keep_blank_values=True)
             try:
                 page = int((params.get("page") or ["1"])[0])
             except (TypeError, ValueError):
                 page = 1
-            self.send_json(conversation_history_page_payload(page))
+            self.send_json(conversation_history_page_payload(page, {
+                key: params[key][0] for key in HISTORY_IDENTITY_FIELDS if key in params
+            }))
             return
         if self.path == "/api/access-log":
             self.send_json({"limit": ACCESS_LOG_LIMIT, "entries": list(reversed(read_access_log(ACCESS_LOG_LIMIT)))})
@@ -4740,7 +4839,10 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "prompt is required"}, HTTPStatus.BAD_REQUEST)
                 return
             remember_prompts(prompts)
-            remember_user_prompt(user_id, prompt)
+            identity = request_history_identity(
+                incoming, user_id, self.client_address[0] if self.client_address else ""
+            )
+            remember_user_prompt(user_id, prompt, identity=identity)
             selected_model = str(incoming.get("model") or read_selected_model())
             images = images_from_request(incoming)
             remember_history = remember_history_requested(
@@ -4763,6 +4865,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 "_remember_history": remember_history,
                 "_history_user_prompt": prompt,
                 "_history_user_id": user_id,
+                "_history_identity": identity,
             }
             if images:
                 payload["images"] = images
