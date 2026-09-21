@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import ast
 import base64
@@ -5,6 +7,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -42,6 +45,11 @@ LLM_STATUS_URL = os.environ.get(
     "LLM_STATUS_URL",
     urllib.parse.urljoin(LLM_API_URL, "/api/status"),
 )
+WRITING_TECH_DOC_TOOL_URL = os.environ.get(
+    "WRITING_TECH_DOC_TOOL_URL",
+    urllib.parse.urljoin(LLM_API_URL, "/api/tools/writing-tech-doc"),
+)
+WRITING_TECH_DOC_TOOL_TIMEOUT = int(os.environ.get("WRITING_TECH_DOC_TOOL_TIMEOUT", "960"))
 PROMPT_RESULT_POLL_INTERVAL_SECONDS = float(os.environ.get("PROMPT_RESULT_POLL_INTERVAL_SECONDS", "1"))
 GEMMA4_USER_ID = os.environ.get("GEMMA4_USER_ID", "").strip()
 GEMMA4_PASSWORD = os.environ.get("GEMMA4_PASSWORD", "")
@@ -113,6 +121,40 @@ def get_json(url: str, timeout: int = 30) -> dict:
         raise RuntimeError(f"API 오류({exc.code}): {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"API 서버에 연결할 수 없습니다: {exc.reason}") from exc
+
+
+def writing_tool_payload(tool: str, **arguments: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {"tool": tool, "arguments": arguments}
+    if GEMMA4_USER_ID or GEMMA4_PASSWORD:
+        payload["user_id"] = GEMMA4_USER_ID
+        payload["password"] = GEMMA4_PASSWORD
+    return payload
+
+
+def call_writing_tool(tool: str, **arguments: Any) -> dict:
+    return post_json(
+        WRITING_TECH_DOC_TOOL_URL,
+        writing_tool_payload(tool, **arguments),
+        timeout=WRITING_TECH_DOC_TOOL_TIMEOUT,
+    )
+
+
+def writing_tool_result_text(result: dict) -> str:
+    tool = str(result.get("tool") or "tool")
+    elapsed = result.get("elapsed_seconds")
+    heading = f"[{tool} 완료]"
+    if elapsed is not None:
+        heading += f" {elapsed}초"
+    sections = [heading]
+    stdout = str(result.get("stdout") or "").strip()
+    stderr = str(result.get("stderr") or "").strip()
+    if stdout:
+        sections.append(stdout)
+    if stderr:
+        sections.append("[stderr]\n" + stderr)
+    if result.get("output_truncated"):
+        sections.append("[안내] 서버 출력 길이 제한으로 일부 결과가 생략되었습니다.")
+    return "\n\n".join(sections)
 
 
 def enqueue_llm_prompt(prompt: str, images: Optional[list[str]] = None, identity: Optional[dict] = None) -> dict:
@@ -864,9 +906,132 @@ def allowed_telegram_user_ids() -> set[str]:
     return allowed_user_ids
 
 
+def command_argument_text(update: Update) -> str:
+    text = message_text(update)
+    parts = text.split(maxsplit=1)
+    return parts[1].strip() if len(parts) == 2 else ""
+
+
+def parse_boost_command(arguments: str) -> dict[str, Any]:
+    try:
+        tokens = shlex.split(arguments)
+    except ValueError as exc:
+        raise ValueError(f"boost 인자를 해석할 수 없습니다: {exc}") from exc
+    dry_run = False
+    filename_parts: list[str] = []
+    for token in tokens:
+        if token == "--dry-run":
+            dry_run = True
+        elif token.startswith("--"):
+            raise ValueError(f"지원하지 않는 boost 옵션입니다: {token}")
+        else:
+            filename_parts.append(token)
+    payload: dict[str, Any] = {"dry_run": dry_run}
+    if filename_parts:
+        payload["file"] = " ".join(filename_parts)
+    return payload
+
+
+def parse_findm_command(arguments: str) -> dict[str, Any]:
+    try:
+        tokens = shlex.split(arguments)
+    except ValueError as exc:
+        raise ValueError(f"findm 인자를 해석할 수 없습니다: {exc}") from exc
+    query_parts: list[str] = []
+    page_size: int | None = None
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--page-size":
+            index += 1
+            if index >= len(tokens):
+                raise ValueError("--page-size 뒤에 숫자를 입력해 주세요.")
+            try:
+                page_size = int(tokens[index])
+            except ValueError as exc:
+                raise ValueError("--page-size는 숫자여야 합니다.") from exc
+        elif token.startswith("--page-size="):
+            try:
+                page_size = int(token.split("=", 1)[1])
+            except ValueError as exc:
+                raise ValueError("--page-size는 숫자여야 합니다.") from exc
+        elif token.startswith("--"):
+            raise ValueError(f"지원하지 않는 findm 옵션입니다: {token}")
+        else:
+            query_parts.append(token)
+        index += 1
+    if not query_parts:
+        raise ValueError("검색어를 입력해 주세요. 예: /findm 서버 연동")
+    payload = {"query": " ".join(query_parts)}
+    if page_size is not None:
+        payload["page_size"] = page_size
+    return payload
+
+
+async def execute_writing_tool(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    tool: str,
+    arguments: dict[str, Any],
+) -> None:
+    if not is_allowed_user(update):
+        user = update.effective_user
+        logger.info(
+            "Ignored tool command from unauthorized user: tool=%s user_id=%s username=%s",
+            tool,
+            getattr(user, "id", None),
+            getattr(user, "username", None),
+        )
+        return
+    progress = await update.message.reply_text(f"{tool} 실행 중...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    try:
+        result = await asyncio.to_thread(call_writing_tool, tool, **arguments)
+        chunks = split_message(writing_tool_result_text(result))
+        await progress.edit_text(chunks[0])
+        for chunk in chunks[1:]:
+            await update.message.reply_text(chunk)
+    except Exception as exc:
+        logger.exception("Failed to execute writing-tech-doc tool: %s", tool)
+        await progress.edit_text(f"{tool} 실행 중 오류가 발생했습니다.\n{exc}")
+
+
+async def boost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        arguments = parse_boost_command(command_argument_text(update))
+    except ValueError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    await execute_writing_tool(update, context, "boost", arguments)
+
+
+async def list_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await execute_writing_tool(update, context, "list", {})
+
+
+async def allom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    content = command_argument_text(update)
+    if not content:
+        await update.message.reply_text("저장할 메모를 입력해 주세요. 예: /allom 서버 연동 상태 확인")
+        return
+    await execute_writing_tool(update, context, "allom", {"content": content})
+
+
+async def findm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        arguments = parse_findm_command(command_argument_text(update))
+    except ValueError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    await execute_writing_tool(update, context, "findm", arguments)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
-    await update.message.reply_text("프롬프트를 보내면 Gemma4 Ollama 서버에 전달하고 답변을 회신합니다.")
+    await update.message.reply_text(
+        "프롬프트를 보내면 Gemma4 Ollama 서버에 전달합니다. "
+        "문서 도구는 /boost, /list, /ls, /allom, /findm 명령으로 사용할 수 있습니다."
+    )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -875,7 +1040,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "사용법:\n"
         "1. 이 채팅창에 질문이나 프롬프트를 입력합니다.\n"
         "2. 봇이 Gemma4 서버의 /api/enqueue-generate로 전송합니다.\n"
-        "3. 생성된 답변을 다시 전달합니다."
+        "3. 생성된 답변을 다시 전달합니다.\n\n"
+        "문서 도구:\n"
+        "/boost [--dry-run] [파일명] - Markdown 기술 문서 보강\n"
+        "/list 또는 /ls - allom/boost 파일과 WebDAV 경로 확인\n"
+        "/allom 메모 내용 - WebDAV 메모 저장\n"
+        "/findm [--page-size N] 검색어 - 메모와 원본 문서 검색"
     )
 
 
@@ -952,12 +1122,18 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("boost", boost_command))
+    application.add_handler(CommandHandler("list", list_command))
+    application.add_handler(CommandHandler("ls", list_command))
+    application.add_handler(CommandHandler("allom", allom_command))
+    application.add_handler(CommandHandler("findm", findm_command))
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
     logger.info(
-        "Telegram bot started. LLM_API_URL=%s prefixes=%s allowed_user_ids_file=%s allowed_user_count=%s",
+        "Telegram bot started. LLM_API_URL=%s writing_tool_url=%s prefixes=%s allowed_user_ids_file=%s allowed_user_count=%s",
         LLM_API_URL,
+        WRITING_TECH_DOC_TOOL_URL,
         mention_prefixes(TELEGRAM_BOT_USERNAMES),
         ALLOWED_TELEGRAM_USER_IDS_FILE,
         len(allowed_telegram_user_ids()),

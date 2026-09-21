@@ -28,6 +28,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from writing_tech_doc_tools import (
+    ToolUnavailableError,
+    ToolValidationError,
+    WritingTechDocToolRunner,
+)
+
 
 HOST = os.getenv("GEMMA4_SERVER_HOST", "0.0.0.0")
 PORT = int(os.getenv("GEMMA4_SERVER_PORT", "8082"))
@@ -104,6 +110,7 @@ SESSION_COOKIE_NAME = "gemma4_session"
 SESSION_TTL_SECONDS = int(os.getenv("GEMMA4_SESSION_TTL_SECONDS", "28800"))
 SESSION_LOCK = threading.RLock()
 AUTH_SESSIONS: dict[str, dict[str, Any]] = {}
+WRITING_TECH_DOC_TOOL_RUNNER = WritingTechDocToolRunner.from_environment(Path(__file__).resolve().parent)
 
 
 def format_uptime_dhm(total_seconds: int | float) -> str:
@@ -4196,6 +4203,7 @@ def status_payload() -> dict[str, Any]:
     selected_gpu = read_selected_gpu()
     selected_model = read_selected_model()
     model_load = read_model_load_summary()
+    writing_tool_status = WRITING_TECH_DOC_TOOL_RUNNER.status()
     ifconfig_addresses = ifconfig_ipv4_addresses()
     try:
         models = list_ollama_models()
@@ -4224,6 +4232,12 @@ def status_payload() -> dict[str, Any]:
         "model_available": any(model_matches(name, selected_model) for name in models),
         "models": models,
         "model_load": model_load,
+        "writing_tech_doc_tools": {
+            "enabled": writing_tool_status["enabled"],
+            "available": writing_tool_status["available"],
+            "names": [item["function"]["name"] for item in WRITING_TECH_DOC_TOOL_RUNNER.catalog()],
+            "endpoint": "/api/tools/writing-tech-doc",
+        },
         "prompt_queue": prompt_queue_status(),
         "lifetime_process_count": read_latest_prompt_process_count(),
         "prompt_process_count_file": str(PROMPT_PROCESS_COUNT_FILE),
@@ -4540,6 +4554,22 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self.send_json({"ok": True, **status_payload()})
             return
+        if self.path == "/api/tools/writing-tech-doc":
+            session_user = authenticated_session_user(self.headers)
+            user_id, password = self.request_credentials({})
+            if not session_user and not is_authorized_user(user_id, password):
+                self.send_auth_error("invalid user id or password")
+                return
+            self.access_user_id = session_user or user_id or "tool-client"
+            self.send_json(
+                {
+                    "name": "writing-tech-doc",
+                    "status": WRITING_TECH_DOC_TOOL_RUNNER.status(),
+                    "tools": WRITING_TECH_DOC_TOOL_RUNNER.catalog(),
+                    "execute_endpoint": "/api/tools/writing-tech-doc",
+                }
+            )
+            return
         if self.path == "/api/tags":
             try:
                 self.send_json(ollama_tags_payload())
@@ -4598,6 +4628,37 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if self.path == "/api/tools/writing-tech-doc":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                incoming = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                if not isinstance(incoming, dict):
+                    raise ToolValidationError("request body must be a JSON object")
+                session_user = authenticated_session_user(self.headers)
+                user_id, password = self.request_credentials(incoming)
+                if not session_user and not is_authorized_user(user_id, password):
+                    self.send_auth_error("invalid user id or password")
+                    return
+                self.access_user_id = session_user or user_id or "tool-client"
+                arguments = incoming.get("arguments")
+                if arguments is not None:
+                    if not isinstance(arguments, dict):
+                        raise ToolValidationError("arguments must be a JSON object")
+                    tool_payload = dict(arguments)
+                    tool_payload["tool"] = incoming.get("tool") or incoming.get("name")
+                else:
+                    tool_payload = incoming
+                result = WRITING_TECH_DOC_TOOL_RUNNER.run(tool_payload)
+                status = HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_GATEWAY
+                self.send_json(result, status)
+            except (json.JSONDecodeError, ToolValidationError) as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except ToolUnavailableError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            except OSError as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+            return
+
         if self.path == "/api/start-ollama":
             try:
                 result = start_ollama_server()

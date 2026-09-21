@@ -19,6 +19,8 @@ export BEREPI_DIR="/absolute/path/to/BerePi"
 - `ALLOWED_TELEGRAM_USER_IDS_FILE`
 - `REQUEST_TIMEOUT`
 - `LOG_LEVEL`
+- `WRITING_TECH_DOC_TOOL_URL`
+- `WRITING_TECH_DOC_TOOL_TIMEOUT`
 
 즉, **토큰과 계정 정보는 소스 코드에 직접 하드코딩하지 않고 환경 변수로 주입하는 방식**이 현재 코드 기준의 권장 방법입니다.
 
@@ -68,6 +70,11 @@ BotFather에서 아래 명령도 함께 설정하면 사용이 편합니다.
 ```text
 start - 봇 사용 시작
 help - 사용 방법 보기
+boost - Markdown 기술 문서 보강
+list - allom/boost 대상 파일 및 경로
+ls - list 별칭
+allom - WebDAV 메모 저장
+findm - 메모와 원본 문서 검색
 ```
 
 그룹 채팅에서 `@봇username 질문` 형태의 메시지를 받으려면 BotFather에서
@@ -254,7 +261,18 @@ python3 bot.py
 
 - `/start` : 봇 소개 메시지 표시
 - `/help` : 사용 방법 표시
+- `/boost [--dry-run] [파일명]` : 전체 또는 특정 Markdown 문서를 보강. 먼저 `--dry-run` 사용 권장
+- `/list`, `/ls` : `allom` 메모와 `boost` 원본·결과 파일 경로 표시
+- `/allom 메모 내용` : 메모를 `memo_alloc_YYYYMMDD_HHMMSS.md`로 WebDAV에 저장
+- `/findm [--page-size N] 검색어` : 메모와 `boost` 원본에서 관련 문장 검색
 - 일반 텍스트 메시지 : Gemma4 프롬프트로 처리
+
+문서 명령은 Telegram 봇이 직접 WebDAV 비밀번호를 갖는 대신 Gemma4 서버의 인증된 `/api/tools/writing-tech-doc`을 호출합니다. Gemma4 서버 프로세스에는 `WRITING_TECH_DOC_CLI`와 `WRITING_TECH_DOC_CONFIG`가 설정되어 있어야 합니다. 봇과 API 서버가 다른 주소라면 봇에 다음 값을 지정합니다.
+
+```bash
+export WRITING_TECH_DOC_TOOL_URL="http://SERVER_IP:8082/api/tools/writing-tech-doc"
+export WRITING_TECH_DOC_TOOL_TIMEOUT="960"
+```
 
 ## 9. 허용 사용자 ID 관리
 
@@ -326,6 +344,8 @@ export REQUEST_TIMEOUT="300"
 - `ALLOWED_TELEGRAM_USER_IDS_FILE`: 허용할 Telegram 사용자 숫자 ID를 한 줄에 하나씩 저장한 파일. 기본값은 `allowed_telegram_user_ids.txt`
 - `REQUEST_TIMEOUT`: API 응답 대기 시간, 기본값 `180`
 - `LOG_LEVEL`: 로그 레벨, 기본값 `INFO`
+- `WRITING_TECH_DOC_TOOL_URL`: 문서 도구 API 주소. 기본값은 `LLM_API_URL`과 같은 서버의 `/api/tools/writing-tech-doc`
+- `WRITING_TECH_DOC_TOOL_TIMEOUT`: 문서 도구 API 대기 시간, 기본값 `960`초
 
 ## 12. 보안 주의 사항
 

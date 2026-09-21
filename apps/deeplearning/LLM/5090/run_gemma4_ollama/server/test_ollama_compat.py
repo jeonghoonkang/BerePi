@@ -221,6 +221,10 @@ class OllamaCompatibilityTests(unittest.TestCase):
         self.assertFalse(status["model_available"])
         self.assertEqual(status["models"], [])
         self.assertIn("Connection refused", status["ollama_error"])
+        self.assertEqual(
+            status["writing_tech_doc_tools"]["names"],
+            ["boost", "list", "allom", "findm"],
+        )
 
 
 if __name__ == "__main__":

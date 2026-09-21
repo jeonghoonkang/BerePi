@@ -3,11 +3,12 @@
 ENV_VARS=(
 "TELEGRAM_BOT_TOKEN=***" \
 "LLM_API_URL=http://127.0.0.1:8082/api/generate" \
+"WRITING_TECH_DOC_TOOL_URL=http://127.0.0.1:8082/api/tools/writing-tech-doc" \
 "GEMMA4_USER_ID=***" \
 "GEMMA4_PASSWORD=***" 
 )
 
-VAR_NAMES=("TELEGRAM_BOT_TOKEN" "GEMMA4_USER_ID" "GEMMA4_PASSWORD" "LLM_API_URL")
+VAR_NAMES=("TELEGRAM_BOT_TOKEN" "GEMMA4_USER_ID" "GEMMA4_PASSWORD" "LLM_API_URL" "WRITING_TECH_DOC_TOOL_URL")
 echo "$VAR_NAMES[@]"
 
 if [ "$1" == "unset" ]; then
@@ -19,9 +20,7 @@ if [ "$1" == "unset" ]; then
 else 
 	for item in "${ENV_VARS[@]}"; do
 		export "$item"
-		echo $itme
+		echo "${item%%=*}"
 	done
 	echo " ... has been export, set"
 fi
-
-

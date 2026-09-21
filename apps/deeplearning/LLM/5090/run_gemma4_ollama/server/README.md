@@ -139,6 +139,54 @@ GET  /api/prompt-result?id=JOB_ID
 POST /api/cancel-pending-prompts
 ```
 
+## Writing Tech Doc 도구
+
+서버는 `workshot/agent/writing_tech_doc/webdav_enhance.py`의 `boost`, `list`/`ls`, `allom`, `findm`을 인증된 도구 API로 제공합니다. 실제 WebDAV 기능은 기존 CLI가 담당하고, 이 서버의 `writing_tech_doc_tools.py`는 입력 검증·실행 직렬화·시간 제한·출력 캡처를 담당합니다. 셸을 사용하지 않으며 `allom` 본문은 프로세스 인자가 아닌 표준입력으로 전달합니다.
+
+서버 실행 전에 경로를 지정합니다. `BerePi`와 `workshot`이 같은 상위 디렉터리에 있으면 CLI 경로는 자동으로 탐색할 수 있지만 운영 서비스에서는 명시적인 경로를 권장합니다.
+
+```bash
+export WRITING_TECH_DOC_CLI="/path/to/workshot/agent/writing_tech_doc/webdav_enhance.py"
+export WRITING_TECH_DOC_CONFIG="/path/to/workshot/agent/writing_tech_doc/this_config.conf"
+export WRITING_TECH_DOC_PYTHON="$(command -v python3)"
+./run_service.sh
+```
+
+`WRITING_TECH_DOC_PYTHON` 환경에는 기존 CLI 의존성도 설치되어 있어야 합니다.
+
+```bash
+"${WRITING_TECH_DOC_PYTHON}" -m pip install -r \
+  "$(dirname "${WRITING_TECH_DOC_CLI}")/requirements.txt"
+```
+
+도구 상태와 function schema 조회:
+
+```bash
+curl -u 'admin:실제_서버_비밀번호' \
+  http://127.0.0.1:8082/api/tools/writing-tech-doc | python3 -m json.tool
+```
+
+도구 실행 예시:
+
+```bash
+curl -u 'admin:실제_서버_비밀번호' \
+  -H 'Content-Type: application/json' \
+  -d '{"tool":"list","arguments":{}}' \
+  http://127.0.0.1:8082/api/tools/writing-tech-doc
+
+curl -u 'admin:실제_서버_비밀번호' \
+  -H 'Content-Type: application/json' \
+  -d '{"tool":"allom","arguments":{"content":"서버 연동 상태 확인"}}' \
+  http://127.0.0.1:8082/api/tools/writing-tech-doc
+
+curl -u 'admin:실제_서버_비밀번호' \
+  -H 'Content-Type: application/json' \
+  -d '{"tool":"findm","arguments":{"query":"서버 연동","page_size":10}}' \
+  http://127.0.0.1:8082/api/tools/writing-tech-doc
+```
+
+GET 응답의 `tools` 배열은 function-calling 클라이언트나 agent가 그대로 등록할 수 있는 schema입니다. 도구 실행은 반드시 인증을 거치며, 현재 `/api/generate`의 일반 대화가 임의로 도구를 자동 실행하지는 않습니다. Telegram에서는 명시적인 slash 명령으로 실행합니다.
+
 서버와 웹 UI는 기본적으로 `Remember History`가 활성화되며, 모델 선택과 관계없이 대화 문맥을 다음 프롬프트에 함께 전달합니다. 웹 UI에서 체크를 OFF한 요청만 히스토리를 사용하거나 저장하지 않습니다. 사용자와 어시스턴트 메시지를 각각 1개로 계산하며, 최신 1,000개는 `conversation_history.json`에 저장합니다. 이를 초과한 이전 메시지는 JSONL 텍스트 형식의 `conversation_history_backup.txt`로 이동합니다. 현재 1,000개와 백업 9,000개를 합쳐 최대 10,000개까지만 보존하며, 초과 시 가장 오래된 백업부터 삭제합니다.
 
 체크박스 주변에는 두 파일의 실제 절대 경로와 저장 개수가 표시됩니다. `History` 탭에서는 현재·백업 메시지를 합쳐 최신순으로 한 페이지에 25개씩 조회할 수 있습니다. `Clear History + Backup`은 인증 정보 확인 후 두 파일을 모두 초기화합니다.
@@ -209,6 +257,13 @@ GET  /api/access-log
 GET  /api/workspace/files
 POST /api/workspace/upload
 POST /api/conversation-history/clear
+```
+
+Writing Tech Doc 도구:
+
+```text
+GET  /api/tools/writing-tech-doc
+POST /api/tools/writing-tech-doc
 ```
 
 파일 업로드 예시:
@@ -290,6 +345,12 @@ launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 | `GEMMA4_SELECTED_MODEL` | 없음 | 선택 모델 런타임 재정의 |
 | `GEMMA4_SELECTED_GPU` | 없음 | 선택 GPU 런타임 재정의 |
 | `GEMMA4_CUDA_VISIBLE_USE_UUID` | 비활성 | GPU 인덱스를 UUID로 매핑 |
+| `WRITING_TECH_DOC_TOOLS_ENABLED` | `1` | Writing Tech Doc 도구 활성화 여부 |
+| `WRITING_TECH_DOC_CLI` | 자동 탐색 | `webdav_enhance.py` 절대 경로 |
+| `WRITING_TECH_DOC_CONFIG` | CLI 옆 `this_config.conf` | WebDAV/모델 설정 파일 경로 |
+| `WRITING_TECH_DOC_PYTHON` | 서버 Python | CLI 실행에 사용할 Python |
+| `WRITING_TECH_DOC_TIMEOUT_SECONDS` | `900` | 도구 1회 실행 제한 시간 |
+| `WRITING_TECH_DOC_MAX_OUTPUT_CHARS` | `200000` | API가 반환할 stdout/stderr별 최대 길이 |
 
 경로 관련 변수로 `OLLAMA_PID_FILE`, `GPU_SELECTION_FILE`, `MODEL_SELECTION_FILE`, `PROMPT_HISTORY_FILE`, `GEMMA4_ACCESS_LOG_FILE`, `GEMMA4_SAMPLE_DIR`, `GEMMA4_SERVER_WORKSPACE_DIR`, `GEMMA4_MACH_STATS_DIR`, `GEMMA4_PROMPT_PROCESS_COUNT_FILE`, `GEMMA4_LOG_DIR`을 사용할 수 있습니다.
 
