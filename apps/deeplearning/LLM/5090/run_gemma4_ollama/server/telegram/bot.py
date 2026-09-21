@@ -338,6 +338,48 @@ def response_info_lines(data: dict) -> list[str]:
     return info
 
 
+def compact_telegram_summary_text(value: object, limit: int = 80) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def telegram_response_summary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    chat = update.effective_chat
+    if chat is None:
+        return ""
+
+    chat_type = getattr(chat, "type", "") or "unknown"
+    chat_type_label = {
+        ChatType.PRIVATE: "개인 대화",
+        ChatType.GROUP: "그룹",
+        ChatType.SUPERGROUP: "슈퍼그룹",
+        ChatType.CHANNEL: "채널",
+    }.get(chat_type, str(chat_type))
+    title = compact_telegram_summary_text(getattr(chat, "title", ""))
+    chat_description = f"{chat_type_label} ({title})" if title else chat_type_label
+
+    message = update.effective_message
+    topic_id = getattr(message, "message_thread_id", None) if message else None
+    room_id = f"{getattr(chat, 'id', 'unknown')}:{topic_id or 0}"
+
+    parts = [f"Chat: {chat_description}", f"Room ID: {room_id}"]
+    bot_username = compact_telegram_summary_text(getattr(context.bot, "username", "")).lstrip("@")
+    if bot_username:
+        parts.append(f"Bot: @{bot_username}")
+    return " | ".join(parts)
+
+
+def append_telegram_response_summary(
+    answer: str, update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> str:
+    summary = telegram_response_summary(update, context)
+    if not summary:
+        return answer
+    return f"{answer.rstrip()}\n\n[Telegram]\n{summary}"
+
+
 def split_message(text: str) -> list[str]:
     return [
         text[index : index + MAX_TELEGRAM_MESSAGE_LENGTH]
@@ -1085,7 +1127,7 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         job_id = int(enqueue_response.get("prompt_queue_id"))
         result = await wait_for_prompt_result(job_id)
         raw_answer = str(result.get("visible_response") or result.get("answer") or result.get("response") or "").strip()
-        answer = format_llm_response(result)
+        answer = append_telegram_response_summary(format_llm_response(result), update, context)
     except Exception as exc:
         cleanup_temp_image_paths(temp_image_paths)
         logger.exception("Failed to handle prompt")

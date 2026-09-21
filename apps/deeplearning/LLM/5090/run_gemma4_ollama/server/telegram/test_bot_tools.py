@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import bot
@@ -40,6 +41,27 @@ class TelegramWritingToolCommandTests(unittest.TestCase):
         )
         self.assertIn("[list 완료] 0.25초", text)
         self.assertIn("파일 목록", text)
+
+    def test_prompt_reply_includes_safe_telegram_room_summary(self):
+        update = SimpleNamespace(
+            effective_chat=SimpleNamespace(
+                id=-1001234567890,
+                type=bot.ChatType.SUPERGROUP,
+                title="LLM\n운영방",
+            ),
+            effective_message=SimpleNamespace(message_thread_id=42),
+        )
+        context = SimpleNamespace(bot=SimpleNamespace(username="berepi_gemma_bot"))
+
+        text = bot.append_telegram_response_summary("답변", update, context)
+
+        self.assertIn("답변", text)
+        self.assertIn("[Telegram]", text)
+        self.assertIn("Chat: 슈퍼그룹 (LLM 운영방)", text)
+        self.assertIn("Room ID: -1001234567890:42", text)
+        self.assertIn("Bot: @berepi_gemma_bot", text)
+        self.assertNotIn("TELEGRAM_BOT_TOKEN", text)
+        self.assertNotIn("password", text)
 
 
 if __name__ == "__main__":
