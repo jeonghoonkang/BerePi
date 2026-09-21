@@ -10,4 +10,6 @@ telegram/install/
 telegram/logs/
 telegram/__pycache__/
 telegram/this_conf_keys.sh
+telegram/web_config.json
+telegram/.web-config-*
 telegram/allowed_telegram_user_ids.txt

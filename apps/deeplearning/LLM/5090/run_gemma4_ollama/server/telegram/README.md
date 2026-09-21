@@ -183,6 +183,62 @@ chmod +x run_service.sh start.sh stop.sh
 
 ## 6. 실행 방법
 
+### `run_service.sh`와 함께 자동 실행
+
+`server/run_service.sh`는 웹 서버 시작 시 Telegram 봇을 자동 실행합니다.
+웹 서버가 봇 프로세스를 관리하며 Ctrl+C 또는 SIGTERM으로 종료하면 봇도 종료합니다.
+`start.sh`는 별도 실행 방식이며 이 자동 실행 기능을 사용하지 않습니다.
+
+최초 한 번 위 설치 절차로 봇 의존성을 설치하고, `telegram/this_conf_keys.sh`에
+다음 환경변수를 설정하세요. 이 파일은 Git에서 제외됩니다.
+
+```bash
+export TELEGRAM_BOT_TOKEN="BotFather에서_받은_토큰"
+export GEMMA4_USER_ID="실제_서버_사용자"
+export GEMMA4_PASSWORD="실제_서버_비밀번호"
+export ALLOWED_TELEGRAM_USER_IDS="123456789"
+```
+
+```bash
+# server 디렉토리에서 실행
+bash run_service.sh
+bash run_service.sh 2500 0
+# Telegram 없이 실행
+TELEGRAM_ENABLED=0 bash run_service.sh
+```
+
+- 토큰은 기존 환경변수로 전달해도 됩니다. 설정 파일이 있으면 해당 파일을 읽습니다.
+- `LLM_API_URL`을 설정하지 않으면 이번 서버 포트에 맞게 자동 지정합니다.
+  기존 설정 파일에 `8082`가 고정되어 있다면 해당 줄을 제거하거나 수정하세요.
+- Python은 `TELEGRAM_PYTHON`, `telegram/.venv/bin/python`,
+  `telegram/install/bin/python`, 시스템 `python3` 순으로 선택합니다.
+- `TELEGRAM_CONFIG_FILE`로 다른 설정 파일을 지정할 수 있습니다.
+- 로그는 서버 로그 디렉토리의 `telegram-bot.log`에 저장됩니다.
+- 토큰이 없거나 봇 시작이 실패해도 서버는 계속 실행됩니다. 로그를 확인하세요.
+- 프로세스 잠금으로 관리되는 봇은 한 번만 실행됩니다. 수동 `run_bot.sh`는 Linux의 `flock` 명령이 필요합니다.
+  기존 cron이나 수동 `python3 bot.py` 실행은 먼저 중지하세요. 기존 cron의 봇 실행
+  및 재시작 항목을 함께 사용하면 중복 polling이 발생할 수 있습니다.
+- 실행 중 봇이 종료되면 자동 재시작하지 않습니다. 서버를 재시작하면 다시 실행합니다.
+
+### 웹 Telegram 탭
+
+1. 웹화면의 **Server** 탭에서 사용자 ID와 비밀번호로 로그인합니다.
+2. **Telegram** 탭에서 봇 토큰, LLM API URL, 서버 인증정보, 허용 사용자 ID,
+   봇 사용자 이름을 입력하고 **설정 저장**을 누릅니다.
+3. **시작**, **중지**, **재시작**으로 이 웹 서버가 관리하는 봇을 제어합니다.
+   실행 중 설정을 변경했다면 **재시작**해야 적용됩니다.
+
+상태는 5초마다 갱신됩니다. 토큰·비밀번호는 화면/API에 반환하지 않으며,
+비워서 저장하면 기존 값을 유지합니다. **설정 불러오기**는 저장된 값으로 입력을 초기화합니다.
+웹 설정은 Git에서 제외되는 `telegram/web_config.json`에 저장하며,
+기존 환경변수와 `this_conf_keys.sh`보다 우선합니다. 셸 명령은 웹에서 입력하거나 실행하지 않습니다.
+`ALLOWED_TELEGRAM_USER_IDS`와 기존 `allowed_telegram_user_ids.txt`의 ID는 합쳐서 적용됩니다.
+
+다른 `run_service.sh` 또는 `run_bot.sh`가 이미 봇을 실행하면 중복 실행을 막고
+다른 서비스에서 실행 중으로 표시합니다. 수동 `python3 bot.py`나 기존 cron은
+이 잠금을 사용하지 않으므로 별도로 중지해야 합니다.
+웹 설정은 이 웹 서버의 봇 관리에 적용되며 수동 `run_bot.sh`는 기존 셸 설정을 사용합니다.
+
 ### 6-1. 먼저 Gemma4 Ollama 서버 실행
 
 ```bash

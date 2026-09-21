@@ -129,6 +129,7 @@ export MODEL_SELECTION_FILE
 export GEMMA4_LOG_DIR="${LOG_DIR}"
 
 OLLAMA_PID=""
+SERVER_PID=""
 OLLAMA_USER_SERVICE_WAS_ACTIVE=0
 OLLAMA_SYSTEM_SERVICE_STOP_MODE=""
 
@@ -224,6 +225,27 @@ fi
 export OLLAMA_BIN
 
 cleanup() {
+  # Only stop children owned by this invocation.
+  local pid
+  for pid in "${SERVER_PID}"; do
+    [[ -n "${pid}" ]] && kill "${pid}" 2>/dev/null || true
+  done
+  for _ in {1..10}; do
+    local running=0
+    for pid in "${SERVER_PID}"; do
+      if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+        running=1
+      fi
+    done
+    (( running == 0 )) && break
+    sleep 1
+  done
+  for pid in "${SERVER_PID}"; do
+    if [[ -n "${pid}" ]]; then
+      kill -KILL "${pid}" 2>/dev/null || true
+      wait "${pid}" 2>/dev/null || true
+    fi
+  done
   if [[ -n "${OLLAMA_PID}" ]] && kill -0 "${OLLAMA_PID}" 2>/dev/null; then
     kill "${OLLAMA_PID}" 2>/dev/null || true
   fi
@@ -231,6 +253,8 @@ cleanup() {
   restore_managed_ollama_services
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 restore_managed_ollama_services() {
   if (( OLLAMA_USER_SERVICE_WAS_ACTIVE == 1 )); then
@@ -597,4 +621,8 @@ SERVER_ARGS=()
 if [[ -n "${AI_SERVER_LIST_TOKEN_ARG}" ]]; then
   SERVER_ARGS+=(--ai-server-list-token "${AI_SERVER_LIST_TOKEN_ARG}")
 fi
-python3 "${APP_DIR}/server.py" "${SERVER_ARGS[@]}"
+# The web server owns the bot so UI controls and automatic startup share one process.
+export TELEGRAM_AUTO_START="${TELEGRAM_ENABLED:-1}"
+python3 "${APP_DIR}/server.py" "${SERVER_ARGS[@]}" &
+SERVER_PID="$!"
+wait "${SERVER_PID}"
