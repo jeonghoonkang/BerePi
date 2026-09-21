@@ -27,6 +27,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from telegram_manager import TelegramManager
 
 
 HOST = os.getenv("GEMMA4_SERVER_HOST", "0.0.0.0")
@@ -104,6 +105,7 @@ SESSION_COOKIE_NAME = "gemma4_session"
 SESSION_TTL_SECONDS = int(os.getenv("GEMMA4_SESSION_TTL_SECONDS", "28800"))
 SESSION_LOCK = threading.RLock()
 AUTH_SESSIONS: dict[str, dict[str, Any]] = {}
+TELEGRAM_MANAGER = TelegramManager(Path(__file__).resolve().parent, LOG_DIR, PORT)
 
 
 def format_uptime_dhm(total_seconds: int | float) -> str:
@@ -226,6 +228,19 @@ INDEX_HTML = """<!doctype html>
     section {
       margin-top: 24px;
     }
+    #telegramPanel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+    #telegramStatus { padding: 12px; margin: 12px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+    #telegramSettings { display: grid; gap: 10px; min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 8px; }
+    #telegramSettings input { width: 100%; min-width: 0; box-sizing: border-box; }
+    #telegramSettings label { font-weight: 600; margin-top: 6px; }
+    #telegramSettings p { font-size: 13px; line-height: 1.5; }
+    #telegramSettings button { justify-self: start; margin-top: 8px; }
+    .telegram-guide { margin: 16px 0; padding: 16px 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .telegram-guide summary { cursor: pointer; font-weight: 700; }
+    .telegram-guide li { margin: 12px 0; line-height: 1.65; }
+    .telegram-guide p { margin-top: 12px; line-height: 1.65; }
+    .telegram-guide code { overflow-wrap: anywhere; }
+    .telegram-guide pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
     .grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -680,6 +695,7 @@ INDEX_HTML = """<!doctype html>
       <button class="page-tab" data-tab="ocrPanel" type="button">OCR</button>
       <button class="page-tab" data-tab="yoloPanel" type="button">YOLO Detection</button>
       <button class="page-tab" data-tab="accessLogPanel" type="button">Access Log</button>
+      <button class="page-tab" data-tab="telegramPanel" type="button">Telegram</button>
     </nav>
 
     <div class="tab-panel active" id="serverPanel">
@@ -970,6 +986,93 @@ if __name__ == "__main__":
           <div class="detection-plot" id="yoloPlot">Detection box plot will appear here.</div>
         </div>
       </div>
+    </section>
+
+    <section class="tab-panel" id="telegramPanel">
+      <h2>Telegram</h2>
+      <p>Server 탭에서 로그인한 뒤 봇을 관리하세요. 설정 저장 후 시작하거나 재시작하면 적용됩니다.</p>
+      <details class="telegram-guide" open>
+        <summary>처음 연결하기 · 봇 생성부터 답변 확인까지</summary>
+        <ol>
+          <li><strong>Telegram에서 봇 만들기</strong><br>
+            <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">공식 @BotFather 열기</a> →
+            <code>/newbot</code> 입력 → 안내에 따라 봇 이름과 사용자 이름을 지정합니다.
+            발급된 API 토큰을 아래 <strong>봇 토큰</strong>에 붙여넣으세요.
+            봇 사용자 이름은 토큰과 다른 값입니다.</li>
+          <li><strong>서버 연결정보 입력</strong><br>
+            <strong>LLM API URL</strong>은 봇이 접근할 서버 주소입니다. 같은 서버에서 실행하면
+            <code>http://127.0.0.1:포트/api/generate</code>를 사용하세요.
+            예: 기본 포트는 <code>8082</code>, <code>run_service.sh 2500 0</code>으로 실행했다면 <code>2500</code>입니다.
+            다른 장비의 LLM 서버를 사용하면 그 장비의 IP와 포트를 지정합니다.
+            <strong>서버 사용자 ID / 비밀번호</strong>에는 Gemma4 서버 계정을 입력하세요. Telegram 로그인 정보가 아닙니다.</li>
+          <li><strong>사용할 Telegram 사용자 지정</strong><br>
+            Telegram의 <code>@userinfobot</code> 같은 ID 확인 봇에서 본인의 숫자 사용자 ID를 확인하고
+            <strong>허용 Telegram 사용자 ID</strong>에 입력하세요. 여러 명은 쉼표로 구분합니다.
+            <code>@사용자이름</code>, 전화번호, 그룹 ID가 아닌 개인의 숫자 ID입니다.
+            기존 허용 ID 파일의 값도 함께 적용되며, 모두 비어 있으면 모든 사용자가 허용됩니다.
+            <strong>봇 사용자 이름</strong>에는 BotFather에서 만든 username을 <code>@</code> 없이 입력하세요.</li>
+          <li><strong>설정 저장 → 시작</strong><br>
+            <strong>설정 저장</strong>을 누른 다음 <strong>시작</strong>을 누릅니다.
+            이미 실행 중이라면 <strong>재시작</strong>을 눌러 새 설정을 적용하세요.
+            토큰·비밀번호는 저장 후 다시 표시되지 않으며, 빈칸으로 저장하면 기존 값을 유지합니다.</li>
+          <li><strong>Telegram에서 실제 답변 확인</strong><br>
+            만든 봇의 대화창을 열고 <code>/start</code>를 보낸 뒤
+            <code>안녕하세요. 한 문장으로 답해주세요.</code>를 보내세요.
+            <code>/help</code>로 사용법을 볼 수 있습니다.
+            화면의 “실행 중”은 프로세스 상태이므로, 질문에 대한 답변까지 받아야 LLM 연결이 확인됩니다.</li>
+        </ol>
+        <p>공식 안내: <a href="https://core.telegram.org/bots/tutorial" target="_blank" rel="noopener noreferrer">Telegram 봇 생성 가이드</a></p>
+      </details>
+      <details class="telegram-guide">
+        <summary>최초 설치 · 그룹에서 사용 · 문제가 생겼을 때</summary>
+        <p><strong>최초 설치:</strong> 서버의 터미널에서 <code>run_gemma4_ollama/server</code> 디렉토리로 이동한 뒤 한 번 실행하세요.</p>
+        <pre><code>python3 -m venv telegram/.venv
+telegram/.venv/bin/python -m pip install -r telegram/requirements.txt</code></pre>
+        <p>설치 후 이 탭에서 시작하세요. 웹에서 관리할 때는 별도로 <code>python3 bot.py</code>를 실행하지 않습니다.</p>
+        <ul>
+          <li><strong>그룹 사용:</strong> 봇을 그룹에 추가하고 <code>@내봇username 질문</code>으로 호출하거나
+            봇의 메시지에 답장하세요. 허용 사용자 ID에는 질문하는 사람의 숫자 ID를 넣습니다.
+            그룹에서만 수신이 안 되면 <a href="https://core.telegram.org/bots/faq#what-messages-will-my-bot-get" target="_blank" rel="noopener noreferrer">Telegram 메시지 수신·Privacy Mode 안내</a>를 확인하세요.</li>
+          <li><strong>시작 직후 종료 / 모듈 오류:</strong> 위 의존성 설치 여부와 토큰을 확인하세요.
+            로그는 서버 로그 디렉토리의 <code>telegram-bot.log</code>입니다.
+            기본 실행은 <code>logs/telegram-bot.log</code>, 포트를 인자로 지정한 실행은
+            <code>instances/ollama_포트/logs/telegram-bot.log</code>이며 별도 로그 경로 설정이 있으면 해당 경로를 사용합니다.</li>
+          <li><strong>다른 서비스에서 실행 중 / polling 충돌:</strong> 같은 봇을 실행하는 다른 서버·수동 프로세스·cron을 먼저 중지하고 여기서 시작하세요.</li>
+          <li><strong>/start는 응답하지만 질문에는 무응답:</strong> 허용 사용자 ID를 확인하세요.
+            <code>/start</code> 응답만으로 사용자 허용이나 LLM 연결이 검증되지는 않습니다.</li>
+          <li><strong>인증 오류 / 연결 실패:</strong> Gemma4 서버 계정, API 주소와 포트, Ollama 모델 실행 상태를 확인하세요.
+            봇이 실행되는 장비에서 LLM 서버와 Telegram API에 접근할 수 있어야 합니다.</li>
+          <li><strong>설정이 반영되지 않음:</strong> 저장 후 재시작하세요.
+            웹에서 저장한 값은 기존 셸 설정보다 우선하며, “설정 불러오기”는 저장된 값으로 입력을 되돌립니다.</li>
+        </ul>
+      </details>
+      <div class="actions">
+        <button type="button" id="telegramRefresh">설정 불러오기</button>
+        <button type="button" id="telegramStart" disabled>시작</button>
+        <button type="button" id="telegramStop" disabled>중지</button>
+        <button type="button" id="telegramRestart" disabled>재시작</button>
+      </div>
+      <p id="telegramStatus" role="status" aria-live="polite">로그인 후 설정을 불러오세요.</p>
+      <form id="telegramForm">
+        <fieldset id="telegramSettings" disabled>
+          <legend>봇 설정</legend>
+          <label for="tgToken">봇 토큰</label>
+          <input id="tgToken" type="password" autocomplete="new-password" placeholder="변경할 때만 입력">
+          <label for="tgUrl">LLM API URL</label>
+          <input id="tgUrl" type="url" required placeholder="http://127.0.0.1:8082/api/generate">
+          <label for="tgUser">서버 사용자 ID</label>
+          <input id="tgUser" type="text" autocomplete="off">
+          <label for="tgPassword">서버 비밀번호</label>
+          <input id="tgPassword" type="password" autocomplete="new-password" placeholder="변경할 때만 입력">
+          <label for="tgAllowed">허용 Telegram 사용자 ID (쉼표 구분)</label>
+          <input id="tgAllowed" type="text" placeholder="123456789,987654321">
+          <p>기존 allowed_telegram_user_ids.txt의 ID도 함께 허용됩니다. 둘 다 비어 있으면 모든 사용자가 허용됩니다.</p>
+          <label for="tgNames">봇 사용자 이름 (쉼표 구분)</label>
+          <input id="tgNames" type="text" placeholder="berepi_gemma_bot">
+          <p>토큰과 비밀번호는 빈칸으로 저장하면 기존 값을 유지합니다.</p>
+          <button id="telegramSave" type="submit">설정 저장</button>
+        </fieldset>
+      </form>
     </section>
 
     <section class="tab-panel" id="accessLogPanel">
@@ -1484,6 +1587,7 @@ if __name__ == "__main__":
     }
 
     function showTab(panelId) {
+      if (panelId === "telegramPanel") refreshTelegram(true);
       for (const tab of pageTabs) {
         tab.classList.toggle("active", tab.dataset.tab === panelId);
       }
@@ -1498,6 +1602,66 @@ if __name__ == "__main__":
         refreshConversationHistoryPage(conversationHistoryPage);
       }
     }
+
+    const telegramFields = {
+      TELEGRAM_BOT_TOKEN: "tgToken", LLM_API_URL: "tgUrl", GEMMA4_USER_ID: "tgUser",
+      GEMMA4_PASSWORD: "tgPassword", ALLOWED_TELEGRAM_USER_IDS: "tgAllowed",
+      TELEGRAM_BOT_USERNAMES: "tgNames"
+    };
+    let telegramBusy = false;
+    function renderTelegram(data, loadConfig) {
+      const state = data.external_running ? "다른 서비스에서 실행 중" : data.running ? `실행 중 · PID ${data.pid}` : "중지됨";
+      document.getElementById("telegramStatus").textContent = `${state} — ${data.message}${data.restart_required ? " · 설정 적용을 위해 재시작하세요." : ""}`;
+      document.getElementById("telegramSettings").disabled = false;
+      document.getElementById("telegramStart").disabled = data.running || data.external_running;
+      document.getElementById("telegramStop").disabled = !data.running;
+      document.getElementById("telegramRestart").disabled = data.external_running;
+      if (loadConfig) {
+        for (const [key, id] of Object.entries(telegramFields)) {
+          const field = document.getElementById(id);
+          field.value = data.config[key] || "";
+          if (key in data.secrets_set) field.placeholder = data.secrets_set[key] ? "저장됨 · 변경할 때만 입력" : "미설정";
+        }
+      }
+    }
+    async function telegramRequest(action, config) {
+      const options = action ? {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action, config})
+      } : {};
+      const res = await fetch("/api/telegram", options);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Telegram 요청 실패");
+      return data;
+    }
+    async function refreshTelegram(loadConfig = false) {
+      if (telegramBusy) return;
+      telegramBusy = true;
+      try { renderTelegram(await telegramRequest(), loadConfig); }
+      catch (err) {
+        document.getElementById("telegramStatus").textContent = String(err);
+        document.getElementById("telegramSettings").disabled = true;
+        for (const id of ["telegramStart", "telegramStop", "telegramRestart"]) document.getElementById(id).disabled = true;
+      } finally { telegramBusy = false; }
+    }
+    async function controlTelegram(action) {
+      if (telegramBusy) return;
+      telegramBusy = true;
+      const config = {};
+      if (action === "save") for (const [key, id] of Object.entries(telegramFields)) config[key] = document.getElementById(id).value;
+      document.getElementById("telegramStatus").textContent = "처리 중…";
+      try { renderTelegram(await telegramRequest(action, config), action === "save"); }
+      catch (err) { document.getElementById("telegramStatus").textContent = String(err); }
+      finally { telegramBusy = false; }
+    }
+    document.getElementById("telegramRefresh").addEventListener("click", () => refreshTelegram(true));
+    for (const action of ["start", "stop", "restart"]) {
+      document.getElementById(`telegram${action[0].toUpperCase()}${action.slice(1)}`).addEventListener("click", () => controlTelegram(action));
+    }
+    document.getElementById("telegramForm").addEventListener("submit", (event) => { event.preventDefault(); controlTelegram("save"); });
+    setInterval(() => {
+      if (document.getElementById("telegramPanel").classList.contains("active")) refreshTelegram();
+    }, 5000);
 
     function colorForUser(user) {
       const colors = ["#137c5b", "#255f99", "#9b5a00", "#6d4ca3", "#a62f2f", "#177e89", "#8a4f14", "#5f6b2a"];
@@ -4514,7 +4678,50 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def handle_telegram(self, mutate: bool) -> None:
+        user = authenticated_session_user(self.headers)
+        if not user:
+            self.send_json({"error": "Server 탭에서 먼저 로그인하세요."}, HTTPStatus.UNAUTHORIZED)
+            return
+        self.access_user_id = user
+        try:
+            if mutate:
+                origin = self.headers.get("Origin")
+                if origin and urllib.parse.urlsplit(origin).netloc != self.headers.get("Host"):
+                    self.send_json({"error": "다른 사이트에서 보낸 요청은 허용하지 않습니다."}, HTTPStatus.FORBIDDEN)
+                    return
+                if self.headers.get_content_type() != "application/json":
+                    raise ValueError("JSON 요청이 필요합니다.")
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 32768:
+                    raise ValueError("요청 크기가 잘못되었습니다.")
+                incoming = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(incoming, dict):
+                    raise ValueError("JSON 객체가 필요합니다.")
+                action = incoming.get("action")
+                if action == "save":
+                    result = TELEGRAM_MANAGER.save(incoming.get("config"))
+                elif action == "start":
+                    result = TELEGRAM_MANAGER.start()
+                elif action == "stop":
+                    TELEGRAM_MANAGER.stop()
+                    result = TELEGRAM_MANAGER.status()
+                elif action == "restart":
+                    result = TELEGRAM_MANAGER.restart()
+                else:
+                    raise ValueError("지원하지 않는 Telegram 명령입니다.")
+            else:
+                result = TELEGRAM_MANAGER.status()
+            self.send_json(result, extra_headers={"Cache-Control": "no-store"})
+        except (ValueError, UnicodeError) as exc:
+            self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        except (OSError, subprocess.SubprocessError):
+            self.send_json({"error": "Telegram 실행/설정을 확인하세요. Python 환경과 로컬 설정 파일을 점검하세요."}, HTTPStatus.BAD_REQUEST)
+
     def do_GET(self) -> None:
+        if self.path == "/api/telegram":
+            self.handle_telegram(False)
+            return
         parsed_path = urllib.parse.urlparse(self.path)
         if self.path in {"/", "/index.html"}:
             body = render_index_html().encode("utf-8")
@@ -4598,6 +4805,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
         self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if self.path == "/api/telegram":
+            self.handle_telegram(True)
+            return
         if self.path == "/api/start-ollama":
             try:
                 result = start_ollama_server()
@@ -4911,7 +5121,22 @@ def main() -> int:
     print(f"Gemma4 service page: http://{HOST}:{PORT}")
     print(f"Ollama backend: {OLLAMA_BASE_URL}, model={OLLAMA_MODEL}")
     print_gpu_configuration()
-    httpd.serve_forever()
+    def stop_service(signum, frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stop_service)
+    signal.signal(signal.SIGINT, stop_service)
+    try:
+        if os.environ.get("TELEGRAM_AUTO_START", "0") == "1":
+            try:
+                state = TELEGRAM_MANAGER.start()
+                print(f"Telegram: {state['message']}", flush=True)
+            except (ValueError, OSError, subprocess.SubprocessError):
+                print("Telegram was not started. Configure it in the Telegram tab.", flush=True)
+        httpd.serve_forever()
+    finally:
+        TELEGRAM_MANAGER.stop()
+        httpd.server_close()
     return 0
 
 
