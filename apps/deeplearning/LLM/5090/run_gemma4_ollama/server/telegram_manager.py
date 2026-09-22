@@ -34,13 +34,19 @@ class TelegramManager:
     def config(self):
         if self.legacy is None:
             values = {key: os.environ.get(key, "") for key in FIELDS}
-            config = Path(os.environ.get("TELEGRAM_CONFIG_FILE", self.bot_dir / "this_conf_keys.sh"))
+            config = Path(os.environ.get("TELEGRAM_CONFIG_FILE", self.bot_dir / "this_conf_keys.sh")).expanduser().resolve()
+            if os.environ.get("TELEGRAM_CONFIG_FILE") and not config.is_file():
+                raise ValueError(f"Telegram 설정 파일을 찾을 수 없습니다: {config}")
             if config.is_file():
                 # This is the existing trusted local shell config, never web input.
-                result = subprocess.run(
-                    ["bash", "-c", 'source "$1" set >/dev/null && env -0', "telegram-config", str(config)],
-                    capture_output=True, timeout=10, check=True,
-                )
+                try:
+                    result = subprocess.run(
+                        ["bash", "-c", 'set -a; source "$1" set >/dev/null && env -0', "telegram-config", str(config)],
+                        cwd=config.parent, capture_output=True, timeout=10, check=True,
+                    )
+                except (OSError, subprocess.SubprocessError) as exc:
+                    # Shell stderr can include credentials; report only the path.
+                    raise ValueError(f"Telegram 설정 파일 읽기 실패: {config} (bash 실행 환경과 셸 파일 문법을 확인하세요.)") from exc
                 exported = dict(item.split(b"=", 1) for item in result.stdout.split(b"\0") if b"=" in item)
                 values.update({key: exported[key.encode()].decode() for key in FIELDS if key.encode() in exported})
             values["LLM_API_URL"] = values["LLM_API_URL"] or f"http://127.0.0.1:{self.port}/api/generate"
@@ -53,6 +59,17 @@ class TelegramManager:
                 raise ValueError("Telegram 설정 파일 형식이 잘못되었습니다.")
             values.update({key: saved[key] for key in FIELDS if key in saved})
         return values
+
+    def reload(self):
+        """Explicit refresh re-reads shell/environment settings, then web overrides."""
+        with self.lock:
+            previous = self.legacy
+            self.legacy = None
+            try:
+                return self.status()
+            except Exception:
+                self.legacy = previous
+                raise
 
     def save(self, changes):
         with self.lock:
@@ -129,6 +146,11 @@ class TelegramManager:
                 "restart_required": running and self.applied != values,
                 "config": {key: value for key, value in values.items() if key not in SECRETS},
                 "secrets_set": {key: bool(values[key]) for key in SECRETS},
+                "config_sources": {
+                    "shell": str(Path(os.environ.get("TELEGRAM_CONFIG_FILE", self.bot_dir / "this_conf_keys.sh")).expanduser().resolve()),
+                    "web": str(self.config_file.resolve()),
+                    "web_exists": self.config_file.is_file(),
+                },
             }
 
     def start(self):

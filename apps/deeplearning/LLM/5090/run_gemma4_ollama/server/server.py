@@ -1060,6 +1060,7 @@ telegram/.venv/bin/python -m pip install -r telegram/requirements.txt</code></pr
         <button type="button" id="telegramRestart" disabled>재시작</button>
       </div>
       <p id="telegramStatus" role="status" aria-live="polite">로그인 후 설정을 불러오세요.</p>
+      <p id="telegramConfigSource"></p>
       <form id="telegramForm">
         <fieldset id="telegramSettings" disabled>
           <legend>봇 설정</legend>
@@ -1616,6 +1617,7 @@ if __name__ == "__main__":
       TELEGRAM_BOT_USERNAMES: "tgNames"
     };
     let telegramBusy = false;
+    let telegramReloadPending = false;
     function renderTelegram(data, loadConfig) {
       const state = data.external_running ? "다른 서비스에서 실행 중" : data.running ? `실행 중 · PID ${data.pid}` : "중지됨";
       document.getElementById("telegramStatus").textContent = `${state} — ${data.message}${data.restart_required ? " · 설정 적용을 위해 재시작하세요." : ""}`;
@@ -1623,6 +1625,10 @@ if __name__ == "__main__":
       document.getElementById("telegramStart").disabled = data.running || data.external_running;
       document.getElementById("telegramStop").disabled = !data.running;
       document.getElementById("telegramRestart").disabled = data.external_running;
+      if (data.config_sources) {
+        const sources = data.config_sources;
+        document.getElementById("telegramConfigSource").textContent = `셸 설정: ${sources.shell} · 웹 설정: ${sources.web}${sources.web_exists ? " (웹 저장값 우선 적용)" : " (저장된 웹 설정 없음)"}`;
+      }
       if (loadConfig) {
         for (const [key, id] of Object.entries(telegramFields)) {
           const field = document.getElementById(id);
@@ -1642,14 +1648,20 @@ if __name__ == "__main__":
       return data;
     }
     async function refreshTelegram(loadConfig = false) {
-      if (telegramBusy) return;
+      if (telegramBusy) {
+        telegramReloadPending = telegramReloadPending || loadConfig;
+        return;
+      }
       telegramBusy = true;
-      try { renderTelegram(await telegramRequest(), loadConfig); }
+      try { renderTelegram(await telegramRequest(loadConfig ? "reload" : undefined), loadConfig); }
       catch (err) {
         document.getElementById("telegramStatus").textContent = String(err);
         document.getElementById("telegramSettings").disabled = true;
         for (const id of ["telegramStart", "telegramStop", "telegramRestart"]) document.getElementById(id).disabled = true;
-      } finally { telegramBusy = false; }
+      } finally {
+        telegramBusy = false;
+        if (telegramReloadPending) { telegramReloadPending = false; refreshTelegram(true); }
+      }
     }
     async function controlTelegram(action) {
       if (telegramBusy) return;
@@ -1659,7 +1671,10 @@ if __name__ == "__main__":
       document.getElementById("telegramStatus").textContent = "처리 중…";
       try { renderTelegram(await telegramRequest(action, config), action === "save"); }
       catch (err) { document.getElementById("telegramStatus").textContent = String(err); }
-      finally { telegramBusy = false; }
+      finally {
+        telegramBusy = false;
+        if (telegramReloadPending) { telegramReloadPending = false; refreshTelegram(true); }
+      }
     }
     document.getElementById("telegramRefresh").addEventListener("click", () => refreshTelegram(true));
     for (const action of ["start", "stop", "restart"]) {
@@ -4719,6 +4734,8 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 action = incoming.get("action")
                 if action == "save":
                     result = TELEGRAM_MANAGER.save(incoming.get("config"))
+                elif action == "reload":
+                    result = TELEGRAM_MANAGER.reload()
                 elif action == "start":
                     result = TELEGRAM_MANAGER.start()
                 elif action == "stop":
