@@ -1103,12 +1103,37 @@ async def list_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await execute_writing_tool(update, context, "list", {"mode": mode})
 
 
+def allom_message_content(update: Update) -> str:
+    note = command_argument_text(update)
+    original = getattr(update.effective_message, "reply_to_message", None)
+    if original is None:
+        if not note.strip():
+            raise ValueError("저장할 메모를 입력하거나 저장할 메시지에 답장으로 /allom을 보내세요.")
+        return note
+
+    content = getattr(original, "text", None) or getattr(original, "caption", None)
+    if not content or not content.strip():
+        raise ValueError("답장한 메시지에 저장할 텍스트나 설명이 없습니다. 사진·파일 자체는 저장하지 않습니다.")
+    sender = getattr(original, "sender_chat", None) or getattr(original, "from_user", None)
+    source = {
+        "chat_id": getattr(getattr(original, "chat", None), "id", None),
+        "message_id": getattr(original, "message_id", None),
+        "author_id": getattr(sender, "id", None),
+        "author_name": (getattr(sender, "title", None) or getattr(sender, "full_name", None)
+                        or getattr(sender, "username", None)),
+        "username": getattr(sender, "username", None),
+    }
+    result = "## 원본 메시지\n\n" + content
+    if note.strip():
+        result += "\n\n## 추가 메모\n\n" + note
+    # Stable provenance keeps repeated saves of the same reply deduplicatable.
+    result += "\n\n## Telegram 원본 출처\n\n```json\n" + json.dumps(source, ensure_ascii=False, indent=2) + "\n```\n"
+    return result
+
+
 async def allom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    content = command_argument_text(update)
-    if not content:
-        await update.message.reply_text("저장할 메모를 입력해 주세요. 예: /allom 서버 연동 상태 확인")
-        return
     try:
+        content = allom_message_content(update)
         arguments = {"content": content, **telegram_allom_identity(update)}
     except ValueError as exc:
         await update.message.reply_text(str(exc))
@@ -1156,6 +1181,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/list all - 최대 50개, 초과 시 /list full 안내\n"
         "/list full - 모든 항목을 나누어 회신\n"
         "/allom 메모 내용 - 방·토픽·작성자별 WebDAV 메모 저장\n"
+        "/allom (메시지에 답장) - 원본 텍스트·설명 저장, 뒤에 추가 메모 입력 가능\n"
         '/recall "단어" - 내용이 일치하는 Markdown 파일 목록과 전체 내용\n'
         "/findm [--page-size N] [--author ID] [--room ID] [--topic ID] 검색어 - 메모와 원본 문서 검색"
     )
