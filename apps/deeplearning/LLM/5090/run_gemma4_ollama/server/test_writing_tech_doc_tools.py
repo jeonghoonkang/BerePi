@@ -46,9 +46,22 @@ class WritingTechDocToolRunnerTests(unittest.TestCase):
         self.assertEqual(listing.name, "list")
         self.assertEqual(listing.argv, [*self.base, "list"])
 
-    def test_prepare_sends_allom_content_on_stdin(self):
-        invocation = self.runner.prepare({"tool": "allom", "content": "첫 줄\n둘째 줄"})
-        self.assertEqual(invocation.argv, [*self.base, "allom"])
+    def test_prepare_sends_allom_content_and_telegram_identity(self):
+        invocation = self.runner.prepare({
+            "tool": "allom",
+            "content": "첫 줄\n둘째 줄",
+            "room": "-1001",
+            "topic": "42",
+            "author": "7",
+            "author_name": "alice",
+        })
+        self.assertEqual(
+            invocation.argv,
+            [
+                *self.base, "allom", "--room=-1001", "--topic=42",
+                "--author=7", "--author-name=alice",
+            ],
+        )
         self.assertEqual(invocation.stdin_text, "첫 줄\n둘째 줄")
 
     def test_prepare_makes_findm_noninteractive_and_validates_page_size(self):
@@ -56,6 +69,16 @@ class WritingTechDocToolRunnerTests(unittest.TestCase):
         self.assertEqual(
             invocation.argv,
             [*self.base, "findm", "--no-pager", "--page-size", "7", "--", "서버 연동"],
+        )
+        filtered = self.runner.prepare({
+            "tool": "findm", "query": "서버 연동", "author": "7", "room": "-1001", "topic": "42",
+        })
+        self.assertEqual(
+            filtered.argv,
+            [
+                *self.base, "findm", "--no-pager", "--author=7", "--room=-1001",
+                "--topic=42", "--", "서버 연동",
+            ],
         )
         with self.assertRaisesRegex(ToolValidationError, "between 1 and 1000"):
             self.runner.prepare({"tool": "findm", "query": "서버", "page_size": 0})

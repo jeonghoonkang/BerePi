@@ -159,10 +159,16 @@ class WritingTechDocToolRunner:
                 "type": "function",
                 "function": {
                     "name": "allom",
-                    "description": "메모를 timestamp 기반 memo_alloc Markdown 파일로 WebDAV에 저장합니다.",
+                    "description": "메모를 timestamp 기반 memo_alloc Markdown 파일로 WebDAV에 저장합니다. room과 author를 함께 지정하면 개인별 Telegram 경로와 메타데이터를 저장합니다.",
                     "parameters": {
                         "type": "object",
-                        "properties": {"content": {"type": "string", "description": "저장할 메모 본문"}},
+                        "properties": {
+                            "content": {"type": "string", "description": "저장할 메모 본문"},
+                            "room": {"type": "string", "description": "Telegram 채팅방 ID"},
+                            "topic": {"type": "string", "description": "Telegram 토픽 ID. 생략 시 0"},
+                            "author": {"type": "string", "description": "Telegram 작성자 ID"},
+                            "author_name": {"type": "string", "description": "Telegram 작성자 표시명 또는 사용자명"},
+                        },
                         "required": ["content"],
                         "additionalProperties": False,
                     },
@@ -183,6 +189,9 @@ class WritingTechDocToolRunner:
                                 "maximum": 1000,
                                 "description": "페이지당 결과 수",
                             },
+                            "author": {"type": "string", "description": "Telegram 작성자 ID 필터"},
+                            "room": {"type": "string", "description": "Telegram 채팅방 ID 필터"},
+                            "topic": {"type": "string", "description": "Telegram 토픽 ID 필터"},
                         },
                         "required": ["query"],
                         "additionalProperties": False,
@@ -200,8 +209,8 @@ class WritingTechDocToolRunner:
         tool_fields = {
             "boost": {"file", "dry_run"},
             "list": set(),
-            "allom": {"content"},
-            "findm": {"query", "page_size"},
+            "allom": {"content", "room", "topic", "author", "author_name"},
+            "findm": {"query", "page_size", "author", "room", "topic"},
         }
         allowed_fields = common_fields | tool_fields.get(name, set())
         unknown_fields = sorted(set(payload) - allowed_fields)
@@ -232,7 +241,18 @@ class WritingTechDocToolRunner:
 
         if name == "allom":
             content = _clean_text(payload.get("content"), "content", maximum=1_000_000)
-            return ToolInvocation(name, [*base, "allom"], stdin_text=content)
+            argv = [*base, "allom"]
+            for field, option, maximum in (
+                ("room", "--room", 128),
+                ("topic", "--topic", 128),
+                ("author", "--author", 128),
+                ("author_name", "--author-name", 256),
+            ):
+                value = payload.get(field)
+                if value is not None and value != "":
+                    clean_value = _clean_text(value, field, maximum=maximum, multiline=False)
+                    argv.append(f"{option}={clean_value}")
+            return ToolInvocation(name, argv, stdin_text=content)
 
         if name == "findm":
             query = _clean_text(payload.get("query"), "query", maximum=2_000)
@@ -241,6 +261,11 @@ class WritingTechDocToolRunner:
             if page_size_value is not None and page_size_value != "":
                 page_size = _positive_int(page_size_value, "page_size", maximum=1000)
                 argv.extend(["--page-size", str(page_size)])
+            for field, option in (("author", "--author"), ("room", "--room"), ("topic", "--topic")):
+                value = payload.get(field)
+                if value is not None and value != "":
+                    clean_value = _clean_text(value, field, maximum=128, multiline=False)
+                    argv.append(f"{option}={clean_value}")
             argv.extend(["--", query])
             return ToolInvocation(name, argv)
 

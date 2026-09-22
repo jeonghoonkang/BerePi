@@ -981,6 +981,7 @@ def parse_findm_command(arguments: str) -> dict[str, Any]:
         raise ValueError(f"findm 인자를 해석할 수 없습니다: {exc}") from exc
     query_parts: list[str] = []
     page_size: int | None = None
+    filters: dict[str, str] = {}
     index = 0
     while index < len(tokens):
         token = tokens[index]
@@ -997,6 +998,16 @@ def parse_findm_command(arguments: str) -> dict[str, Any]:
                 page_size = int(token.split("=", 1)[1])
             except ValueError as exc:
                 raise ValueError("--page-size는 숫자여야 합니다.") from exc
+        elif token in {"--author", "--room", "--topic"}:
+            index += 1
+            if index >= len(tokens) or not tokens[index]:
+                raise ValueError(f"{token} 뒤에 ID를 입력해 주세요.")
+            filters[token.removeprefix("--")] = tokens[index]
+        elif any(token.startswith(option + "=") for option in ("--author", "--room", "--topic")):
+            option, value = token.split("=", 1)
+            if not value:
+                raise ValueError(f"{option} 뒤에 ID를 입력해 주세요.")
+            filters[option.removeprefix("--")] = value
         elif token.startswith("--"):
             raise ValueError(f"지원하지 않는 findm 옵션입니다: {token}")
         else:
@@ -1007,7 +1018,34 @@ def parse_findm_command(arguments: str) -> dict[str, Any]:
     payload = {"query": " ".join(query_parts)}
     if page_size is not None:
         payload["page_size"] = page_size
+    payload.update(filters)
     return payload
+
+
+def telegram_allom_identity(update: Update) -> dict[str, str]:
+    chat = update.effective_chat
+    user = update.effective_user
+    message = update.effective_message
+    if chat is None or user is None or message is None:
+        raise ValueError("Telegram 채팅방 또는 작성자 정보를 확인할 수 없습니다.")
+
+    username = compact_telegram_summary_text(getattr(user, "username", "")).lstrip("@")
+    if username:
+        author_name = f"@{username}"
+    else:
+        author_name = compact_telegram_summary_text(
+            " ".join(
+                part for part in (getattr(user, "first_name", ""), getattr(user, "last_name", "")) if part
+            )
+        )
+    identity = {
+        "room": str(chat.id),
+        "topic": str(getattr(message, "message_thread_id", None) or 0),
+        "author": str(user.id),
+    }
+    if author_name:
+        identity["author_name"] = author_name
+    return identity
 
 
 async def execute_writing_tool(
@@ -1056,7 +1094,12 @@ async def allom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not content:
         await update.message.reply_text("저장할 메모를 입력해 주세요. 예: /allom 서버 연동 상태 확인")
         return
-    await execute_writing_tool(update, context, "allom", {"content": content})
+    try:
+        arguments = {"content": content, **telegram_allom_identity(update)}
+    except ValueError as exc:
+        await update.message.reply_text(str(exc))
+        return
+    await execute_writing_tool(update, context, "allom", arguments)
 
 
 async def findm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1086,8 +1129,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "문서 도구:\n"
         "/boost [--dry-run] [파일명] - Markdown 기술 문서 보강\n"
         "/list 또는 /ls - allom/boost 파일과 WebDAV 경로 확인\n"
-        "/allom 메모 내용 - WebDAV 메모 저장\n"
-        "/findm [--page-size N] 검색어 - 메모와 원본 문서 검색"
+        "/allom 메모 내용 - 방·토픽·작성자별 WebDAV 메모 저장\n"
+        "/findm [--page-size N] [--author ID] [--room ID] [--topic ID] 검색어 - 메모와 원본 문서 검색"
     )
 
 

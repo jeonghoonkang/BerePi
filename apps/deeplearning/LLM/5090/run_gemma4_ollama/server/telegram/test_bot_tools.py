@@ -17,11 +17,30 @@ class TelegramWritingToolCommandTests(unittest.TestCase):
 
     def test_parse_findm_command(self):
         self.assertEqual(
-            bot.parse_findm_command('--page-size 7 "서버 연동"'),
-            {"query": "서버 연동", "page_size": 7},
+            bot.parse_findm_command('--page-size 7 --author 7 --room=-1001 --topic 42 "서버 연동"'),
+            {"query": "서버 연동", "page_size": 7, "author": "7", "room": "-1001", "topic": "42"},
         )
         with self.assertRaisesRegex(ValueError, "검색어"):
             bot.parse_findm_command("--page-size 7")
+        with self.assertRaisesRegex(ValueError, "--author"):
+            bot.parse_findm_command("--author")
+
+    def test_allom_identity_uses_current_room_topic_and_author(self):
+        update = SimpleNamespace(
+            effective_chat=SimpleNamespace(id=-1001234567890),
+            effective_message=SimpleNamespace(message_thread_id=42),
+            effective_user=SimpleNamespace(id=7, username="alice", first_name="Alice", last_name=""),
+        )
+
+        self.assertEqual(
+            bot.telegram_allom_identity(update),
+            {
+                "room": "-1001234567890",
+                "topic": "42",
+                "author": "7",
+                "author_name": "@alice",
+            },
+        )
 
     def test_tool_payload_keeps_credentials_outside_arguments(self):
         with (

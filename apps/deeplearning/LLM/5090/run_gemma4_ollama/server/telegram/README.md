@@ -324,11 +324,13 @@ python3 bot.py
 - `/help` : 사용 방법 표시
 - `/boost [--dry-run] [파일명]` : 전체 또는 특정 Markdown 문서를 보강. 먼저 `--dry-run` 사용 권장
 - `/list`, `/ls` : `allom` 메모와 `boost` 원본·결과 파일 경로 표시
-- `/allom 메모 내용` : 메모를 `memo_alloc_YYYYMMDD_HHMMSS.md`로 WebDAV에 저장
-- `/findm [--page-size N] 검색어` : 메모와 `boost` 원본에서 관련 문장 검색
+- `/allom 메모 내용` : 현재 방·토픽·작성자별 `memo_alloc/{room}/{topic}/{author}/memo_alloc_YYYYMMDD_HHMMSS.md`에 WebDAV 메모 저장
+- `/findm [--page-size N] [--author ID] [--room ID] [--topic ID] 검색어` : 메모와 `boost` 원본에서 관련 문장 검색. 필터를 쓰면 일치하는 Telegram 메모만 검색
 - 일반 텍스트 메시지 : Gemma4 프롬프트로 처리
 
 문서 명령은 Telegram 봇이 직접 WebDAV 비밀번호를 갖는 대신 Gemma4 서버의 인증된 `/api/tools/writing-tech-doc`을 호출합니다. Gemma4 서버 프로세스에는 `WRITING_TECH_DOC_CLI`와 `WRITING_TECH_DOC_CONFIG`가 설정되어 있어야 합니다. 봇과 API 서버가 다른 주소라면 봇에 다음 값을 지정합니다.
+
+`/allom`은 현재 `chat_id`, 토픽 ID(없으면 `0`), Telegram 작성자 ID와 사용자명(가능한 경우)을 YAML 메타데이터에 기록합니다. 저장된 메시지의 작성자를 나중에 찾으려면 `/findm --author 123456789 검색어`, 현재 방만 보려면 `/findm --room=-1001234567890 검색어`처럼 사용할 수 있습니다. 사용자 ID는 허용 목록 설정이나 Telegram 정보 요약에서 확인할 수 있습니다.
 
 ```bash
 export WRITING_TECH_DOC_TOOL_URL="http://SERVER_IP:8082/api/tools/writing-tech-doc"
