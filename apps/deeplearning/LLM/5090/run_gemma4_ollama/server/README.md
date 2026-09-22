@@ -147,7 +147,7 @@ POST /api/cancel-pending-prompts
 
 ```bash
 export WRITING_TECH_DOC_CLI="/path/to/workshot/agent/writing_tech_doc/webdav_enhance.py"
-export WRITING_TECH_DOC_CONFIG="/path/to/workshot/agent/writing_tech_doc/this_config.conf"
+export WRITING_TECH_DOC_CONFIG="/path/to/workshot/agent/writing_tech_doc/this.config.conf"
 export WRITING_TECH_DOC_PYTHON="$(command -v python3)"
 ./run_service.sh
 ```
@@ -347,7 +347,7 @@ launchctl bootout "gui/$(id -u)/com.berepi.gemma4-ollama-8082"
 | `GEMMA4_CUDA_VISIBLE_USE_UUID` | 비활성 | GPU 인덱스를 UUID로 매핑 |
 | `WRITING_TECH_DOC_TOOLS_ENABLED` | `1` | Writing Tech Doc 도구 활성화 여부 |
 | `WRITING_TECH_DOC_CLI` | 자동 탐색 | `webdav_enhance.py` 절대 경로 |
-| `WRITING_TECH_DOC_CONFIG` | CLI 옆 `this_config.conf` | WebDAV/모델 설정 파일 경로 |
+| `WRITING_TECH_DOC_CONFIG` | CLI 옆 `this.config.conf` | WebDAV/모델 설정 파일 경로 |
 | `WRITING_TECH_DOC_PYTHON` | 서버 Python | CLI 실행에 사용할 Python |
 | `WRITING_TECH_DOC_TIMEOUT_SECONDS` | `900` | 도구 1회 실행 제한 시간 |
 | `WRITING_TECH_DOC_MAX_OUTPUT_CHARS` | `200000` | API가 반환할 stdout/stderr별 최대 길이 |

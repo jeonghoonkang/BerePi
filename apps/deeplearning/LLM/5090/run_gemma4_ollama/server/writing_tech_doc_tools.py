@@ -91,7 +91,7 @@ class WritingTechDocToolRunner:
         root = (server_dir or Path(__file__).resolve().parent).resolve()
         cli_path = _default_cli_path(root)
         config_setting = os.environ.get("WRITING_TECH_DOC_CONFIG", "").strip()
-        config_path = Path(config_setting).expanduser() if config_setting else cli_path.with_name("this_config.conf")
+        config_path = Path(config_setting).expanduser() if config_setting else cli_path.with_name("this.config.conf")
         python_executable = os.environ.get("WRITING_TECH_DOC_PYTHON", sys.executable).strip() or sys.executable
         timeout_seconds = _positive_int(
             os.environ.get("WRITING_TECH_DOC_TIMEOUT_SECONDS", "900"),

@@ -18,7 +18,7 @@ class WritingTechDocToolRunnerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         self.cli_path = root / "webdav_enhance.py"
-        self.config_path = root / "this_config.conf"
+        self.config_path = root / "this.config.conf"
         self.cli_path.write_text("# test CLI\n", encoding="utf-8")
         self.config_path.write_text("[webdav]\n", encoding="utf-8")
         self.runner = WritingTechDocToolRunner(
