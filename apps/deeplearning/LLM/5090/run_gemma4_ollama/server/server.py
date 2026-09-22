@@ -753,6 +753,12 @@ INDEX_HTML = """<!doctype html>
           <input id="password" type="password" autocomplete="current-password">
         </div>
       </div>
+      <p>Use the User ID and Password above to log in. A login session is required for Telegram settings and user account management.</p>
+      <div class="session-row">
+        <button id="loginSession" type="button">Login Session</button>
+        <button id="logoutSession" type="button">Logout Session</button>
+        <span id="sessionStatus">Session not started.</span>
+      </div>
       <label for="conversationRoom">Room ID</label>
       <input id="conversationRoom" type="text" value="default" placeholder="Room ID">
       <div class="prompt-grid">
@@ -791,12 +797,7 @@ INDEX_HTML = """<!doctype html>
 
     <section>
       <h2>User Account Management</h2>
-      <p>Start a login session with an existing account. Saving a new User ID and Password is allowed only for that authenticated session.</p>
-      <div class="session-row">
-        <button id="loginSession">Login Session</button>
-        <button id="logoutSession">Logout Session</button>
-        <span id="sessionStatus">Session not started.</span>
-      </div>
+      <p>Log in using Login Session in Prompt Test above before saving a new User ID and Password.</p>
       <div class="admin-grid">
         <div>
           <label for="newUserId">New User ID</label>
