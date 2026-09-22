@@ -135,6 +135,17 @@ class WritingTechDocToolRunner:
             {
                 "type": "function",
                 "function": {
+                    "name": "recall",
+                    "description": "WebDAV 하위 폴더의 모든 Markdown 내용에서 검색어를 찾아 파일 목록과 전체 내용을 반환합니다.",
+                    "parameters": {
+                        "type": "object", "properties": {"query": {"type": "string"}},
+                        "required": ["query"], "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "boost",
                     "description": "WebDAV Markdown 원본을 기술 문서로 보강합니다.",
                     "parameters": {
@@ -214,6 +225,7 @@ class WritingTechDocToolRunner:
             "list": {"mode"},
             "allom": {"content", "room", "topic", "author", "author_name"},
             "findm": {"query", "page_size", "author", "room", "topic"},
+            "recall": {"query"},
         }
         allowed_fields = common_fields | tool_fields.get(name, set())
         unknown_fields = sorted(set(payload) - allowed_fields)
@@ -260,6 +272,10 @@ class WritingTechDocToolRunner:
                     argv.append(f"{option}={clean_value}")
             return ToolInvocation(name, argv, stdin_text=content)
 
+        if name == "recall":
+            query = _clean_text(payload.get("query"), "query", maximum=2_000)
+            return ToolInvocation(name, [*base, "recall", "--", query])
+
         if name == "findm":
             query = _clean_text(payload.get("query"), "query", maximum=2_000)
             argv = [*base, "findm", "--no-pager"]
@@ -275,7 +291,7 @@ class WritingTechDocToolRunner:
             argv.extend(["--", query])
             return ToolInvocation(name, argv)
 
-        raise ToolValidationError("tool must be one of: boost, list, ls, allom, findm")
+        raise ToolValidationError("tool must be one of: boost, list, ls, allom, findm, recall")
 
     def _ensure_available(self) -> None:
         if not self.enabled:
@@ -310,7 +326,7 @@ class WritingTechDocToolRunner:
             raise ToolUnavailableError(
                 f"{invocation.name} exceeded the {self.timeout_seconds}s timeout"
             ) from exc
-        if invocation.name == "list" and invocation.argv[-1] == "full":
+        if invocation.name == "recall" or (invocation.name == "list" and invocation.argv[-1] == "full"):
             stdout, stdout_truncated = completed.stdout or "", False
         else:
             stdout, stdout_truncated = self._truncate(completed.stdout or "")

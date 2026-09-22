@@ -7,6 +7,18 @@ from telegram.error import RetryAfter
 
 
 class ListCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_recall_quoted_query_and_empty_input(self):
+        update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
+        context = object()
+        for raw in ('"physical AI"', 'physical AI', "'physical AI'"):
+            with patch.object(bot, 'command_argument_text', return_value=raw), patch.object(bot, 'execute_writing_tool', new_callable=AsyncMock) as execute:
+                await bot.recall_command(update, context)
+                execute.assert_awaited_once_with(update, context, 'recall', {'query': 'physical AI'})
+        for raw in ('', '""'):
+            with patch.object(bot, 'command_argument_text', return_value=raw), patch.object(bot, 'execute_writing_tool', new_callable=AsyncMock) as execute:
+                await bot.recall_command(update, context)
+                execute.assert_not_awaited()
+
     async def test_modes_are_forwarded_and_invalid_input_is_rejected(self):
         update = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()))
         context = object()

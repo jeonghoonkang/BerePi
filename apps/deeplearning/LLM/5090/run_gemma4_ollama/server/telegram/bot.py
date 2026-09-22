@@ -1116,6 +1116,16 @@ async def allom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await execute_writing_tool(update, context, "allom", arguments)
 
 
+async def recall_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = command_argument_text(update).strip()
+    if len(query) >= 2 and query[0] in ('"', "'") and query[-1] == query[0]:
+        query = query[1:-1].strip()
+    if not query:
+        await update.message.reply_text('검색어를 입력해 주세요. 예: /recall "피지컬AI"')
+        return
+    await execute_writing_tool(update, context, "recall", {"query": query})
+
+
 async def findm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         arguments = parse_findm_command(command_argument_text(update))
@@ -1129,7 +1139,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
     await update.message.reply_text(
         "프롬프트를 보내면 Gemma4 Ollama 서버에 전달합니다. "
-        "문서 도구는 /boost, /list, /ls, /allom, /findm 명령으로 사용할 수 있습니다."
+        "문서 도구는 /boost, /list, /ls, /allom, /findm, /recall 명령으로 사용할 수 있습니다."
     )
 
 
@@ -1146,6 +1156,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/list all - 최대 50개, 초과 시 /list full 안내\n"
         "/list full - 모든 항목을 나누어 회신\n"
         "/allom 메모 내용 - 방·토픽·작성자별 WebDAV 메모 저장\n"
+        '/recall "단어" - 내용이 일치하는 Markdown 파일 목록과 전체 내용\n'
         "/findm [--page-size N] [--author ID] [--room ID] [--topic ID] 검색어 - 메모와 원본 문서 검색"
     )
 
@@ -1228,6 +1239,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ls", list_command))
     application.add_handler(CommandHandler("allom", allom_command))
     application.add_handler(CommandHandler("findm", findm_command))
+    application.add_handler(CommandHandler("recall", recall_command))
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)

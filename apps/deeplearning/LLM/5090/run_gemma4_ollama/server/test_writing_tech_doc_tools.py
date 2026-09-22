@@ -37,7 +37,18 @@ class WritingTechDocToolRunnerTests(unittest.TestCase):
 
     def test_catalog_exposes_requested_function_tools(self):
         names = [item["function"]["name"] for item in self.runner.catalog()]
-        self.assertEqual(names, ["boost", "list", "allom", "findm"])
+        self.assertEqual(names, ["recall", "boost", "list", "allom", "findm"])
+
+    def test_recall_query_is_literal_and_full_contents_are_preserved(self):
+        invocation = self.runner.prepare({"tool": "recall", "query": "--literal query"})
+        self.assertEqual(invocation.argv, [*self.base, "recall", "--", "--literal query"])
+        with self.assertRaises(ToolValidationError):
+            self.runner.prepare({"tool": "recall", "query": " "})
+        content = 'full document\n' * 1000
+        with patch("writing_tech_doc_tools.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout=content, stderr="")):
+            result = self.runner.run({"tool": "recall", "query": "document"})
+        self.assertEqual(result['stdout'], content)
+        self.assertFalse(result['output_truncated'])
 
     def test_prepare_builds_shell_free_boost_and_list_invocations(self):
         boost = self.runner.prepare({"tool": "boost", "dry_run": True, "file": "회의록.md"})
@@ -160,7 +171,7 @@ class WritingTechDocToolApiTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(data["name"], "writing-tech-doc")
         self.assertEqual([item["function"]["name"] for item in data["tools"]],
-                         ["boost", "list", "allom", "findm"])
+                         ["recall", "boost", "list", "allom", "findm"])
 
     def test_execute_endpoint_dispatches_nested_arguments(self):
         request = urllib.request.Request(
