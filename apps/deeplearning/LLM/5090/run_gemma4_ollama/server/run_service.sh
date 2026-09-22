@@ -5,18 +5,23 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [service_port] [gpu] [ollama_port] [--ai-server-list-token TOKEN]
+Usage: $(basename "$0") [service_port] [gpu] [ollama_port] [--ai-server-list-token TOKEN] [--webdav_store [0|1]]
 
 Starts the Gemma4 service. When service_port is provided, a separate Ollama
 instance is created under instances/ollama_<service_port>. GPU may be a device
 index such as 0 or 1, or auto/all/cpu/none. If ollama_port is omitted, it
 defaults to service_port + 10000.
+--webdav_store 1 enables writing-tech-doc tools; 0 disables them.
+With no value, --webdav_store enables the tools. When omitted, the
+WRITING_TECH_DOC_TOOLS_ENABLED environment setting is preserved (default: enabled).
 
 Examples:
   $(basename "$0")
   $(basename "$0") 2500 0
   $(basename "$0") 2501 1
   $(basename "$0") 2500 0 11434
+  $(basename "$0") 2500 0 --webdav_store 1
+  $(basename "$0") 2500 0 --webdav_store 0
   $(basename "$0") --ai-server-list-token ghp_xxx
   $(basename "$0") 8083 --ai-server-list-token ghp_xxx
   GEMMA4_SERVER_PORT=8084 $(basename "$0")
@@ -35,6 +40,22 @@ OLLAMA_PORT_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --webdav_store|--webdav-store)
+      export WRITING_TECH_DOC_TOOLS_ENABLED=1
+      case "${2:-}" in
+        0|1) export WRITING_TECH_DOC_TOOLS_ENABLED="$2"; shift ;;
+      esac
+      shift
+      ;;
+    --webdav_store=*|--webdav-store=*)
+      webdav_store_value="${1#*=}"
+      if [[ "${webdav_store_value}" != "0" && "${webdav_store_value}" != "1" ]]; then
+        echo "--webdav_store expects 0 or 1" >&2
+        exit 2
+      fi
+      export WRITING_TECH_DOC_TOOLS_ENABLED="${webdav_store_value}"
+      shift
+      ;;
     --ai-server-list-token)
       if [[ -z "${2:-}" ]]; then
         echo "--ai-server-list-token requires a token value" >&2

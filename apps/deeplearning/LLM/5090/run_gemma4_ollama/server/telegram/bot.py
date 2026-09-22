@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
+from telegram.error import RetryAfter
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 
@@ -1068,9 +1069,18 @@ async def execute_writing_tool(
     try:
         result = await asyncio.to_thread(call_writing_tool, tool, **arguments)
         chunks = split_message(writing_tool_result_text(result))
-        await progress.edit_text(chunks[0])
-        for chunk in chunks[1:]:
-            await update.message.reply_text(chunk)
+        for index, chunk in enumerate(chunks):
+            if index:
+                await asyncio.sleep(1)
+            send = progress.edit_text if index == 0 else update.message.reply_text
+            while True:
+                try:
+                    await send(chunk)
+                    break
+                except RetryAfter as exc:
+                    delay = exc.retry_after
+                    seconds = delay.total_seconds() if hasattr(delay, "total_seconds") else float(delay)
+                    await asyncio.sleep(seconds + 1)
     except Exception as exc:
         logger.exception("Failed to execute writing-tech-doc tool: %s", tool)
         await progress.edit_text(f"{tool} 실행 중 오류가 발생했습니다.\n{exc}")
@@ -1086,7 +1096,11 @@ async def boost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def list_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await execute_writing_tool(update, context, "list", {})
+    mode = command_argument_text(update).strip().lower() or "recent"
+    if mode not in {"recent", "all", "full"}:
+        await update.message.reply_text("사용법: /list (최근 10개), /list all (최대 50개), /list full (전체)")
+        return
+    await execute_writing_tool(update, context, "list", {"mode": mode})
 
 
 async def allom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1128,7 +1142,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "3. 생성된 답변을 다시 전달합니다.\n\n"
         "문서 도구:\n"
         "/boost [--dry-run] [파일명] - Markdown 기술 문서 보강\n"
-        "/list 또는 /ls - allom/boost 파일과 WebDAV 경로 확인\n"
+        "/list 또는 /ls - 최근 10개 파일과 WebDAV 경로\n"
+        "/list all - 최대 50개, 초과 시 /list full 안내\n"
+        "/list full - 모든 항목을 나누어 회신\n"
         "/allom 메모 내용 - 방·토픽·작성자별 WebDAV 메모 저장\n"
         "/findm [--page-size N] [--author ID] [--room ID] [--topic ID] 검색어 - 메모와 원본 문서 검색"
     )

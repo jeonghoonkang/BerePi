@@ -152,7 +152,10 @@ class WritingTechDocToolRunner:
                 "function": {
                     "name": "list",
                     "description": "allom 메모와 boost 입력·출력 파일의 WebDAV 경로를 조회합니다.",
-                    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+                    "parameters": {"type": "object", "properties": {
+                        "mode": {"type": "string", "enum": ["recent", "all", "full"],
+                                 "description": "recent: newest 10, all: up to 50, full: every entry"}
+                    }, "additionalProperties": False},
                 },
             },
             {
@@ -208,7 +211,7 @@ class WritingTechDocToolRunner:
         common_fields = {"tool", "name", "user_id", "username", "password"}
         tool_fields = {
             "boost": {"file", "dry_run"},
-            "list": set(),
+            "list": {"mode"},
             "allom": {"content", "room", "topic", "author", "author_name"},
             "findm": {"query", "page_size", "author", "room", "topic"},
         }
@@ -237,7 +240,10 @@ class WritingTechDocToolRunner:
             return ToolInvocation(name, argv)
 
         if name == "list":
-            return ToolInvocation(name, [*base, "list"])
+            mode = payload.get("mode", "recent")
+            if mode not in ("recent", "all", "full"):
+                raise ToolValidationError("list mode must be recent, all, or full")
+            return ToolInvocation(name, [*base, "list", *([mode] if mode != "recent" else [])])
 
         if name == "allom":
             content = _clean_text(payload.get("content"), "content", maximum=1_000_000)
@@ -304,7 +310,10 @@ class WritingTechDocToolRunner:
             raise ToolUnavailableError(
                 f"{invocation.name} exceeded the {self.timeout_seconds}s timeout"
             ) from exc
-        stdout, stdout_truncated = self._truncate(completed.stdout or "")
+        if invocation.name == "list" and invocation.argv[-1] == "full":
+            stdout, stdout_truncated = completed.stdout or "", False
+        else:
+            stdout, stdout_truncated = self._truncate(completed.stdout or "")
         stderr, stderr_truncated = self._truncate(completed.stderr or "")
         return {
             "ok": completed.returncode == 0,

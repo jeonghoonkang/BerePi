@@ -141,6 +141,20 @@ POST /api/cancel-pending-prompts
 
 ## Writing Tech Doc 도구
 
+`--webdav_store` 인자로 문서 도구 실행을 켜거나 끌 수 있습니다.
+
+```bash
+bash run_service.sh 2500 0 --webdav_store 1  # 활성화
+bash run_service.sh 2500 0 --webdav_store 0  # 비활성화
+python3 server.py --webdav_store 0          # 서버 직접 실행 시에도 지원
+```
+
+`--webdav_store`만 지정하면 활성화됩니다. `--webdav-store` 및 `--webdav_store=0` 형식도 지원합니다.
+인자를 생략하면 `WRITING_TECH_DOC_TOOLS_ENABLED` 환경변수를 따르며, 환경변수도 없으면 기존처럼 활성화됩니다.
+명시한 인자가 환경변수보다 우선합니다. 비활성화하면 `allom`, `boost`, `findm`, `list`/`ls` 도구 요청을
+거부하고 workshot CLI를 실행하지 않습니다. 일반 LLM 대화와 Telegram 봇은 계속 사용할 수 있습니다.
+활성화는 도구 요청을 허용하는 설정이며, 서버 시작 시 문서 저장 명령을 즉시 실행하는 것은 아닙니다.
+
 서버는 `workshot/agent/writing_tech_doc/webdav_enhance.py`의 `boost`, `list`/`ls`, `allom`, `findm`을 인증된 도구 API로 제공합니다. 실제 WebDAV 기능은 기존 CLI가 담당하고, 이 서버의 `writing_tech_doc_tools.py`는 입력 검증·실행 직렬화·시간 제한·출력 캡처를 담당합니다. 셸을 사용하지 않으며 `allom` 본문은 프로세스 인자가 아닌 표준입력으로 전달합니다.
 
 서버 실행 전에 경로를 지정합니다. `BerePi`와 `workshot`이 같은 상위 디렉터리에 있으면 CLI 경로는 자동으로 탐색할 수 있지만 운영 서비스에서는 명시적인 경로를 권장합니다.

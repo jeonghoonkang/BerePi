@@ -4608,6 +4608,10 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="GitHub token used to read the AI server list markdown file.",
     )
+    parser.add_argument(
+        "--webdav_store", "--webdav-store", nargs="?", const="1", choices=("0", "1"),
+        default=None, help="Enable (1) or disable (0) writing-tech-doc tools; omitted preserves environment setting.",
+    )
     return parser.parse_args()
 
 
@@ -5171,6 +5175,8 @@ class Gemma4ThreadingHTTPServer(ThreadingHTTPServer):
 def main() -> int:
     global AI_SERVER_LIST_TOKEN
     args = parse_args()
+    if args.webdav_store is not None:
+        WRITING_TECH_DOC_TOOL_RUNNER.enabled = args.webdav_store == "1"
     if args.ai_server_list_token:
         AI_SERVER_LIST_TOKEN = args.ai_server_list_token.strip()
 

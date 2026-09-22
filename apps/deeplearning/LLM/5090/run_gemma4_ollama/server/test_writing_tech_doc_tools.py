@@ -64,6 +64,18 @@ class WritingTechDocToolRunnerTests(unittest.TestCase):
         )
         self.assertEqual(invocation.stdin_text, "첫 줄\n둘째 줄")
 
+    def test_list_modes_and_untruncated_full_output(self):
+        for mode in ("all", "full"):
+            self.assertEqual(self.runner.prepare({"tool": "list", "mode": mode}).argv[-2:], ["list", mode])
+        with self.assertRaises(ToolValidationError):
+            self.runner.prepare({"tool": "list", "mode": "invalid"})
+        long_output = "entry\n" * 1000
+        completed = subprocess.CompletedProcess([], 0, stdout=long_output, stderr="")
+        with patch("writing_tech_doc_tools.subprocess.run", return_value=completed):
+            result = self.runner.run({"tool": "list", "mode": "full"})
+        self.assertEqual(result["stdout"], long_output)
+        self.assertFalse(result["output_truncated"])
+
     def test_prepare_makes_findm_noninteractive_and_validates_page_size(self):
         invocation = self.runner.prepare({"tool": "findm", "query": "서버 연동", "page_size": 7})
         self.assertEqual(
