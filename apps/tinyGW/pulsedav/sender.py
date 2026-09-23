@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import os
+import platform
+import shlex
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +26,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reboot", action="store_true", help="Mark this one-shot send as a reboot-time run.")
     parser.add_argument("--loop", action="store_true", help="Run continuously using the configured interval.")
     parser.add_argument("--interval-minutes", type=int, help="Override interval for loop mode.")
+    parser.add_argument("--gateway-watchdog", action="store_true", help="Check the Linux default gateway; reboot after 30 minutes of continuous ping failure.")
+    parser.add_argument("--gateway-dry-run", action="store_true", help="Check normally but never reboot (requires --gateway-watchdog).")
+    parser.add_argument("--install-crontab", action="store_true", help="Replace this installation's matching cron jobs with the current arguments.")
     parser.add_argument(
         "--config",
         help="Path to a settings JSON file. Defaults to apps/tinyGW/pulsedav/settings.json",
@@ -36,7 +43,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Send ipTIME ping status and device list to WebDAV before the normal PulseDAV report.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.gateway_dry_run and not args.gateway_watchdog:
+        parser.error("--gateway-dry-run requires --gateway-watchdog")
+    if args.gateway_watchdog and (args.once or args.loop or args.reboot or args.iptime_list):
+        parser.error("--gateway-watchdog runs separately from report sending options")
+    if args.print_crontab and args.install_crontab:
+        parser.error("choose --print-crontab or --install-crontab")
+    return args
 
 
 def current_time_text() -> str:
@@ -60,12 +74,19 @@ def print_upload_targets(result: dict[str, object]) -> None:
             print(f"  - {destination_url}")
 
 
-def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -> list[str]:
+def build_crontab_lines(config_path: str | None, interval_minutes: int | None,
+                        gateway_watchdog: bool = False, gateway_dry_run: bool = False) -> list[str]:
     """Build example crontab lines for the current CLI configuration."""
-    app_dir = Path(__file__).resolve().parent
-    python_bin = sys.executable or "/usr/bin/python3"
+    app_dir = shlex.quote(str(Path(__file__).resolve().parent))
+    python_bin = shlex.quote(sys.executable or "/usr/bin/python3")
+    if gateway_watchdog:
+        command = f"cd {app_dir} && {python_bin} sender.py --gateway-watchdog"
+        if gateway_dry_run:
+            command += " --gateway-dry-run"
+        command += " > gateway-watchdog.log 2>&1"
+        return [f"{schedule} {command}".replace("%", r"\%") for schedule in ("@reboot", "0 * * * *")]
     resolved_config_path = resolve_settings_path(config_path)
-    config_args = f" --config {resolved_config_path}" if config_path else ""
+    config_args = f" --config {shlex.quote(str(resolved_config_path))}" if config_path else ""
 
     settings = load_settings(config_path)
     configured_interval = int(
@@ -85,18 +106,36 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -
     base_command = f"{python_bin} sender.py --once{config_args}"
     reboot_log_command = f"{{ echo 'reboot 시점'; {timestamp_command}; {reboot_command}; }} > pulsedav.log 2>&1"
     log_command = f"{{ {timestamp_command}; {base_command}; }} > pulsedav.log 2>&1"
-    return [
+    return [line.replace("%", r"\%") for line in [
         f"@reboot cd {app_dir} && {reboot_log_command}",
         f"*/{cron_interval} * * * * cd {app_dir} && {log_command}",
-    ]
+    ]]
 
 
 def main() -> int:
     args = parse_args()
+    try:
+        if args.gateway_watchdog and platform.system() != "Linux":
+            raise RuntimeError("게이트웨이 자동 재부팅은 Linux에서 지원합니다.")
+        if args.install_crontab and os.name != "posix":
+            raise RuntimeError("crontab 등록은 Linux/macOS에서 지원합니다.")
+        if args.install_crontab and args.gateway_watchdog and not args.gateway_dry_run and os.geteuid() != 0:
+            raise RuntimeError("자동 재부팅 감시는 sudo로 root crontab에 등록하세요.")
+        if args.print_crontab or args.install_crontab:
+            lines = build_crontab_lines(args.config, args.interval_minutes, args.gateway_watchdog, args.gateway_dry_run)
+            if args.install_crontab:
+                from cron_manager import install_crontab
+                backup = install_crontab(lines, Path(__file__).resolve().parent, args.gateway_watchdog)
+                print(f"crontab 등록 완료 (동일 작업 교체). 이전 설정 백업: {backup}")
+            print("\n".join(lines))
+            return 0
+        if args.gateway_watchdog:
+            from gateway_watchdog import run_watchdog
+            return run_watchdog(Path(__file__).resolve().parent, args.gateway_dry_run)
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"PulseDAV 실행 실패: {exc}", file=sys.stderr)
+        return 1
     settings = load_settings(args.config)
-    if args.print_crontab:
-        print("\n".join(build_crontab_lines(args.config, args.interval_minutes)))
-        return 0
 
     if args.iptime_list:
         try:
