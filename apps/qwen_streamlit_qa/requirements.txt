@@ -1,0 +1,6 @@
+torch>=2.6,<3
+transformers>=4.45,<5
+streamlit>=1.40,<2
+huggingface_hub>=0.26,<1
+rich>=13,<15
+accelerate>=1,<2

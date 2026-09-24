@@ -36,6 +36,22 @@ chmod +x run_service.sh start.sh stop.sh
 
 브라우저에서 `http://SERVER_IP:8082`를 엽니다. `run_service.sh`는 포그라운드에서 실행되며 `Ctrl+C`로 종료합니다.
 
+서버 시작 로그에는 바인딩 주소와 함께 로컬 접속 URL, 인터페이스별 네트워크 IPv4 주소,
+접속 URL을 표시합니다. 예를 들어 할당된 IP가 `192.168.0.25`이면 다음과 같습니다.
+
+```text
+Gemma4 listen address: 0.0.0.0:8082
+  Local URL: http://127.0.0.1:8082
+  Network IPv4 (en0): 192.168.0.25
+    Network URL: http://192.168.0.25:8082
+```
+
+`0.0.0.0`은 모든 IPv4 인터페이스에서 요청을 받는 바인딩 주소입니다.
+같은 네트워크의 다른 기기에서는 출력된 `Network URL`을 사용합니다.
+VPN·가상 인터페이스가 있으면 여러 주소가 표시될 수 있습니다.
+`127.0.0.1`로 바인딩하면 내부 IP는 표시하지만 네트워크 접속 URL은 안내하지 않습니다.
+macOS는 `/sbin/ifconfig`, Linux는 `ifconfig` 또는 `ip` 명령으로 주소를 확인합니다.
+
 백그라운드 실행과 중지:
 
 ```bash
@@ -62,7 +78,7 @@ chmod +x run_service.sh start.sh stop.sh
 
 서비스 포트를 지정하면 상태 파일이 `instances/ollama_<서비스_포트>/` 아래에 분리됩니다. Ollama 포트를 생략하면 `서비스 포트 + 10000`을 사용합니다. 각 인스턴스는 별도의 GPU 선택 파일, PID 파일 및 로그 디렉터리를 가집니다.
 
-GPU 값은 숫자 인덱스(`0`, `1` 등), `auto`, `all`, `cpu`, `none` 중 하나입니다.
+GPU 값은 숫자 인덱스(`0`, `1` 등), `auto`, `all`, `metal`, `mps`, `cpu`, `none` 중 하나입니다. `metal`/`mps`는 macOS용입니다.
 
 환경 변수로 포트를 지정할 수도 있습니다.
 
@@ -298,7 +314,7 @@ POST /api/tools/writing-tech-doc
 
 웹 UI에서 선택한 값은 다음 파일에 저장됩니다.
 
-- `gpu-selection`: `auto`, `all`, `cpu`, `none` 또는 GPU 인덱스
+- `gpu-selection`: `auto`, `all`, `metal`, `mps`, `cpu`, `none` 또는 GPU 인덱스
 - `model-selection`: Ollama 모델 이름
 
 직접 지정하는 예시:
@@ -309,7 +325,7 @@ echo gemma4:31b > model-selection
 ./run_service.sh
 ```
 
-숫자 GPU 인덱스를 선택하고 `nvidia-smi`를 사용할 수 있으면 인덱스를 GPU UUID로 변환해 `CUDA_VISIBLE_DEVICES`에 적용합니다. `cpu` 또는 `none`은 `CUDA_VISIBLE_DEVICES=-1`을 사용합니다.
+Linux에서 숫자 GPU 인덱스를 선택하고 `nvidia-smi`를 사용할 수 있으면 인덱스를 GPU UUID로 변환해 `CUDA_VISIBLE_DEVICES`에 적용합니다. `cpu` 또는 `none`은 `CUDA_VISIBLE_DEVICES=-1`을 사용합니다.
 
 GPU가 하나뿐인데 잘못된 인덱스를 지정하면 경고 후 유일한 GPU를 사용합니다. GPU가 여러 개인 경우에는 사용 가능한 인덱스를 표시하고 시작을 중단합니다.
 
@@ -324,7 +340,55 @@ systemctl --user status gemma4-ollama-8082.service
 journalctl --user -u gemma4-ollama-8082.service -f
 ```
 
+## macOS에서 실행
+
+macOS 기본 Bash 3.2에서도 실행할 수 있습니다. Python 3와 Ollama를 준비한 뒤 실행합니다.
+Ollama는 PATH 외에 `/Applications/Ollama.app`과 `~/Applications/Ollama.app`에서도 찾습니다.
+
+```bash
+/bin/bash ./run_service.sh
+```
+
+Apple Silicon에서는 Ollama가 Metal GPU를 자동으로 사용합니다. `system_profiler`로
+Apple GPU를 탐지하여 웹 UI의 GPU 목록에 표시하며 NVIDIA 도구는 필요하지 않습니다.
+`metal` 또는 `auto`를 선택하세요. 이전 설정 파일의 숫자 GPU 값은 Mac에서 `metal`로
+해석합니다. `CUDA_VISIBLE_DEVICES`는 Mac의 GPU 제어에 사용하지 않습니다.
+
+```bash
+printf 'metal\n' > gpu-selection
+/bin/bash ./run_service.sh
+# 별도 포트로 실행
+/bin/bash ./run_service.sh 8083 metal
+```
+
+웹 UI에서 Mac GPU 선택을 저장하면 Ollama를 재시작하지 않고 다음 추론 요청부터
+반영합니다. `cpu`/`none`은 이 웹/API 서버의 요청에 `options.num_gpu=0`을 넣습니다.
+`auto`/`metal`은 Ollama의 자동 GPU 배치를 사용하며, 요청에 명시한 `options.num_gpu`는
+유지됩니다. 다른 앱에서 Ollama에 직접 보낸 요청에는 이 서버의 CPU 설정이 적용되지 않습니다.
+이미 진행 중인 요청에는 변경이 소급 적용되지 않습니다.
+
+이미 실행 중인 macOS Ollama는 종료하지 않고 재사용합니다.
+별도 인스턴스가 필요하면 포트를 지정합니다.
+
+```bash
+/bin/bash ./run_service.sh 8083 auto
+```
+
+최초 실행은 모델 다운로드가 완료된 뒤 웹 서버를 시작합니다. 모델 없이 웹 서버만
+점검하려면 `AUTO_PULL=0 /bin/bash ./run_service.sh`를 사용합니다.
+이 상태에서는 모델을 설치하기 전까지 추론 요청이 실패할 수 있습니다.
+
+답변 생성 후 `ollama ps`의 `PROCESSOR` 열에서 GPU 적재 상태를 확인합니다.
+8083 인스턴스는 `OLLAMA_HOST=127.0.0.1:18083 ollama ps`를 사용합니다.
+GPU 목록과 선택 표시는 설정 상태이므로 실제 적재 여부는 이 명령으로 확인하세요.
+[Mac GPU 검증 결과와 안내](../readme.md), [Ollama 공식 FAQ](https://docs.ollama.com/faq).
+
 ## macOS LaunchAgent
+
+아래 plist의 `ProgramArguments`, `WorkingDirectory`, 로그 경로를 실제 설치 경로로
+수정한 뒤 등록합니다. `PATH`에는 Apple Silicon 및 Intel Homebrew 경로가 포함되어
+있습니다. Python 3와 Ollama가 해당 경로에서 발견되는지 먼저 확인하세요.
+
 
 ```bash
 mkdir -p ~/Library/LaunchAgents

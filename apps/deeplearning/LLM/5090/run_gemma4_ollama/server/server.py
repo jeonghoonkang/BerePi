@@ -9,6 +9,7 @@ import datetime as dt
 import html
 import hmac
 import os
+import platform
 import re
 import secrets
 import signal
@@ -764,7 +765,7 @@ INDEX_HTML = """<!doctype html>
       <div class="prompt-grid">
         <div class="prompt-box">
           <label for="prompt1">Prompt 1</label>
-          <textarea id="prompt1">Reply with one short sentence that the Gemma4 Ollama service is running.</textarea>
+          <textarea id="prompt1">아무 내용 없이 ok 만 회신해 주세요</textarea>
         </div>
         <div class="prompt-box">
           <label for="prompt2">Prompt 2</label>
@@ -3430,6 +3431,9 @@ def images_from_request(incoming: dict[str, Any]) -> list[str]:
 def request_options(incoming: dict[str, Any]) -> dict[str, Any]:
     raw_options = incoming.get("options")
     options = dict(raw_options) if isinstance(raw_options, dict) else {}
+    # CUDA_VISIBLE_DEVICES does not control Apple's Metal backend.
+    if read_selected_gpu() == "cpu":
+        options["num_gpu"] = 0
     try:
         options.setdefault("num_ctx", int(OLLAMA_CONTEXT_LENGTH))
     except ValueError:
@@ -4013,6 +4017,27 @@ def write_selected_model(value: str) -> str:
 
 
 def list_gpus() -> tuple[list[dict[str, Any]], str]:
+    if platform.system() == "Darwin":
+        try:
+            output = subprocess.check_output(
+                ["/usr/sbin/system_profiler", "SPDisplaysDataType", "-json"],
+                stderr=subprocess.STDOUT, text=True, timeout=10,
+            )
+            displays = json.loads(output).get("SPDisplaysDataType", [])
+            gpus = []
+            for display in displays:
+                name = display.get("sppci_model", display.get("_name", "Unknown GPU"))
+                apple = str(name).startswith("Apple")
+                gpus.append({
+                    "index": "metal" if apple else str(len(gpus)),
+                    "name": name,
+                    "memory_total_mb": 0,  # Unified memory is not dedicated VRAM.
+                    "source": "Metal" if apple else "system_profiler",
+                    "selectable": apple,
+                })
+            return gpus, ""
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            return [], str(exc)
     try:
         output = subprocess.check_output(
             [
@@ -4122,6 +4147,10 @@ def normalize_gpu_selection(value: str) -> str:
         return "auto"
     if value in {"cpu", "none"}:
         return "cpu"
+    if value in {"metal", "mps"}:
+        return "metal" if platform.system() == "Darwin" else "auto"
+    if platform.system() == "Darwin" and value.isdigit():
+        return "metal"
     if value.isdigit():
         return value
     return "auto"
@@ -4135,6 +4164,8 @@ def write_selected_gpu(value: str) -> str:
 
 def selected_gpu_label(selected: str, gpus: list[dict[str, Any]]) -> str:
     if selected == "auto":
+        if any(gpu.get("source") == "Metal" for gpu in gpus):
+            return "Auto (Apple Metal; allocation managed by Ollama)"
         return "Auto (all available GPUs)"
     if selected == "cpu":
         return "CPU only"
@@ -4274,6 +4305,8 @@ def cuda_device_for_gpu_selection(selected: str) -> str:
 
 
 def cuda_visible_devices_for_selection(selected: str) -> str:
+    if platform.system() == "Darwin":
+        return "(not applicable on macOS)"
     if selected == "auto":
         return "(unset)"
     if selected == "cpu":
@@ -4286,6 +4319,9 @@ def ollama_environment() -> dict[str, str]:
     env.setdefault("OLLAMA_CONTEXT_LENGTH", OLLAMA_CONTEXT_LENGTH)
     env.setdefault("OLLAMA_KEEP_ALIVE", OLLAMA_KEEP_ALIVE)
     selected = read_selected_gpu()
+    if platform.system() == "Darwin":
+        env.pop("CUDA_VISIBLE_DEVICES", None)
+        return env
     if selected == "auto":
         env.pop("CUDA_VISIBLE_DEVICES", None)
     elif selected == "cpu":
@@ -4349,9 +4385,25 @@ def server_ip() -> str:
 
 def ifconfig_ipv4_addresses() -> list[dict[str, str]]:
     try:
-        output = subprocess.check_output(["ifconfig"], stderr=subprocess.DEVNULL, text=True, timeout=3)
+        command = "/sbin/ifconfig" if platform.system() == "Darwin" else "ifconfig"
+        output = subprocess.check_output([command], stderr=subprocess.DEVNULL, text=True, timeout=3)
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return []
+        # Modern Linux installations may provide iproute2 without net-tools.
+        try:
+            output = subprocess.check_output(
+                ["ip", "-o", "-4", "addr", "show", "up"],
+                stderr=subprocess.DEVNULL, text=True, timeout=3,
+            )
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return []
+        addresses = []
+        for line in output.splitlines():
+            match = re.match(r"\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)/", line)
+            if match and not match[2].startswith("127."):
+                entry = {"interface": match[1], "ip": match[2]}
+                if entry not in addresses:
+                    addresses.append(entry)
+        return addresses
 
     addresses: list[dict[str, str]] = []
     current_interface = ""
@@ -4945,7 +4997,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 return
             ollama_restarted = False
             restart_message = ""
-            if ollama_is_reachable():
+            if platform.system() == "Darwin":
+                restart_message = " Applies to subsequent requests without restarting Ollama. CPU uses num_gpu=0; Auto/Metal uses Ollama GPU allocation."
+            elif ollama_is_reachable():
                 stop_result = stop_ollama_server()
                 if stop_result.get("ok") and not ollama_is_reachable():
                     start_result = start_ollama_server()
@@ -4963,7 +5017,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 {
                     "message": (
                         "GPU selection saved."
-                        f" CUDA_VISIBLE_DEVICES will be {cuda_visible_devices_for_selection(selected)}."
+                        f" CUDA_VISIBLE_DEVICES: {cuda_visible_devices_for_selection(selected)}."
                         f"{restart_message}"
                     ),
                     "selected_gpu": selected,
@@ -5190,6 +5244,22 @@ class Gemma4ThreadingHTTPServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+def print_service_addresses(host: str, port: int) -> None:
+    print(f"Gemma4 listen address: {host}:{port}", flush=True)
+    if host in {"0.0.0.0", "", "127.0.0.1", "localhost"}:
+        print(f"  Local URL: http://127.0.0.1:{port}", flush=True)
+    addresses = ifconfig_ipv4_addresses()
+    for entry in addresses:
+        ip = entry["ip"]
+        print(f"  Network IPv4 ({entry['interface']}): {ip}", flush=True)
+        if host in {"0.0.0.0", "", ip}:
+            print(f"    Network URL: http://{ip}:{port}", flush=True)
+    if not addresses:
+        print("  Network IPv4: no non-loopback address detected", flush=True)
+    if host in {"127.0.0.1", "localhost"}:
+        print("  Local-only listener; network access is disabled.", flush=True)
+
+
 def main() -> int:
     global AI_SERVER_LIST_TOKEN
     args = parse_args()
@@ -5204,7 +5274,7 @@ def main() -> int:
     ACCESS_LOG_FILE.touch(exist_ok=True)
     ensure_api_key_conf()
     httpd = Gemma4ThreadingHTTPServer((HOST, PORT), Gemma4Handler)
-    print(f"Gemma4 service page: http://{HOST}:{PORT}")
+    print_service_addresses(HOST, httpd.server_address[1])
     print(f"Ollama backend: {OLLAMA_BASE_URL}, model={OLLAMA_MODEL}")
     print_gpu_configuration()
     def stop_service(signum, frame):

@@ -81,7 +81,9 @@ find_ollama_bin() {
     return 0
   fi
 
-  for candidate in /usr/local/bin/ollama /opt/homebrew/bin/ollama; do
+  for candidate in /usr/local/bin/ollama /opt/homebrew/bin/ollama \
+    /Applications/Ollama.app/Contents/Resources/ollama \
+    "${HOME}/Applications/Ollama.app/Contents/Resources/ollama"; do
     if [[ -x "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
       return 0
@@ -207,6 +209,16 @@ apply_gpu_selection() {
     selected="$(tr -d '[:space:]' < "${GPU_SELECTION_FILE}")"
   fi
 
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    unset CUDA_VISIBLE_DEVICES
+    echo "macOS: Ollama uses Apple Metal automatically; CPU selection is applied per API request."
+    return 0
+  fi
+  if [[ "${selected}" == "metal" || "${selected}" == "mps" ]]; then
+    echo "Metal/MPS selection requires macOS." >&2
+    return 1
+  fi
+
   case "${selected}" in
     ""|"auto"|"all")
       unset CUDA_VISIBLE_DEVICES
@@ -233,7 +245,9 @@ apply_model_selection() {
 start_ollama_if_needed() {
   if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
     echo "Ollama is already running at ${OLLAMA_BASE_URL}."
-    echo "To stop the existing Ollama service, run: sudo systemctl stop ollama"
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+      echo "To stop the existing Ollama service, run: sudo systemctl stop ollama"
+    fi
   else
     apply_gpu_selection
     start_detached "${LOG_DIR}/ollama.log" "${OLLAMA_BIN}" serve > "${OLLAMA_PID_FILE}"

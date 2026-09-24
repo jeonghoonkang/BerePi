@@ -9,7 +9,7 @@ Usage: $(basename "$0") [service_port] [gpu] [ollama_port] [--ai-server-list-tok
 
 Starts the Gemma4 service. When service_port is provided, a separate Ollama
 instance is created under instances/ollama_<service_port>. GPU may be a device
-index such as 0 or 1, or auto/all/cpu/none. If ollama_port is omitted, it
+index such as 0 or 1, or auto/all/metal/mps/cpu/none. If ollama_port is omitted, it
 defaults to service_port + 10000.
 --webdav_store 1 enables writing-tech-doc tools; 0 disables them.
 With no value, --webdav_store enables the tools. When omitted, the
@@ -100,8 +100,13 @@ if [[ -n "${PORT_ARG}" ]]; then
   export GEMMA4_SERVER_PORT="${PORT_ARG}"
 fi
 
-if [[ -n "${GPU_ARG}" ]] && [[ ! "${GPU_ARG}" =~ ^[0-9]+$|^(auto|all|cpu|none)$ ]]; then
-  echo "Invalid GPU selection: ${GPU_ARG}. Use a GPU index, auto, all, cpu, or none." >&2
+if [[ -n "${GPU_ARG}" ]] && [[ ! "${GPU_ARG}" =~ ^[0-9]+$|^(auto|all|cpu|none|metal|mps)$ ]]; then
+  echo "Invalid GPU selection: ${GPU_ARG}. Use a GPU index, auto, all, metal, mps, cpu, or none." >&2
+  exit 2
+fi
+
+if [[ "${GPU_ARG}" == "metal" || "${GPU_ARG}" == "mps" ]] && [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "Metal/MPS selection requires macOS." >&2
   exit 2
 fi
 
@@ -216,7 +221,9 @@ find_ollama_bin() {
     return 0
   fi
 
-  for candidate in /usr/local/bin/ollama /opt/homebrew/bin/ollama; do
+  for candidate in /usr/local/bin/ollama /opt/homebrew/bin/ollama \
+    /Applications/Ollama.app/Contents/Resources/ollama \
+    "${HOME}/Applications/Ollama.app/Contents/Resources/ollama"; do
     if [[ -x "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
       return 0
@@ -530,6 +537,16 @@ apply_gpu_selection() {
     selected="$(tr -d '[:space:]' < "${GPU_SELECTION_FILE}")"
   fi
 
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    unset CUDA_VISIBLE_DEVICES
+    echo "macOS: Ollama uses Apple Metal automatically; CPU selection is applied per API request."
+    return 0
+  fi
+  if [[ "${selected}" == "metal" || "${selected}" == "mps" ]]; then
+    echo "Metal/MPS selection requires macOS." >&2
+    return 1
+  fi
+
   case "${selected}" in
     ""|"auto"|"all")
       unset CUDA_VISIBLE_DEVICES
@@ -557,6 +574,11 @@ apply_model_selection() {
 
 start_ollama_if_needed() {
   if curl -fsS --max-time 2 "${OLLAMA_BASE_URL}/api/tags" >/dev/null 2>&1; then
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      echo "Using existing Ollama at ${OLLAMA_BASE_URL} (macOS)."
+      echo "GPU selection for this existing instance is managed by Ollama."
+      return 0
+    fi
     echo "Existing Ollama is running at ${OLLAMA_BASE_URL}; restarting it to apply gpu-selection."
     restart_started_ollama
     return
@@ -644,6 +666,6 @@ if [[ -n "${AI_SERVER_LIST_TOKEN_ARG}" ]]; then
 fi
 # The web server owns the bot so UI controls and automatic startup share one process.
 export TELEGRAM_AUTO_START="${TELEGRAM_ENABLED:-1}"
-python3 "${APP_DIR}/server.py" "${SERVER_ARGS[@]}" &
+python3 "${APP_DIR}/server.py" ${SERVER_ARGS[@]+"${SERVER_ARGS[@]}"} &
 SERVER_PID="$!"
 wait "${SERVER_PID}"

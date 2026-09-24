@@ -144,7 +144,9 @@ def load_model(name: str):
     # 애플 실리콘 MPS 디바이스 우선 사용
     if torch.backends.mps.is_available():
         device = torch.device("mps")
-        model = AutoModelForCausalLM.from_pretrained(name, device_map=device)
+        model = AutoModelForCausalLM.from_pretrained(
+            name, torch_dtype=torch.float16,
+        ).to(device).eval()
         generator = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device)
     else:
         # 기존 CUDA 또는 CPU 사용
@@ -156,8 +158,9 @@ def load_model(name: str):
 
 generator = load_model(MODEL_NAME)
 display_gpu_status(generator.tokenizer)
+st.info(f"모델 실행 장치: {generator.model.device}")
 
-prompt = st.text_input("질문을 입력하세요:")
+prompt = st.text_input("질문을 입력하세요:", value="아무 내용 없이 ok 만 회신해 주세요")
 error_area = st.empty()
 if prompt:
     try:
