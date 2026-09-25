@@ -98,6 +98,7 @@ for epoch in range(1, 201):
         loss.backward()               # 4. 역전파 자동 미분
         optimizer.step()              # 5. Adam 가중치 갱신
 
+```
 
 
 
@@ -124,3 +125,4 @@ for epoch in range(1, 201):
 오토인코더(Autoencoder - 비지도 학습): 정상 웨이퍼 파형만 학습한 후, 불량 발생 시 복원 오차(Reconstruction Error) 급증을 감지 (0.1% 미만의 극단적인 불량 데이터 불균형 문제 해결).
 
 시계열 트랜스포머 (PatchTST, Informer): 센서들 사이의 시간적 선후 인과관계를 학습하여 장비 고장을 수 시간 전에 사전 예지보전(PdM).
+**
