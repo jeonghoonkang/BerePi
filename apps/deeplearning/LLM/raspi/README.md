@@ -281,3 +281,38 @@ bash -n install.sh run_service.sh
 테스트는 모의 Ollama를 사용하여 인증, 준비 상태, 생성/대화 API, CPU 제한,
 잘못된 입력, 동시 요청 거부 및 백엔드 오류 후 복구를 검증합니다.
 ARM 설치, systemd 자동 시작, 실제 모델 추론은 대상 Pi에서 별도로 검증해야 합니다.
+
+
+## 시작 시 연결 오류와 접속 주소
+
+이전 실행기에서 아래 메시지 직후 `Gemma4 Pi: ...`가 출력됐다면, Ollama가 준비되기
+전 첫 상태 조회가 실패한 후 재시도에 성공한 것입니다. 실행기는 Ollama API 응답과
+모델 존재 여부를 확인한 다음 웹 서버를 시작합니다. 이는 실제 모델 추론 성공까지
+검증했다는 뜻은 아닙니다.
+
+```text
+curl: (7) Failed to connect to 127.0.0.1 port 11435
+Gemma4 Pi: http://127.0.0.1:8082 model=gemma4:e4b
+```
+
+현재 실행기는 대기 중 일시적인 curl 오류를 `server/logs/ollama-readiness.log`에
+저장하고 다음처럼 준비 상태를 표시합니다. 시작 실패나 대기 시간 초과 시에는
+오류를 출력하고 종료합니다. Ollama 자체의 오류는 `server/logs/ollama.log`에서 확인하세요.
+
+```text
+Waiting for Ollama: http://127.0.0.1:11435 ...
+Ollama API ready: http://127.0.0.1:11435
+```
+
+`GEMMA4_SERVER_HOST=127.0.0.1`이면 Pi 자신에서만 웹 서버에 접속할 수 있습니다.
+시작 로그의 LAN IP는 장비 주소 안내이며 현재 그 주소로 접속 가능하다는 의미는 아닙니다.
+다른 PC에서 접속하려면 `server/config.env`를 다음과 같이 설정하고 서비스를 재시작하세요.
+
+```bash
+GEMMA4_SERVER_HOST=0.0.0.0
+```
+
+그 후 브라우저에서 `http://PI_IP:8082`로 접속합니다. Ollama의 `11435` 바인딩은
+그대로 loopback으로 유지합니다. API 요청에는 기존 `GEMMA4_API_KEY`가 필요합니다.
+Pi 안에서 웹 서버의 실행 여부는 `curl -fsS http://127.0.0.1:8082/health`로 확인할 수 있습니다.
+메모리 경고는 실행을 차단하지 않으며, 실제 추론 성공 여부는 요청을 보내 확인해야 합니다.

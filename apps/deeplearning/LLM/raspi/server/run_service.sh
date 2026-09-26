@@ -76,12 +76,18 @@ trap 'exit 143' TERM
 ollama serve >>"$APP_DIR/logs/ollama.log" 2>&1 &
 OLLAMA_PID=$!
 ready=0
+echo "Waiting for Ollama: $OLLAMA_BASE_URL ..."
 for _ in {1..60}; do
   kill -0 "$OLLAMA_PID" 2>/dev/null || { echo 'Ollama exited; see logs/ollama.log' >&2; exit 1; }
-  if curl -fsS --max-time 2 "$OLLAMA_BASE_URL/api/tags" >/dev/null; then ready=1; break; fi
+  if curl -fsS --max-time 2 "$OLLAMA_BASE_URL/api/tags" >/dev/null 2>"$APP_DIR/logs/ollama-readiness.log"; then ready=1; break; fi
   sleep 1
 done
-(( ready == 1 )) || { echo 'Ollama startup timed out; see logs/ollama.log' >&2; exit 1; }
+if (( ready != 1 )); then
+  echo 'Ollama startup timed out; see logs/ollama.log' >&2
+  cat "$APP_DIR/logs/ollama-readiness.log" >&2
+  exit 1
+fi
+echo "Ollama API ready: $OLLAMA_BASE_URL"
 if ! ollama show "$OLLAMA_MODEL" >/dev/null 2>&1; then
   if [[ "${AUTO_PULL:-1}" != 1 ]]; then
     echo "Model missing: $OLLAMA_MODEL; set AUTO_PULL=1 for the first start." >&2
