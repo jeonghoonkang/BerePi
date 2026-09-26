@@ -13,7 +13,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from server import Config, Server, MAX_OCR_BODY, MAX_IMAGE_BYTES
+from server import Config, Server, MAX_OCR_BODY, MAX_IMAGE_BYTES, ocr_payload
 from PIL import Image
 
 
@@ -227,6 +227,39 @@ class ServerTests(unittest.TestCase):
     def test_ocr_requires_auth(self):
         self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'}, auth=False)[0], 401)
 
+    def test_ocr_timings_separate_preparation_model_check_and_execution(self):
+        clock = [100.0]
+
+        def prepare(data, config):
+            payload = ocr_payload(data, config)
+            clock[0] += 3
+            return payload
+
+        def backend(path, *args):
+            if path == '/api/show':
+                clock[0] += 2
+                return {'capabilities': ['vision']}
+            clock[0] += 10
+            return {'message': {'content': 'text'}, 'total_duration': 8_000_000_000}
+
+        with patch('server.time.monotonic', side_effect=lambda: clock[0]), \
+                patch('server.ocr_payload', side_effect=prepare), \
+                patch.object(self.server, 'backend_json', side_effect=backend):
+            status, result = self.request('/api/ocr', {'image': self.image()})
+        self.assertEqual(status, 200)
+        self.assertEqual(result['timings'], {
+            'image_receive_seconds': 0.0, 'image_prepare_seconds': 3.0,
+            'backend_request_seconds': 10.0, 'llm_execution_seconds': 8.0,
+            'tesseract_execution_seconds': None, 'server_total_seconds': 15.0,
+        })
+        self.assertEqual(result['elapsed_seconds'], 12.0)
+
+    def test_ocr_missing_backend_duration_is_not_fabricated(self):
+        status, result = self.request('/api/ocr', {'image': self.image()})
+        self.assertEqual(status, 200)
+        self.assertIsNone(result['timings']['llm_execution_seconds'])
+        self.assertGreaterEqual(result['timings']['backend_request_seconds'], 0)
+
     def test_invalid_ocr_rejected_and_slot_released(self):
         image = self.image()
         for data in [[], {}, {'image': 123}, {'image': ''}, {'image': '%bad-base64%'},
@@ -343,6 +376,9 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(result['engine'], 'tesseract')
             self.assertEqual(result['text'], result['response'])
             self.assertEqual(result['requested_model'], 'Tesseract (kor+eng)')
+            self.assertIsNone(result['timings']['llm_execution_seconds'])
+            self.assertIsNone(result['timings']['backend_request_seconds'])
+            self.assertGreaterEqual(result['timings']['tesseract_execution_seconds'], 0)
             engine.assert_called_once()
         for error, code in [(RuntimeError('missing'), 503), (subprocess.TimeoutExpired('tesseract', 90), 504)]:
             with patch('server.tesseract_ocr', side_effect=error):

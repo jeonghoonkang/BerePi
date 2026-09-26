@@ -618,6 +618,36 @@
         }
         return result;
       }
+      function uploadOcr(data, onUploaded) {
+        // fetch does not expose upload completion separately from the response.
+        const body = JSON.stringify(data);
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/ocr");
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.responseType = "json";
+          let uploadSeconds = null;
+          xhr.upload.onload = () => {
+            uploadSeconds = (performance.now() - started) / 1000;
+            onUploaded(uploadSeconds);
+          };
+          xhr.onload = () => {
+            const result = xhr.response;
+            if (xhr.status === 401) session(null);
+            if (xhr.status < 200 || xhr.status >= 300) {
+              reject(new Error(result?.error || "요청 실패 (" + xhr.status + ")"));
+            } else if (!result || typeof result !== "object") {
+              reject(new Error("올바르지 않은 OCR 응답입니다."));
+            } else {
+              resolve({ result, uploadSeconds });
+            }
+          };
+          xhr.onerror = () => reject(new Error("OCR 서버 연결에 실패했습니다."));
+          xhr.onabort = () => reject(new Error("OCR 요청이 취소되었습니다."));
+          const started = performance.now();
+          xhr.send(body);
+        });
+      }
       function pairs(id, items) {
         const list = $(id);
         list.replaceChildren();
@@ -1151,23 +1181,38 @@
         $("ocrDownload").disabled = true;
         $("ocrStats").replaceChildren();
         $("ocrAnswer").textContent = "이미지에서 텍스트를 추출하고 있습니다…";
+        let uploadedSeconds = null;
         const update = () =>
           ($("ocrStatus").textContent =
-            "OCR 처리 중 · " + seconds((performance.now() - start) / 1000));
+            (uploadedSeconds === null
+              ? "이미지 전송 중"
+              : "이미지 전송 완료 (" + seconds(uploadedSeconds) + ") · OCR 응답 대기 중") +
+            " · 전체 " + seconds((performance.now() - start) / 1000));
         update();
         const timer = setInterval(update, 250);
         try {
-          const d = await api("/api/ocr", {
+          const { result: d, uploadSeconds } = await uploadOcr({
             image: ocrImage,
             engine: $("ocrEngine").value,
             instructions: $("ocrInstructions").value,
+          }, (elapsed) => {
+            uploadedSeconds = elapsed;
+            if (version === generation && loggedIn) update();
           });
           if (version !== generation || !loggedIn) return;
           ocrText = d.response || "";
           $("ocrAnswer").textContent = ocrText || "인식된 텍스트가 없습니다.";
           for (const text of [
-            "OCR 엔진/모델: " + (d.model || "미제공"),
-            "소요시간: " + seconds(d.elapsed_seconds),
+            "OCR 엔진/모델: " + (d.model || d.requested_model || "미제공"),
+            "이미지 전송 (브라우저 업로드): " + seconds(uploadSeconds),
+            "이미지 수신 (서버): " + seconds(d.timings?.image_receive_seconds),
+            "이미지 검증/준비: " + seconds(d.timings?.image_prepare_seconds),
+            ...(d.engine === "tesseract"
+              ? ["Tesseract 실행: " + seconds(d.timings?.tesseract_execution_seconds)]
+              : ["LLM 실행 (로딩 포함): " + seconds(d.timings?.llm_execution_seconds),
+                 "모델 로딩: " + seconds(d.load_duration === undefined ? null : d.load_duration / 1e9),
+                 "Ollama 요청/응답: " + seconds(d.timings?.backend_request_seconds)]),
+            "전체 소요시간: " + seconds((performance.now() - start) / 1000),
             "출력 토큰: " + fmt(d.eval_count),
           ]) {
             const span = document.createElement("span");

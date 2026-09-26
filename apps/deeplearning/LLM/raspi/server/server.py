@@ -440,6 +440,7 @@ class Handler(BaseHTTPRequestHandler):
             self.server.inference.release()
 
     def run_inference(self):
+        request_started = time.monotonic()
         try:
             if self.headers.get("Transfer-Encoding"):
                 raise ValueError("Chunked request bodies are not supported")
@@ -448,9 +449,14 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= limit:
                 self.reply(413, {"error": f"JSON body must be 1 to {limit} bytes"})
                 return
-            data = json.loads(self.rfile.read(length))
+            receive_started = time.monotonic()
+            body = self.rfile.read(length)
+            received = time.monotonic()
+            data = json.loads(body)
+            del body
             payload = (ocr_payload(data, self.server.config) if self.path == "/api/ocr"
                        else generation_payload(data, self.path, self.server.config))
+            prepared = time.monotonic()
         except ImportError:
             self.reply(503, {"error": "OCR 이미지 검증 모듈이 없습니다. sudo apt-get install python3-pil 실행 후 재시도하세요."})
             return
@@ -462,7 +468,9 @@ class Handler(BaseHTTPRequestHandler):
             backend_path = "/api/chat" if self.path == "/api/ocr" else self.path
             engine = data.get("engine", "gemma") if self.path == "/api/ocr" else None
             if engine == "tesseract":
+                execution_started = time.monotonic()
                 result = tesseract_ocr(data["image"])
+                execution_seconds = time.monotonic() - execution_started
                 result["text"] = result["response"]
             else:
                 if engine == "gemma":
@@ -472,7 +480,9 @@ class Handler(BaseHTTPRequestHandler):
                     if "vision" not in info.get("capabilities", []):
                         self.reply(422, {"error": "선택 모델은 이미지 OCR을 지원하지 않습니다."})
                         return
+                execution_started = time.monotonic()
                 result = self.server.backend_json(backend_path, payload, self.server.config.timeout)
+                execution_seconds = time.monotonic() - execution_started
             if not isinstance(result, dict):
                 raise ValueError("Invalid backend response")
             if engine == "gemma" and "error" not in result:
@@ -485,6 +495,20 @@ class Handler(BaseHTTPRequestHandler):
             result["requested_model"] = result["model"] if engine == "tesseract" else self.server.config.model
             if engine:
                 result["engine"] = engine
+                # Backend request wall time includes local HTTP/JSON overhead;
+                # only Ollama's total_duration measures its own execution.
+                duration = result.get("total_duration")
+                llm_seconds = (round(duration / 1e9, 3)
+                               if engine == "gemma" and type(duration) in (int, float)
+                               and 0 <= duration < float("inf") else None)
+                result["timings"] = {
+                    "image_receive_seconds": round(received - receive_started, 3),
+                    "image_prepare_seconds": round(prepared - received, 3),
+                    "backend_request_seconds": round(execution_seconds, 3) if engine == "gemma" else None,
+                    "llm_execution_seconds": llm_seconds,
+                    "tesseract_execution_seconds": round(execution_seconds, 3) if engine == "tesseract" else None,
+                    "server_total_seconds": round(time.monotonic() - request_started, 3),
+                }
             self.reply(502 if "error" in result else 200, result)
         except urllib.error.HTTPError as exc:
             self.reply(502, {"error": ("Gemma 이미지 OCR 실패: 서버의 메모리와 Ollama 로그를 확인해 주세요."

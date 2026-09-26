@@ -354,6 +354,21 @@ Pillow로 검증하고, JSON 한도는 base64 최대 길이에 64 KiB를 더한 
 회신 엔진/모델과 처리 통계를 확인할 수 있습니다. `eval_count`는 Gemma에서만 제공합니다. `422`는 이미지 미지원 모델,
 `429`는 다른 추론 진행 중을 의미합니다.
 
+OCR 화면은 이미지 전송과 LLM 실행 시간을 분리해서 표시합니다.
+브라우저 업로드 시간은 JSON 준비 후 전송 시작부터 업로드 완료 이벤트까지이며,
+연결 수립 등의 비용을 포함합니다. 이미지 선택·축소 시간은 제외합니다.
+API 응답의 `timings`에는 다음 초 단위 측정값이 추가됩니다.
+
+- `image_receive_seconds`: 서버의 요청 본문 읽기 시간(이미 버퍼에 수신된 데이터는 제외).
+- `image_prepare_seconds`: JSON 파싱, base64 디코딩, 이미지 검증 및 요청 준비 시간.
+- `llm_execution_seconds`: Ollama의 `total_duration`을 초로 변환한 실행 시간. 모델 로딩을 포함하며, 원본 통계가 없으면 `null`로 반환하고 화면에는 `—`로 표시합니다.
+- `backend_request_seconds`: 서버에서 Ollama 호출부터 응답 파싱까지의 시간. 내부 이미지 전달, 모델 실행 및 HTTP/JSON 비용을 포함합니다.
+- `tesseract_execution_seconds`: Tesseract 선택 시 실행 시간. 사용하지 않는 엔진의 시간은 `null`입니다.
+- `server_total_seconds`: 서버의 요청 본문 수신부터 결과 준비까지의 전체 시간.
+
+화면에는 모델 로딩과 브라우저 기준 전체 소요시간도 표시합니다. 각 측정 구간은
+서로 중첩되므로 합산하지 않습니다. 기존 `elapsed_seconds`의 의미는 유지합니다.
+
 ## API 사용
 
 인증은 `Authorization: Bearer ...`입니다. 테스트 시 로컬 설정에서 키를 읽습니다.
