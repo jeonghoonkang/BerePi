@@ -2,7 +2,8 @@
 
 `../5090/run_gemma4_ollama/server`의 Ollama + Python 웹/API 구조를 참고한
 독립적인 Pi용 경량 구현입니다. 기본 모델은 `gemma4:e4b`, 웹 포트는 `8082`입니다.
-Python 표준 라이브러리만 사용하므로 pip/venv 설치는 필요하지 않습니다.
+웹/API 서버는 Python 표준 라이브러리를 사용합니다. OCR 이미지 검증에는 Pillow가 필요하며,
+`install.sh`가 배포판 패키지 `python3-pil`을 설치하므로 Pi에서 pip/venv 설치는 필요하지 않습니다.
 
 ## 장비와 메모리
 
@@ -142,8 +143,8 @@ systemd 서비스로 실행 중이면 해당 서비스를 `systemctl stop`으로
 
 
 웹 서버 시작 로그에는 장비의 `192.168.*` 및 `10.*` 내부 IPv4 접속 주소도 표시됩니다.
-기본 바인딩은 `127.0.0.1`이므로 내부 IP가 표시되더라도 다른 PC에서 접속하려면
-아래 바인딩 설정을 변경해야 합니다. 주소 조회 실패는 서버 실행을 중단하지 않습니다.
+새 설치의 기본 바인딩은 `0.0.0.0`입니다. 기존 `config.env`는 보존되므로 이전 설치에서
+`127.0.0.1`을 사용했다면 아래 설정을 변경해야 합니다. 주소 조회 실패는 서버 실행을 중단하지 않습니다.
 
 다른 PC에서 접속하려면 `config.env`의 `GEMMA4_SERVER_HOST=0.0.0.0`으로 변경 후
 재시작하고 `http://PI_IP:8082`를 사용합니다. HTTP는 키를 암호화하지 않으므로
@@ -179,7 +180,7 @@ sudo systemctl disable --now gemma4-raspi.service
 
 ## 웹 화면과 로그인
 
-5090 서버의 Server / History 화면 구성을 따른 Pi용 인터페이스입니다.
+Server / OCR / History 탭을 제공하는 Pi용 인터페이스입니다.
 
 - User ID / Password 로그인, 로그아웃, 8시간 HttpOnly 세션 쿠키.
 - 서버 이름, OS, CPU/스레드 수, 메모리·swap, 온도, 부하, 가동 시간.
@@ -190,7 +191,9 @@ sudo systemctl disable --now gemma4-raspi.service
 - 결과 복사·텍스트 저장, 최근 20개 요청 이력과 프롬프트 재사용.
   Remember History를 켜면 최근 10개 문답을 다음 요청에 포함합니다.
   이력은 페이지 메모리에만 보관하며 새로고침·로그아웃 시 삭제됩니다.
-  서버의 64KiB 입력 제한과 컨텍스트 제한은 유지됩니다.
+  텍스트 채팅의 64KiB 입력 제한과 컨텍스트 제한은 유지됩니다.
+- OCR 탭: 클립보드 이미지 붙여넣기, JPG/PNG 선택, 미리보기, OCR 실행, 결과 복사·저장.
+  OCR 이미지와 결과는 대화 이력에 넣지 않으며 로그아웃·새로고침 시 지웁니다.
 
 기본 로그인 ID는 `admin`, 암호는 기존 `GEMMA4_API_KEY`입니다.
 별도 암호를 사용하려면 `config.env`에 아래 값을 설정한 뒤 재시작합니다.
@@ -219,32 +222,88 @@ GEMMA4_LOGIN_PASSWORD='원하는 로그인 암호'
 set -a
 source ./config.env
 set +a
-curl -fsS http://127.0.0.1:8082/health
-curl -fsS http://127.0.0.1:8082/ready \
+curl -fsS http://sonno.iptime.org:8082/api/health
+curl -fsS http://sonno.iptime.org:8082/api/ready \
   -H "Authorization: Bearer $GEMMA4_API_KEY"
-curl -fsS --max-time 1900 http://127.0.0.1:8082/api/generate \
+curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/generate \
   -H "Authorization: Bearer $GEMMA4_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"라즈베리파이의 용도를 한국어로 짧게 설명해 주세요.","stream":false}'
-curl -fsS --max-time 1900 http://127.0.0.1:8082/api/chat \
+curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
   -H "Authorization: Bearer $GEMMA4_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"messages":[{"role":"user","content":"안녕하세요"}],"stream":false}'
 ```
 
-- `GET /health`: 웹 서버 생존 확인, 인증 불필요.
-- `GET /ready`: 인증 필요, Ollama 연결 및 설정된 모델 설치 여부 확인.
+- `GET /api/health` (`/health`도 호환 유지): 웹 서버 생존 확인, 인증 불필요.
+- `GET /api/ready` (`/ready`도 호환 유지): 인증 필요, Ollama 연결 및 설정된 모델 설치 여부 확인.
   모델을 메모리에 올리거나 추론하지 않으므로 **실제 실행 검증은 생성 API로** 수행합니다.
 - `POST /api/generate`: `prompt`, 선택적 `system` 입력. 답변은 `response` 필드.
 - `POST /api/chat`: `messages` 입력. 답변은 `message.content` 필드.
   대화 이력은 클라이언트가 전달하며 최대 32개의 텍스트 메시지를 허용합니다.
 - 두 생성 API는 Ollama 응답 JSON을 반환하고 `stream:false`만 지원합니다.
   `model`을 전달한다면 서버 설정과 같아야 합니다. 입력 JSON은 최대 64KiB입니다.
-- Pi 자원 보호를 위해 임의 모델·options·이미지·도구 실행 요청은 거부합니다.
-  대기열, 파일 업로드, Telegram, 다중 사용자 관리 및 GPU/모델 변경은 지원하지 않습니다.
+- `POST /api/ocr`: base64 JPG/PNG `image`, 선택적 `prompt` 입력. 인식 결과는 `text` 필드.
+  이미지는 OCR API에서만 받으며 최대 8 MiB, 2,000만 화소로 제한합니다.
+- Pi 자원 보호를 위해 임의 모델·options·도구 실행 요청은 거부합니다.
+  대기열, 일반 파일 저장, Telegram, 다중 사용자 관리 및 GPU/모델 변경은 지원하지 않습니다.
 - `401`: 잘못된 키, `400`: 지원하지 않는 입력, `413`: 본문 크기 초과,
   `429`: 다른 추론 진행 중, `502`: Ollama 오류, `504`: 추론 제한 시간 초과.
   실패 시 Ollama 로그에서 RAM 부족·모델 버전 오류를 확인하십시오.
+
+## 외부 주소와 OCR 사용
+
+외부 웹 주소는 `http://sonno.iptime.org:8082/`, API 기본 주소는
+`http://sonno.iptime.org:8082/api`입니다. 이 주소는 **raspi 서버 자체**를 가리키며,
+추론은 Pi의 전용 Ollama에서 실행합니다. `/api`에 접속하면 지원 엔드포인트 목록을 반환합니다.
+로그인·세션·서버 상태·모델 정보·채팅·OCR·준비 상태·헬스 체크 모두 `/api/...`로 제공합니다.
+웹 화면은 현재 접속한 서버의 `/api/`를 사용하므로 외부 도메인, 내부 IP, localhost 접속에서
+동일한 세션 인증이 동작하며 브라우저가 Ollama 포트에 직접 연결하지 않습니다.
+
+기존 Pi 설치에 이번 변경을 반영하려면 수정된 `server` 파일들을 배포한 뒤:
+
+1. `sudo apt-get install python3-pil`로 이미지 검증 모듈을 설치합니다.
+2. `config.env`의 `GEMMA4_SERVER_HOST=0.0.0.0`, `GEMMA4_SERVER_PORT=8082`를 확인합니다.
+   기존 로그인 암호와 API 키는 그대로 사용합니다.
+3. 서비스를 재시작합니다. systemd 사용 시 `sudo systemctl restart gemma4-raspi.service`,
+   수동 실행 시 `bash stop.sh` 후 `bash run_service.sh`를 실행합니다.
+4. 공유기에서 `sonno.iptime.org`가 연결된 외부 TCP 8082를 Pi의 TCP 8082로 전달해야 합니다.
+   이 코드는 공유기/DDNS 설정을 자동으로 변경하지 않습니다.
+5. 웹 화면에 로그인 → **OCR · 이미지 인식** 탭 → 이미지 선택/붙여넣기 → **OCR 실행**.
+
+이미지 붙여넣기 영역에서 Ctrl+V / Cmd+V를 사용할 수 있습니다. `클립보드에서 가져오기`
+버튼은 브라우저의 보안 컨텍스트와 권한 지원이 필요하므로 외부 HTTP 주소에서는
+직접 붙여넣기 또는 파일 선택을 사용합니다. 선택한 이미지와 OCR 텍스트는 서버 파일로
+저장하지 않습니다. 요청 처리 중에는 채팅과 OCR이 하나의 추론 슬롯을 공유합니다.
+긴 문서는 출력 토큰 제한에 도달할 수 있으며 화면에 안내를 표시합니다.
+
+OCR은 별도 Tesseract 엔진이 아니라 설정된 Gemma 비전 모델의 이미지 인식을 사용합니다.
+[Ollama 공식 이미지 입력 규격](https://docs.ollama.com/capabilities/vision)에 따라
+검증된 이미지를 base64 `images` 배열로 전달합니다. 실제 인식 정확도·처리 시간은
+Pi에서 설치한 모델과 이미지로 확인해야 합니다.
+
+외부 API를 직접 호출하는 예시 (`config.env`를 읽은 뒤 실행):
+
+```bash
+python3 - screenshot.png <<'PYTHON'
+import base64
+import json
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+payload = {"image": base64.b64encode(Path(sys.argv[1]).read_bytes()).decode("ascii")}
+request = urllib.request.Request(
+    "http://sonno.iptime.org:8082/api/ocr",
+    data=json.dumps(payload).encode(),
+    headers={"Content-Type": "application/json",
+             "Authorization": "Bearer " + os.environ["GEMMA4_API_KEY"]},
+)
+with urllib.request.urlopen(request, timeout=1900) as response:
+    print(json.load(response)["text"])
+PYTHON
+```
 
 ## 설정
 
@@ -253,14 +312,15 @@ curl -fsS --max-time 1900 http://127.0.0.1:8082/api/chat \
 
 | 변수 | 기본값 | 의미 |
 | --- | --- | --- |
-| `GEMMA4_SERVER_HOST` | `127.0.0.1` | 웹 서버 바인딩 주소 |
+| `GEMMA4_SERVER_HOST` | `0.0.0.0` | 웹 서버 바인딩 주소 |
 | `GEMMA4_SERVER_PORT` | `8082` | 웹 포트 |
 | `OLLAMA_PORT` | `11435` | 전용 Ollama 포트 |
 | `OLLAMA_MODEL` | `gemma4:e4b` | 다운로드/실행 모델 |
 | `OLLAMA_MODELS` | `server/models` 절대 경로 | 모델 저장 위치, SSD 경로로 변경 가능 |
 | `OLLAMA_CONTEXT_LENGTH` | `2048` | 컨텍스트 토큰 수 |
 | `GEMMA4_NUM_THREAD` | `4` | CPU 추론 스레드 수 |
-| `GEMMA4_MAX_TOKENS` | `512` | 최대 출력 토큰 수 |
+| `GEMMA4_MAX_TOKENS` | `512` | 텍스트 생성 최대 출력 토큰 수 |
+| `GEMMA4_OCR_MAX_TOKENS` | `2048` | OCR 최대 출력 토큰 수 |
 | `GEMMA4_REQUEST_TIMEOUT` | `1800` | Ollama 응답 대기 초 |
 | `OLLAMA_KEEP_ALIVE` | `5m` | 요청 후 모델 메모리 유지 시간 |
 | `AUTO_PULL` | `1` | 모델 없을 때 자동 다운로드 |
@@ -279,7 +339,8 @@ bash -n install.sh run_service.sh
 ```
 
 테스트는 모의 Ollama를 사용하여 인증, 준비 상태, 생성/대화 API, CPU 제한,
-잘못된 입력, 동시 요청 거부 및 백엔드 오류 후 복구를 검증합니다.
+JPG/PNG OCR 이미지 전달·응답, 손상/미지원/과대 이미지 거부, 공개 호스트의 세션 인증,
+동시 요청 거부 및 백엔드 오류 후 복구를 검증합니다. 테스트 실행에도 Pillow가 필요합니다.
 ARM 설치, systemd 자동 시작, 실제 모델 추론은 대상 Pi에서 별도로 검증해야 합니다.
 
 
@@ -314,5 +375,5 @@ GEMMA4_SERVER_HOST=0.0.0.0
 
 그 후 브라우저에서 `http://PI_IP:8082`로 접속합니다. Ollama의 `11435` 바인딩은
 그대로 loopback으로 유지합니다. API 요청에는 기존 `GEMMA4_API_KEY`가 필요합니다.
-Pi 안에서 웹 서버의 실행 여부는 `curl -fsS http://127.0.0.1:8082/health`로 확인할 수 있습니다.
+Pi 안에서 웹 서버의 실행 여부는 `curl -fsS http://127.0.0.1:8082/api/health`로 확인할 수 있습니다.
 메모리 경고는 실행을 차단하지 않으며, 실제 추론 성공 여부는 요청을 보내 확인해야 합니다.

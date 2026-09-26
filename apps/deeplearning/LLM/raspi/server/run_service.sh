@@ -14,7 +14,7 @@ set -a
 # Trusted, owner-controlled configuration; never use a downloaded config file.
 source "$APP_DIR/config.env"
 set +a
-export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-127.0.0.1}"
+export GEMMA4_SERVER_HOST="${GEMMA4_SERVER_HOST:-0.0.0.0}"
 export GEMMA4_SERVER_PORT="${GEMMA4_SERVER_PORT:-8082}"
 export OLLAMA_HOST="127.0.0.1:${OLLAMA_PORT:-11435}"
 export OLLAMA_BASE_URL="http://${OLLAMA_HOST}"

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Small, authenticated Raspberry Pi gateway to a dedicated Ollama daemon."""
 import hmac
+import base64
+import binascii
+import io
 import ipaddress
 import json
 import os
@@ -10,6 +13,7 @@ import time
 import socket
 import subprocess
 import threading
+import warnings
 import urllib.error
 import urllib.request
 from http.cookies import CookieError, SimpleCookie
@@ -17,10 +21,16 @@ from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_PIXELS = 20_000_000
+MAX_OCR_BODY = ((MAX_IMAGE_BYTES + 2) // 3) * 4 + 65536
+OCR_PROMPT = ("이미지에서 읽을 수 있는 모든 글자를 추출해 주세요. "
+              "원문의 언어와 줄바꿈을 유지하고, 설명이나 추측 없이 인식한 텍스트만 반환하세요.")
+
 
 class Config:
     def __init__(self):
-        self.host = os.getenv("GEMMA4_SERVER_HOST", "127.0.0.1")
+        self.host = os.getenv("GEMMA4_SERVER_HOST", "0.0.0.0")
         self.port = int(os.getenv("GEMMA4_SERVER_PORT", "8082"))
         self.backend = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11435").rstrip("/")
         self.model = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
@@ -30,11 +40,12 @@ class Config:
         self.context = int(os.getenv("OLLAMA_CONTEXT_LENGTH", "2048"))
         self.threads = int(os.getenv("GEMMA4_NUM_THREAD", "4"))
         self.tokens = int(os.getenv("GEMMA4_MAX_TOKENS", "512"))
+        self.ocr_tokens = int(os.getenv("GEMMA4_OCR_MAX_TOKENS", "2048"))
         self.timeout = int(os.getenv("GEMMA4_REQUEST_TIMEOUT", "1800"))
         self.keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "5m")
         if len(self.key) < 24:
             raise ValueError("GEMMA4_API_KEY must contain at least 24 characters; run install.sh")
-        if min(self.context, self.threads, self.tokens, self.timeout) <= 0:
+        if min(self.context, self.threads, self.tokens, self.ocr_tokens, self.timeout) <= 0:
             raise ValueError("Context, threads, tokens and timeout must be positive")
 
 
@@ -137,6 +148,43 @@ def generation_payload(data, path, config):
     return payload
 
 
+def ocr_payload(data, config):
+    if not isinstance(data, dict) or set(data) - {"image", "prompt"}:
+        raise ValueError("OCR requires image (base64) and optional prompt")
+    encoded = data.get("image")
+    if not isinstance(encoded, str) or not encoded or len(encoded) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+        raise ValueError("JPG/PNG image must be at most 8 MiB")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("Invalid base64 image") from exc
+    if not raw or len(raw) > MAX_IMAGE_BYTES:
+        raise ValueError("JPG/PNG image must be at most 8 MiB")
+    # Lazy import keeps text-only use available before upgrading dependencies.
+    from PIL import Image, UnidentifiedImageError
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(raw)) as image:
+                if image.format not in {"JPEG", "PNG"}:
+                    raise ValueError("Only JPG and PNG images are supported")
+                if image.width * image.height > MAX_IMAGE_PIXELS:
+                    raise ValueError("Image must be at most 20 megapixels")
+                image.verify()
+            with Image.open(io.BytesIO(raw)) as image:
+                image.load()
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError,
+            Image.DecompressionBombWarning, SyntaxError) as exc:
+        raise ValueError("Invalid or oversized JPG/PNG image") from exc
+    prompt = data.get("prompt", OCR_PROMPT)
+    if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4000:
+        raise ValueError("OCR prompt must contain 1 to 4000 characters")
+    payload = generation_payload({"messages": [{"role": "user", "content": prompt}]}, "/api/chat", config)
+    payload["messages"][0]["images"] = [encoded]
+    payload["options"]["num_predict"] = config.ocr_tokens
+    return payload
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Gemma4Pi/1.0"
 
@@ -233,7 +281,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
             self.send_bytes(200, Path(__file__).with_name("index.html").read_bytes(), "text/html; charset=utf-8")
-        elif self.path == "/health":
+        elif self.path in {"/api", "/api/"}:
+            self.reply(200, {"service": "Gemma4 Raspberry Pi", "endpoints": {
+                "GET": ["/api/health", "/api/ready", "/api/session", "/api/status", "/api/model-info"],
+                "POST": ["/api/session-login", "/api/session-logout", "/api/generate", "/api/chat", "/api/ocr"],
+            }})
+        elif self.path in {"/health", "/api/health"}:
             self.reply(200, {"status": "ok"})
         elif self.path == "/api/session":
             user = self.session_user()
@@ -249,7 +302,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, result)
             except (OSError, ValueError):
                 self.reply(502, {"error": "모델 상세 정보를 조회할 수 없습니다."})
-        elif self.path == "/ready":
+        elif self.path in {"/ready", "/api/ready"}:
             if not self.authenticated():
                 return
             try:
@@ -294,29 +347,48 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, {"logged_in": False},
                        cookie="gemma_pi_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
             return
-        if self.path not in {"/api/generate", "/api/chat"}:
+        if self.path not in {"/api/generate", "/api/chat", "/api/ocr"}:
             self.reply(404, {"error": "Not found"})
             return
         if not self.authenticated():
-            return
-        try:
-            if self.headers.get("Transfer-Encoding"):
-                raise ValueError("Chunked request bodies are not supported")
-            length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 65536:
-                self.reply(413, {"error": "JSON body must be 1 to 65536 bytes"})
-                return
-            data = json.loads(self.rfile.read(length))
-            payload = generation_payload(data, self.path, self.server.config)
-        except (ValueError, UnicodeError, TimeoutError) as exc:
-            self.reply(400, {"error": str(exc)})
             return
         if not self.server.inference.acquire(blocking=False):
             self.reply(429, {"error": "Inference busy; retry after the current request completes"})
             return
         try:
+            self.run_inference()
+        finally:
+            self.server.inference.release()
+
+    def run_inference(self):
+        try:
+            if self.headers.get("Transfer-Encoding"):
+                raise ValueError("Chunked request bodies are not supported")
+            length = int(self.headers.get("Content-Length", "0"))
+            limit = MAX_OCR_BODY if self.path == "/api/ocr" else 65536
+            if not 0 < length <= limit:
+                self.reply(413, {"error": f"JSON body must be 1 to {limit} bytes"})
+                return
+            data = json.loads(self.rfile.read(length))
+            payload = (ocr_payload(data, self.server.config) if self.path == "/api/ocr"
+                       else generation_payload(data, self.path, self.server.config))
+        except ImportError:
+            self.reply(503, {"error": "OCR 이미지 검증 모듈이 없습니다. sudo apt-get install python3-pil 실행 후 재시도하세요."})
+            return
+        except (ValueError, UnicodeError, OSError) as exc:
+            self.reply(400, {"error": str(exc)})
+            return
+        try:
             started = time.monotonic()
-            result = self.server.backend_json(self.path, payload, self.server.config.timeout)
+            backend_path = "/api/chat" if self.path == "/api/ocr" else self.path
+            result = self.server.backend_json(backend_path, payload, self.server.config.timeout)
+            if not isinstance(result, dict):
+                raise ValueError("Invalid backend response")
+            if self.path == "/api/ocr" and "error" not in result:
+                message = result.get("message")
+                if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+                    raise ValueError("Missing OCR text in backend response")
+                result["text"] = message["content"]
             result["elapsed_seconds"] = round(time.monotonic() - started, 3)
             result["requested_model"] = self.server.config.model
             self.reply(502 if "error" in result else 200, result)
@@ -327,8 +399,6 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(504, {"error": "Ollama inference timed out"})
         except (OSError, ValueError):
             self.reply(502, {"error": "Ollama unavailable or invalid response"})
-        finally:
-            self.server.inference.release()
 
 
 def print_startup_addresses(config):

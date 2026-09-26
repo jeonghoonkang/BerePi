@@ -77,6 +77,15 @@
         border-color: var(--accent);
         color: white;
       }
+      #ocrPasteZone {
+        border: 2px dashed #becdc5;
+        border-radius: 8px;
+        padding: 28px 16px;
+        margin: 16px 0;
+        cursor: pointer;
+      }
+      #ocrPasteZone:focus-visible { outline: 3px solid #7cc8ae; }
+      #ocrPreview { max-width: 100%; max-height: 360px; object-fit: contain; }
       section {
         background: var(--panel);
         border: 1px solid var(--line);
@@ -278,7 +287,8 @@
         <div>
           <div class="eyebrow">LOCAL MODEL · CPU INFERENCE</div>
           <h1>Ollama Service · Raspberry Pi</h1>
-          <p>Gemma 4 서버 상태, 모델 정보와 프롬프트 테스트</p>
+          <p>Gemma 4 서버 상태, 프롬프트 테스트와 이미지 OCR</p>
+          <small id="apiAddress"></small>
         </div>
         <button id="refresh" disabled>Refresh · 새로고침</button>
       </header>
@@ -320,6 +330,7 @@
       <nav class="tabs" aria-label="서버 기능">
         <button class="active" data-panel="serverPanel" aria-pressed="true">
           Server</button
+        ><button data-panel="ocrPanel" aria-pressed="false">OCR · 이미지 인식</button
         ><button data-panel="historyPanel" aria-pressed="false">History</button>
       </nav>
       <div id="serverPanel">
@@ -403,6 +414,45 @@
           </div>
         </section>
       </div>
+      <div id="ocrPanel" hidden>
+        <section>
+          <h2>Image OCR · 이미지에서 글자 읽기</h2>
+          <p>이미지를 붙여넣거나 JPG·PNG 파일을 선택한 뒤 OCR을 실행하세요. 한 번에 한 장, 최대 8 MiB · 2,000만 화소까지 지원합니다.</p>
+          <form id="ocrForm">
+            <div class="columns">
+              <div>
+                <label for="ocrFile">JPG / PNG 파일</label>
+                <input id="ocrFile" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" disabled />
+                <div id="ocrPasteZone" tabindex="0" role="region" aria-label="클립보드 이미지 붙여넣기">
+                  이 영역을 클릭하고 Ctrl+V / Cmd+V로 이미지를 붙여넣으세요.
+                </div>
+                <div class="row">
+                  <button id="ocrClipboard" type="button" disabled>클립보드에서 가져오기</button>
+                  <button id="ocrClear" type="button" disabled>이미지 지우기</button>
+                </div>
+                <small>HTTP 접속에서 가져오기 버튼이 제한되면 위 영역에 직접 붙여넣거나 파일을 선택하세요.</small>
+                <p id="ocrImageInfo" role="status">선택한 이미지가 없습니다.</p>
+                <img id="ocrPreview" alt="OCR에 사용할 이미지 미리보기" hidden />
+              </div>
+              <div>
+                <label for="ocrPrompt">OCR 지시문</label>
+                <textarea id="ocrPrompt" rows="6" maxlength="4000">이미지에서 읽을 수 있는 모든 글자를 추출해 주세요. 원문의 언어와 줄바꿈을 유지하고, 설명이나 추측 없이 인식한 텍스트만 반환하세요.</textarea>
+                <div class="row">
+                  <button id="ocrSend" class="primary" disabled>OCR 실행</button>
+                  <span id="ocrStatus" role="status">로그인 후 이미지를 선택하세요.</span>
+                </div>
+              </div>
+            </div>
+          </form>
+          <div class="row">
+            <h3>OCR 결과</h3>
+            <button id="ocrCopy" disabled>결과 복사</button>
+            <button id="ocrDownload" disabled>텍스트 저장</button>
+          </div>
+          <div id="ocrStats" class="stats"></div>
+          <div id="ocrResult" class="answer" aria-live="polite">인식한 텍스트가 여기에 표시됩니다.</div>
+        </section>
+      </div>
       <div id="historyPanel" hidden>
         <section>
           <h2>Conversation History</h2>
@@ -417,6 +467,10 @@
     </main>
     <script>
       const $ = (id) => document.getElementById(id);
+      // Same-origin requests use http://sonno.iptime.org:8082/api when opened there.
+      const API_BASE = new URL("/api/", location.origin).href;
+      $("apiAddress").textContent = "API · " + API_BASE;
+      let ocrImage = null, ocrText = "", imageSelection = 0;
       let loggedIn = false,
         pending = false,
         history = [],
@@ -436,6 +490,11 @@
         $("refresh").disabled = !loggedIn;
         $("modelDetail").disabled = !loggedIn;
         $("clearHistory").disabled = pending;
+        $("ocrSend").disabled = !loggedIn || pending || !ocrImage;
+        $("ocrFile").disabled = !loggedIn || pending;
+        $("ocrClipboard").disabled = !loggedIn || pending;
+        $("ocrClear").disabled = !loggedIn || pending || !ocrImage;
+        $("ocrPrompt").disabled = !loggedIn || pending;
       }
       function clearPrivate() {
         history = [];
@@ -448,6 +507,7 @@
         $("modelJson").textContent = "아직 조회하지 않았습니다.";
         $("copyAnswer").disabled = true;
         $("downloadAnswer").disabled = true;
+        clearOcrImage();
         renderHistory();
       }
       function session(user) {
@@ -456,13 +516,14 @@
           ? user + " · 로그인됨"
           : "로그인해 주세요.";
         controls();
+        if (user && !ocrImage) $("ocrStatus").textContent = "이미지를 선택하세요.";
         if (!user) {
           generation++;
           clearPrivate();
         }
       }
       async function api(path, data) {
-        const res = await fetch(path, {
+        const res = await fetch(new URL(path.replace(/^\/api\//, ""), API_BASE), {
           method: data === undefined ? "GET" : "POST",
           credentials: "same-origin",
           headers:
@@ -785,6 +846,141 @@
         a.href = url;
         a.download = "gemma-response.txt";
         a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+      function resetOcrResult() {
+        ocrText = "";
+        $("ocrResult").textContent = "인식한 텍스트가 여기에 표시됩니다.";
+        $("ocrStats").replaceChildren();
+        $("ocrCopy").disabled = true;
+        $("ocrDownload").disabled = true;
+      }
+      function clearOcrImage(clearFile = true) {
+        imageSelection++;
+        ocrImage = null;
+        if (clearFile) $("ocrFile").value = "";
+        $("ocrPreview").removeAttribute("src");
+        $("ocrPreview").hidden = true;
+        $("ocrImageInfo").textContent = "선택한 이미지가 없습니다.";
+        $("ocrStatus").textContent = loggedIn ? "이미지를 선택하세요." : "로그인 후 이미지를 선택하세요.";
+        resetOcrResult();
+        controls();
+      }
+      async function selectOcrImage(file, fromFileInput = false) {
+        if (!loggedIn || pending) return;
+        clearOcrImage(!fromFileInput);
+        const selection = imageSelection, version = generation;
+        try {
+          if (!file || !["image/png", "image/jpeg"].includes(file.type))
+            throw new Error("JPG 또는 PNG 이미지를 선택하세요.");
+          if (!file.size || file.size > 8 * 1024 * 1024)
+            throw new Error("이미지 크기는 8 MiB 이하여야 합니다.");
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error("이미지 파일을 읽을 수 없습니다."));
+            reader.readAsDataURL(file);
+          });
+          const preview = new Image();
+          preview.src = dataUrl;
+          await preview.decode();
+          if (preview.naturalWidth * preview.naturalHeight > 20_000_000)
+            throw new Error("이미지는 2,000만 화소 이하여야 합니다.");
+          if (selection !== imageSelection || version !== generation || !loggedIn) return;
+          ocrImage = dataUrl.split(",")[1];
+          $("ocrPreview").src = dataUrl;
+          $("ocrPreview").hidden = false;
+          $("ocrImageInfo").textContent = `${file.name || "클립보드 이미지"} · ${preview.naturalWidth} × ${preview.naturalHeight} · ${fmt(file.size / 1024)} KiB`;
+          $("ocrStatus").textContent = "이미지 준비 완료 · OCR 실행을 누르세요.";
+        } catch (e) {
+          if (selection === imageSelection && version === generation)
+            $("ocrStatus").textContent = e.message;
+        } finally { controls(); }
+      }
+      $("ocrFile").onchange = (e) => selectOcrImage(e.target.files[0], true);
+      $("ocrClear").onclick = clearOcrImage;
+      $("ocrPasteZone").addEventListener("paste", (e) => {
+        e.preventDefault();
+        if (!loggedIn || pending) return;
+        const item = [...(e.clipboardData?.items || [])].find((item) => item.kind === "file" && item.type.startsWith("image/"));
+        if (item) selectOcrImage(item.getAsFile());
+        else $("ocrStatus").textContent = "클립보드에 이미지가 없습니다. 이미지를 복사하거나 파일을 선택하세요.";
+      });
+      $("ocrClipboard").onclick = async () => {
+        const version = generation, selection = imageSelection;
+        try {
+          if (!window.isSecureContext || !navigator.clipboard?.read)
+            throw new Error("이 접속에서는 직접 붙여넣기(Ctrl+V / Cmd+V) 또는 파일 선택을 사용하세요.");
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const type = item.types.find((type) => ["image/png", "image/jpeg"].includes(type));
+            if (type) {
+              const blob = await item.getType(type);
+              if (version === generation && selection === imageSelection && loggedIn && !pending)
+                await selectOcrImage(new File([blob], "clipboard." + (type === "image/png" ? "png" : "jpg"), { type }));
+              return;
+            }
+          }
+          throw new Error("클립보드에 JPG/PNG 이미지가 없습니다.");
+        } catch (e) {
+          if (version === generation) $("ocrStatus").textContent = e.message;
+        }
+      };
+      $("ocrForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!loggedIn || pending || !ocrImage) return;
+        const prompt = $("ocrPrompt").value.trim();
+        if (!prompt) { $("ocrStatus").textContent = "OCR 지시문을 입력하세요."; return; }
+        pending = true;
+        controls();
+        resetOcrResult();
+        const version = generation, start = performance.now();
+        $("ocrResult").textContent = "이미지의 글자를 인식하고 있습니다…";
+        const update = () => { $("ocrStatus").textContent = "OCR 처리 중 · " + seconds((performance.now() - start) / 1000); };
+        update();
+        const timer = setInterval(update, 250);
+        try {
+          const result = await api("/api/ocr", { image: ocrImage, prompt });
+          if (version !== generation || !loggedIn) return;
+          ocrText = result.text;
+          $("ocrResult").textContent = ocrText || "인식한 텍스트가 없습니다.";
+          $("ocrStats").textContent = `모델: ${result.model || result.requested_model} · 서버 처리: ${seconds(result.elapsed_seconds)}`;
+          $("ocrStatus").textContent = result.done_reason === "length"
+            ? "출력 길이 제한에 도달했습니다. 이미지를 나누어 다시 인식해 주세요."
+            : "완료 · " + seconds((performance.now() - start) / 1000);
+          $("ocrCopy").disabled = !ocrText;
+          $("ocrDownload").disabled = !ocrText;
+        } catch (e) {
+          if (version === generation) {
+            $("ocrResult").textContent = "OCR 실패: " + e.message;
+            $("ocrStatus").textContent = "실패 · 이미지를 확인한 뒤 다시 실행하세요.";
+          }
+        } finally {
+          clearInterval(timer);
+          pending = false;
+          controls();
+          if (loggedIn) refresh();
+        }
+      });
+      $("ocrCopy").onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(ocrText);
+          $("ocrStatus").textContent = "OCR 결과를 복사했습니다.";
+        } catch {
+          const range = document.createRange();
+          range.selectNodeContents($("ocrResult"));
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          $("ocrStatus").textContent = "결과를 선택했습니다. Ctrl+C / Cmd+C로 복사하세요.";
+        }
+      };
+      $("ocrDownload").onclick = () => {
+        const url = URL.createObjectURL(new Blob([ocrText], { type: "text/plain;charset=utf-8" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "ocr-result.txt";
+        link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       };
       (async () => {

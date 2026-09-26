@@ -10,7 +10,7 @@ if (( EUID == 0 )); then
   exit 1
 fi
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl python3 zstd util-linux
+sudo apt-get install -y ca-certificates curl python3 python3-pil zstd util-linux
 if ! command -v ollama >/dev/null 2>&1; then
   installer="$(mktemp)"
   trap 'rm -f "$installer"' EXIT

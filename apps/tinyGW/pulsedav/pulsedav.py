@@ -33,6 +33,7 @@ STATE_PATH = APP_DIR / "state.json"
 REQUEST_TIMEOUT = 60
 WEBDAV_NS = {"d": "DAV:"}
 RETENTION_MONTHS = 36
+MIN_REMOTE_FREE_BYTES = 5_000_000_000  # 5 GB: begin rolling report replacement
 DEFAULT_INTERVAL_MINUTES = 30
 UTC = timezone.utc
 
@@ -317,6 +318,7 @@ def propfind(session: requests.Session, url: str, depth: str = "1") -> ET.Elemen
             '<?xml version="1.0" encoding="utf-8" ?>'
             '<d:propfind xmlns:d="DAV:"><d:prop>'
             "<d:resourcetype/><d:getlastmodified/><d:creationdate/><d:getcontentlength/>"
+            "<d:quota-available-bytes/>"
             "</d:prop></d:propfind>"
         ),
         timeout=REQUEST_TIMEOUT,
@@ -356,11 +358,12 @@ def ensure_remote_directories(session: requests.Session, config: WebDAVConfig, r
             response.raise_for_status()
 
 
-def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, content_type: str = "text/markdown; charset=utf-8") -> None:
+def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, content_type: str = "text/markdown; charset=utf-8") -> list[str]:
     session = build_session(config)
     ensure_sub_directory(session, config)
     parent_dir = posixpath.dirname(normalize_remote_path(remote_path))
     ensure_remote_directories(session, config, parent_dir)
+    deleted = prepare_remote_space(config, remote_path, len(data))
     response = session.put(
         compose_webdav_url(config, remote_path),
         data=data,
@@ -368,6 +371,82 @@ def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, cont
         timeout=REQUEST_TIMEOUT,
     )
     response.raise_for_status()
+    return deleted
+
+
+def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str) -> int:
+    """Read the server's usable quota; unknown/unlimited is not free space."""
+    session = build_session(config)
+    # Some servers expose quota only on the account root.
+    for path in dict.fromkeys((remote_dir, "")):
+        root = propfind(session, compose_webdav_url(config, path), depth="0")
+        for propstat in root.findall("d:response/d:propstat", WEBDAV_NS):
+            status = propstat.findtext("d:status", default="", namespaces=WEBDAV_NS).split()
+            if len(status) < 2 or status[1] != "200":
+                continue
+            value = propstat.findtext("d:prop/d:quota-available-bytes", namespaces=WEBDAV_NS)
+            try:
+                available = int(value)
+            except (TypeError, ValueError):
+                continue
+            if available >= 0:
+                return available
+    raise ValueError("서버 여유 공간(quota-available-bytes)을 확인할 수 없어 전송을 중단합니다.")
+
+
+def sender_report_timestamp(entry: dict[str, Any], host_dir: str) -> datetime | None:
+    """Identify Markdown reports written by sender.py in this node's directory."""
+    path = entry["remote_path"]
+    if (entry["is_collection"] or posixpath.dirname(path) != normalize_remote_path(host_dir)
+            or posixpath.normpath(path) != path):
+        return None
+    name = posixpath.basename(path)
+    if not re.fullmatch(r"(?:pulse|iptime)_\d{8}_\d{6}\.md", name):
+        return None
+    return extract_timestamp_from_name(name)
+
+
+def prepare_remote_space(config: WebDAVConfig, remote_path: str, incoming_bytes: int) -> list[str]:
+    """At/below 5 GB free, replace old reports without increasing usage."""
+    host_dir = posixpath.dirname(normalize_remote_path(remote_path))
+    entries = list_remote_entries(config, host_dir)
+    files = [entry for entry in entries if not entry["is_collection"]]
+    directory_bytes = sum(entry["size"] for entry in files)
+    available = get_remote_available_bytes(config, host_dir)
+    print(f"[pulsedav] {host_dir}: 현재 파일 용량={directory_bytes:,} bytes, "
+          f"서버 여유={available:,} bytes, 전송={incoming_bytes:,} bytes", flush=True)
+    # Reserve the full payload even for overwrites: PUT may use a temporary file.
+    # Below the threshold, preserve current free space rather than bulk-deleting
+    # history to recover an existing deficit all the way back to 5 GB.
+    free_space_floor = min(available, MIN_REMOTE_FREE_BYTES)
+    required = free_space_floor + incoming_bytes
+    if available >= required:
+        return []
+
+    candidates = []
+    for entry in files:
+        path = entry["remote_path"]
+        if path == normalize_remote_path(remote_path):
+            continue
+        timestamp = sender_report_timestamp(entry, host_dir)
+        if timestamp is not None and entry["size"] > 0:
+            candidates.append((timestamp, path, entry["size"]))
+    candidates.sort()
+    if sum(size for _, _, size in candidates) < required - available:
+        raise ValueError("이전 Markdown 보고서를 모두 정리해도 새 보고서에 필요한 공간을 확보할 수 없어 전송을 중단합니다.")
+
+    deleted: list[str] = []
+    for _, path, _ in candidates:
+        delete_remote_path(config, path)
+        deleted.append(path)
+        print(f"[pulsedav] 공간 확보를 위해 이전 보고서 삭제: {path}", flush=True)
+        previous_available = available
+        available = get_remote_available_bytes(config, host_dir)
+        if available >= required:
+            return deleted
+        if available <= previous_available:
+            raise ValueError("파일 삭제 후에도 서버 여유 공간이 늘지 않았습니다. 휴지통/할당량을 확인해 주세요. 전송을 중단합니다.")
+    raise ValueError("서버 여유 공간이 부족하여 기존 공간을 유지하면서 새 보고서를 전송할 수 없습니다.")
 
 
 def list_remote_entries(config: WebDAVConfig, remote_dir: str) -> list[dict[str, Any]]:
@@ -381,13 +460,21 @@ def list_remote_entries(config: WebDAVConfig, remote_dir: str) -> list[dict[str,
         href = response_element.findtext("d:href", default="", namespaces=WEBDAV_NS)
         if not href:
             continue
-        parsed_href = urlparse(unquote(href)).path.strip("/")
-        relative_path = parsed_href[len(expected_prefix):].strip("/") if parsed_href.startswith(expected_prefix) else parsed_href
-        if relative_path == current_dir:
+        parsed_href = unquote(urlparse(href).path).strip("/")
+        if expected_prefix and not parsed_href.startswith(expected_prefix + "/"):
+            continue
+        relative_path = parsed_href[len(expected_prefix):].strip("/") if expected_prefix else parsed_href
+        if (relative_path == current_dir or posixpath.dirname(relative_path) != current_dir
+                or posixpath.normpath(relative_path) != relative_path):
             continue
 
-        prop = response_element.find("d:propstat/d:prop", WEBDAV_NS)
-        if prop is None:
+        prop = ET.Element("properties")
+        for propstat in response_element.findall("d:propstat", WEBDAV_NS):
+            status = propstat.findtext("d:status", default="", namespaces=WEBDAV_NS).split()
+            properties = propstat.find("d:prop", WEBDAV_NS)
+            if len(status) >= 2 and status[1] == "200" and properties is not None:
+                prop.extend(properties)
+        if not len(prop):
             continue
 
         results.append(
@@ -425,9 +512,7 @@ def prune_old_remote_files(config: WebDAVConfig, host_dir: str, retention_months
         return deleted
 
     for entry in entries:
-        if entry["is_collection"]:
-            continue
-        timestamp = entry["created_at"] or entry["modified_at"] or extract_timestamp_from_name(entry["name"])
+        timestamp = sender_report_timestamp(entry, host_dir)
         if timestamp is None:
             continue
         if timestamp.tzinfo is None:
@@ -1121,7 +1206,7 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     try:
         print_webdav_wait_warning()
         for host_dir, remote_path in zip(host_dirs, remote_paths):
-            upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
+            deleted.extend(upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8")) or [])
             deleted.extend(prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS))
     except REQUEST_ERRORS as exc:
         raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
@@ -1169,7 +1254,7 @@ def send_once(
     try:
         print_webdav_wait_warning()
         for host_dir, remote_path in zip(host_dirs, remote_paths):
-            upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8"))
+            deleted.extend(upload_remote_file(webdav_config, remote_path, markdown.encode("utf-8")) or [])
             deleted.extend(prune_old_remote_files(webdav_config, host_dir, RETENTION_MONTHS))
     except REQUEST_ERRORS as exc:
         raise WebDAVConnectionError(friendly_webdav_error_message()) from exc

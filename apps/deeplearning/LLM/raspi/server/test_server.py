@@ -1,5 +1,7 @@
 """HTTP integration tests; no Ollama installation or model download needed."""
 import json
+import base64
+import io
 import time
 from http.cookiejar import CookieJar
 import os
@@ -10,7 +12,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from server import Config, Server
+from server import Config, Server, MAX_OCR_BODY, MAX_IMAGE_BYTES
+from PIL import Image
 
 
 class Backend(BaseHTTPRequestHandler):
@@ -25,6 +28,7 @@ class Backend(BaseHTTPRequestHandler):
     def do_POST(self):
         data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         self.server.received = data
+        self.server.received_path = self.path
         if data.get('prompt') == 'block':
             self.server.entered.set()
             self.server.release.wait(5)
@@ -180,6 +184,7 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(call('/api/session')[1]['logged_in'])
         self.assertEqual(call('/api/status')[0], 200)
         self.assertEqual(call('/api/chat', {'messages': [{'role': 'user', 'content': 'hi'}]})[0], 200)
+        self.assertEqual(call('/api/ocr', {'image': self.image()})[0], 200)
         self.assertEqual(call('/api/session-logout', {}, 'http://other.example')[0], 403)
         self.assertEqual(call('/api/session-logout', {})[0], 200)
         self.assertEqual(call('/api/status')[0], 401)
@@ -195,6 +200,91 @@ class ServerTests(unittest.TestCase):
             config = Config()
         self.assertEqual(config.password, 'separate-password')
         self.assertEqual(config.key, self.key)
+
+    @staticmethod
+    def image(format='PNG', size=(32, 16)):
+        buffer = io.BytesIO()
+        Image.new('RGB', size, 'white').save(buffer, format=format)
+        return base64.b64encode(buffer.getvalue()).decode('ascii')
+
+    def test_ocr_png_and_jpeg_forward_images_and_return_text(self):
+        for format in ('PNG', 'JPEG'):
+            with self.subTest(format=format):
+                image = self.image(format)
+                status, result = self.request('/api/ocr', {'image': image, 'prompt': '글자만 읽어 주세요'})
+                self.assertEqual(status, 200)
+                self.assertEqual(result['text'], '안녕하세요')
+                self.assertEqual(self.backend.received_path, '/api/chat')
+                self.assertEqual(self.backend.received['messages'][0],
+                                 {'role': 'user', 'content': '글자만 읽어 주세요', 'images': [image]})
+                self.assertEqual(self.backend.received['options']['num_predict'], 2048)
+                self.assertEqual(self.backend.received['options']['num_gpu'], 0)
+                self.assertGreaterEqual(result['elapsed_seconds'], 0)
+
+    def test_ocr_requires_auth(self):
+        self.assertEqual(self.request('/api/ocr', {'image': self.image()}, auth=False)[0], 401)
+
+    def test_invalid_ocr_rejected_and_slot_released(self):
+        image = self.image()
+        for data in [[], {}, {'image': 123}, {'image': ''}, {'image': '%bad-base64%'},
+                     {'image': base64.b64encode(b'not an image').decode()},
+                     {'image': self.image('GIF')}, {'image': image, 'prompt': ''},
+                     {'image': image, 'prompt': 42}, {'image': image, 'prompt': 'a' * 4001},
+                     {'image': image, 'options': {}}, {'image': 'data:image/png;base64,' + image},
+                     {'image': base64.b64encode(base64.b64decode(image)[:30]).decode()}]:
+            with self.subTest(data=str(data)[:70]):
+                self.assertEqual(self.request('/api/ocr', data)[0], 400)
+                self.assertFalse(self.server.inference.locked())
+        self.assertEqual(self.request('/api/ocr', {'image': image})[0], 200)
+
+    def test_ocr_image_and_body_limits(self):
+        # Lower limits keep the regression test small while exercising HTTP validation.
+        with patch('server.MAX_IMAGE_BYTES', 10):
+            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 400)
+        with patch('server.MAX_IMAGE_PIXELS', 100):
+            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 400)
+        with patch('server.MAX_OCR_BODY', 20):
+            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 413)
+        self.assertGreater(MAX_OCR_BODY, MAX_IMAGE_BYTES)
+        self.assertFalse(self.server.inference.locked())
+
+    def test_ocr_shares_inference_slot_with_chat(self):
+        with self.server.inference:
+            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 429)
+            self.assertEqual(self.request('/api/health')[0], 200)
+
+    def test_ocr_backend_errors_allow_retry(self):
+        for error, status in [(TimeoutError(), 504), (OSError(), 502)]:
+            with patch.object(self.server, 'backend_json', side_effect=error):
+                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], status)
+            self.assertFalse(self.server.inference.locked())
+        for response in ({'error': 'vision unsupported'}, {}, {'message': {}}, []):
+            with patch.object(self.server, 'backend_json', return_value=response):
+                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 502)
+            self.assertFalse(self.server.inference.locked())
+        self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 200)
+
+    def test_api_namespace_includes_health_and_readiness(self):
+        self.assertEqual(self.request('/api/health', auth=False)[0], 200)
+        self.assertEqual(self.request('/api/ready', auth=False)[0], 401)
+        self.assertEqual(self.request('/api/ready')[0], 200)
+        status, index = self.request('/api', auth=False)
+        self.assertEqual(status, 200)
+        self.assertIn('/api/ocr', index['endpoints']['POST'])
+
+    def test_public_hostname_same_origin_login_and_ocr(self):
+        # Simulate the port-forwarded request while still keeping tests offline.
+        headers = {'Host': 'sonno.iptime.org:8082', 'Origin': 'http://sonno.iptime.org:8082',
+                   'Content-Type': 'application/json'}
+        request = urllib.request.Request(self.base + '/api/session-login', headers=headers,
+            data=json.dumps({'user_id': 'admin', 'password': self.key}).encode())
+        with self.opener.open(request) as response:
+            self.assertEqual(response.status, 200)
+            headers['Cookie'] = response.headers['Set-Cookie'].split(';')[0]
+        request = urllib.request.Request(self.base + '/api/ocr', headers=headers,
+            data=json.dumps({'image': self.image()}).encode())
+        with self.opener.open(request) as response:
+            self.assertEqual(json.load(response)['text'], '안녕하세요')
 
     def test_missing_key_prevents_startup(self):
         with patch.dict(os.environ, {}, clear=True):
