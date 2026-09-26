@@ -36,7 +36,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Send ipTIME ping status and device list to WebDAV before the normal PulseDAV report.",
     )
-    return parser.parse_args()
+    parser.add_argument('--check-status', action='store_true', help='Read-only recursive WebDAV recording check; discover config from cron or use --config.')
+    parser.add_argument('--server-list', help='Optional JSON server inventory with server_name, ip_address, open_port, directory.')
+    parser.add_argument('--status-output-dir', help='Directory for server_status.json and server_status.txt.')
+    parser.add_argument('--max-age-minutes', type=int, help='Stale recording threshold (default: twice configured interval).')
+    args = parser.parse_args()
+    if args.check_status and any((args.once, args.loop, args.reboot, args.iptime_list, args.print_crontab)):
+        parser.error('--check-status cannot be combined with send or crontab modes')
+    return args
 
 
 def current_time_text() -> str:
@@ -93,6 +100,13 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None) -
 
 def main() -> int:
     args = parse_args()
+    if args.check_status:
+        from status_check import check_status
+        try:
+            return check_status(args.config, args.status_output_dir, args.max_age_minutes, args.server_list)
+        except (OSError, ValueError) as exc:
+            print(f'상태 점검 실패: {exc}', file=sys.stderr)
+            return 2
     settings = load_settings(args.config)
     if args.print_crontab:
         print("\n".join(build_crontab_lines(args.config, args.interval_minutes)))
