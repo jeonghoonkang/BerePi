@@ -149,3 +149,66 @@ sudo crontab -l
 ```bash
 [ -x /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/check_login_pulsedav.sh ] && /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/check_login_pulsedav.sh
 ```
+
+
+## WebDAV 기록 상태 점검
+
+`--check-status`는 `/tinyGW` 전체를 WebDAV `PROPFIND Depth: 1`로 반복 탐색합니다.
+모든 파일의 수정 시각을 UTC ISO 8601로 저장하며, 최신 PulseDAV Markdown을 WebDAV GET으로
+읽어 호스트명, 내부/Public IP, 설정된 SSH 포트를 추출합니다. 인증은 기존 설정 파일을 사용합니다.
+점검은 원격 파일을 업로드하거나 삭제하지 않으며 로컬 전송 state도 변경하지 않습니다.
+
+```bash
+cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav
+python3 pulsedav.py --check-status
+# cron을 조회할 수 없거나 설정이 여러 개이면 명시적으로 지정
+python3 pulsedav.py --check-status --config this_settings.json
+# sender.py에서도 같은 인자를 지원
+python3 sender.py --check-status --config this_settings.json --max-age-minutes 90
+```
+
+설정 자동 탐색은 사용자 crontab과 비밀번호 없이 조회 가능한 root crontab의 `cd`,
+`sender.py`/`pulsedav.py`, `--config`를 해석합니다. shell 변수 등 해석할 수 없는 설정은
+`--config`로 지정하세요. cron 원문과 비밀번호는 출력 파일에 기록하지 않습니다.
+현재 실행 환경에서 cron을 읽지 못하는 경우에도 명시적 설정으로 점검할 수 있습니다.
+
+기본 출력은 workspace의 `workshot/2remember/server_list/server_status.json` 및
+`server_status.txt`입니다. `--status-output-dir /path/to/output`으로 변경할 수 있습니다.
+Tree에는 모든 폴더와 파일 시각이 표시되고 JSON에는 파일 목록, 서버별 최신 파일,
+최근 PulseDAV 기록, 누락/실패 정보가 포함됩니다.
+
+서버 디렉터리는 `pulse_*.md`가 있는 디렉터리와 현재 설정의 업로드 대상에서 찾습니다.
+아직 기록이 없거나 별도의 디렉터리 구조를 사용하는 서버는 `--server-list inventory.json`으로
+추가하세요. 목록의 필드는 보고서에서 추출한 메타데이터보다 우선합니다.
+
+```json
+{
+  "servers": [
+    {
+      "server_name": "gateway-1",
+      "ip_address": "192.0.2.10",
+      "open_port": 22,
+      "directory": "tinyGW/site/gateway-1"
+    }
+  ]
+}
+```
+
+`latest_file`은 서버 디렉터리 하위 모든 파일 중 최신 파일입니다. `status`는
+`pulse_*.md`의 수정 시각을 기준으로 판단하므로 다른 파일 갱신이 기록 중단을 숨기지 않습니다.
+기본 지연 기준은 선택한 설정의 `schedule.interval_minutes`의 2배이며 모든 서버에 적용됩니다.
+서버마다 전송 주기가 다르면 `--max-age-minutes`로 적절한 기준을 지정하세요.
+`ok`는 최근 기록 존재, `stale`은 지연, `missing`은 기록 없음,
+`unknown`은 조회 실패, `clock_skew`는 미래 시각입니다.
+이는 최근 기록 존재 여부이며 다음 전송 성공이나 SSH 포트의 실제 개방 여부를 보장하지 않습니다.
+`open_port`는 보고서 또는 목록에 명시된 포트입니다. 추출 불가 항목은 JSON null입니다.
+
+일부 디렉터리가 실패해도 다른 디렉터리를 계속 검사하고 `scan_complete: false`와 오류를 저장합니다.
+종료 코드는 정상 0, 지연/누락/시각 이상 1, 설정 오류/불완전 조회 2입니다.
+설정 오류는 원격 점검 전에 종료되므로 기존 출력 파일을 갱신하지 않습니다.
+
+검증:
+
+```bash
+python3 -m unittest discover -s . -p test_status_check.py -v
+```

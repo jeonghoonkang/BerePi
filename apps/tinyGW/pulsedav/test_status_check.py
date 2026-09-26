@@ -1,0 +1,106 @@
+import json
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
+from xml.sax.saxutils import escape
+
+import status_check as sc
+from pulsedav import WebDAVConfig
+
+
+def xml_response(path, directory=False, modified='Sat, 26 Sep 2026 02:00:00 GMT'):
+    kind = '<d:collection/>' if directory else ''
+    return f'<d:response><d:href>{escape(path)}</d:href><d:propstat><d:prop><d:resourcetype>{kind}</d:resourcetype><d:getlastmodified>{modified}</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>'
+
+
+class Response:
+    def __init__(self, text):
+        self.text = text
+    def raise_for_status(self):
+        pass
+
+
+class Session:
+    def __init__(self, pages):
+        self.pages = pages
+        self.calls = []
+    def request(self, method, url, **kwargs):
+        self.calls.append((method, url, kwargs))
+        value = self.pages[url]
+        if isinstance(value, Exception):
+            raise value
+        return Response(value)
+
+
+class StatusTests(unittest.TestCase):
+    def test_cron_quoted_config_and_comments(self):
+        paths, bad = sc.cron_configs('''# */30 * * * * cd /tmp/pulsedav && python3 sender.py --config ignored.json
+*/30 * * * * cd '/tmp/pulsedav space' && python3 sender.py --once --config 'my settings.json'
+@reboot python3 /tmp/pulsedav/sender.py --config=/tmp/config.json
+''', '/home/test')
+        self.assertEqual(paths, {Path('/tmp/pulsedav space/my settings.json').resolve(), Path('/tmp/config.json').resolve()})
+        self.assertFalse(bad)
+
+    def test_watchdog_cron_is_not_a_report_config(self):
+        paths, bad = sc.cron_configs('0 * * * * cd /tmp/pulsedav && python3 sender.py --gateway-watchdog', '/tmp')
+        self.assertEqual(paths, set())
+        self.assertFalse(bad)
+
+    def test_check_status_rejects_other_modes(self):
+        import sender
+        for mode in ('--gateway-watchdog', '--install-crontab', '--once'):
+            with self.subTest(mode=mode), patch('sys.argv', ['sender.py', '--check-status', mode]), patch('sys.stderr'):
+                with self.assertRaises(SystemExit) as error:
+                    sender.parse_args()
+                self.assertEqual(error.exception.code, 2)
+
+    def test_unresolved_shell_variable(self):
+        self.assertTrue(sc.cron_configs('*/30 * * * * python3 /tmp/pulsedav/sender.py --config "$CONFIG"', '/tmp')[1])
+
+    def test_recursive_scan_and_partial_failure(self):
+        config = WebDAVConfig('https://example.test', '/remote.php/dav/files/u', 'u', 'secret')
+        base = '/remote.php/dav/files/u/'
+        def page(*items):
+            return '<d:multistatus xmlns:d="DAV:">' + ''.join(items) + '</d:multistatus>'
+        session = Session({
+            'https://example.test' + base + 'tinyGW': page(xml_response(base+'tinyGW/', True), xml_response(base+'tinyGW/sub/', True), xml_response(base+'tinyGW/broken/', True)),
+            'https://example.test' + base + 'tinyGW/sub': page(xml_response(base+'tinyGW/sub/', True), xml_response(base+'tinyGW/sub/host/', True)),
+            'https://example.test' + base + 'tinyGW/sub/host': page(xml_response(base+'tinyGW/sub/host/', True), xml_response(base+'tinyGW/sub/host/a%20%23%3F.md')),
+            'https://example.test' + base + 'tinyGW/broken': OSError('connection refused'),
+        })
+        directories, files, errors = sc.scan(session, config, 'tinyGW')
+        self.assertIn('tinyGW/sub/host', directories)
+        self.assertEqual(files[0]['path'], 'tinyGW/sub/host/a #?.md')
+        self.assertEqual(files[0]['modified_at'], '2026-09-26T02:00:00+00:00')
+        self.assertEqual(errors[0]['error'], 'connection_refused')
+        self.assertTrue(all(c[0] == 'PROPFIND' and c[2]['headers']['Depth'] == '1' for c in session.calls))
+
+    def test_latest_and_timezones(self):
+        self.assertEqual(sc.iso_time('2026-09-26T11:00:00+09:00'), '2026-09-26T02:00:00+00:00')
+        self.assertIsNone(sc.iso_time('invalid'))
+        self.assertEqual(sc.latest([{'modified_at': None}, {'modified_at': '2026-01-01T00:00:00+00:00'}])['modified_at'], '2026-01-01T00:00:00+00:00')
+
+    def test_recording_health_not_masked_by_new_other_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'settings.json'
+            path.write_text(json.dumps({'webdav': {'hostname': 'https://example.test', 'root': '/dav', 'username': 'u', 'password': 'secret'}}))
+            files = [{'path': 'tinyGW/host/pulse_old.md', 'modified_at': '2020-01-01T00:00:00+00:00'}, {'path': 'tinyGW/host/other.txt', 'modified_at': datetime.now(timezone.utc).isoformat()}]
+            with patch.object(sc, 'discover_config', return_value=(path, ['test'])), patch.object(sc, 'build_session'), patch.object(sc, 'build_host_remote_dirs', return_value=['tinyGW/host']), patch.object(sc, 'scan', return_value=(['tinyGW','tinyGW/host'], files, [])), patch.object(sc, 'report_metadata', return_value={'server_name': 'host', 'ip_address': '10.0.0.2', 'open_port': '22'}), patch('builtins.print'):
+                code = sc.check_status(str(path), tmp)
+            result = json.loads((Path(tmp)/'server_status.json').read_text())
+            self.assertEqual(code, 1)
+            self.assertEqual(result['servers'][0]['status'], 'stale')
+            self.assertEqual(result['servers'][0]['latest_file'], 'tinyGW/host/other.txt')
+            self.assertNotIn('secret', (Path(tmp)/'server_status.json').read_text())
+            self.assertIn('pulse_old.md', (Path(tmp)/'server_status.txt').read_text())
+
+    def test_tree_siblings_and_nested_folders(self):
+        tree = sc.render_tree({'target_directory':'tinyGW','scan_complete':True,'checked_at':'now','cron_notes':[], 'directories':['tinyGW','tinyGW/a','tinyGW/a/b','tinyGW/z'], 'servers':[], 'files':[{'path':'tinyGW/a/b/f','modified_at':None},{'path':'tinyGW/z/g','modified_at':None}], 'errors':[]})
+        self.assertIn('│       └── f', tree)
+        self.assertIn('└── z/\n    └── g', tree)
+
+
+if __name__ == '__main__':
+    unittest.main()

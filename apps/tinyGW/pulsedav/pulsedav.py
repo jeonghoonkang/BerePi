@@ -1144,3 +1144,8 @@ def run_loop(interval_minutes: int | None = None, settings_path: str | Path | No
 
 def quoted_command(command: list[str]) -> str:
     return " ".join(shlex.quote(part) for part in command)
+
+
+if __name__ == "__main__":
+    from sender import main
+    raise SystemExit(main())
