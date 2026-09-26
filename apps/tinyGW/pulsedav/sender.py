@@ -17,6 +17,7 @@ from pulsedav import (
     run_loop,
     send_iptime_list,
     send_once,
+    warn_docker_group_membership,
 )
 
 
@@ -122,6 +123,7 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None,
 
 def main() -> int:
     args = parse_args()
+    warn_docker_group_membership()
     if args.check_status or args.check_status_all:
         from status_check import check_status
         try:

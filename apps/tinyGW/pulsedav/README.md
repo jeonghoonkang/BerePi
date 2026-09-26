@@ -247,3 +247,27 @@ sudo usermod -aG docker "$USER"
 권한을 부여합니다. Rootless Docker나 Docker Desktop 환경은 해당 계정의 Docker context와
 소켓 경로를 확인하세요.
 참고: https://docs.docker.com/engine/install/linux-postinstall/
+
+
+### 실행 시 Docker 그룹 경고
+
+`python3 sender.py ...` 또는 `python3 pulsedav.py ...` 실행 시 Linux에서는 현재
+실행 계정의 `docker` 그룹을 확인합니다. `--once`, `--loop`, `--check-status`,
+`--check-status-all` 등에서 시작할 때 한 번 검사하며, 경고가 있어도 실행을 계속합니다.
+경고는 stderr로 출력되어 `2>&1`로 저장하는 cron 로그에도 포함됩니다.
+
+```text
+WARNING: 현재 사용자 'tinyos'이 docker 그룹에 포함되어 있지 않습니다. Docker 소켓 접근 시 permission denied가 발생할 수 있습니다.
+Docker 관리 권한을 부여하려면: sudo usermod -aG docker tinyos
+그룹 변경 후 로그아웃/로그인하세요. docker 그룹은 root 수준의 권한을 부여합니다.
+```
+
+- 현재 프로세스의 기본/보조 그룹에 `docker`가 있으면 경고하지 않습니다.
+- 계정에 그룹을 추가했어도 실행 중인 프로세스에 적용되지 않았으면 재로그인을 안내합니다.
+- `docker` 그룹 자체가 없으면 Docker 설치 및 context/소켓 설정 확인을 안내합니다.
+- root 및 macOS/Windows는 이 Linux 그룹 검사를 생략합니다.
+- `$USER` 대신 실제 프로세스의 실행 UID로 계정을 확인합니다. cron 실행 계정에도 적용됩니다.
+
+Rootless Docker 또는 원격 Docker context는 `docker` 그룹 없이도 정상 동작할 수 있습니다.
+따라서 그룹 경고는 컨테이너 장애를 의미하지 않으며, 실제 조회 성공 여부는 보고서의
+Docker 운영 상태에서 확인하세요. 프로그램은 그룹 가입이나 소켓 권한 변경을 자동 실행하지 않습니다.

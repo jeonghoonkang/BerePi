@@ -8,6 +8,7 @@ import re
 import shlex
 import socket
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -661,6 +662,46 @@ def get_crontab_list() -> str:
     if root_hint and "password is required" not in root_hint.lower() and "not allowed" not in root_hint.lower():
         sections.append(f"[root]\n{root_hint}")
     return "\n\n".join(sections)
+
+
+def warn_docker_group_membership() -> None:
+    """Warn once at CLI startup; never change groups or request elevation."""
+    if platform.system() != "Linux" or os.geteuid() == 0:
+        return
+    import grp
+    import pwd
+
+    try:
+        account = pwd.getpwuid(os.geteuid())
+        try:
+            docker_group = grp.getgrnam("docker")
+        except KeyError:
+            print(
+                f"WARNING: Docker 그룹 확인: 사용자 '{account.pw_name}'의 머신에 docker 그룹이 없습니다. "
+                "Docker Engine 설치 및 Docker context/소켓 설정을 확인하세요.",
+                file=sys.stderr, flush=True,
+            )
+            return
+        active_groups = set(os.getgroups()) | {os.getegid()}
+        if docker_group.gr_gid in active_groups:
+            return
+        configured_groups = os.getgrouplist(account.pw_name, account.pw_gid)
+        if docker_group.gr_gid in configured_groups:
+            message = (
+                f"사용자 '{account.pw_name}'은 docker 그룹에 등록되어 있지만 현재 프로세스에는 적용되지 않았습니다. "
+                "로그아웃 후 다시 로그인하고 PulseDAV를 다시 실행하세요."
+            )
+        else:
+            message = (
+                f"현재 사용자 '{account.pw_name}'이 docker 그룹에 포함되어 있지 않습니다. "
+                "Docker 소켓 접근 시 permission denied가 발생할 수 있습니다.\n"
+                f"Docker 관리 권한을 부여하려면: sudo usermod -aG docker {shlex.quote(account.pw_name)}\n"
+                "그룹 변경 후 로그아웃/로그인하세요. docker 그룹은 root 수준의 권한을 부여합니다."
+            )
+        print(f"WARNING: {message}", file=sys.stderr, flush=True)
+    except (KeyError, OSError):
+        print("WARNING: 현재 사용자의 Docker 그룹 정보를 확인하지 못했습니다. id 명령으로 확인하세요.",
+              file=sys.stderr, flush=True)
 
 
 def get_docker_status() -> str:
