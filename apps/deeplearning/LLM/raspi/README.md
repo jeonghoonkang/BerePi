@@ -123,6 +123,8 @@ bash run_service.sh
 `install.sh`는 apt 의존성을 설치하고, Ollama가 없으면
 [공식 설치 스크립트](https://docs.ollama.com/linux)를 실행합니다.
 임의 API 키를 포함한 `config.env`를 권한 `0600`으로 생성하며 기존 설정은 보존합니다.
+기존 파일에 키가 없거나 비어 있거나 24자 미만이면 새 키를 추가합니다.
+`bash install.sh --config-only`로 패키지 설치 없이 설정만 복구할 수 있습니다.
 Ollama 공식 설치 프로그램이 시스템 `ollama.service`를 등록/시작할 수 있습니다.
 Pi 서버는 별도의 `127.0.0.1:11435` 인스턴스를 사용하며 기존 서비스는 중지하지 않습니다.
 다른 인스턴스에 모델이 로드되어 있으면 Pi의 RAM을 함께 사용하므로 확인하십시오.
@@ -150,6 +152,56 @@ systemd 서비스로 실행 중이면 해당 서비스를 `systemctl stop`으로
 재시작하고 `http://PI_IP:8082`를 사용합니다. HTTP는 키를 암호화하지 않으므로
 신뢰할 수 있는 LAN에서 사용하고, 외부 접속은 HTTPS 프록시 또는 SSH 터널을 사용하십시오.
 Ollama의 `11435` 포트는 항상 loopback에만 바인딩됩니다.
+
+### `GEMMA4_API_KEY`가 파일에 없을 때
+
+이전 `install.sh`는 `config.env`가 이미 있으면 파일 전체를 건너뛰었습니다.
+따라서 샘플을 복사했거나 키를 삭제한 상태에서는 재설치해도 키가 생성되지 않았습니다.
+수정된 설치기는 `init_config.py`로 기존 설정과 키의 유효성을 확인합니다.
+환경 변수 이름은 대문자 **`GEMMA4_API_KEY`**를 사용합니다.
+
+패키지나 모델을 다시 설치하지 않고 설정만 복구할 수 있습니다.
+서버를 실행하는 일반 사용자 계정으로 다음 명령을 실행합니다.
+
+```bash
+cd /home/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/raspi/server
+bash install.sh --config-only
+```
+
+- 파일이 없으면 샘플 설정과 무작위 64자 API 키로 생성합니다.
+- 키가 없거나 비어 있거나 24자 미만이면 새 키를 파일 끝에 추가합니다.
+  기존의 잘못된 키 줄이 남아 있어도 Bash는 마지막에 지정한 값을 사용합니다.
+- 유효한 기존 키와 포트·모델 등 다른 설정은 보존합니다.
+- 파일 권한은 `0600`으로 설정합니다. 키 값은 설치 로그에 출력하지 않습니다.
+- 설정 파일의 Bash 문법이 잘못되었으면 덮어쓰지 않고 오류를 표시합니다.
+
+키 값을 출력하지 않고 저장 여부와 길이를 확인하려면:
+
+```bash
+bash -c 'unset GEMMA4_API_KEY; source ./config.env; printf "API key length: %s\n" "${#GEMMA4_API_KEY}"'
+stat -c '%a %n' config.env
+```
+
+새로 생성한 키의 길이는 `64`, 파일 권한은 `600`으로 표시됩니다.
+기존 유효 키를 보존했다면 길이는 24자 이상일 수 있습니다.
+로그인에 사용할 실제 값은 `config.env`의 마지막 `GEMMA4_API_KEY` 항목에서 확인합니다.
+
+변경한 키를 적용하려면 서버를 재시작합니다. 직접 실행 중인 경우:
+
+```bash
+bash stop.sh
+bash run_service.sh
+```
+
+systemd 서비스로 운영하는 경우:
+
+```bash
+sudo systemctl restart gemma4-raspi.service
+```
+
+재시작 후 웹에서 다시 로그인합니다. 별도 `GEMMA4_LOGIN_PASSWORD`가 없으면
+`admin` 계정의 암호는 복구한 API 키입니다. 별도 로그인 암호가 설정되어 있다면
+그 암호는 그대로 유지됩니다.
 
 ## 부팅 시 자동 실행
 
@@ -214,6 +266,50 @@ GEMMA4_LOGIN_PASSWORD='원하는 로그인 암호'
 생성 API는 Ollama 원본 필드에 `elapsed_seconds`, `requested_model`을 추가합니다.
 회신 모델은 백엔드가 반환한 `model` 필드를 표시합니다.
 
+## 클립보드 이미지 OCR
+
+1. 로그인한 뒤 **OCR** 탭을 엽니다.
+2. 이미지 영역을 클릭하고 `Ctrl+V` (macOS: `⌘V`)로 이미지를 붙여넣습니다.
+   클립보드 버튼, 파일 선택, 드래그 앤 드롭도 지원합니다.
+3. 미리보기와 OCR 엔진을 확인하고 **Run OCR**을 누릅니다. 추가 지침은 Gemma 엔진에서 사용합니다.
+4. 추출된 텍스트, 회신 모델, 소요시간, 출력 토큰을 확인하고 복사하거나 저장합니다.
+
+HTTP 접속에서 클립보드 읽기 버튼이 제한되면 키보드 붙여넣기 또는 파일 선택을
+사용합니다. 원본은 PNG/JPEG/WebP 최대 10 MiB이며 브라우저가 긴 변을 2048픽셀
+이하로 조정해 PNG로 변환합니다. 전송할 PNG가 2 MiB를 넘으면 이미지를 잘라야 합니다.
+이미지와 OCR 결과는 페이지 메모리에서만 보관하며 로그아웃·새로고침 시 삭제됩니다.
+서버는 이미지 파일을 저장하지 않고 선택한 로컬 OCR 엔진에 전달합니다.
+
+기본 엔진은 한국어·영어를 지원하는 **Tesseract**입니다. `install.sh`에서 설치합니다.
+기존 설치 환경에서는 서버 디렉터리에서 `bash install_ocr.sh`를 실행하면 관리자
+권한 없이 Debian/Ubuntu 패키지를 `.ocr-runtime/`에 풀어 전용으로 사용할 수 있습니다.
+이 스크립트는 apt 패키지 목록과 시스템 기본 공유 라이브러리를 이용합니다.
+현재 Pi에서는 한국어·영어 언어 데이터와 함께 설치해 검증했습니다.
+
+선택 가능한 **Gemma** 엔진은 설정된 모델의 `vision` 지원을 확인하고 Ollama의
+`/api/generate`에 이미지를 전달합니다. 현재 8GB Pi에서 `gemma4:e4b` 이미지 모델
+로딩 중 OOM 종료를 확인했으므로 이 환경에서는 Tesseract를 권장합니다.
+Gemma는 일반 대화와 같은 CPU·출력 토큰 제한을 사용하며 자동 모델 변경은 하지 않습니다.
+두 OCR 엔진 모두 일반 대화와 같은 단일 추론 잠금을 사용합니다.
+Tesseract 처리 제한 시간은 90초입니다.
+작은 글자나 흐린 이미지는 오인식할 수 있고, Gemma의 출력 한도에 도달한 긴 문서는
+나누어 전송해야 합니다. OCR 입력은 일반 대화 이력에 포함하지 않습니다.
+Gemma OCR 출력 한도는 `GEMMA4_OCR_MAX_TOKENS`(기본 2048)로 별도 설정합니다.
+
+`POST /api/ocr`는 로그인 세션 또는 Bearer 인증이 필요합니다.
+본문은 `{"image": "PNG의 순수 base64 문자열", "engine": "tesseract", "instructions": "선택적 Gemma 지침"}`이며,
+이미지 1개, 추가 지침 최대 4000자를 받습니다. API는 PNG/JPEG 최대 8 MiB·2천만 화소를
+Pillow로 검증하고, JSON 한도는 base64 최대 길이에 64 KiB를 더한 값입니다.
+브라우저는 Pi 메모리를 고려해 기존의 2048px·PNG 2 MiB 제한을 유지합니다.
+`engine`은 `tesseract`(기본) 또는 `gemma`이며 `instructions`는 Gemma에서만 적용됩니다.
+GitHub 버전의 `prompt` 입력도 지원합니다. `prompt`만 지정하고 엔진을 생략하면
+기존 호환성을 위해 Gemma를 사용합니다. `prompt`와 `instructions`를 동시에 보내면
+400 오류를 반환합니다. 엔진 선택을 확실히 하려면 `engine`을 지정하세요.
+`image`에 `data:image/png;base64,` 접두사는 붙이지 않습니다.
+응답의 `text`와 `response`는 같은 인식 텍스트이며 `model`, `elapsed_seconds`, `eval_count`로
+회신 엔진/모델과 처리 통계를 확인할 수 있습니다. `eval_count`는 Gemma에서만 제공합니다. `422`는 이미지 미지원 모델,
+`429`는 다른 추론 진행 중을 의미합니다.
+
 ## API 사용
 
 인증은 `Authorization: Bearer ...`입니다. 테스트 시 로컬 설정에서 키를 읽습니다.
@@ -243,7 +339,8 @@ curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
   대화 이력은 클라이언트가 전달하며 최대 32개의 텍스트 메시지를 허용합니다.
 - 두 생성 API는 Ollama 응답 JSON을 반환하고 `stream:false`만 지원합니다.
   `model`을 전달한다면 서버 설정과 같아야 합니다. 입력 JSON은 최대 64KiB입니다.
-- `POST /api/ocr`: base64 JPG/PNG `image`, 선택적 `prompt` 입력. 인식 결과는 `text` 필드.
+- `POST /api/ocr`: base64 JPG/PNG `image`, 선택적 `engine`, `prompt` 또는 `instructions` 입력.
+  인식 결과는 동일한 `text`·`response` 필드. 기본 엔진은 Tesseract이며 위 호환 규칙을 따릅니다.
   이미지는 OCR API에서만 받으며 최대 8 MiB, 2,000만 화소로 제한합니다.
 - Pi 자원 보호를 위해 임의 모델·options·도구 실행 요청은 거부합니다.
   대기열, 일반 파일 저장, Telegram, 다중 사용자 관리 및 GPU/모델 변경은 지원하지 않습니다.
@@ -262,7 +359,9 @@ curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
 
 기존 Pi 설치에 이번 변경을 반영하려면 수정된 `server` 파일들을 배포한 뒤:
 
-1. `sudo apt-get install python3-pil`로 이미지 검증 모듈을 설치합니다.
+1. `sudo apt-get install python3-pil tesseract-ocr tesseract-ocr-kor`로 이미지 검증 모듈과 OCR 엔진을 설치합니다.
+   가상환경에서 실행한다면 그 환경에도 `python3 -m pip install Pillow`가 필요합니다.
+   Tesseract만 관리자 권한 없이 설치하려면 `bash install_ocr.sh`를 사용합니다.
 2. `config.env`의 `GEMMA4_SERVER_HOST=0.0.0.0`, `GEMMA4_SERVER_PORT=8082`를 확인합니다.
    기존 로그인 암호와 API 키는 그대로 사용합니다.
 3. 서비스를 재시작합니다. systemd 사용 시 `sudo systemctl restart gemma4-raspi.service`,
@@ -277,7 +376,7 @@ curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
 저장하지 않습니다. 요청 처리 중에는 채팅과 OCR이 하나의 추론 슬롯을 공유합니다.
 긴 문서는 출력 토큰 제한에 도달할 수 있으며 화면에 안내를 표시합니다.
 
-OCR은 별도 Tesseract 엔진이 아니라 설정된 Gemma 비전 모델의 이미지 인식을 사용합니다.
+OCR 기본 엔진은 Tesseract이며, Gemma 선택 시 설정된 비전 모델의 이미지 인식을 사용합니다.
 [Ollama 공식 이미지 입력 규격](https://docs.ollama.com/capabilities/vision)에 따라
 검증된 이미지를 base64 `images` 배열로 전달합니다. 실제 인식 정확도·처리 시간은
 Pi에서 설치한 모델과 이미지로 확인해야 합니다.
@@ -334,7 +433,7 @@ PYTHON
 
 ```bash
 cd server
-python3 -m unittest -v test_server.py
+python3 -m unittest -v test_server.py test_init_config.py
 bash -n install.sh run_service.sh
 ```
 

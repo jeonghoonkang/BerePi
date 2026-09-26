@@ -1,4 +1,5 @@
 """HTTP integration tests; no Ollama installation or model download needed."""
+import subprocess
 import json
 import base64
 import io
@@ -37,6 +38,8 @@ class Backend(BaseHTTPRequestHandler):
         self.end_headers()
         response = {'response': '안녕하세요', 'done': True, 'model': 'gemma4:e4b',
                     'eval_count': 8, 'eval_duration': 2000000000}
+        if self.path == '/api/show':
+            response = {'capabilities': ['completion', 'vision']}
         if self.path == '/api/chat':
             response = {'message': {'role': 'assistant', 'content': '안녕하세요'}, 'done': True}
         self.wfile.write(json.dumps(response).encode())
@@ -184,7 +187,7 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(call('/api/session')[1]['logged_in'])
         self.assertEqual(call('/api/status')[0], 200)
         self.assertEqual(call('/api/chat', {'messages': [{'role': 'user', 'content': 'hi'}]})[0], 200)
-        self.assertEqual(call('/api/ocr', {'image': self.image()})[0], 200)
+        self.assertEqual(call('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 200)
         self.assertEqual(call('/api/session-logout', {}, 'http://other.example')[0], 403)
         self.assertEqual(call('/api/session-logout', {})[0], 200)
         self.assertEqual(call('/api/status')[0], 401)
@@ -211,7 +214,7 @@ class ServerTests(unittest.TestCase):
         for format in ('PNG', 'JPEG'):
             with self.subTest(format=format):
                 image = self.image(format)
-                status, result = self.request('/api/ocr', {'image': image, 'prompt': '글자만 읽어 주세요'})
+                status, result = self.request('/api/ocr', {'image': image, 'prompt': '글자만 읽어 주세요', 'engine': 'gemma'})
                 self.assertEqual(status, 200)
                 self.assertEqual(result['text'], '안녕하세요')
                 self.assertEqual(self.backend.received_path, '/api/chat')
@@ -222,7 +225,7 @@ class ServerTests(unittest.TestCase):
                 self.assertGreaterEqual(result['elapsed_seconds'], 0)
 
     def test_ocr_requires_auth(self):
-        self.assertEqual(self.request('/api/ocr', {'image': self.image()}, auth=False)[0], 401)
+        self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'}, auth=False)[0], 401)
 
     def test_invalid_ocr_rejected_and_slot_released(self):
         image = self.image()
@@ -235,34 +238,34 @@ class ServerTests(unittest.TestCase):
             with self.subTest(data=str(data)[:70]):
                 self.assertEqual(self.request('/api/ocr', data)[0], 400)
                 self.assertFalse(self.server.inference.locked())
-        self.assertEqual(self.request('/api/ocr', {'image': image})[0], 200)
+        self.assertEqual(self.request('/api/ocr', {'image': image, 'engine': 'gemma'})[0], 200)
 
     def test_ocr_image_and_body_limits(self):
         # Lower limits keep the regression test small while exercising HTTP validation.
         with patch('server.MAX_IMAGE_BYTES', 10):
-            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 400)
+            self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 400)
         with patch('server.MAX_IMAGE_PIXELS', 100):
-            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 400)
+            self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 400)
         with patch('server.MAX_OCR_BODY', 20):
-            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 413)
+            self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 413)
         self.assertGreater(MAX_OCR_BODY, MAX_IMAGE_BYTES)
         self.assertFalse(self.server.inference.locked())
 
     def test_ocr_shares_inference_slot_with_chat(self):
         with self.server.inference:
-            self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 429)
+            self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 429)
             self.assertEqual(self.request('/api/health')[0], 200)
 
     def test_ocr_backend_errors_allow_retry(self):
         for error, status in [(TimeoutError(), 504), (OSError(), 502)]:
             with patch.object(self.server, 'backend_json', side_effect=error):
-                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], status)
+                self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], status)
             self.assertFalse(self.server.inference.locked())
         for response in ({'error': 'vision unsupported'}, {}, {'message': {}}, []):
-            with patch.object(self.server, 'backend_json', return_value=response):
-                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 502)
+            with patch.object(self.server, 'backend_json', side_effect=[{'capabilities': ['vision']}, response]):
+                self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 502)
             self.assertFalse(self.server.inference.locked())
-        self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 200)
+        self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 200)
 
     def test_api_namespace_includes_health_and_readiness(self):
         self.assertEqual(self.request('/api/health', auth=False)[0], 200)
@@ -282,9 +285,39 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             headers['Cookie'] = response.headers['Set-Cookie'].split(';')[0]
         request = urllib.request.Request(self.base + '/api/ocr', headers=headers,
-            data=json.dumps({'image': self.image()}).encode())
+            data=json.dumps({'image': self.image(), 'engine': 'gemma'}).encode())
         with self.opener.open(request) as response:
             self.assertEqual(json.load(response)['text'], '안녕하세요')
+
+    def test_tesseract_default_and_response_aliases(self):
+        with patch('server.tesseract_ocr', return_value={'response': 'OCR text', 'model': 'Tesseract (kor+eng)'}) as engine:
+            status, result = self.request('/api/ocr', {'image': self.image()})
+            self.assertEqual(status, 200)
+            self.assertEqual(result['engine'], 'tesseract')
+            self.assertEqual(result['text'], result['response'])
+            self.assertEqual(result['requested_model'], 'Tesseract (kor+eng)')
+            engine.assert_called_once()
+        for error, code in [(RuntimeError('missing'), 503), (subprocess.TimeoutExpired('tesseract', 90), 504)]:
+            with patch('server.tesseract_ocr', side_effect=error):
+                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], code)
+            self.assertFalse(self.server.inference.locked())
+
+    def test_local_ocr_request_compatibility(self):
+        status, result = self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma', 'instructions': 'Keep lines'})
+        self.assertEqual(status, 200)
+        self.assertEqual(result['text'], result['response'])
+        self.assertIn('Keep lines', self.backend.received['messages'][0]['content'])
+        status, legacy = self.request('/api/ocr', {'image': self.image(), 'prompt': 'Read text'})
+        self.assertEqual(status, 200)
+        self.assertEqual(legacy['engine'], 'gemma')
+        self.assertEqual(legacy['text'], legacy['response'])
+        self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma', 'instructions': 'x' * 4000})[0], 200)
+        for extra in [{'engine': 'invalid'}, {'instructions': []}, {'instructions': 'x' * 4001},
+                      {'prompt': 'x', 'instructions': 'y'}]:
+            self.assertEqual(self.request('/api/ocr', {'image': self.image(), **extra})[0], 400)
+        with patch.object(self.server, 'backend_json', return_value={'capabilities': ['completion']}):
+            self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 422)
+        self.assertFalse(self.server.inference.locked())
 
     def test_missing_key_prevents_startup(self):
         with patch.dict(os.environ, {}, clear=True):

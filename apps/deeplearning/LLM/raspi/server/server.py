@@ -8,6 +8,7 @@ import ipaddress
 import json
 import os
 import platform
+import shutil
 import secrets
 import time
 import socket
@@ -149,8 +150,15 @@ def generation_payload(data, path, config):
 
 
 def ocr_payload(data, config):
-    if not isinstance(data, dict) or set(data) - {"image", "prompt"}:
-        raise ValueError("OCR requires image (base64) and optional prompt")
+    if not isinstance(data, dict) or set(data) - {"image", "prompt", "instructions", "engine"}:
+        raise ValueError("OCR requires image and optional engine, prompt or instructions")
+    if data.get("engine", "gemma" if "prompt" in data else "tesseract") not in ("tesseract", "gemma"):
+        raise ValueError("OCR engine must be tesseract or gemma")
+    if "prompt" in data and "instructions" in data:
+        raise ValueError("Use either prompt or instructions, not both")
+    instructions = data.get("instructions", "")
+    if not isinstance(instructions, str) or len(instructions) > 4000:
+        raise ValueError("OCR instructions must be at most 4000 characters")
     encoded = data.get("image")
     if not isinstance(encoded, str) or not encoded or len(encoded) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
         raise ValueError("JPG/PNG image must be at most 8 MiB")
@@ -176,13 +184,33 @@ def ocr_payload(data, config):
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError,
             Image.DecompressionBombWarning, SyntaxError) as exc:
         raise ValueError("Invalid or oversized JPG/PNG image") from exc
-    prompt = data.get("prompt", OCR_PROMPT)
-    if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4000:
+    prompt = data.get("prompt", OCR_PROMPT + ("\n" + instructions.strip() if instructions.strip() else ""))
+    if not isinstance(prompt, str) or not prompt.strip() or ("prompt" in data and len(prompt) > 4000):
         raise ValueError("OCR prompt must contain 1 to 4000 characters")
     payload = generation_payload({"messages": [{"role": "user", "content": prompt}]}, "/api/chat", config)
     payload["messages"][0]["images"] = [encoded]
     payload["options"]["num_predict"] = config.ocr_tokens
     return payload
+
+def tesseract_ocr(encoded):
+    runtime = Path(__file__).with_name('.ocr-runtime')
+    binary = shutil.which('tesseract')
+    env = os.environ.copy()
+    env['OMP_THREAD_LIMIT'] = '1'
+    if not binary and (runtime / 'usr/bin/tesseract').exists():
+        binary = str(runtime / 'usr/bin/tesseract')
+        libraries = [str(path) for path in (runtime / 'usr/lib').glob('*-linux-gnu')]
+        env['LD_LIBRARY_PATH'] = ':'.join(libraries + [env.get('LD_LIBRARY_PATH', '')])
+        env['TESSDATA_PREFIX'] = str(runtime / 'usr/share/tesseract-ocr/5/tessdata')
+    if not binary:
+        raise RuntimeError('Tesseract가 없습니다. 서버에서 bash install_ocr.sh를 실행하세요.')
+    result = subprocess.run([binary, 'stdin', 'stdout', '-l', 'kor+eng', '--psm', '3'],
+                            input=base64.b64decode(encoded), capture_output=True,
+                            env=env, timeout=90)
+    if result.returncode:
+        raise RuntimeError('Tesseract OCR 실패: 이미지와 kor/eng 언어 데이터 설치를 확인하세요.')
+    return {'response': result.stdout.decode('utf-8').strip(),
+            'model': 'Tesseract (kor+eng)', 'done': True, 'done_reason': 'stop'}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -381,20 +409,40 @@ class Handler(BaseHTTPRequestHandler):
         try:
             started = time.monotonic()
             backend_path = "/api/chat" if self.path == "/api/ocr" else self.path
-            result = self.server.backend_json(backend_path, payload, self.server.config.timeout)
+            engine = data.get("engine", "gemma" if "prompt" in data else "tesseract") if self.path == "/api/ocr" else None
+            if engine == "tesseract":
+                result = tesseract_ocr(data["image"])
+                result["text"] = result["response"]
+            else:
+                if engine == "gemma":
+                    info = self.server.backend_json("/api/show", {"model": self.server.config.model})
+                    if not isinstance(info, dict):
+                        raise ValueError("Invalid model information")
+                    if "vision" not in info.get("capabilities", []):
+                        self.reply(422, {"error": "선택 모델은 이미지 OCR을 지원하지 않습니다."})
+                        return
+                result = self.server.backend_json(backend_path, payload, self.server.config.timeout)
             if not isinstance(result, dict):
                 raise ValueError("Invalid backend response")
-            if self.path == "/api/ocr" and "error" not in result:
+            if engine == "gemma" and "error" not in result:
                 message = result.get("message")
                 if not isinstance(message, dict) or not isinstance(message.get("content"), str):
                     raise ValueError("Missing OCR text in backend response")
                 result["text"] = message["content"]
+                result["response"] = message["content"]
             result["elapsed_seconds"] = round(time.monotonic() - started, 3)
-            result["requested_model"] = self.server.config.model
+            result["requested_model"] = result["model"] if engine == "tesseract" else self.server.config.model
+            if engine:
+                result["engine"] = engine
             self.reply(502 if "error" in result else 200, result)
         except urllib.error.HTTPError as exc:
-            self.reply(502, {"error": "Ollama inference failed", "backend_status": exc.code,
+            self.reply(502, {"error": ("Gemma 이미지 OCR 실패: Pi 메모리가 부족할 수 있습니다. Tesseract를 선택해 주세요."
+                                       if self.path == "/api/ocr" else "Ollama inference failed"), "backend_status": exc.code,
                              "hint": "Check Ollama logs for model/version or insufficient memory errors"})
+        except RuntimeError as exc:
+            self.reply(503, {"error": str(exc)})
+        except subprocess.TimeoutExpired:
+            self.reply(504, {"error": "Tesseract OCR timed out"})
         except (TimeoutError, socket.timeout):
             self.reply(504, {"error": "Ollama inference timed out"})
         except (OSError, ValueError):
