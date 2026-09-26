@@ -29,6 +29,8 @@
 
 ## 실행
 
+`--help` 확인 방법과 주요 명령은 [help.md](help.md)를 참고하세요.
+
 ```bash
 cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav
 streamlit run app.py
