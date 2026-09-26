@@ -664,11 +664,32 @@ def get_crontab_list() -> str:
 
 
 def get_docker_status() -> str:
-    info = run_command(["docker", "info", "--format", "Server {{.ServerVersion}} / {{.OperatingSystem}}"], timeout=20)
-    ps = run_command(["docker", "ps", "--format", "table {{.Names}}\t{{.Status}}\t{{.Ports}}"], timeout=20)
-    if not info and not ps:
-        return "docker 없음 또는 권한 부족"
-    return f"{info}\n\n{ps}".strip()
+    outputs: list[str] = []
+    for command in (
+        ["docker", "info", "--format", "Server {{.ServerVersion}} / {{.OperatingSystem}}"],
+        ["docker", "ps", "--format", "table {{.Names}}\t{{.Status}}\t{{.Ports}}"],
+    ):
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=20)
+        except FileNotFoundError:
+            return "Docker 상태 확인 불가: docker 명령이 설치되지 않았거나 실행 환경의 PATH에 없습니다."
+        except subprocess.TimeoutExpired:
+            return "Docker 상태 확인 불가: Docker 조회 시간이 초과되었습니다."
+        except OSError:
+            return "Docker 상태 확인 불가: docker 명령을 실행할 수 없습니다."
+        if result.returncode:
+            detail = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part and part.strip())
+            if "permission denied" in detail.lower():
+                return (
+                    "Docker 상태 확인 불가: PulseDAV 실행 계정에 Docker 접근 권한이 없습니다.\n"
+                    "실행 중인 컨테이너의 상태는 확인하지 못했습니다.\n"
+                    "해당 머신에서 PulseDAV와 같은 계정으로 id, ls -l /var/run/docker.sock, docker ps를 확인하세요."
+                )
+            if "cannot connect to the docker daemon" in detail.lower():
+                return "Docker 상태 확인 불가: Docker daemon에 연결할 수 없습니다. 실행 상태와 Docker context를 확인하세요."
+            return f"Docker 상태 확인 불가: docker {command[1]} 실패 (종료 코드 {result.returncode}).\n{detail}".strip()
+        outputs.append(result.stdout.strip())
+    return "\n\n".join(outputs).strip()
 
 
 def get_user_services() -> str:

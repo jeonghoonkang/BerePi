@@ -221,3 +221,29 @@ JSON의 `scope`와 `target_directories`에서 실제 점검 범위를 확인할 
 ```bash
 python3 -m unittest discover -s . -p test_status_check.py -v
 ```
+
+## Docker 상태 수집 권한
+
+`permission denied ... /var/run/docker.sock`는 PulseDAV 실행 계정이 Docker 소켓에
+접근할 수 없다는 뜻입니다. 컨테이너가 중단되었다는 뜻은 아닙니다.
+보고서에는 권한 부족을 표시하며 PulseDAV가 자동으로 sudo를 실행하거나 권한을 변경하지 않습니다.
+
+해당 머신에서 cron 실행 계정과 동일한 계정으로 확인하세요.
+
+```bash
+id
+ls -l /var/run/docker.sock
+docker ps
+```
+
+Linux Docker Engine의 소켓 그룹이 `docker`라면, 해당 계정에 Docker 관리 권한을
+부여하기로 한 경우 아래처럼 그룹에 추가할 수 있습니다. `USER`는 PulseDAV 실행 계정이어야 합니다.
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+로그아웃 후 다시 로그인하고 `docker ps`를 확인하세요. Docker 그룹은 root 수준의
+권한을 부여합니다. Rootless Docker나 Docker Desktop 환경은 해당 계정의 Docker context와
+소켓 경로를 확인하세요.
+참고: https://docs.docker.com/engine/install/linux-postinstall/
