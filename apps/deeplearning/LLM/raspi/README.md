@@ -280,16 +280,17 @@ HTTP 접속에서 클립보드 읽기 버튼이 제한되면 키보드 붙여넣
 이미지와 OCR 결과는 페이지 메모리에서만 보관하며 로그아웃·새로고침 시 삭제됩니다.
 서버는 이미지 파일을 저장하지 않고 선택한 로컬 OCR 엔진에 전달합니다.
 
-기본 엔진은 한국어·영어를 지원하는 **Tesseract**입니다. `install.sh`에서 설치합니다.
-기존 설치 환경에서는 서버 디렉터리에서 `bash install_ocr.sh`를 실행하면 관리자
-권한 없이 Debian/Ubuntu 패키지를 `.ocr-runtime/`에 풀어 전용으로 사용할 수 있습니다.
-이 스크립트는 apt 패키지 목록과 시스템 기본 공유 라이브러리를 이용합니다.
-현재 Pi에서는 한국어·영어 언어 데이터와 함께 설치해 검증했습니다.
+기본 엔진은 **Gemma 4**입니다. `engine` 인자를 생략하거나 `"engine": "gemma"`를
+지정하면 설정된 Gemma 비전 모델을 사용합니다. 웹 화면도 Gemma 4를 기본 선택합니다.
+모델의 `vision` 지원을 확인한 뒤 Ollama의 `/api/chat`에 이미지를 전달합니다.
+Gemma 실행이 실패하거나 이미지 미지원 모델이어도 Tesseract로 자동 전환하지 않습니다.
 
-선택 가능한 **Gemma** 엔진은 설정된 모델의 `vision` 지원을 확인하고 Ollama의
-`/api/generate`에 이미지를 전달합니다. 현재 8GB Pi에서 `gemma4:e4b` 이미지 모델
-로딩 중 OOM 종료를 확인했으므로 이 환경에서는 Tesseract를 권장합니다.
-Gemma는 일반 대화와 같은 CPU·출력 토큰 제한을 사용하며 자동 모델 변경은 하지 않습니다.
+**Tesseract는 요청 인자에 `"engine": "tesseract"`를 명시한 경우에만 실행합니다.**
+웹 화면에서 Tesseract를 직접 선택하면 해당 인자를 전송합니다.
+기본 `install.sh`는 Tesseract를 설치하지 않습니다. 필요한 경우에만
+`bash install_ocr.sh`를 직접 실행해 한국어·영어 엔진을 설치할 수 있습니다.
+이 스크립트는 Debian/Ubuntu 패키지를 `.ocr-runtime/`에 풀어 전용으로 사용하며,
+apt 패키지 목록과 시스템 기본 공유 라이브러리를 이용합니다.
 두 OCR 엔진 모두 일반 대화와 같은 단일 추론 잠금을 사용합니다.
 Tesseract 처리 제한 시간은 90초입니다.
 작은 글자나 흐린 이미지는 오인식할 수 있고, Gemma의 출력 한도에 도달한 긴 문서는
@@ -297,14 +298,14 @@ Tesseract 처리 제한 시간은 90초입니다.
 Gemma OCR 출력 한도는 `GEMMA4_OCR_MAX_TOKENS`(기본 2048)로 별도 설정합니다.
 
 `POST /api/ocr`는 로그인 세션 또는 Bearer 인증이 필요합니다.
-본문은 `{"image": "PNG의 순수 base64 문자열", "engine": "tesseract", "instructions": "선택적 Gemma 지침"}`이며,
+본문은 `{"image": "PNG의 순수 base64 문자열", "engine": "gemma", "instructions": "선택적 Gemma 지침"}`이며,
 이미지 1개, 추가 지침 최대 4000자를 받습니다. API는 PNG/JPEG 최대 8 MiB·2천만 화소를
 Pillow로 검증하고, JSON 한도는 base64 최대 길이에 64 KiB를 더한 값입니다.
 브라우저는 Pi 메모리를 고려해 기존의 2048px·PNG 2 MiB 제한을 유지합니다.
-`engine`은 `tesseract`(기본) 또는 `gemma`이며 `instructions`는 Gemma에서만 적용됩니다.
-GitHub 버전의 `prompt` 입력도 지원합니다. `prompt`만 지정하고 엔진을 생략하면
-기존 호환성을 위해 Gemma를 사용합니다. `prompt`와 `instructions`를 동시에 보내면
-400 오류를 반환합니다. 엔진 선택을 확실히 하려면 `engine`을 지정하세요.
+`engine`은 `gemma`(기본) 또는 `tesseract`이며 `instructions`는 Gemma에서만 적용됩니다.
+`prompt` 입력도 지원합니다. `prompt`나 `instructions`의 유무와 관계없이 엔진을
+생략하면 Gemma를 사용합니다. `prompt`와 `instructions`를 동시에 보내면
+400 오류를 반환합니다. Tesseract 실행 요청은 `{"image": "순수 base64 문자열", "engine": "tesseract"}`입니다.
 `image`에 `data:image/png;base64,` 접두사는 붙이지 않습니다.
 응답의 `text`와 `response`는 같은 인식 텍스트이며 `model`, `elapsed_seconds`, `eval_count`로
 회신 엔진/모델과 처리 통계를 확인할 수 있습니다. `eval_count`는 Gemma에서만 제공합니다. `422`는 이미지 미지원 모델,
@@ -359,9 +360,9 @@ curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
 
 기존 Pi 설치에 이번 변경을 반영하려면 수정된 `server` 파일들을 배포한 뒤:
 
-1. `sudo apt-get install python3-pil tesseract-ocr tesseract-ocr-kor`로 이미지 검증 모듈과 OCR 엔진을 설치합니다.
+1. `sudo apt-get install python3-pil`로 이미지 검증 모듈을 설치합니다.
    가상환경에서 실행한다면 그 환경에도 `python3 -m pip install Pillow`가 필요합니다.
-   Tesseract만 관리자 권한 없이 설치하려면 `bash install_ocr.sh`를 사용합니다.
+   Tesseract를 명시적으로 사용할 때만 선택적으로 `bash install_ocr.sh`를 실행합니다.
 2. `config.env`의 `GEMMA4_SERVER_HOST=0.0.0.0`, `GEMMA4_SERVER_PORT=8082`를 확인합니다.
    기존 로그인 암호와 API 키는 그대로 사용합니다.
 3. 서비스를 재시작합니다. systemd 사용 시 `sudo systemctl restart gemma4-raspi.service`,
@@ -376,7 +377,8 @@ curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
 저장하지 않습니다. 요청 처리 중에는 채팅과 OCR이 하나의 추론 슬롯을 공유합니다.
 긴 문서는 출력 토큰 제한에 도달할 수 있으며 화면에 안내를 표시합니다.
 
-OCR 기본 엔진은 Tesseract이며, Gemma 선택 시 설정된 비전 모델의 이미지 인식을 사용합니다.
+OCR 기본 엔진은 Gemma 4이며, 설정된 비전 모델의 이미지 인식을 사용합니다.
+Tesseract는 `engine` 인자로 명시한 요청에서만 실행됩니다.
 [Ollama 공식 이미지 입력 규격](https://docs.ollama.com/capabilities/vision)에 따라
 검증된 이미지를 base64 `images` 배열로 전달합니다. 실제 인식 정확도·처리 시간은
 Pi에서 설치한 모델과 이미지로 확인해야 합니다.

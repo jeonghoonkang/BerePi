@@ -152,7 +152,7 @@ def generation_payload(data, path, config):
 def ocr_payload(data, config):
     if not isinstance(data, dict) or set(data) - {"image", "prompt", "instructions", "engine"}:
         raise ValueError("OCR requires image and optional engine, prompt or instructions")
-    if data.get("engine", "gemma" if "prompt" in data else "tesseract") not in ("tesseract", "gemma"):
+    if data.get("engine", "gemma") not in ("tesseract", "gemma"):
         raise ValueError("OCR engine must be tesseract or gemma")
     if "prompt" in data and "instructions" in data:
         raise ValueError("Use either prompt or instructions, not both")
@@ -409,7 +409,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             started = time.monotonic()
             backend_path = "/api/chat" if self.path == "/api/ocr" else self.path
-            engine = data.get("engine", "gemma" if "prompt" in data else "tesseract") if self.path == "/api/ocr" else None
+            engine = data.get("engine", "gemma") if self.path == "/api/ocr" else None
             if engine == "tesseract":
                 result = tesseract_ocr(data["image"])
                 result["text"] = result["response"]
@@ -436,7 +436,7 @@ class Handler(BaseHTTPRequestHandler):
                 result["engine"] = engine
             self.reply(502 if "error" in result else 200, result)
         except urllib.error.HTTPError as exc:
-            self.reply(502, {"error": ("Gemma 이미지 OCR 실패: Pi 메모리가 부족할 수 있습니다. Tesseract를 선택해 주세요."
+            self.reply(502, {"error": ("Gemma 이미지 OCR 실패: 서버의 메모리와 Ollama 로그를 확인해 주세요."
                                        if self.path == "/api/ocr" else "Ollama inference failed"), "backend_status": exc.code,
                              "hint": "Check Ollama logs for model/version or insufficient memory errors"})
         except RuntimeError as exc:

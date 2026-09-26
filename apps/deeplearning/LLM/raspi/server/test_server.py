@@ -289,9 +289,30 @@ class ServerTests(unittest.TestCase):
         with self.opener.open(request) as response:
             self.assertEqual(json.load(response)['text'], '안녕하세요')
 
-    def test_tesseract_default_and_response_aliases(self):
+    def test_ocr_defaults_to_gemma_with_or_without_instructions(self):
+        with patch('server.tesseract_ocr') as tesseract:
+            for extra in ({}, {'instructions': 'Keep lines'}, {'prompt': 'Read text'}):
+                with self.subTest(extra=extra):
+                    status, result = self.request('/api/ocr', {'image': self.image(), **extra})
+                    self.assertEqual(status, 200)
+                    self.assertEqual(result['engine'], 'gemma')
+                    self.assertEqual(result['requested_model'], 'gemma4:e4b')
+                    self.assertEqual(result['text'], '안녕하세요')
+                    self.assertEqual(self.backend.received_path, '/api/chat')
+            tesseract.assert_not_called()
+
+    def test_gemma_default_never_falls_back_to_tesseract(self):
+        with patch('server.tesseract_ocr') as tesseract:
+            with patch.object(self.server, 'backend_json', side_effect=OSError('unavailable')):
+                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 502)
+            with patch.object(self.server, 'backend_json', return_value={'capabilities': ['completion']}):
+                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], 422)
+            tesseract.assert_not_called()
+        self.assertFalse(self.server.inference.locked())
+
+    def test_tesseract_requires_explicit_engine_and_preserves_response_aliases(self):
         with patch('server.tesseract_ocr', return_value={'response': 'OCR text', 'model': 'Tesseract (kor+eng)'}) as engine:
-            status, result = self.request('/api/ocr', {'image': self.image()})
+            status, result = self.request('/api/ocr', {'image': self.image(), 'engine': 'tesseract'})
             self.assertEqual(status, 200)
             self.assertEqual(result['engine'], 'tesseract')
             self.assertEqual(result['text'], result['response'])
@@ -299,7 +320,7 @@ class ServerTests(unittest.TestCase):
             engine.assert_called_once()
         for error, code in [(RuntimeError('missing'), 503), (subprocess.TimeoutExpired('tesseract', 90), 504)]:
             with patch('server.tesseract_ocr', side_effect=error):
-                self.assertEqual(self.request('/api/ocr', {'image': self.image()})[0], code)
+                self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'tesseract'})[0], code)
             self.assertFalse(self.server.inference.locked())
 
     def test_local_ocr_request_compatibility(self):

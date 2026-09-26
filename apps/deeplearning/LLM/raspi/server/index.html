@@ -479,21 +479,18 @@
             <div>
               <label for="ocrEngine">OCR 엔진</label>
               <select id="ocrEngine">
+                <option value="gemma" selected>Gemma 4 · 기본 OCR</option>
                 <option value="tesseract">
-                  Tesseract · 한국어/영어 (Pi 권장)
-                </option>
-                <option value="gemma">
-                  Gemma · 이미지 모델 (메모리 여유 필요)
+                  Tesseract · 명시적으로 선택할 때만 사용
                 </option>
               </select>
               <p class="muted">
-                Tesseract는 가벼운 문자 인식 엔진입니다. Gemma 이미지 모델은 8GB
-                Pi에서 메모리가 부족할 수 있습니다.
+                기본으로 Gemma 4가 이미지를 인식합니다. Tesseract는 직접
+                선택한 요청에서만 실행하며 자동으로 전환하지 않습니다.
               </p>
               <label for="ocrInstructions">추가 OCR 지침 (선택)</label>
               <textarea
                 id="ocrInstructions"
-                disabled
                 maxlength="4000"
                 rows="3"
                 placeholder="예: 표의 행과 열 순서를 유지해 주세요."
