@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Small, authenticated Raspberry Pi gateway to a dedicated Ollama daemon."""
 import hmac
+import ipaddress
 import json
 import os
 import socket
+import subprocess
 import threading
 import urllib.error
 import urllib.request
@@ -188,10 +190,39 @@ class Handler(BaseHTTPRequestHandler):
             self.server.inference.release()
 
 
+def print_startup_addresses(config):
+    print(f"Gemma4 Pi: http://{config.host}:{config.port} model={config.model}", flush=True)
+    try:
+        result = subprocess.run(
+            ["hostname", "-I"], capture_output=True, text=True, timeout=3, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        print("LAN IP: 자동 조회 실패 (hostname -I로 확인하세요).", flush=True)
+        return
+    addresses = set()
+    for value in result.stdout.split():
+        try:
+            address = ipaddress.IPv4Address(value)
+        except ipaddress.AddressValueError:
+            continue
+        if address in ipaddress.IPv4Network("10.0.0.0/8") or address in ipaddress.IPv4Network("192.168.0.0/16"):
+            addresses.add(address)
+    for address in sorted(addresses):
+        print(f"LAN IP: http://{address}:{config.port}", flush=True)
+    if not addresses:
+        print("LAN IP: 192.168.* 또는 10.* 내부 주소가 없습니다.", flush=True)
+    elif config.host != "0.0.0.0":
+        print(
+            f"현재 바인딩 주소: {config.host}. 모든 내부 IP로 접속하려면 "
+            "config.env의 GEMMA4_SERVER_HOST=0.0.0.0 설정 후 재시작하세요.",
+            flush=True,
+        )
+
+
 if __name__ == "__main__":
     config = Config()
     with Server((config.host, config.port), config) as server:
-        print(f"Gemma4 Pi: http://{config.host}:{config.port} model={config.model}", flush=True)
+        print_startup_addresses(config)
         try:
             server.serve_forever()
         except KeyboardInterrupt:
