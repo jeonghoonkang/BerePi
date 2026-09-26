@@ -90,3 +90,23 @@ Linux에서는 시작할 때 Docker 그룹 권한을 확인하고 필요한 경�
 
 설정 파일 작성, Docker 접근 권한, cron 등록, 게이트웨이 감시의 자세한 설명은
 [README.md](README.md)를 참고하세요.
+
+
+### 전체 상태 점검의 Markdown 파일 요약
+
+```bash
+python3 sender.py --config ./this_settings.json --check-status-all
+```
+
+전체 점검의 콘솔 tree와 `server_status.txt`는 각 디렉터리의 `.md` 파일을
+수정 시각 기준 최신 한 개와 전체 개수로 요약합니다. 하위 디렉터리는 각각 집계하고,
+Markdown 이외의 파일은 그대로 표시합니다.
+
+```text
+└── iMac27WS/
+    └── pulse_20260926_140000.md  2026-09-26T14:00:00+09:00 [MD 총 48개, 최신 1개 표시]
+```
+
+모든 파일의 수정 시각을 조회하며 JSON의 전체 파일 목록은 유지합니다.
+수정 시각을 확인하지 못한 파일이 있으면 미확인 개수를 함께 표시합니다.
+`--check-status`의 로컬 점검 tree는 기존처럼 모든 파일을 표시합니다.

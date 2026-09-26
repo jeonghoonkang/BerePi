@@ -211,8 +211,23 @@ def render_tree(result):
     for directory in sorted(display_directories):
         if directory != result['target_directory']:
             children.setdefault(posixpath.dirname(directory), []).append((directory, True, None))
+    markdown_groups = {}
+    summaries = {}
     for f in result['files']:
-        children.setdefault(posixpath.dirname(f['path']), []).append((f['path'], False, f['modified_at']))
+        parent = posixpath.dirname(f['path'])
+        if result.get('scope') == 'all' and f['path'].lower().endswith('.md'):
+            markdown_groups.setdefault(parent, []).append(f)
+        else:
+            children.setdefault(parent, []).append((f['path'], False, f['modified_at']))
+    for parent, entries in markdown_groups.items():
+        known = [entry for entry in entries if entry['modified_at']]
+        newest = max(known, key=lambda entry: (datetime.fromisoformat(entry['modified_at']), entry['path'])) if known else min(entries, key=lambda entry: entry['path'])
+        children.setdefault(parent, []).append((newest['path'], False, newest['modified_at']))
+        unknown_count = len(entries) - len(known)
+        summary = f" [MD 총 {len(entries)}개, 최신 1개 표시]"
+        if unknown_count:
+            summary = f" [MD 총 {len(entries)}개, 수정 시각 미확인 {unknown_count}개, {'확인된 최신' if known else '대표'} 1개 표시]"
+        summaries[newest['path']] = summary
     stack = [(result['target_directory'], '', None)]
     while stack:
         parent, prefix, line = stack.pop()
@@ -223,6 +238,7 @@ def render_tree(result):
             path, is_dir, modified = items[i]
             end = i == len(items) - 1
             text = posixpath.basename(path) + ('/' if is_dir else f'  {modified or "unknown"}')
+            text += summaries.get(path, '')
             if path in by_dir:
                 s = by_dir[path]
                 text += f" [{s['status']}] IP={s['ip_address']} port={s['open_port']} latest={s['latest_modified_at']}"

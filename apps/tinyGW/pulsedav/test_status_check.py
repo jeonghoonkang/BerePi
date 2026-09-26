@@ -130,6 +130,31 @@ class StatusTests(unittest.TestCase):
             self.assertNotIn('secret', (Path(tmp)/'server_status.json').read_text())
             self.assertIn('pulse_old.md', (Path(tmp)/'server_status.txt').read_text())
 
+    def test_all_tree_summarizes_markdown_per_directory_only(self):
+        files = [
+            {'path': 'tinyGW/host/z_old.md', 'modified_at': '2026-09-25T11:00:00+09:00'},
+            {'path': 'tinyGW/host/a_new.MD', 'modified_at': '2026-09-26T11:00:00+09:00'},
+            {'path': 'tinyGW/host/info.txt', 'modified_at': None},
+            {'path': 'tinyGW/host/sub/child.md', 'modified_at': '2026-09-26T12:00:00+09:00'},
+        ]
+        result = {'target_directory': 'tinyGW', 'scan_complete': True, 'checked_at': 'now', 'scope': 'all', 'cron_notes': [], 'directories': ['tinyGW', 'tinyGW/host', 'tinyGW/host/sub'], 'servers': [], 'files': files, 'errors': []}
+        tree = sc.render_tree(result)
+        self.assertNotIn('z_old.md', tree)
+        self.assertIn('a_new.MD  2026-09-26T11:00:00+09:00 [MD 총 2개, 최신 1개 표시]', tree)
+        self.assertIn('child.md', tree)
+        self.assertIn('info.txt', tree)
+        self.assertEqual(len(result['files']), 4)
+        result['scope'] = 'local'
+        self.assertIn('z_old.md', sc.render_tree(result))
+        self.assertNotIn('MD 총', sc.render_tree(result))
+
+    def test_markdown_summary_does_not_claim_unknown_time_is_latest(self):
+        result = {'target_directory': 'tinyGW', 'scan_complete': False, 'checked_at': 'now', 'scope': 'all', 'cron_notes': [], 'directories': ['tinyGW'], 'servers': [], 'files': [{'path': 'tinyGW/a.md', 'modified_at': None}, {'path': 'tinyGW/b.md', 'modified_at': None}], 'errors': []}
+        tree = sc.render_tree(result)
+        self.assertIn('수정 시각 미확인 2개, 대표 1개 표시', tree)
+        self.assertNotIn('최신', tree)
+        self.assertNotIn('b.md', tree)
+
     def test_tree_siblings_and_nested_folders(self):
         tree = sc.render_tree({'target_directory':'tinyGW','scan_complete':True,'checked_at':'now','cron_notes':[], 'directories':['tinyGW','tinyGW/a','tinyGW/a/b','tinyGW/z'], 'servers':[], 'files':[{'path':'tinyGW/a/b/f','modified_at':None},{'path':'tinyGW/z/g','modified_at':None}], 'errors':[]})
         self.assertIn('│       └── f', tree)

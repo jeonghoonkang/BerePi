@@ -201,7 +201,7 @@ python3 sender.py --check-status --config this_settings.json --max-age-minutes 9
 
 기본 출력은 workspace의 `workshot/2remember/server_list/server_status.json` 및
 `server_status.txt`입니다. `--status-output-dir /path/to/output`으로 변경할 수 있습니다.
-Tree에는 모든 폴더와 파일 시각이 표시되고 JSON에는 파일 목록, 서버별 최신 파일,
+Tree에는 모든 폴더와 파일 시각이 표시되며 전체 점검의 Markdown 파일은 최신 한 개와 개수로 요약됩니다. JSON에는 전체 파일 목록, 서버별 최신 파일,
 최근 PulseDAV 기록, 누락/실패 정보가 포함됩니다.
 
 전체 점검의 서버 디렉터리는 `pulse_*.md`가 있는 디렉터리와 현재 설정의 업로드 대상에서 찾습니다.
@@ -307,3 +307,23 @@ WebDAV가 UTC로 반환한 시각도 서울 시간으로 변환하며 기록의 
 새로 생성하는 cron 예시도 서울 시간으로 로그를 출력합니다. 이미 등록된 cron 명령의
 시각 출력 코드는 자동으로 바뀌지 않으므로 `--print-crontab`으로 확인 후 반영하세요.
 cron 실행 스케줄 자체는 머신의 cron 시간대 설정을 따릅니다.
+
+
+### 전체 상태 점검의 Markdown 파일 요약
+
+```bash
+python3 sender.py --config ./this_settings.json --check-status-all
+```
+
+전체 점검의 콘솔 tree와 `server_status.txt`는 각 디렉터리의 `.md` 파일을
+수정 시각 기준 최신 한 개와 전체 개수로 요약합니다. 하위 디렉터리는 각각 집계하고,
+Markdown 이외의 파일은 그대로 표시합니다.
+
+```text
+└── iMac27WS/
+    └── pulse_20260926_140000.md  2026-09-26T14:00:00+09:00 [MD 총 48개, 최신 1개 표시]
+```
+
+모든 파일의 수정 시각을 조회하며 JSON의 전체 파일 목록은 유지합니다.
+수정 시각을 확인하지 못한 파일이 있으면 미확인 개수를 함께 표시합니다.
+`--check-status`의 로컬 점검 tree는 기존처럼 모든 파일을 표시합니다.
