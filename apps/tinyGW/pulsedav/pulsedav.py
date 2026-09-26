@@ -13,8 +13,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import quote, unquote, urlparse
-from urllib.request import HTTPBasicAuthHandler, HTTPSHandler, Request, build_opener
+from urllib.request import HTTPBasicAuthHandler, HTTPPasswordMgrWithDefaultRealm, HTTPSHandler, Request, build_opener
 import xml.etree.ElementTree as ET
 
 try:
@@ -80,7 +81,9 @@ class SimpleResponse:
 
 class SimpleSession:
     def __init__(self, config: WebDAVConfig):
-        auth_handler = HTTPBasicAuthHandler()
+        # Nextcloud challenges with a named realm; credentials are configured
+        # without a realm, so the password manager must support that fallback.
+        auth_handler = HTTPBasicAuthHandler(HTTPPasswordMgrWithDefaultRealm())
         auth_handler.add_password(
             realm=None,
             uri=config.hostname,
@@ -102,6 +105,12 @@ class SimpleSession:
                 content = response.read()
                 text = content.decode("utf-8", errors="replace")
                 return SimpleResponse(response.getcode(), text, content)
+        except HTTPError as exc:
+            # Match requests: callers inspect expected statuses such as MKCOL 405,
+            # and raise_for_status() still rejects authentication/server failures.
+            with exc:
+                content = exc.read()
+                return SimpleResponse(exc.code, content.decode("utf-8", errors="replace"), content)
         except Exception as exc:  # noqa: BLE001
             raise SimpleRequestException(str(exc)) from exc
 
