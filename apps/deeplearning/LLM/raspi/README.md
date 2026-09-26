@@ -230,6 +230,40 @@ sudo systemctl disable --now gemma4-raspi.service
 5분 내 3회 시작 실패 시 중단되므로 원인을 해결하고
 `sudo systemctl reset-failed gemma4-raspi.service` 후 다시 시작합니다.
 
+## git pull 후 웹 화면에서 재시작
+
+Server 탭의 **로컬 접속 주소**에는 서버에서 조회한 `192.168.*` 주소를 우선 표시하고
+`10.*` 주소도 링크로 표시합니다. 포트는 `GEMMA4_SERVER_PORT`를 사용합니다.
+이 정보는 인증된 `GET /api/status`의 `local_urls`에도 포함됩니다. 주소가 없거나
+조회에 실패하면 확인 불가를 표시하며, localhost로만 바인딩된 경우 설정 안내를 표시합니다.
+
+1. 서버 디렉터리에서 `git pull`을 실행합니다.
+2. 로그인한 웹 화면 상단의 **Restart · 서버 재시작**을 누릅니다.
+3. 화면에서 재연결을 기다립니다. 새 서버가 확인되면 페이지를 자동으로 새로고침하며,
+   서버 메모리의 세션은 초기화되므로 다시 로그인합니다.
+
+버튼은 코드를 다운로드하거나 `git pull`을 실행하지 않습니다. 채팅/OCR 처리 중이면
+재시작 요청을 거부하므로 완료 후 다시 누르세요. 재연결은 최대 3분간 확인합니다.
+실패하면 실행 터미널 또는 systemd 로그를 확인한 뒤 새로고침합니다.
+포트/바인딩 주소를 변경했다면 새 주소로 직접 접속해야 합니다.
+
+`run_service.sh` 실행 시 웹 서버는 재시작 전용 종료 코드 75를 반환합니다.
+실행기는 자신이 시작한 웹 서버·Ollama를 정리하고 실행 잠금을 해제한 뒤 자신을 다시
+실행하여 최신 코드와 `config.env`를 읽습니다. systemd로 시작한 경우에도 같은 실행기를
+교체하므로 별도 sudo 권한 없이 동작합니다. 다른 Ollama 인스턴스는 건드리지 않습니다.
+`python3 server.py`로 직접 실행한 경우에는 웹 프로세스만 교체하며 기존 환경변수를 사용합니다.
+
+**이 기능을 처음 반영할 때는** 기존 서버에 재시작 API가 없으므로 `git pull` 후 한 번은
+수동으로 재시작해야 합니다. systemd는 `sudo systemctl restart gemma4-raspi.service`,
+수동 실행은 `bash stop.sh` 후 `bash run_service.sh`를 사용합니다.
+이후부터는 새 웹 버튼을 이용할 수 있습니다.
+
+- `POST /api/restart`: 세션 또는 Bearer 인증 필요, 본문 `{}`. 승인 시 `202`와 기존
+  `instance_id` 반환. 추론/재시작 진행 중이면 `409`, 다른 Origin 요청은 `403`입니다.
+- `GET /api/health`: `instance_id`와 `restarting`을 포함합니다. 화면은 새 인스턴스가
+  시작된 것을 확인한 뒤 새로고침하므로 아직 종료되지 않은 이전 서버를 재시작 완료로
+  판단하지 않습니다.
+
 ## 웹 화면과 로그인
 
 Server / OCR / History 탭을 제공하는 Pi용 인터페이스입니다.
@@ -435,7 +469,7 @@ PYTHON
 
 ```bash
 cd server
-python3 -m unittest -v test_server.py test_init_config.py
+python3 -m unittest discover -v -p 'test_*.py' test_init_config.py
 bash -n install.sh run_service.sh
 ```
 

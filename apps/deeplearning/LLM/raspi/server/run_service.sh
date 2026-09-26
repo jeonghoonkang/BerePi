@@ -99,12 +99,29 @@ if ! ollama show "$OLLAMA_MODEL" >/dev/null 2>&1; then
   wait "$PULL_PID"
   PULL_PID=''
 fi
-python3 -u "$APP_DIR/server.py" &
+GEMMA4_MANAGED_LAUNCHER=1 python3 -u "$APP_DIR/server.py" &
 SERVER_PID=$!
 # If either child fails, stop its sibling and let systemd restart this service.
 set +e
-wait -n "$OLLAMA_PID" "$SERVER_PID"
-status=$?
+while kill -0 "$SERVER_PID" 2>/dev/null && kill -0 "$OLLAMA_PID" 2>/dev/null; do
+  sleep 1
+done
+server_status=0
+if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+  wait "$SERVER_PID"
+  server_status=$?
+  status=$server_status
+else
+  wait "$OLLAMA_PID"
+  status=$?
+fi
 set -e
+if (( status == 75 && server_status == 75 )); then
+  echo 'Web restart requested; restarting this launcher and its managed services ...'
+  cleanup
+  # Release our lock before the replacement launcher reacquires it.
+  exec 9>&-
+  exec /bin/bash "$APP_DIR/run_service.sh"
+fi
 (( status != 0 )) || status=1
 exit "$status"

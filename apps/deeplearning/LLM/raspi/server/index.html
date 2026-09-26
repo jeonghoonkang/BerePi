@@ -295,8 +295,12 @@
           <h1>Ollama Service · Raspberry Pi</h1>
           <p>Gemma 4 서버 상태, 모델 정보와 프롬프트 테스트</p>
         </div>
-        <button id="refresh" disabled>Refresh · 새로고침</button>
+        <div class="row">
+          <button id="refresh" disabled>Refresh · 새로고침</button>
+          <button id="restart" disabled>Restart · 서버 재시작</button>
+        </div>
       </header>
+      <p id="restartStatus" role="status">git pull 후 서버 재시작을 누르면 새 코드를 적용합니다. 재연결 후 다시 로그인하세요.</p>
       <section aria-labelledby="loginTitle">
         <h2 id="loginTitle">Login Session · 로그인</h2>
         <form id="loginForm">
@@ -353,6 +357,8 @@
               <dt>상태</dt>
               <dd>—</dd>
             </dl>
+            <h3>로컬 접속 주소 · 192.168.* / 10.*</h3>
+            <div id="localAddresses">로그인 후 확인할 수 있습니다.</div>
           </section>
           <section>
             <h2>Model Information</h2>
@@ -535,6 +541,7 @@
         ocrText = "",
         imageVersion = 0,
         imageLoading = false;
+      let restarting = false, serverBusy = false;
       function controls() {
         $("ocrSend").disabled =
           !loggedIn || pending || imageLoading || !ocrImage;
@@ -543,8 +550,9 @@
         $("send").disabled = !loggedIn || pending;
         $("login").disabled = loggedIn || pending;
         $("logout").disabled = !loggedIn || pending;
-        $("refresh").disabled = !loggedIn;
-        $("modelDetail").disabled = !loggedIn;
+        $("refresh").disabled = !loggedIn || restarting;
+        $("modelDetail").disabled = !loggedIn || restarting;
+        $("restart").disabled = !loggedIn || pending || serverBusy;
         $("clearHistory").disabled = pending;
       }
       function clearPrivate() {
@@ -555,6 +563,7 @@
         $("responseStats").replaceChildren();
         $("metrics").replaceChildren();
         $("serverInfo").replaceChildren();
+        $("localAddresses").textContent = "로그인 후 확인할 수 있습니다.";
         $("modelInfo").replaceChildren();
         $("modelJson").textContent = "아직 조회하지 않았습니다.";
         $("copyAnswer").disabled = true;
@@ -620,6 +629,25 @@
         try {
           const d = await api("/api/status");
           if (version !== generation || !loggedIn) return;
+          serverBusy = d.busy || d.restarting;
+          controls();
+          $("localAddresses").replaceChildren();
+          for (const url of d.local_urls || []) {
+            const row = document.createElement("div"), link = document.createElement("a");
+            link.href = url;
+            link.textContent = url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            row.append(link);
+            $("localAddresses").append(row);
+          }
+          if (!d.local_urls?.length)
+            $("localAddresses").textContent = "192.168.* 또는 10.* 로컬 주소를 확인할 수 없습니다.";
+          else if (d.host === "127.0.0.1" || d.host === "localhost") {
+            const note = document.createElement("small");
+            note.textContent = "다른 기기에서 접속하려면 GEMMA4_SERVER_HOST=0.0.0.0 설정 후 재시작하세요.";
+            $("localAddresses").append(note);
+          }
           const m = d.server.memory,
             model = d.model_details || {},
             details = model.details || {},
@@ -721,6 +749,42 @@
         }
       };
       $("refresh").onclick = refresh;
+      $("restart").onclick = async () => {
+        if (!loggedIn || pending || serverBusy) return;
+        pending = true;
+        restarting = true;
+        controls();
+        $("restartStatus").textContent = "서버 재시작 요청 중…";
+        try {
+          const accepted = await api("/api/restart", {});
+          session(null);
+          const deadline = Date.now() + 180_000;
+          $("restartStatus").textContent = "서버를 다시 시작하고 있습니다. 재연결을 기다리는 중…";
+          while (Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000);
+            try {
+              const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal });
+              const health = await response.json();
+              if (response.ok && health.status === "ok" && !health.restarting &&
+                  health.instance_id && health.instance_id !== accepted.instance_id) {
+                location.reload();
+                return;
+              }
+            } catch { /* Connection failures are expected while restarting. */ }
+            finally { clearTimeout(timeout); }
+          }
+          $("restartStatus").textContent = "3분 안에 재연결하지 못했습니다. 서버 로그를 확인한 뒤 페이지를 새로고침하세요.";
+        } catch (e) {
+          $("restartStatus").textContent = "재시작 요청 실패: " + e.message;
+        } finally {
+          restarting = false;
+          pending = false;
+          serverBusy = false;
+          controls();
+        }
+      };
       $("modelDetail").onclick = async () => {
         const version = generation;
         $("modelDetail").disabled = true;

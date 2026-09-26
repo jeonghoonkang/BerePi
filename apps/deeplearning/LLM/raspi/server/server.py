@@ -13,6 +13,7 @@ import secrets
 import time
 import socket
 import subprocess
+import sys
 import threading
 import warnings
 import urllib.error
@@ -25,6 +26,7 @@ from pathlib import Path
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 20_000_000
 MAX_OCR_BODY = ((MAX_IMAGE_BYTES + 2) // 3) * 4 + 65536
+RESTART_EXIT_CODE = 75
 OCR_PROMPT = ("이미지에서 읽을 수 있는 모든 글자를 추출해 주세요. "
               "원문의 언어와 줄바꿈을 유지하고, 설명이나 추측 없이 인식한 텍스트만 반환하세요.")
 
@@ -56,6 +58,8 @@ class Server(ThreadingHTTPServer):
     def __init__(self, address, config):
         self.config = config
         self.started = time.monotonic()
+        self.instance_id = secrets.token_hex(16)
+        self.restart_requested = threading.Event()
         self.sessions = {}
         self.session_lock = threading.Lock()
         self.inference = threading.Lock()
@@ -107,6 +111,25 @@ def machine_info():
             "architecture": platform.machine(), "cpu_count": os.cpu_count(),
             "load_average": list(os.getloadavg()), "memory": memory,
             "temperature_c": temperature}
+
+
+def local_ipv4_addresses():
+    """Return this server's LAN addresses, with 192.168.* addresses first."""
+    try:
+        result = subprocess.run(
+            ["hostname", "-I"], capture_output=True, text=True, timeout=3, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    addresses = set()
+    for value in result.stdout.split():
+        try:
+            address = ipaddress.IPv4Address(value)
+        except ipaddress.AddressValueError:
+            continue
+        if address in ipaddress.IPv4Network("192.168.0.0/16") or address in ipaddress.IPv4Network("10.0.0.0/8"):
+            addresses.add(address)
+    return [str(address) for address in sorted(addresses, key=lambda ip: (not str(ip).startswith("192.168."), int(ip)))]
 
 
 def generation_payload(data, path, config):
@@ -278,6 +301,9 @@ class Handler(BaseHTTPRequestHandler):
         config = self.server.config
         result = {"server": machine_info(), "uptime_seconds": round(time.monotonic() - self.server.started),
                   "host": config.host, "port": config.port, "backend_url": config.backend,
+                  "local_urls": [f"http://{address}:{config.port}" for address in local_ipv4_addresses()],
+                  "instance_id": self.server.instance_id,
+                  "restarting": self.server.restart_requested.is_set(),
                   "model": config.model, "busy": self.server.inference.locked(),
                   "inference": {"device": "CPU", "threads": config.threads,
                                 "context": config.context, "max_tokens": config.tokens,
@@ -312,10 +338,11 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path in {"/api", "/api/"}:
             self.reply(200, {"service": "Gemma4 Raspberry Pi", "endpoints": {
                 "GET": ["/api/health", "/api/ready", "/api/session", "/api/status", "/api/model-info"],
-                "POST": ["/api/session-login", "/api/session-logout", "/api/generate", "/api/chat", "/api/ocr"],
+                "POST": ["/api/session-login", "/api/session-logout", "/api/generate", "/api/chat", "/api/ocr", "/api/restart"],
             }})
         elif self.path in {"/health", "/api/health"}:
-            self.reply(200, {"status": "ok"})
+            self.reply(200, {"status": "ok", "instance_id": self.server.instance_id,
+                             "restarting": self.server.restart_requested.is_set()})
         elif self.path == "/api/session":
             user = self.session_user()
             self.reply(200, {"logged_in": bool(user), "user_id": user})
@@ -344,6 +371,27 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if not self.same_origin():
+            return
+        if self.path == "/api/restart":
+            if not self.authenticated():
+                return
+            try:
+                if self.read_json() != {}:
+                    raise ValueError("Restart expects an empty JSON object")
+            except (ValueError, UnicodeError, OSError) as exc:
+                self.reply(400, {"error": str(exc)})
+                return
+            # The same lock prevents a new inference from starting after acceptance.
+            if not self.server.inference.acquire(blocking=False):
+                self.reply(409, {"error": "추론 또는 재시작이 진행 중입니다. 완료 후 다시 시도하세요."})
+                return
+            self.server.restart_requested.set()
+            try:
+                self.reply(202, {"restarting": True, "instance_id": self.server.instance_id})
+                self.wfile.flush()
+            finally:
+                # shutdown must run outside serve_forever's main thread.
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
         if self.path == "/api/session-login":
             try:
@@ -451,22 +499,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def print_startup_addresses(config):
     print(f"Gemma4 Pi: http://{config.host}:{config.port} model={config.model}", flush=True)
-    try:
-        result = subprocess.run(
-            ["hostname", "-I"], capture_output=True, text=True, timeout=3, check=True,
-        )
-    except (OSError, subprocess.SubprocessError):
-        print("LAN IP: 자동 조회 실패 (hostname -I로 확인하세요).", flush=True)
-        return
-    addresses = set()
-    for value in result.stdout.split():
-        try:
-            address = ipaddress.IPv4Address(value)
-        except ipaddress.AddressValueError:
-            continue
-        if address in ipaddress.IPv4Network("10.0.0.0/8") or address in ipaddress.IPv4Network("192.168.0.0/16"):
-            addresses.add(address)
-    for address in sorted(addresses):
+    addresses = local_ipv4_addresses()
+    for address in addresses:
         print(f"LAN IP: http://{address}:{config.port}", flush=True)
     if not addresses:
         print("LAN IP: 192.168.* 또는 10.* 내부 주소가 없습니다.", flush=True)
@@ -478,7 +512,7 @@ def print_startup_addresses(config):
         )
 
 
-if __name__ == "__main__":
+def main():
     config = Config()
     with Server((config.host, config.port), config) as server:
         print_startup_addresses(config)
@@ -486,3 +520,12 @@ if __name__ == "__main__":
             server.serve_forever()
         except KeyboardInterrupt:
             pass
+    if server.restart_requested.is_set():
+        if os.getenv("GEMMA4_MANAGED_LAUNCHER") == "1":
+            return RESTART_EXIT_CODE
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
