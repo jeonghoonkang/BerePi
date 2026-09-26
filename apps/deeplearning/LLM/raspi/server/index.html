@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemma 4 · Raspberry Pi 5</title>
+<style>
+body{max-width:760px;margin:48px auto;padding:0 20px;background:#f4f6fa;color:#182333;font:16px system-ui}
+input,textarea,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0 20px;font:inherit}
+button{background:#244b86;color:white;border:0;border-radius:6px;cursor:pointer}
+button:disabled{opacity:.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:24px;border-radius:8px}
+</style>
+<h1>Gemma 4 · Raspberry Pi 5</h1>
+<p>CPU 추론은 시간이 걸릴 수 있습니다. 한 번에 하나의 요청을 처리합니다.</p>
+<form id="form">
+<label>API 키<input id="key" type="password" required autocomplete="off"></label>
+<label>질문<textarea id="prompt" rows="5" required></textarea></label>
+<button id="send">질문 보내기</button>
+</form>
+<p id="status" role="status"></p><pre id="answer" aria-live="polite">답변이 여기에 표시됩니다.</pre>
+<script>
+const form=document.querySelector('#form'), status=document.querySelector('#status'), answer=document.querySelector('#answer'), send=document.querySelector('#send');
+form.addEventListener('submit',async event=>{
+  event.preventDefault();send.disabled=true;status.textContent='답변 생성 중…';answer.textContent='';
+  try{
+    const response=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+document.querySelector('#key').value},body:JSON.stringify({prompt:document.querySelector('#prompt').value,stream:false})});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||'요청 실패');
+    answer.textContent=data.response||'(빈 답변)';
+    status.textContent='완료'+(data.eval_count?' · 생성 '+data.eval_count+' 토큰':'');
+  }catch(error){status.textContent=error.message;}finally{send.disabled=false;}
+});
+</script>
+</html>

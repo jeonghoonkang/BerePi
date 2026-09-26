@@ -1,0 +1,23 @@
+[Unit]
+Description=Gemma 4 E4B Raspberry Pi CPU server
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=tinyos
+WorkingDirectory=/home/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/raspi/server
+ExecStart=/bin/bash /home/tinyos/devel_opment/BerePi/apps/deeplearning/LLM/raspi/server/run_service.sh
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

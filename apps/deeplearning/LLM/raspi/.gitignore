@@ -1,0 +1,4 @@
+server/config.env
+server/models/
+server/logs/
+__pycache__/
