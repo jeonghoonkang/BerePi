@@ -84,7 +84,7 @@ python3 sender.py --config ./this_settings.json --print-crontab
 일반 전송에서 생략하면 프로그램 디렉터리의 `settings.json`을 사용합니다.
 
 상태 점검 결과는 기본적으로 workspace의
-`workshot/2remember/server_list/server_status.json`과 `server_status.txt`에 저장됩니다.
+`workshot/server_list/server_status.json`과 `server_status.txt`에 저장됩니다.
 시간은 서울 시간(`Asia/Seoul`, `KST` 또는 `+09:00`)으로 표시합니다.
 Linux에서는 시작할 때 Docker 그룹 권한을 확인하고 필요한 경우 `WARNING`을 출력합니다.
 

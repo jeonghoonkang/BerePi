@@ -205,7 +205,7 @@ python3 sender.py --check-status --config this_settings.json --max-age-minutes 9
 `--config`로 지정하세요. cron 원문과 비밀번호는 출력 파일에 기록하지 않습니다.
 현재 실행 환경에서 cron을 읽지 못하는 경우에도 명시적 설정으로 점검할 수 있습니다.
 
-기본 출력은 workspace의 `workshot/2remember/server_list/server_status.json` 및
+기본 출력은 workspace의 `workshot/server_list/server_status.json` 및
 `server_status.txt`입니다. `--status-output-dir /path/to/output`으로 변경할 수 있습니다.
 Tree에는 모든 폴더와 파일 시각이 표시되며 전체 점검의 Markdown 파일은 최신 한 개와 개수로 요약됩니다. JSON에는 전체 파일 목록, 서버별 최신 파일,
 최근 PulseDAV 기록, 누락/실패 정보가 포함됩니다.

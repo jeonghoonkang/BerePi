@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 
 from pulsedav import APP_DIR, build_session, build_webdav_config, build_host_remote_dirs, compose_webdav_url, load_settings, propfind
 
-DEFAULT_OUTPUT = APP_DIR.parents[3] / 'workshot/2remember/server_list'
+DEFAULT_OUTPUT = APP_DIR.parents[3] / 'workshot/server_list'
 NS = {'d': 'DAV:'}
 
 
