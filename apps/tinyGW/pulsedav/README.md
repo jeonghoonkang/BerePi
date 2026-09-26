@@ -72,6 +72,26 @@ python3 sender.py --iptime-list --config /path/to/custom-settings.json
 
 ## 설정 파일
 
+최신 `settings.json` 구조를 기준으로 개인 설정 파일을 생성하거나 갱신하려면:
+
+```bash
+python3 update_settings.py
+# 파일명이 다르거나 다른 경로에 있는 경우
+python3 update_settings.py --template setting.json --config this_setting.json
+```
+
+기본 출력은 스크립트와 같은 폴더의 `this_settings.json`입니다. 기존 파일의
+WebDAV ID/비밀번호, ipTIME ID/비밀번호 및 같은 항목의 사용자 설정을 유지하고,
+새 항목은 템플릿 값으로 추가하며 템플릿에서 삭제된 항목은 제거합니다.
+템플릿 자체는 수정하지 않습니다. 기존 출력 파일이 없으면 템플릿을 복사하므로
+사용 전에 접속 정보를 수정해야 합니다.
+
+인증 항목이 삭제/이동되었거나 기존 값의 자료형이 달라졌다면 자동으로 추측하지 않고
+오류로 중단합니다. 이때 원본은 변경되지 않으며 항목을 직접 맞춘 뒤 재실행합니다.
+`webdav.sub`은 문자열과 문자열 배열을 모두 지원하므로 기존 배열도 보존합니다.
+출력 파일과 덮어쓰기 전 생성하는 `this_settings.json.bak.*` 백업은 소유자만 읽고
+쓸 수 있는 권한(`0600`)으로 저장됩니다. 인증 정보는 화면에 출력하지 않습니다.
+
 - 기본 설정 파일은 `/Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav/settings.json` 입니다.
 - CLI 에서 `--config` 를 주면 해당 JSON 파일을 설정 파일로 사용합니다.
 - 지정한 설정 파일이 없으면 기본값 템플릿과 병합되어 동작합니다.
