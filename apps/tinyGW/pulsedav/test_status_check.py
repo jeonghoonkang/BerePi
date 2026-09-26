@@ -106,12 +106,13 @@ class StatusTests(unittest.TestCase):
         directories, files, errors = sc.scan(session, config, 'tinyGW')
         self.assertIn('tinyGW/sub/host', directories)
         self.assertEqual(files[0]['path'], 'tinyGW/sub/host/a #?.md')
-        self.assertEqual(files[0]['modified_at'], '2026-09-26T02:00:00+00:00')
+        self.assertEqual(files[0]['modified_at'], '2026-09-26T11:00:00+09:00')
         self.assertEqual(errors[0]['error'], 'connection_refused')
         self.assertTrue(all(c[0] == 'PROPFIND' and c[2]['headers']['Depth'] == '1' for c in session.calls))
 
     def test_latest_and_timezones(self):
-        self.assertEqual(sc.iso_time('2026-09-26T11:00:00+09:00'), '2026-09-26T02:00:00+00:00')
+        self.assertEqual(sc.iso_time('2026-09-26T11:00:00+09:00'), '2026-09-26T11:00:00+09:00')
+        self.assertEqual(sc.iso_time('2026-09-25T23:30:00Z'), '2026-09-26T08:30:00+09:00')
         self.assertIsNone(sc.iso_time('invalid'))
         self.assertEqual(sc.latest([{'modified_at': None}, {'modified_at': '2026-01-01T00:00:00+00:00'}])['modified_at'], '2026-01-01T00:00:00+00:00')
 

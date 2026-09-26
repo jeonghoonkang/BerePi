@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from time_utils import SEOUL
+
 from pulsedav import (
     DEFAULT_INTERVAL_MINUTES,
     WebDAVConnectionError,
@@ -63,7 +65,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def current_time_text() -> str:
-    now = datetime.now().astimezone()
+    now = datetime.now(SEOUL)
     return f"{now.year:04d}-{now.month:02d}-{now.day:02d} {now.hour:02d}:{now.minute:02d}:{now.second:02d} {now.tzname()}"
 
 
@@ -106,8 +108,8 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None,
     cron_interval = max(1, min(configured_interval, 59))
 
     timestamp_command = (
-        f"{python_bin} -c 'from datetime import datetime; "
-        'd=datetime.now().astimezone(); '
+        f"{python_bin} -c 'from datetime import datetime; from time_utils import SEOUL; "
+        'd=datetime.now(SEOUL); '
         'print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} '
         '{d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")\''
     )

@@ -13,6 +13,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from time_utils import SEOUL
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import quote, unquote, urlparse
@@ -1022,7 +1024,7 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
     return {
         "hostname": hostname(),
         "os": f"{platform.system()} {platform.release()}",
-        "collected_at": datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "collected_at": datetime.now(SEOUL).strftime("%Y-%m-%d %H:%M:%S %Z"),
         "uptime_minutes": uptime_minutes(),
         "cpu": get_cpu_info(),
         "network": {
@@ -1091,7 +1093,7 @@ def format_iptime_markdown(report: str, settings: dict[str, Any]) -> str:
             "",
             settings["metadata"].get("intro_text", "").strip() or "ipTIME 장치 목록",
             "",
-            f"- 생성 시각: {datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')}",
+            f"- 생성 시각: {datetime.now(SEOUL).strftime('%Y-%m-%d %H:%M:%S %Z')}",
             f"- 호스트명: {hostname()}",
             "",
             "```text",
@@ -1112,7 +1114,7 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     markdown = format_iptime_markdown(report, settings)
     webdav_config = build_webdav_config(settings)
     host_dirs = build_host_remote_dirs(webdav_config)
-    file_name = f"iptime_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    file_name = f"iptime_{datetime.now(SEOUL).strftime('%Y%m%d_%H%M%S')}.md"
     remote_paths = [posixpath.join(host_dir, file_name).strip("/") for host_dir in host_dirs]
     destination_urls = [compose_webdav_url(webdav_config, remote_path) for remote_path in remote_paths]
     deleted: list[str] = []
@@ -1160,7 +1162,7 @@ def send_once(
 
     webdav_config = build_webdav_config(settings)
     host_dirs = build_host_remote_dirs(webdav_config)
-    file_name = f"pulse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    file_name = f"pulse_{datetime.now(SEOUL).strftime('%Y%m%d_%H%M%S')}.md"
     remote_paths = [posixpath.join(host_dir, file_name).strip("/") for host_dir in host_dirs]
     destination_urls = [compose_webdav_url(webdav_config, remote_path) for remote_path in remote_paths]
     deleted: list[str] = []
@@ -1174,7 +1176,7 @@ def send_once(
 
     new_state = {
         "last_boot_marker": current_boot_marker,
-        "last_sent_at": datetime.now().astimezone().isoformat(),
+        "last_sent_at": datetime.now(SEOUL).isoformat(),
         "last_remote_path": remote_paths[0],
         "last_remote_paths": remote_paths,
         "last_uptime_minutes": snapshot["uptime_minutes"],

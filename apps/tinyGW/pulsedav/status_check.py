@@ -10,6 +10,8 @@ import sys
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+
+from time_utils import SEOUL
 from urllib.parse import unquote, urlparse
 import xml.etree.ElementTree as ET
 
@@ -94,7 +96,7 @@ def iso_time(value):
             dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
         except ValueError:
             return None
-    return dt.replace(tzinfo=dt.tzinfo or timezone.utc).astimezone(timezone.utc).isoformat()
+    return dt.replace(tzinfo=dt.tzinfo or timezone.utc).astimezone(SEOUL).isoformat()
 
 
 def list_directory(session, config, directory):
@@ -266,7 +268,7 @@ def check_status(config_path=None, output_dir=None, max_age_minutes=None, server
             errors.extend(found_errors)
         directories = sorted(directory_set)
         files = sorted(file_map.values(), key=lambda entry: entry['path'])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(SEOUL)
         hosts = set(local_hosts)
         if all_nodes:
             # PulseDAV host directories may occur under any subdirectory.
@@ -299,7 +301,7 @@ def check_status(config_path=None, output_dir=None, max_age_minutes=None, server
         if hasattr(session, 'close'):
             session.close()
     result = {'checked_at': now.isoformat(), 'webdav_server': config.hostname, 'target_directory': 'tinyGW',
-              'scope': 'all' if all_nodes else 'local', 'target_directories': targets,
+              'timezone': 'Asia/Seoul', 'scope': 'all' if all_nodes else 'local', 'target_directories': targets,
               'settings_file': str(path), 'cron_notes': notes, 'max_age_minutes': threshold,
               'scan_complete': not errors, 'servers': servers, 'directories': directories, 'files': files, 'errors': errors,
               'port_note': 'SSH port reported by PulseDAV; reachability is not probed.'}

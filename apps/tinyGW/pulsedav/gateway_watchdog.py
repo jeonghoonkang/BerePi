@@ -10,6 +10,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from time_utils import SEOUL
+
 
 def executable(name: str) -> str:
     result = shutil.which(name, path=os.environ.get("PATH", "") + ":/usr/sbin:/sbin:/usr/bin:/bin")
@@ -37,7 +39,7 @@ def ping_gateway(command: str, gateway: str) -> bool:
 
 
 def log(message: str) -> None:
-    print(f"[{datetime.now().astimezone().isoformat(timespec='seconds')}] {message}", flush=True)
+    print(f"[{datetime.now(SEOUL).isoformat(timespec='seconds')}] {message}", flush=True)
 
 
 def monitor(*, probe, reboot, dry_run=False, clock=time.monotonic, sleep=time.sleep) -> int:

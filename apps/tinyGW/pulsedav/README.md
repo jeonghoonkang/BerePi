@@ -107,8 +107,8 @@ WebDAV ID/비밀번호, ipTIME ID/비밀번호 및 같은 항목의 사용자 �
 ## 부팅 자동 전송 예시
 
 ```cron
-@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { echo 'reboot 시점'; /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once --reboot; } > pulsedav.log 2>&1
-*/30 * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; d=datetime.now().astimezone(); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
+@reboot cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { echo 'reboot 시점'; /usr/bin/python3 -c 'from datetime import datetime; from time_utils import SEOUL; d=datetime.now(SEOUL); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once --reboot; } > pulsedav.log 2>&1
+*/30 * * * * cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav && { /usr/bin/python3 -c 'from datetime import datetime; from time_utils import SEOUL; d=datetime.now(SEOUL); print(f"{d.year:04d}-{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}:{d.second:02d} {d.tzname()}")'; /usr/bin/python3 sender.py --once; } > pulsedav.log 2>&1
 ```
 
 ## 게이트웨이 감시 및 자동 재부팅 (Linux)
@@ -177,7 +177,7 @@ sudo crontab -l
 `sub`가 여러 개면 현재 머신의 모든 설정된 업로드 경로를 확인합니다.
 `--check-status-all`은 `/tinyGW` 전체 노드를 확인합니다.
 두 모드 모두 대상 경로 하위를 WebDAV `PROPFIND Depth: 1`로 반복 탐색합니다.
-모든 파일의 수정 시각을 UTC ISO 8601로 저장하며, 최신 PulseDAV Markdown을 WebDAV GET으로
+모든 파일의 수정 시각을 서울 시간 ISO 8601 (`+09:00`)로 저장하며, 최신 PulseDAV Markdown을 WebDAV GET으로
 읽어 호스트명, 내부/Public IP, 설정된 SSH 포트를 추출합니다. 인증은 기존 설정 파일을 사용합니다.
 점검은 원격 파일을 업로드하거나 삭제하지 않으며 로컬 전송 state도 변경하지 않습니다.
 
@@ -291,3 +291,17 @@ Docker 관리 권한을 부여하려면: sudo usermod -aG docker tinyos
 Rootless Docker 또는 원격 Docker context는 `docker` 그룹 없이도 정상 동작할 수 있습니다.
 따라서 그룹 경고는 컨테이너 장애를 의미하지 않으며, 실제 조회 성공 여부는 보고서의
 Docker 운영 상태에서 확인하세요. 프로그램은 그룹 가입이나 소켓 권한 변경을 자동 실행하지 않습니다.
+
+
+## 시간 표시
+
+보고서 생성 시각, 상태 점검의 파일 수정 시각과 점검 시각, 전송 상태의 `last_sent_at`,
+재부팅·게이트웨이 로그와 새 보고서 파일명의 날짜는 서버 OS의 시간대와 관계없이
+서울 시간(`Asia/Seoul`)을 사용합니다. 텍스트에는 `KST`, JSON의 ISO 8601 시각에는
+`+09:00`이 표시됩니다. 예: `2026-09-26T13:00:00+09:00`.
+WebDAV가 UTC로 반환한 시각도 서울 시간으로 변환하며 기록의 경과 시간 계산은 유지합니다.
+기존 보고서와 파일명은 변경하지 않습니다.
+
+새로 생성하는 cron 예시도 서울 시간으로 로그를 출력합니다. 이미 등록된 cron 명령의
+시각 출력 코드는 자동으로 바뀌지 않으므로 `--print-crontab`으로 확인 후 반영하세요.
+cron 실행 스케줄 자체는 머신의 cron 시간대 설정을 따릅니다.
