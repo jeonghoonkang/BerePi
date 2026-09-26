@@ -4,11 +4,16 @@ import hmac
 import ipaddress
 import json
 import os
+import platform
+import secrets
+import time
 import socket
 import subprocess
 import threading
 import urllib.error
 import urllib.request
+from http.cookies import CookieError, SimpleCookie
+from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -20,6 +25,8 @@ class Config:
         self.backend = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11435").rstrip("/")
         self.model = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
         self.key = os.getenv("GEMMA4_API_KEY", "")
+        self.user = os.getenv("GEMMA4_LOGIN_USER", "admin")
+        self.password = os.getenv("GEMMA4_LOGIN_PASSWORD") or self.key
         self.context = int(os.getenv("OLLAMA_CONTEXT_LENGTH", "2048"))
         self.threads = int(os.getenv("GEMMA4_NUM_THREAD", "4"))
         self.tokens = int(os.getenv("GEMMA4_MAX_TOKENS", "512"))
@@ -36,6 +43,9 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, address, config):
         self.config = config
+        self.started = time.monotonic()
+        self.sessions = {}
+        self.session_lock = threading.Lock()
         self.inference = threading.Lock()
         self.connections = threading.BoundedSemaphore(16)
         # Do not route localhost inference through a machine-wide HTTP proxy.
@@ -66,6 +76,25 @@ class Server(ThreadingHTTPServer):
         )
         with self.opener.open(request, timeout=timeout) as response:
             return json.load(response)
+
+
+def machine_info():
+    memory = {}
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            key, value = line.split(":", 1)
+            if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
+                memory[key] = int(value.split()[0]) * 1024
+    except (OSError, ValueError):
+        pass
+    try:
+        temperature = int(Path("/sys/class/thermal/thermal_zone0/temp").read_text()) / 1000
+    except (OSError, ValueError):
+        temperature = None
+    return {"hostname": socket.gethostname(), "os": platform.platform(),
+            "architecture": platform.machine(), "cpu_count": os.cpu_count(),
+            "load_average": list(os.getloadavg()), "memory": memory,
+            "temperature_c": temperature}
 
 
 def generation_payload(data, path, config):
@@ -115,22 +144,85 @@ class Handler(BaseHTTPRequestHandler):
         super().setup()
         self.connection.settimeout(15)
 
-    def send_bytes(self, status, body, content_type="application/json; charset=utf-8"):
+    def send_bytes(self, status, body, content_type="application/json; charset=utf-8", cookie=None):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        if cookie is not None:
+            self.send_header("Set-Cookie", cookie)
         self.end_headers()
         try:
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass
 
-    def reply(self, status, data):
-        self.send_bytes(status, json.dumps(data, ensure_ascii=False).encode())
+    def reply(self, status, data, cookie=None):
+        self.send_bytes(status, json.dumps(data, ensure_ascii=False).encode(), cookie=cookie)
+
+    def session_token(self):
+        cookie = SimpleCookie()
+        try:
+            cookie.load(self.headers.get("Cookie", ""))
+            return cookie["gemma_pi_session"].value if "gemma_pi_session" in cookie else ""
+        except CookieError:
+            return ""
+
+    def session_user(self):
+        with self.server.session_lock:
+            record = self.server.sessions.get(self.session_token())
+            if record and record[1] > time.monotonic():
+                return record[0]
+        return None
+
+    def same_origin(self):
+        origin = self.headers.get("Origin")
+        try:
+            foreign_origin = bool(origin and urlsplit(origin).netloc != self.headers.get("Host"))
+        except ValueError:
+            foreign_origin = True
+        if foreign_origin or self.headers.get("Sec-Fetch-Site") == "cross-site":
+            self.reply(403, {"error": "Cross-origin requests are not allowed"})
+            return False
+        return True
+
+    def read_json(self):
+        if self.headers.get("Transfer-Encoding"):
+            raise ValueError("Chunked request bodies are not supported")
+        length = int(self.headers.get("Content-Length", "0"))
+        if not 0 < length <= 65536:
+            raise ValueError("JSON body must be 1 to 65536 bytes")
+        data = json.loads(self.rfile.read(length))
+        if not isinstance(data, dict):
+            raise ValueError("JSON object required")
+        return data
+
+    def status_data(self):
+        config = self.server.config
+        result = {"server": machine_info(), "uptime_seconds": round(time.monotonic() - self.server.started),
+                  "host": config.host, "port": config.port, "backend_url": config.backend,
+                  "model": config.model, "busy": self.server.inference.locked(),
+                  "inference": {"device": "CPU", "threads": config.threads,
+                                "context": config.context, "max_tokens": config.tokens,
+                                "timeout_seconds": config.timeout, "keep_alive": config.keep_alive},
+                  "ollama_online": False, "model_installed": False, "loaded_models": []}
+        try:
+            models = self.server.backend_json("/api/tags").get("models", [])
+            result["ollama_online"] = True
+            result["model_details"] = next((m for m in models if m.get("name") == config.model), None)
+            result["model_installed"] = result["model_details"] is not None
+        except (OSError, ValueError):
+            result["backend_error"] = "Ollama에 연결할 수 없습니다."
+        try:
+            result["loaded_models"] = self.server.backend_json("/api/ps").get("models", [])
+        except (OSError, ValueError):
+            result["loaded_models_error"] = "로드 상태를 조회할 수 없습니다."
+        return result
 
     def authenticated(self):
+        if self.session_user():
+            return True
         expected = ("Bearer " + self.server.config.key).encode()
         supplied = self.headers.get("Authorization", "").encode()
         if hmac.compare_digest(supplied, expected):
@@ -143,6 +235,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_bytes(200, Path(__file__).with_name("index.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/health":
             self.reply(200, {"status": "ok"})
+        elif self.path == "/api/session":
+            user = self.session_user()
+            self.reply(200, {"logged_in": bool(user), "user_id": user})
+        elif self.path == "/api/status":
+            if self.authenticated():
+                self.reply(200, self.status_data())
+        elif self.path == "/api/model-info":
+            if not self.authenticated():
+                return
+            try:
+                result = self.server.backend_json("/api/show", {"model": self.server.config.model})
+                self.reply(200, result)
+            except (OSError, ValueError):
+                self.reply(502, {"error": "모델 상세 정보를 조회할 수 없습니다."})
         elif self.path == "/ready":
             if not self.authenticated():
                 return
@@ -156,6 +262,38 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(404, {"error": "Not found"})
 
     def do_POST(self):
+        if not self.same_origin():
+            return
+        if self.path == "/api/session-login":
+            try:
+                data = self.read_json()
+                user, password = data.get("user_id", ""), data.get("password", "")
+                config = self.server.config
+                if not isinstance(user, str) or not isinstance(password, str):
+                    raise ValueError("User ID and password must be strings")
+                if not (hmac.compare_digest(user.encode(), config.user.encode()) and
+                        hmac.compare_digest(password.encode(), config.password.encode())):
+                    self.reply(401, {"error": "아이디 또는 암호가 올바르지 않습니다."})
+                    return
+                token = secrets.token_urlsafe(32)
+                with self.server.session_lock:
+                    now = time.monotonic()
+                    self.server.sessions = {k: v for k, v in self.server.sessions.items() if v[1] > now}
+                    if len(self.server.sessions) >= 128:
+                        self.server.sessions.pop(next(iter(self.server.sessions)))
+                    self.server.sessions.pop(self.session_token(), None)
+                    self.server.sessions[token] = (user, now + 28800)
+                self.reply(200, {"logged_in": True, "user_id": user},
+                           cookie=f"gemma_pi_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800")
+            except (ValueError, UnicodeError, TimeoutError) as exc:
+                self.reply(400, {"error": str(exc)})
+            return
+        if self.path == "/api/session-logout":
+            with self.server.session_lock:
+                self.server.sessions.pop(self.session_token(), None)
+            self.reply(200, {"logged_in": False},
+                       cookie="gemma_pi_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+            return
         if self.path not in {"/api/generate", "/api/chat"}:
             self.reply(404, {"error": "Not found"})
             return
@@ -177,7 +315,10 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(429, {"error": "Inference busy; retry after the current request completes"})
             return
         try:
+            started = time.monotonic()
             result = self.server.backend_json(self.path, payload, self.server.config.timeout)
+            result["elapsed_seconds"] = round(time.monotonic() - started, 3)
+            result["requested_model"] = self.server.config.model
             self.reply(502 if "error" in result else 200, result)
         except urllib.error.HTTPError as exc:
             self.reply(502, {"error": "Ollama inference failed", "backend_status": exc.code,

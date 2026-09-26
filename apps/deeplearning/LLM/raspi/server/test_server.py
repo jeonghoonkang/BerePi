@@ -1,5 +1,7 @@
 """HTTP integration tests; no Ollama installation or model download needed."""
 import json
+import time
+from http.cookiejar import CookieJar
 import os
 import threading
 import unittest
@@ -29,7 +31,8 @@ class Backend(BaseHTTPRequestHandler):
         failed = data.get('prompt') == 'fail'
         self.send_response(500 if failed else 200)
         self.end_headers()
-        response = {'response': '안녕하세요', 'done': True}
+        response = {'response': '안녕하세요', 'done': True, 'model': 'gemma4:e4b',
+                    'eval_count': 8, 'eval_duration': 2000000000}
         if self.path == '/api/chat':
             response = {'message': {'role': 'assistant', 'content': '안녕하세요'}, 'done': True}
         self.wfile.write(json.dumps(response).encode())
@@ -128,6 +131,70 @@ class ServerTests(unittest.TestCase):
             self.backend.release.set()
             worker.join(5)
         self.assertEqual(results[0][0], 200)
+
+    def test_status_and_model_info_require_auth(self):
+        for path in ['/api/status', '/api/model-info']:
+            self.assertEqual(self.request(path, auth=False)[0], 401)
+            status, data = self.request(path)
+            self.assertEqual(status, 200)
+            self.assertNotIn(self.key, json.dumps(data))
+        status = self.request('/api/status')[1]
+        self.assertTrue(status['ollama_online'])
+        self.assertTrue(status['model_installed'])
+        self.assertEqual(status['inference']['device'], 'CPU')
+        self.assertIn('memory', status['server'])
+
+    def test_generation_timings_preserve_backend_model(self):
+        status, data = self.request('/api/generate', {'prompt': 'hi'})
+        self.assertEqual(status, 200)
+        self.assertEqual(data['model'], 'gemma4:e4b')
+        self.assertEqual(data['requested_model'], 'gemma4:e4b')
+        self.assertGreaterEqual(data['elapsed_seconds'], 0)
+        self.assertEqual(data['eval_count'], 8)
+
+    def test_login_session_logout_expiry_and_origin(self):
+        jar = CookieJar()
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
+                                            urllib.request.HTTPCookieProcessor(jar))
+        def call(path, data=None, origin=None):
+            headers = {'Content-Type': 'application/json'}
+            if origin:
+                headers['Origin'] = origin
+            request = urllib.request.Request(self.base + path, headers=headers,
+                data=None if data is None else json.dumps(data).encode())
+            try:
+                response = opener.open(request, timeout=10)
+            except urllib.error.HTTPError as exc:
+                response = exc
+            with response:
+                return response.status, json.load(response)
+        self.assertFalse(call('/api/session')[1]['logged_in'])
+        self.assertEqual(call('/api/session-login', {'user_id': 'admin', 'password': 'bad'})[0], 401)
+        self.assertEqual(call('/api/session-login', {'user_id': [], 'password': self.key})[0], 400)
+        credentials = {'user_id': 'admin', 'password': self.key}
+        self.assertEqual(call('/api/session-login', credentials, 'http://other.example')[0], 403)
+        self.assertEqual(call('/api/session-login', credentials)[0], 200)
+        cookie = next(iter(jar))
+        self.assertIn('HttpOnly', cookie._rest)
+        self.assertEqual(cookie._rest['SameSite'], 'Strict')
+        self.assertTrue(call('/api/session')[1]['logged_in'])
+        self.assertEqual(call('/api/status')[0], 200)
+        self.assertEqual(call('/api/chat', {'messages': [{'role': 'user', 'content': 'hi'}]})[0], 200)
+        self.assertEqual(call('/api/session-logout', {}, 'http://other.example')[0], 403)
+        self.assertEqual(call('/api/session-logout', {})[0], 200)
+        self.assertEqual(call('/api/status')[0], 401)
+        self.assertEqual(call('/api/session-login', credentials)[0], 200)
+        with self.server.session_lock:
+            for token, (user, _) in self.server.sessions.items():
+                self.server.sessions[token] = (user, time.monotonic() - 1)
+        self.assertEqual(call('/api/status')[0], 401)
+
+    def test_separate_login_password(self):
+        with patch.dict(os.environ, {'GEMMA4_API_KEY': self.key,
+                                    'GEMMA4_LOGIN_PASSWORD': 'separate-password'}, clear=True):
+            config = Config()
+        self.assertEqual(config.password, 'separate-password')
+        self.assertEqual(config.key, self.key)
 
     def test_missing_key_prevents_startup(self):
         with patch.dict(os.environ, {}, clear=True):

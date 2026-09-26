@@ -1,33 +1,802 @@
 <!doctype html>
 <html lang="ko">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gemma 4 · Raspberry Pi 5</title>
-<style>
-body{max-width:760px;margin:48px auto;padding:0 20px;background:#f4f6fa;color:#182333;font:16px system-ui}
-input,textarea,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0 20px;font:inherit}
-button{background:#244b86;color:white;border:0;border-radius:6px;cursor:pointer}
-button:disabled{opacity:.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:24px;border-radius:8px}
-</style>
-<h1>Gemma 4 · Raspberry Pi 5</h1>
-<p>CPU 추론은 시간이 걸릴 수 있습니다. 한 번에 하나의 요청을 처리합니다.</p>
-<form id="form">
-<label>API 키<input id="key" type="password" required autocomplete="off"></label>
-<label>질문<textarea id="prompt" rows="5" required></textarea></label>
-<button id="send">질문 보내기</button>
-</form>
-<p id="status" role="status"></p><pre id="answer" aria-live="polite">답변이 여기에 표시됩니다.</pre>
-<script>
-const form=document.querySelector('#form'), status=document.querySelector('#status'), answer=document.querySelector('#answer'), send=document.querySelector('#send');
-form.addEventListener('submit',async event=>{
-  event.preventDefault();send.disabled=true;status.textContent='답변 생성 중…';answer.textContent='';
-  try{
-    const response=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+document.querySelector('#key').value},body:JSON.stringify({prompt:document.querySelector('#prompt').value,stream:false})});
-    const data=await response.json();
-    if(!response.ok)throw new Error(data.error||'요청 실패');
-    answer.textContent=data.response||'(빈 답변)';
-    status.textContent='완료'+(data.eval_count?' · 생성 '+data.eval_count+' 토큰':'');
-  }catch(error){status.textContent=error.message;}finally{send.disabled=false;}
-});
-</script>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gemma 4 · Raspberry Pi Server</title>
+    <style>
+      :root {
+        --bg: #f3f5f4;
+        --panel: #fff;
+        --ink: #172b26;
+        --muted: #64756f;
+        --line: #dce5e0;
+        --accent: #197451;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.55 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1200px;
+        margin: 36px auto;
+        padding: 0 24px;
+      }
+      header,
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      header {
+        justify-content: space-between;
+      }
+      h1 {
+        font-size: 26px;
+        letter-spacing: -0.6px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 19px;
+        margin: 0 0 16px;
+      }
+      h3 {
+        font-size: 15px;
+      }
+      p {
+        color: var(--muted);
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        margin-bottom: 6px;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid var(--line);
+        margin: 24px 0;
+      }
+      .tabs button {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+      .tabs .active,
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+      }
+      .card {
+        padding: 18px;
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow-wrap: anywhere;
+      }
+      .card small {
+        display: block;
+        color: var(--muted);
+      }
+      .card strong {
+        font-size: 20px;
+        display: block;
+        margin: 8px 0;
+      }
+      .columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      label {
+        display: block;
+        font-weight: 650;
+        margin-bottom: 6px;
+      }
+      input,
+      textarea,
+      button {
+        font: inherit;
+      }
+      input,
+      textarea {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid #becdc5;
+        border-radius: 7px;
+        background: white;
+        color: var(--ink);
+      }
+      textarea {
+        resize: vertical;
+        min-height: 120px;
+      }
+      button {
+        padding: 9px 15px;
+        background: white;
+        border: 1px solid #becdc5;
+        border-radius: 7px;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button:hover:enabled {
+        filter: brightness(0.96);
+      }
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: 3px solid #7cc8ae;
+        outline-offset: 2px;
+      }
+      .row {
+        margin-top: 14px;
+      }
+      .muted,
+      small {
+        color: var(--muted);
+      }
+      .status {
+        min-height: 24px;
+        margin: 10px 0;
+      }
+      .badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        background: #e8f4ed;
+        color: #216849;
+        font-size: 13px;
+      }
+      .error {
+        color: #b33232;
+      }
+      .answer {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding: 20px;
+        background: #f7f9f8;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        min-height: 150px;
+      }
+      .stats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 12px 0;
+      }
+      .stats span {
+        background: #eaf1ed;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 13px;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        gap: 9px;
+        margin: 0;
+      }
+      dt {
+        color: var(--muted);
+      }
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 420px;
+        overflow: auto;
+        font-size: 13px;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0;
+        font-weight: 400;
+      }
+      .check input {
+        width: auto;
+      }
+      .history-item {
+        border-top: 1px solid var(--line);
+        padding: 18px 0;
+      }
+      .history-item pre {
+        max-height: 260px;
+      }
+      details {
+        margin-top: 16px;
+      }
+      summary {
+        cursor: pointer;
+      }
+      .hidden,
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 800px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+        .columns {
+          grid-template-columns: 1fr;
+        }
+        main {
+          padding: 0 14px;
+          margin: 22px auto;
+        }
+        section {
+          padding: 18px;
+        }
+        h1 {
+          font-size: 22px;
+        }
+      }
+      @media (max-width: 440px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        dl {
+          grid-template-columns: 100px 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <div class="eyebrow">LOCAL MODEL · CPU INFERENCE</div>
+          <h1>Ollama Service · Raspberry Pi</h1>
+          <p>Gemma 4 서버 상태, 모델 정보와 프롬프트 테스트</p>
+        </div>
+        <button id="refresh" disabled>Refresh · 새로고침</button>
+      </header>
+      <section aria-labelledby="loginTitle">
+        <h2 id="loginTitle">Login Session · 로그인</h2>
+        <form id="loginForm">
+          <div class="columns">
+            <div>
+              <label for="userId">User ID</label
+              ><input
+                id="userId"
+                autocomplete="username"
+                value="admin"
+                required
+              />
+            </div>
+            <div>
+              <label for="password">Password</label
+              ><input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                placeholder="로그인 암호"
+              />
+            </div>
+          </div>
+          <div class="row">
+            <button id="login" class="primary">Login Session</button
+            ><button id="logout" type="button" disabled>Logout Session</button
+            ><span id="sessionStatus" role="status">로그인해 주세요.</span>
+          </div>
+        </form>
+        <small
+          >기본 계정은 admin이며, 별도 로그인 암호가 설정되지 않았다면 기존 API
+          키를 사용합니다. 세션은 8시간 유지됩니다.</small
+        >
+      </section>
+      <nav class="tabs" aria-label="서버 기능">
+        <button class="active" data-panel="serverPanel" aria-pressed="true">
+          Server</button
+        ><button data-panel="historyPanel" aria-pressed="false">History</button>
+      </nav>
+      <div id="serverPanel">
+        <p id="notice" class="status" role="status"></p>
+        <div id="metrics" class="grid">
+          <div class="card">
+            <small>서버 정보</small><strong>로그인 대기</strong
+            ><small>로그인 후 상태를 조회합니다.</small>
+          </div>
+        </div>
+        <div class="columns">
+          <section>
+            <h2>Server Information</h2>
+            <dl id="serverInfo">
+              <dt>상태</dt>
+              <dd>—</dd>
+            </dl>
+          </section>
+          <section>
+            <h2>Model Information</h2>
+            <dl id="modelInfo">
+              <dt>모델</dt>
+              <dd>—</dd>
+            </dl>
+            <details>
+              <summary>모델 상세 정보 · 파라미터 / 템플릿</summary>
+              <button id="modelDetail" disabled>상세 정보 조회</button>
+              <pre id="modelJson">아직 조회하지 않았습니다.</pre>
+            </details>
+          </section>
+        </div>
+        <section>
+          <h2>Prompt Test</h2>
+          <form id="promptForm">
+            <details>
+              <summary>System Prompt · 응답 지침</summary>
+              <label for="systemPrompt" class="muted"
+                >모델에 전달할 역할이나 응답 규칙</label
+              ><textarea
+                id="systemPrompt"
+                rows="3"
+                placeholder="예: 한국어로 간결하게 답변해 주세요."
+              ></textarea>
+            </details>
+            <div class="columns" style="margin-top: 16px">
+              <div>
+                <label for="prompt1">Prompt 1</label
+                ><textarea id="prompt1" rows="5">
+아무 내용 없이 ok 만 회신해 주세요</textarea>
+              </div>
+              <div>
+                <label for="prompt2">Prompt 2</label
+                ><textarea
+                  id="prompt2"
+                  rows="5"
+                  placeholder="추가 질문이나 참고 내용을 입력하세요."
+                ></textarea>
+              </div>
+            </div>
+            <small
+              >두 프롬프트를 하나의 요청으로 합쳐 전달합니다. CPU 추론은 한 번에
+              하나씩 처리합니다.</small
+            >
+            <div class="row">
+              <button id="send" class="primary" disabled>Send Prompt</button
+              ><label class="check"
+                ><input id="rememberHistory" type="checkbox" checked />Remember
+                History</label
+              ><button id="clearHistory" type="button">Clear History</button
+              ><span id="busy" role="status"></span>
+            </div>
+          </form>
+          <div class="row">
+            <h3>Response · 회신</h3>
+            <button id="copyAnswer" disabled>Copy Result</button
+            ><button id="downloadAnswer" disabled>결과 저장</button>
+          </div>
+          <div id="responseStats" class="stats"></div>
+          <div id="answer" class="answer" aria-live="polite">
+            답변이 여기에 표시됩니다.
+          </div>
+        </section>
+      </div>
+      <div id="historyPanel" hidden>
+        <section>
+          <h2>Conversation History</h2>
+          <p>
+            현재 페이지에서 완료한 요청을 최대 20개 표시합니다.
+            새로고침·로그아웃하면 삭제됩니다. Remember History를 켜면 최근
+            대화를 다음 요청에 포함합니다.
+          </p>
+          <div id="historyList">아직 대화 이력이 없습니다.</div>
+        </section>
+      </div>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let loggedIn = false,
+        pending = false,
+        history = [],
+        answerText = "",
+        generation = 0;
+      const fmt = (n) =>
+        Number.isFinite(n)
+          ? n.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
+          : "—";
+      const bytes = (n) =>
+        Number.isFinite(n) ? fmt(n / 1024 ** 3) + " GiB" : "—";
+      const seconds = (n) => (Number.isFinite(n) ? fmt(n) + "초" : "—");
+      function controls() {
+        $("send").disabled = !loggedIn || pending;
+        $("login").disabled = loggedIn || pending;
+        $("logout").disabled = !loggedIn || pending;
+        $("refresh").disabled = !loggedIn;
+        $("modelDetail").disabled = !loggedIn;
+        $("clearHistory").disabled = pending;
+      }
+      function clearPrivate() {
+        history = [];
+        answerText = "";
+        $("answer").textContent = "답변이 여기에 표시됩니다.";
+        $("responseStats").replaceChildren();
+        $("metrics").replaceChildren();
+        $("serverInfo").replaceChildren();
+        $("modelInfo").replaceChildren();
+        $("modelJson").textContent = "아직 조회하지 않았습니다.";
+        $("copyAnswer").disabled = true;
+        $("downloadAnswer").disabled = true;
+        renderHistory();
+      }
+      function session(user) {
+        loggedIn = !!user;
+        $("sessionStatus").textContent = user
+          ? user + " · 로그인됨"
+          : "로그인해 주세요.";
+        controls();
+        if (!user) {
+          generation++;
+          clearPrivate();
+        }
+      }
+      async function api(path, data) {
+        const res = await fetch(path, {
+          method: data === undefined ? "GET" : "POST",
+          credentials: "same-origin",
+          headers:
+            data === undefined ? {} : { "Content-Type": "application/json" },
+          body: data === undefined ? undefined : JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          if (res.status === 401) session(null);
+          throw new Error(result.error || "요청 실패 (" + res.status + ")");
+        }
+        return result;
+      }
+      function pairs(id, items) {
+        const list = $(id);
+        list.replaceChildren();
+        for (const [label, value] of items) {
+          const dt = document.createElement("dt"),
+            dd = document.createElement("dd");
+          dt.textContent = label;
+          dd.textContent = value ?? "—";
+          list.append(dt, dd);
+        }
+      }
+      function cards(items) {
+        $("metrics").replaceChildren();
+        for (const [label, value, note] of items) {
+          const card = document.createElement("div");
+          card.className = "card";
+          for (const [tag, text] of [
+            ["small", label],
+            ["strong", value],
+            ["small", note],
+          ]) {
+            const el = document.createElement(tag);
+            el.textContent = text;
+            card.append(el);
+          }
+          $("metrics").append(card);
+        }
+      }
+      async function refresh() {
+        const version = generation;
+        try {
+          const d = await api("/api/status");
+          if (version !== generation || !loggedIn) return;
+          const m = d.server.memory,
+            model = d.model_details || {},
+            details = model.details || {},
+            loaded = d.loaded_models.find(
+              (x) => (x.name || x.model) === d.model,
+            );
+          cards([
+            [
+              "Ollama",
+              d.ollama_online ? "온라인" : "연결 실패",
+              d.busy ? "요청 처리 중" : "대기 중",
+            ],
+            [
+              "Selected Model",
+              d.model,
+              d.model_installed
+                ? loaded
+                  ? "메모리에 로드됨"
+                  : "설치됨 · 로드 대기"
+                : "설치 확인 필요",
+            ],
+            [
+              "Available Memory",
+              bytes(m.MemAvailable),
+              "전체 " + bytes(m.MemTotal),
+            ],
+            [
+              "CPU Temperature",
+              d.server.temperature_c === null
+                ? "—"
+                : fmt(d.server.temperature_c) + " °C",
+              "CPU " +
+                d.server.cpu_count +
+                " 코어 · " +
+                d.inference.threads +
+                " 추론 스레드",
+            ],
+          ]);
+          pairs("serverInfo", [
+            ["서버 이름", d.server.hostname],
+            ["접속 주소", location.origin],
+            ["바인딩", d.host + ":" + d.port],
+            ["운영체제", d.server.os],
+            ["아키텍처", d.server.architecture],
+            ["Ollama", d.backend_url],
+            ["서버 가동 시간", seconds(d.uptime_seconds)],
+            ["CPU 부하 (1/5/15분)", d.server.load_average.map(fmt).join(" / ")],
+            [
+              "Swap 사용량",
+              bytes(m.SwapTotal - m.SwapFree) + " / " + bytes(m.SwapTotal),
+            ],
+          ]);
+          pairs("modelInfo", [
+            ["선택 모델", d.model],
+            ["실행 장치", d.inference.device],
+            ["모델 계열", details.family],
+            ["파라미터", details.parameter_size],
+            ["양자화", details.quantization_level],
+            ["파일 크기", bytes(model.size)],
+            ["메모리 로드 크기", loaded ? bytes(loaded.size) : "로드되지 않음"],
+            ["컨텍스트", fmt(d.inference.context) + " 토큰"],
+            ["최대 출력", fmt(d.inference.max_tokens) + " 토큰"],
+            ["제한 시간", seconds(d.inference.timeout_seconds)],
+            ["메모리 유지", d.inference.keep_alive],
+          ]);
+          $("notice").textContent =
+            d.backend_error ||
+            d.loaded_models_error ||
+            "최근 조회: " + new Date().toLocaleTimeString("ko-KR");
+          $("notice").className = "status" + (d.backend_error ? " error" : "");
+        } catch (e) {
+          $("notice").textContent = e.message;
+          $("notice").className = "status error";
+        }
+      }
+      $("loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        $("login").disabled = true;
+        try {
+          const d = await api("/api/session-login", {
+            user_id: $("userId").value,
+            password: $("password").value,
+          });
+          $("password").value = "";
+          session(d.user_id);
+          await refresh();
+        } catch (e) {
+          $("sessionStatus").textContent = e.message;
+        } finally {
+          controls();
+        }
+      });
+      $("logout").onclick = async () => {
+        try {
+          await api("/api/session-logout", {});
+          session(null);
+        } catch (e) {
+          $("sessionStatus").textContent = e.message;
+        }
+      };
+      $("refresh").onclick = refresh;
+      $("modelDetail").onclick = async () => {
+        const version = generation;
+        $("modelDetail").disabled = true;
+        try {
+          const d = await api("/api/model-info");
+          if (loggedIn && version === generation)
+            $("modelJson").textContent = JSON.stringify(d, null, 2);
+        } catch (e) {
+          $("modelJson").textContent = e.message;
+        } finally {
+          controls();
+        }
+      };
+      for (const tab of document.querySelectorAll("[data-panel]"))
+        tab.onclick = () => {
+          for (const other of document.querySelectorAll("[data-panel]")) {
+            const active = other === tab;
+            other.classList.toggle("active", active);
+            other.setAttribute("aria-pressed", String(active));
+            $(other.dataset.panel).hidden = !active;
+          }
+        };
+      function renderHistory() {
+        $("historyList").replaceChildren();
+        if (!history.length) {
+          $("historyList").textContent = "아직 대화 이력이 없습니다.";
+          return;
+        }
+        for (const item of [...history].reverse()) {
+          const node = document.createElement("article");
+          node.className = "history-item";
+          const title = document.createElement("h3");
+          title.textContent =
+            item.at + " · " + item.model + " · " + seconds(item.elapsed);
+          const prompt = document.createElement("pre");
+          prompt.textContent = "질문: " + item.prompt;
+          const answer = document.createElement("pre");
+          answer.textContent = item.answer;
+          const reuse = document.createElement("button");
+          reuse.textContent = "Prompt 1에 불러오기";
+          reuse.onclick = () => {
+            $("prompt1").value = item.prompt;
+            $("prompt2").value = "";
+            document.querySelector('[data-panel="serverPanel"]').click();
+            $("prompt1").focus();
+          };
+          node.append(title, prompt, answer, reuse);
+          $("historyList").append(node);
+        }
+      }
+      $("clearHistory").onclick = () => {
+        history = [];
+        renderHistory();
+        $("busy").textContent = "대화 이력을 삭제했습니다.";
+      };
+      $("promptForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!loggedIn || pending) return;
+        const prompt = [$("prompt1").value.trim(), $("prompt2").value.trim()]
+          .filter(Boolean)
+          .join("\n\n");
+        if (!prompt) {
+          $("busy").textContent = "프롬프트를 입력해 주세요.";
+          return;
+        }
+        pending = true;
+        controls();
+        const version = generation,
+          start = performance.now();
+        $("responseStats").replaceChildren();
+        $("answer").textContent = "답변 생성 중…";
+        answerText = "";
+        $("copyAnswer").disabled = true;
+        $("downloadAnswer").disabled = true;
+        const update = () => {
+          $("busy").textContent =
+            "생성 중 · " + seconds((performance.now() - start) / 1000);
+        };
+        update();
+        const timer = setInterval(update, 250);
+        try {
+          const messages = [];
+          if ($("systemPrompt").value.trim())
+            messages.push({
+              role: "system",
+              content: $("systemPrompt").value.trim(),
+            });
+          if ($("rememberHistory").checked) {
+            for (const item of history.slice(-10)) {
+              messages.push(
+                { role: "user", content: item.prompt },
+                { role: "assistant", content: item.answer },
+              );
+            }
+          }
+          messages.push({ role: "user", content: prompt });
+          const d = await api("/api/chat", { messages, stream: false });
+          if (version !== generation || !loggedIn) return;
+          answerText = d.message?.content || d.response || "(빈 답변)";
+          $("answer").textContent = answerText;
+          const elapsed = (performance.now() - start) / 1000;
+          const stats = [
+            ["회신 모델", d.model || "백엔드 응답에 없음"],
+            ["요청 모델", d.requested_model],
+            ["전체 소요시간", seconds(elapsed)],
+            ["서버 처리", seconds(d.elapsed_seconds)],
+            [
+              "모델 로딩",
+              seconds(
+                d.load_duration === undefined
+                  ? undefined
+                  : d.load_duration / 1e9,
+              ),
+            ],
+            ["입력 토큰", fmt(d.prompt_eval_count)],
+            ["출력 토큰", fmt(d.eval_count)],
+            [
+              "생성 속도",
+              d.eval_duration
+                ? fmt(d.eval_count / (d.eval_duration / 1e9)) + " tok/s"
+                : "—",
+            ],
+            ["종료 사유", d.done_reason || "—"],
+          ];
+          for (const [label, value] of stats) {
+            const span = document.createElement("span");
+            span.textContent = label + ": " + (value ?? "—");
+            $("responseStats").append(span);
+          }
+          history.push({
+            prompt,
+            answer: answerText,
+            model: d.model || d.requested_model,
+            elapsed,
+            at: new Date().toLocaleString("ko-KR"),
+          });
+          history = history.slice(-20);
+          renderHistory();
+          $("busy").textContent = "완료 · " + seconds(elapsed);
+          $("copyAnswer").disabled = false;
+          $("downloadAnswer").disabled = false;
+        } catch (e) {
+          $("answer").textContent = "요청 실패: " + e.message;
+          $("busy").textContent =
+            "실패 · " + seconds((performance.now() - start) / 1000);
+        } finally {
+          clearInterval(timer);
+          pending = false;
+          controls();
+          if (loggedIn) refresh();
+        }
+      });
+      $("copyAnswer").onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(answerText);
+          $("busy").textContent = "답변을 복사했습니다.";
+        } catch (e) {
+          const range = document.createRange();
+          range.selectNodeContents($("answer"));
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          $("busy").textContent =
+            "답변을 선택했습니다. Ctrl+C 또는 복사 메뉴를 사용하세요.";
+        }
+      };
+      $("downloadAnswer").onclick = () => {
+        const blob = new Blob([answerText], {
+            type: "text/plain;charset=utf-8",
+          }),
+          url = URL.createObjectURL(blob),
+          a = document.createElement("a");
+        a.href = url;
+        a.download = "gemma-response.txt";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+      (async () => {
+        try {
+          const d = await api("/api/session");
+          session(d.logged_in ? d.user_id : null);
+          if (loggedIn) await refresh();
+        } catch (e) {
+          $("sessionStatus").textContent =
+            "서버에 연결할 수 없습니다: " + e.message;
+        }
+      })();
+    </script>
+  </body>
 </html>
