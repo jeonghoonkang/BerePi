@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGE_PIXELS = 20_000_000
 MAX_OCR_BODY = ((MAX_IMAGE_BYTES + 2) // 3) * 4 + 65536
 RESTART_EXIT_CODE = 75
@@ -184,13 +184,13 @@ def ocr_payload(data, config):
         raise ValueError("OCR instructions must be at most 4000 characters")
     encoded = data.get("image")
     if not isinstance(encoded, str) or not encoded or len(encoded) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
-        raise ValueError("JPG/PNG image must be at most 8 MiB")
+        raise ValueError("JPG/PNG image must be at most 10 MiB")
     try:
         raw = base64.b64decode(encoded, validate=True)
     except (ValueError, binascii.Error) as exc:
         raise ValueError("Invalid base64 image") from exc
     if not raw or len(raw) > MAX_IMAGE_BYTES:
-        raise ValueError("JPG/PNG image must be at most 8 MiB")
+        raise ValueError("JPG/PNG image must be at most 10 MiB")
     # Lazy import keeps text-only use available before upgrading dependencies.
     from PIL import Image, UnidentifiedImageError
     try:
@@ -337,7 +337,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_bytes(200, Path(__file__).with_name("index.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path in {"/api", "/api/"}:
             self.reply(200, {"service": "Gemma4 Raspberry Pi", "endpoints": {
-                "GET": ["/api/health", "/api/ready", "/api/session", "/api/status", "/api/model-info"],
+                "GET": ["/api/ocr/example", "/api/health", "/api/ready", "/api/session", "/api/status", "/api/model-info"],
                 "POST": ["/api/session-login", "/api/session-logout", "/api/generate", "/api/chat", "/api/ocr", "/api/restart"],
             }})
         elif self.path in {"/health", "/api/health"}:
@@ -349,6 +349,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/status":
             if self.authenticated():
                 self.reply(200, self.status_data())
+        elif self.path == "/api/ocr/example":
+            if self.authenticated():
+                self.send_bytes(200, (Path(__file__).parent / "assets" / "neural-network.png").read_bytes(), "image/png")
         elif self.path == "/api/model-info":
             if not self.authenticated():
                 return

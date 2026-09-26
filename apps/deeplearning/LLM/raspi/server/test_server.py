@@ -251,6 +251,32 @@ class ServerTests(unittest.TestCase):
         self.assertGreater(MAX_OCR_BODY, MAX_IMAGE_BYTES)
         self.assertFalse(self.server.inference.locked())
 
+    def test_ocr_accepts_full_10_mib_and_rejects_one_byte_over(self):
+        self.assertEqual(MAX_IMAGE_BYTES, 10 * 1024 * 1024)
+        # Valid PNG with trailing padding exercises real HTTP/base64 body limits.
+        raw = base64.b64decode(self.image())
+        raw += b"\0" * (MAX_IMAGE_BYTES - len(raw))
+        encoded = base64.b64encode(raw).decode('ascii')
+        status, result = self.request('/api/ocr', {'image': encoded})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.backend.received['messages'][0]['images'], [encoded])
+        status, result = self.request('/api/ocr', {'image': base64.b64encode(raw + b'x').decode('ascii')})
+        self.assertEqual(status, 400)
+        self.assertIn('10 MiB', result['error'])
+        self.assertFalse(self.server.inference.locked())
+
+    def test_bundled_ocr_example_requires_auth_and_is_valid_image(self):
+        self.assertEqual(self.request('/api/ocr/example', auth=False)[0], 401)
+        request = urllib.request.Request(self.base + '/api/ocr/example',
+                                        headers={'Authorization': 'Bearer ' + self.key})
+        with self.opener.open(request, timeout=10) as response:
+            self.assertEqual(response.headers['Content-Type'], 'image/png')
+            raw = response.read()
+        with Image.open(io.BytesIO(raw)) as image:
+            self.assertEqual(image.size, (1280, 591))
+            image.verify()
+        self.assertEqual(self.request('/api/ocr', {'image': base64.b64encode(raw).decode('ascii')})[0], 200)
+
     def test_ocr_shares_inference_slot_with_chat(self):
         with self.server.inference:
             self.assertEqual(self.request('/api/ocr', {'image': self.image(), 'engine': 'gemma'})[0], 429)

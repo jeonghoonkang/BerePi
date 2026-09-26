@@ -309,8 +309,17 @@ GEMMA4_LOGIN_PASSWORD='원하는 로그인 암호'
 4. 추출된 텍스트, 회신 모델, 소요시간, 출력 토큰을 확인하고 복사하거나 저장합니다.
 
 HTTP 접속에서 클립보드 읽기 버튼이 제한되면 키보드 붙여넣기 또는 파일 선택을
-사용합니다. 원본은 PNG/JPEG/WebP 최대 10 MiB이며 브라우저가 긴 변을 2048픽셀
-이하로 조정해 PNG로 변환합니다. 전송할 PNG가 2 MiB를 넘으면 이미지를 잘라야 합니다.
+사용합니다. **전송 한도는 10 MiB (10,485,760바이트), 2천만 화소**입니다.
+PNG/JPEG는 한도 이내이면 원본 그대로 전송하고 WebP는 PNG로 변환합니다.
+브라우저에서 불러올 원본은 최대 40 MiB·4천만 화소이며, 전송 한도를 넘으면 자동 축소합니다.
+처리가 어렵거나 느리면 최대 길이(3072/2048/1280/1024px)를 선택하고 **이미지 줄이기**를
+누른 뒤 OCR을 다시 실행하세요. 매번 보관한 원본에서 축소하며 클립보드 자체는 바꾸지 않습니다.
+**원본으로 되돌리기**도 전송 한도는 적용합니다. 원본/전송 크기를 화면에 함께 표시합니다.
+
+**신경망 예제 불러오기**는 서버에 포함한 공개 신경망 도식을 가져옵니다.
+출처: [Neural Network — QuantuMechaniX8, CC0 1.0](https://commons.wikimedia.org/wiki/File:Neural_Network.svg).
+`Input x`, `Output y` 및 층별 수식을 확인할 수 있습니다. 수식·첨자의 정확도는 모델에 따라 다릅니다.
+예제는 인증된 `GET /api/ocr/example`로 제공하므로 외부 이미지 사이트 연결 없이 사용할 수 있습니다.
 이미지와 OCR 결과는 페이지 메모리에서만 보관하며 로그아웃·새로고침 시 삭제됩니다.
 서버는 이미지 파일을 저장하지 않고 선택한 로컬 OCR 엔진에 전달합니다.
 
@@ -333,9 +342,9 @@ Gemma OCR 출력 한도는 `GEMMA4_OCR_MAX_TOKENS`(기본 2048)로 별도 설정
 
 `POST /api/ocr`는 로그인 세션 또는 Bearer 인증이 필요합니다.
 본문은 `{"image": "PNG의 순수 base64 문자열", "engine": "gemma", "instructions": "선택적 Gemma 지침"}`이며,
-이미지 1개, 추가 지침 최대 4000자를 받습니다. API는 PNG/JPEG 최대 8 MiB·2천만 화소를
+이미지 1개, 추가 지침 최대 4000자를 받습니다. API는 PNG/JPEG 최대 10 MiB·2천만 화소를
 Pillow로 검증하고, JSON 한도는 base64 최대 길이에 64 KiB를 더한 값입니다.
-브라우저는 Pi 메모리를 고려해 기존의 2048px·PNG 2 MiB 제한을 유지합니다.
+브라우저도 동일한 전송 한도를 적용하며, 필요할 때 사용자가 더 작게 줄일 수 있습니다.
 `engine`은 `gemma`(기본) 또는 `tesseract`이며 `instructions`는 Gemma에서만 적용됩니다.
 `prompt` 입력도 지원합니다. `prompt`나 `instructions`의 유무와 관계없이 엔진을
 생략하면 Gemma를 사용합니다. `prompt`와 `instructions`를 동시에 보내면
@@ -376,7 +385,7 @@ curl -fsS --max-time 1900 http://sonno.iptime.org:8082/api/chat \
   `model`을 전달한다면 서버 설정과 같아야 합니다. 입력 JSON은 최대 64KiB입니다.
 - `POST /api/ocr`: base64 JPG/PNG `image`, 선택적 `engine`, `prompt` 또는 `instructions` 입력.
   인식 결과는 동일한 `text`·`response` 필드. 기본 엔진은 Tesseract이며 위 호환 규칙을 따릅니다.
-  이미지는 OCR API에서만 받으며 최대 8 MiB, 2,000만 화소로 제한합니다.
+  이미지는 OCR API에서만 받으며 최대 10 MiB, 2,000만 화소로 제한합니다.
 - Pi 자원 보호를 위해 임의 모델·options·도구 실행 요청은 거부합니다.
   대기열, 일반 파일 저장, Telegram, 다중 사용자 관리 및 GPU/모델 변경은 지원하지 않습니다.
 - `401`: 잘못된 키, `400`: 지원하지 않는 입력, `413`: 본문 크기 초과,
