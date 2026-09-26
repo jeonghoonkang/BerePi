@@ -153,7 +153,10 @@ sudo crontab -l
 
 ## WebDAV 기록 상태 점검
 
-`--check-status`는 `/tinyGW` 전체를 WebDAV `PROPFIND Depth: 1`로 반복 탐색합니다.
+`--check-status`는 현재 머신의 설정된 `/tinyGW/<sub>/<호스트명>` 경로만 확인합니다.
+`sub`가 여러 개면 현재 머신의 모든 설정된 업로드 경로를 확인합니다.
+`--check-status-all`은 `/tinyGW` 전체 노드를 확인합니다.
+두 모드 모두 대상 경로 하위를 WebDAV `PROPFIND Depth: 1`로 반복 탐색합니다.
 모든 파일의 수정 시각을 UTC ISO 8601로 저장하며, 최신 PulseDAV Markdown을 WebDAV GET으로
 읽어 호스트명, 내부/Public IP, 설정된 SSH 포트를 추출합니다. 인증은 기존 설정 파일을 사용합니다.
 점검은 원격 파일을 업로드하거나 삭제하지 않으며 로컬 전송 state도 변경하지 않습니다.
@@ -163,6 +166,8 @@ cd /Users/tinyos/devel_opment/BerePi/apps/tinyGW/pulsedav
 python3 pulsedav.py --check-status
 # cron을 조회할 수 없거나 설정이 여러 개이면 명시적으로 지정
 python3 pulsedav.py --check-status --config this_settings.json
+# 모든 노드 확인
+python3 pulsedav.py --check-status-all --config this_settings.json
 # sender.py에서도 같은 인자를 지원
 python3 sender.py --check-status --config this_settings.json --max-age-minutes 90
 ```
@@ -177,7 +182,11 @@ python3 sender.py --check-status --config this_settings.json --max-age-minutes 9
 Tree에는 모든 폴더와 파일 시각이 표시되고 JSON에는 파일 목록, 서버별 최신 파일,
 최근 PulseDAV 기록, 누락/실패 정보가 포함됩니다.
 
-서버 디렉터리는 `pulse_*.md`가 있는 디렉터리와 현재 설정의 업로드 대상에서 찾습니다.
+전체 점검의 서버 디렉터리는 `pulse_*.md`가 있는 디렉터리와 현재 설정의 업로드 대상에서 찾습니다.
+로컬 점검은 현재 호스트명의 설정된 업로드 대상만 조회하며 다른 노드는 탐색하지 않습니다.
+`--server-list`는 로컬 점검에서 해당 경로의 메타데이터만 보완하고 점검 범위를 늘리지 않습니다.
+JSON의 `scope`와 `target_directories`에서 실제 점검 범위를 확인할 수 있습니다.
+두 모드는 동일한 결과 파일을 갱신하므로 별도로 보관하려면 `--status-output-dir`을 지정하세요.
 아직 기록이 없거나 별도의 디렉터리 구조를 사용하는 서버는 `--server-list inventory.json`으로
 추가하세요. 목록의 필드는 보고서에서 추출한 메타데이터보다 우선합니다.
 

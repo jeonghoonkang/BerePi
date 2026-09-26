@@ -30,7 +30,7 @@ def cron_configs(text, home):
             continue
         try:
             tokens = shlex.split(line)
-            if any(flag in tokens for flag in ('--gateway-watchdog', '--check-status', '--print-crontab', '--install-crontab')):
+            if any(flag in tokens for flag in ('--gateway-watchdog', '--check-status', '--check-status-all', '--print-crontab', '--install-crontab')):
                 continue
             cwd = Path(home)
             if 'cd' in tokens:
@@ -194,11 +194,19 @@ def report_metadata(session, config, entry):
 
 def render_tree(result):
     lines = [f"/{result['target_directory']} [complete={result['scan_complete']}]", f"checked_at: {result['checked_at']}"]
+    lines.append('scope: ' + result.get('scope', 'all'))
     for note in result['cron_notes']:
         lines.append(f'cron: {note}')
     by_dir = {s['directory']: s for s in result['servers']}
     children = {}
+    display_directories = set(result['directories'])
+    # Include ancestors for display only; local checks never query these parents.
     for directory in result['directories']:
+        parent = posixpath.dirname(directory)
+        while parent and parent != result['target_directory']:
+            display_directories.add(parent)
+            parent = posixpath.dirname(parent)
+    for directory in sorted(display_directories):
         if directory != result['target_directory']:
             children.setdefault(posixpath.dirname(directory), []).append((directory, True, None))
     for f in result['files']:
@@ -225,7 +233,7 @@ def render_tree(result):
     return '\n'.join(lines) + '\n'
 
 
-def check_status(config_path=None, output_dir=None, max_age_minutes=None, server_list=None):
+def check_status(config_path=None, output_dir=None, max_age_minutes=None, server_list=None, *, all_nodes=False):
     path, notes = discover_config(config_path)
     raw = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(raw, dict) or not raw.get('webdav'):
@@ -248,12 +256,22 @@ def check_status(config_path=None, output_dir=None, max_age_minutes=None, server
             raise ValueError('server-list directory는 tinyGW/ 이하의 경로여야 합니다.')
     session = build_session(config)
     try:
-        directories, files, errors = scan(session, config, 'tinyGW')
+        local_hosts = set(build_host_remote_dirs(config))
+        targets = ['tinyGW'] if all_nodes else sorted(local_hosts)
+        directory_set, file_map, errors = set(), {}, []
+        for target in targets:
+            found_dirs, found_files, found_errors = scan(session, config, target)
+            directory_set.update(found_dirs)
+            file_map.update((entry['path'], entry) for entry in found_files)
+            errors.extend(found_errors)
+        directories = sorted(directory_set)
+        files = sorted(file_map.values(), key=lambda entry: entry['path'])
         now = datetime.now(timezone.utc)
-        # PulseDAV host directories may occur under any configured subdirectory.
-        hosts = {posixpath.dirname(f['path']) for f in files if posixpath.basename(f['path']).startswith('pulse_') and f['path'].endswith('.md')}
-        hosts.update(build_host_remote_dirs(config))
-        hosts.update(row['directory'] for row in inventory)
+        hosts = set(local_hosts)
+        if all_nodes:
+            # PulseDAV host directories may occur under any subdirectory.
+            hosts.update(posixpath.dirname(f['path']) for f in files if posixpath.basename(f['path']).startswith('pulse_') and f['path'].endswith('.md'))
+            hosts.update(row['directory'] for row in inventory)
         servers = []
         for host in sorted(hosts):
             descendants = [f for f in files if f['path'].startswith(host + '/')]
@@ -281,6 +299,7 @@ def check_status(config_path=None, output_dir=None, max_age_minutes=None, server
         if hasattr(session, 'close'):
             session.close()
     result = {'checked_at': now.isoformat(), 'webdav_server': config.hostname, 'target_directory': 'tinyGW',
+              'scope': 'all' if all_nodes else 'local', 'target_directories': targets,
               'settings_file': str(path), 'cron_notes': notes, 'max_age_minutes': threshold,
               'scan_complete': not errors, 'servers': servers, 'directories': directories, 'files': files, 'errors': errors,
               'port_note': 'SSH port reported by PulseDAV; reachability is not probed.'}

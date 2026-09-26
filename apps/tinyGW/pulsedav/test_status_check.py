@@ -56,6 +56,39 @@ class StatusTests(unittest.TestCase):
                     sender.parse_args()
                 self.assertEqual(error.exception.code, 2)
 
+    def test_status_scopes_and_multiple_upload_directories(self):
+        local = ['tinyGW/site-a/local', 'tinyGW/site-b/local']
+        other = 'tinyGW/site-a/other'
+        stamp = datetime.now(timezone.utc).isoformat()
+        def fake_scan(session, config, target):
+            hosts = local + [other] if target == 'tinyGW' else [target]
+            return hosts, [{'path': h + '/pulse_now.md', 'modified_at': stamp} for h in hosts], []
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / 'config.json'
+            config.write_text(json.dumps({'webdav': {'hostname': 'https://example.test', 'username': 'u', 'password': 'test'}}))
+            inventory = Path(tmp) / 'inventory.json'
+            inventory.write_text(json.dumps([{'directory': other, 'server_name': 'other'}]))
+            for all_nodes in (False, True):
+                with self.subTest(all_nodes=all_nodes), patch.object(sc, 'discover_config', return_value=(config, [])), patch.object(sc, 'build_session'), patch.object(sc, 'build_host_remote_dirs', return_value=local), patch.object(sc, 'scan', side_effect=fake_scan) as scan, patch.object(sc, 'report_metadata', return_value={}), patch('builtins.print'):
+                    self.assertEqual(sc.check_status(str(config), tmp, server_list=str(inventory), all_nodes=all_nodes), 0)
+                result = json.loads((Path(tmp) / 'server_status.json').read_text())
+                self.assertEqual([call.args[2] for call in scan.call_args_list], ['tinyGW'] if all_nodes else local)
+                self.assertEqual({row['directory'] for row in result['servers']}, set(local + [other] if all_nodes else local))
+                self.assertEqual(result['scope'], 'all' if all_nodes else 'local')
+                tree = (Path(tmp) / 'server_status.txt').read_text()
+                self.assertIn('site-a/', tree)
+                self.assertIn('site-b/', tree)
+                self.assertEqual('other/' in tree, all_nodes)
+
+    def test_all_status_conflicts_and_cron_exclusion(self):
+        import sender
+        for flag in ('--check-status', '--once', '--install-crontab', '--gateway-watchdog'):
+            with self.subTest(flag=flag), patch('sys.argv', ['sender.py', '--check-status-all', flag]), patch('sys.stderr'):
+                with self.assertRaises(SystemExit) as error:
+                    sender.parse_args()
+                self.assertEqual(error.exception.code, 2)
+        self.assertEqual(sc.cron_configs('0 * * * * cd /tmp/pulsedav && python3 sender.py --check-status-all', '/tmp'), (set(), False))
+
     def test_unresolved_shell_variable(self):
         self.assertTrue(sc.cron_configs('*/30 * * * * python3 /tmp/pulsedav/sender.py --config "$CONFIG"', '/tmp')[1])
 
