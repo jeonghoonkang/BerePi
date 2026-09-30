@@ -687,6 +687,7 @@ INDEX_HTML = """<!doctype html>
   </style>
 </head>
 <body>
+  <p id="authStateNotice" role="status" aria-live="polite" style="padding:12px;border-radius:8px;color:#172b43">인증 상태 확인 중…</p>
   <main>
     <header>
       <div>
@@ -1644,7 +1645,7 @@ if __name__ == "__main__":
         method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({action, config})
       } : {};
-      const res = await fetch("/api/telegram", options);
+      const res = await authFetch("/api/telegram", options);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Telegram 요청 실패");
       return data;
@@ -1719,7 +1720,7 @@ if __name__ == "__main__":
     async function refreshAccessLog() {
       accessLogStatus.textContent = "Loading...";
       try {
-        const res = await fetch("/api/access-log");
+        const res = await authFetch("/api/access-log");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Access log unavailable");
         renderAccessLog(data.entries || []);
@@ -1748,7 +1749,7 @@ if __name__ == "__main__":
     async function refreshUserPromptHistory() {
       userPromptHistoryStatus.textContent = "Loading...";
       try {
-        const res = await fetch("/api/user-prompt-history");
+        const res = await authFetch("/api/user-prompt-history");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Prompt history unavailable");
         renderUserPromptHistory(data.entries || []);
@@ -1772,7 +1773,7 @@ if __name__ == "__main__":
 
     async function refreshConversationHistorySummary() {
       try {
-        const res = await fetch("/api/conversation-history");
+        const res = await authFetch("/api/conversation-history");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Conversation history unavailable");
         updateConversationHistorySummary(data);
@@ -1868,7 +1869,7 @@ if __name__ == "__main__":
         historyFilters.forEach(({field, selected}) => {
           if (field.value && selected.startsWith("value:")) params.set(field.value, selected.slice(6));
         });
-        const res = await fetch(`/api/conversation-history/items?page=${nextPage}&${params}`);
+        const res = await authFetch(`/api/conversation-history/items?page=${nextPage}&${params}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Conversation history unavailable");
         if (version === historyRequestVersion) renderConversationHistoryPage(data);
@@ -1880,7 +1881,7 @@ if __name__ == "__main__":
     async function clearConversationHistory() {
       clearConversationHistoryButton.disabled = true;
       try {
-        const res = await fetch("/api/conversation-history/clear", {
+        const res = await authFetch("/api/conversation-history/clear", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(authPayload())
@@ -1929,7 +1930,7 @@ if __name__ == "__main__":
 
     async function loadDemoImage(input, preview, status) {
       status.textContent = "Loading demo image...";
-      const res = await fetch(demoImageUrl);
+      const res = await authFetch(demoImageUrl);
       if (!res.ok) {
         throw new Error(`Demo image unavailable: ${res.status}`);
       }
@@ -2092,7 +2093,7 @@ if __name__ == "__main__":
         }
         updateRequestTimer();
         requestTimer = window.setInterval(updateRequestTimer, 1000);
-        const res = await fetch("/api/generate", {
+        const res = await authFetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
@@ -2218,7 +2219,7 @@ if __name__ == "__main__":
 
     async function promptQueueSnapshot() {
       try {
-        const res = await fetch("/api/status");
+        const res = await authFetch("/api/status");
         const data = await res.json();
         const queue = data.prompt_queue || {};
         const pendingCount = Number(queue.waiting_job_count ?? queue.pending_count ?? 0);
@@ -2240,7 +2241,7 @@ if __name__ == "__main__":
 
     async function refreshPromptHistory() {
       try {
-        const res = await fetch("/api/prompt-history");
+        const res = await authFetch("/api/prompt-history");
         const data = await res.json();
         const history = data.history || [];
         promptHistory.innerHTML = history.length
@@ -2266,7 +2267,7 @@ if __name__ == "__main__":
     async function refreshStatus() {
       metrics.innerHTML = metric("Status", "Loading...");
       try {
-        const res = await fetch("/api/status");
+        const res = await authFetch("/api/status");
         const data = await res.json();
         const modelLoad = data.model_load || {};
         const lifetimeLoad = modelLoad.lifetime || {};
@@ -2353,7 +2354,7 @@ if __name__ == "__main__":
           source: "web",
           ...auth,
         };
-        const generatePromise = fetch("/api/generate", {
+        const generatePromise = authFetch("/api/generate", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(payload)
@@ -2388,7 +2389,7 @@ if __name__ == "__main__":
     async function postControl(path, label) {
       controlStatus.textContent = `${label}...`;
       try {
-        const res = await fetch(path, {method: "POST"});
+        const res = await authFetch(path, {method: "POST"});
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Request failed");
         controlStatus.textContent = data.message || `${label} done`;
@@ -2406,7 +2407,7 @@ if __name__ == "__main__":
         if (!auth.user_id || !auth.password) {
           throw new Error("User ID and password are required.");
         }
-        const res = await fetch("/api/cancel-pending-prompts", {
+        const res = await authFetch("/api/cancel-pending-prompts", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(auth)
@@ -2424,7 +2425,7 @@ if __name__ == "__main__":
     async function saveGpuSelection() {
       gpuStatus.textContent = "Saving...";
       try {
-        const res = await fetch("/api/select-gpu", {
+        const res = await authFetch("/api/select-gpu", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({gpu: gpuSelect.value})
@@ -2442,7 +2443,7 @@ if __name__ == "__main__":
     async function saveModelSelection() {
       modelStatus.textContent = "Saving...";
       try {
-        const res = await fetch("/api/select-model", {
+        const res = await authFetch("/api/select-model", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({model: modelSelect.value})
@@ -2457,26 +2458,54 @@ if __name__ == "__main__":
       }
     }
 
+    let sessionWasActive = false, sessionExpired = false, sessionCheckBusy = false;
+    async function authFetch(url, options) {
+      const res = await globalThis.fetch(url, options);
+      if (res.status === 401) setSessionState({logged_in:false, rejected:true});
+      return res;
+    }
+
     function setSessionState(data) {
       const loggedIn = Boolean(data && data.logged_in);
+      if (loggedIn) sessionExpired = false;
+      else if (sessionWasActive || data?.rejected) sessionExpired = true;
+      sessionWasActive = loggedIn;
+      const message = loggedIn ? `인증 완료 · ${data.user_id || 'unknown'}`
+        : sessionExpired ? '인증이 만료되었거나 거부되었습니다. ID와 비밀번호를 확인하고 Server 탭에서 다시 로그인해 주세요.'
+        : '로그인 세션이 없습니다. ID와 비밀번호를 입력해 로그인하세요.';
+      for (const field of [...authFields.userId, ...authFields.password]) {
+        field.style.backgroundColor = loggedIn ? '#e0efff' : '#e5e7eb';
+        field.style.borderColor = loggedIn ? '#2563eb' : '#9ca3af';
+        field.style.color = '#172b43';
+        field.setAttribute('aria-describedby', 'authStateNotice');
+      }
+      const notice = document.getElementById('authStateNotice');
+      notice.textContent = message;
+      notice.style.backgroundColor = loggedIn ? '#e0efff' : '#e5e7eb';
       saveUserButton.disabled = !loggedIn;
       logoutSessionButton.disabled = !loggedIn;
       loginSessionButton.disabled = false;
-      sessionStatus.textContent = loggedIn
-        ? `Logged in as ${data.user_id || "unknown"}`
-        : "Session not started.";
+      sessionStatus.textContent = message;
     }
 
     async function refreshSessionStatus() {
+      if (sessionCheckBusy) return;
+      sessionCheckBusy = true;
       try {
-        const res = await fetch("/api/session-status");
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        let res;
+        try { res = await authFetch('/api/session-status', {signal:controller.signal}); }
+        finally { clearTimeout(timer); }
+        if (!res.ok) throw new Error('Session status request failed');
         const data = await res.json();
         setSessionState(data);
       } catch (err) {
         saveUserButton.disabled = true;
         logoutSessionButton.disabled = true;
         sessionStatus.textContent = `Session status unavailable: ${err}`;
-      }
+        document.getElementById('authStateNotice').textContent = '인증 상태 확인 불가 · 연결 복구 후 다시 확인합니다.';
+      } finally { sessionCheckBusy = false; }
     }
 
     async function loginSession() {
@@ -2486,7 +2515,7 @@ if __name__ == "__main__":
         if (!auth.user_id || !auth.password) {
           throw new Error("User ID and password are required.");
         }
-        const res = await fetch("/api/session-login", {
+        const res = await authFetch("/api/session-login", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(auth)
@@ -2504,7 +2533,7 @@ if __name__ == "__main__":
     async function logoutSession() {
       sessionStatus.textContent = "Ending session...";
       try {
-        const res = await fetch("/api/session-logout", {method: "POST"});
+        const res = await authFetch("/api/session-logout", {method: "POST"});
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Logout failed");
       } catch (err) {
@@ -2513,6 +2542,7 @@ if __name__ == "__main__":
       }
       newUserPassword.value = "";
       saveUserStatus.textContent = "";
+      sessionWasActive = false; sessionExpired = false;
       refreshSessionStatus();
     }
 
@@ -2524,7 +2554,7 @@ if __name__ == "__main__":
         if (!nextUserId || !nextPassword) {
           throw new Error("New User ID and Password are required.");
         }
-        const res = await fetch("/api/save-user", {
+        const res = await authFetch("/api/save-user", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
@@ -2640,6 +2670,8 @@ if __name__ == "__main__":
     refreshConversationHistorySummary();
     refreshStatus();
     refreshSessionStatus();
+    setInterval(refreshSessionStatus, 15000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSessionStatus(); });
   </script>
 </body>
 </html>
