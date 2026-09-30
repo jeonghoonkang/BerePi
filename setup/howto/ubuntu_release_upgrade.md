@@ -13,6 +13,7 @@ sudo do-release-upgrade
 1.새 임시 디렉토리로 현재 /boot 내용 복사:데이터 유실 방지.
 현재 마운트된 /boot 파티션의 모든 내용(커널, initrd, grub 파일 등)을 루트 파티션 아래의 임시 디렉토리로 복사합니다.
 
+<pre>
 Bash
 # 임시 디렉토리 생성
 sudo mkdir /boot_temp
@@ -20,15 +21,17 @@ sudo mkdir /boot_temp
 # 권한 및 속성을 유지(p)하며 전체 복사(a, v)
 sudo cp -av /boot/* /boot_temp/
 
+</pre>
 
 확인 방법: ls -l /boot_temp 명령을 실행하여 vmlinuz, initrd.img, grub 폴더 등이 제대로 복사되었는지 확인합니다.
 
 2.기존 /boot 파티션 마운트 해제:기존 파티션 분리.
 현재 마운트되어 있는 별도의 /boot 파티션을 언마운트합니다.
 
+<pre>
 Bash
 sudo umount /boot
-
+</pre>
 
 참고: 만약 target is busy 에러가 난다면 해당 디렉토리를 참조 중인 터미널이나 프로세스를 종료 후 다시 시도합니다.
 
@@ -36,10 +39,11 @@ sudo umount /boot
 마운트가 해제되면 기존 / 파티션의 비어 있는 원래 /boot 디렉토리가 보입니다. 아까 복사해둔 내용을 이곳으로 옮깁니다.
 
 
-
+<pre>
 Bash
 sudo cp -av /boot_temp/* /boot/
 sudo rm -rf /boot_temp
+</pre>
 
 
 확인 방법: ls -l /boot를 했을 때 커널 파일들이 보이고, df -h /boot를 실행했을 때 독립 파티션이 아닌 루트 파티션(/dev/mapper/ubuntu--vg-root) 정보가 나오는지 확인합니다.
@@ -47,21 +51,27 @@ sudo rm -rf /boot_temp
 4.etc/fstab 파일 수정:자동 마운트 제거 (핵심).
 부팅 시 기존의 별도 /boot 파티션을 마운트하지 않도록 /etc/fstab 설정 파일에서 해당 항목을 주석 처리해야 합니다.
 
+<pre>
+
 Bash
 sudo nano /etc/fstab
+</pre>
 
 
 파일 내부에서 /boot 마운트 지점이 적힌 줄 찾기 (예: UUID=... /boot ext4 defaults 0 2 또는 /dev/sda1 /boot ... 형태)
 해당 줄의 맨 앞에 #을 붙여 주석 처리하고 저장합니다.
 
-Plaintext
+<pre>
+
 # /boot was on /dev/sda1 during installation
 # UUID=xxxx-xxxx-xxxx-xxxx /boot ext4 defaults 0 2  <-- 이처럼 # 추가
+</pre>
 
 
 
 5.GRUB 부트로더 업데이트 및 재설치:부팅 경로 재설정 (핵심).
 GRUB 부트로더에게 이제 커널 파일 위치가 독립 파티션이 아니라 루트 파티션의 /boot임을 알려주고 부팅 섹터(MBR/EFI)를 갱신합니다.
+<pre>
 
 Bash
 # GRUB 구성 파일 갱신
@@ -69,6 +79,7 @@ sudo update-grub
 
 # 디스크 헤더(MBR)에 GRUB 재설치 (최초 부팅 디스크 지정, 보통 /dev/sda)
 sudo grub-install /dev/sda
+</pre>
 
 
 주의: 출력 결과에 Installation finished. No error reported. 문구가 나오는지 반드시 확인합니다.
