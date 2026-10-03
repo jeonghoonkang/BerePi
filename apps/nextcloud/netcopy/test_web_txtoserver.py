@@ -215,6 +215,69 @@ class LifecycleTests(unittest.TestCase):
             restored.start(); wait(restored)
             self.assertEqual(calls[-1], 'Photos/2.jpg')
 
+    def test_detailed_failure_stages_and_redaction(self):
+        from webdav3.exceptions import ResponseErrorCode
+        class Client:
+            def __init__(self, fail=None, content=b'contents'):
+                self.fail, self.content = fail, content
+            def check(self, path): return True
+            def download_sync(self, remote_path, local_path):
+                if self.fail == 'download':
+                    raise ResponseErrorCode('https://cloud/file?password=secret', 403,
+                                            b'<error>Permission denied: secret</error>')
+                Path(local_path).write_bytes(self.content)
+            def upload_sync(self, remote_path, local_path):
+                if self.fail == 'upload':
+                    raise ResponseErrorCode('https://cloud/file', 403, b'Write denied: secret')
+        cases = [('source_download', Client('download'), Client()),
+                 ('destination_upload', Client(), Client('upload')),
+                 ('verification_download', Client(), Client('download')),
+                 ('sha256_compare', Client(), Client(content=b'corrupted'))]
+        with tempfile.TemporaryDirectory() as directory:
+            manager = web.Manager(Path(directory)/'state.json')
+            manager.config = web.parse_config(settings())
+            manager.key = web.identity(manager.config)
+            item = dict(id='file-id', source='Photos/file.json', destination='Backup/file.json', size=8)
+            for stage, source, dest in cases:
+                with self.subTest(stage=stage):
+                    with self.assertRaises(web.transfer.TransferFailure) as caught:
+                        web.transfer.upload_and_verify_file(source, dest, item['source'], item['destination'])
+                    self.assertEqual(caught.exception.stage, stage)
+                    manager.record_failure(item, caught.exception)
+                    record = json.loads(manager.failed_file.read_text())
+                    self.assertEqual(record['stage'], stage)
+                    self.assertNotIn('secret', record['exception_message'])
+                    self.assertNotIn('secret', record['server_response'])
+                    if stage != 'sha256_compare':
+                        self.assertEqual(record['http_status'], 403)
+                        self.assertTrue(record['server_response'])
+                        self.assertEqual(record['exception_type'], 'ResponseErrorCode')
+                    else:
+                        self.assertIsNone(record['http_status'])
+                        self.assertIn('src_sha256=', record['exception_message'])
+            self.assertEqual(manager.redact('Authorization: Basic dXNlcjpzZWNyZXQ='),
+                             'Authorization: [REDACTED]')
+
+    def test_http_error_body_captured_for_special_status(self):
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                self.send_response(404); self.end_headers()
+                self.wfile.write(b'<error>File not found</error>')
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        try:
+            data = settings()
+            data['source'].update(webdav_hostname='http://127.0.0.1', port=str(server.server_port))
+            client = web.transfer.build_client(web.parse_config(data)['source'], True, 10000)
+            with tempfile.TemporaryDirectory() as directory:
+                with self.assertRaises(Exception):
+                    client.download_sync(remote_path='missing.json', local_path=str(Path(directory)/'file'))
+            self.assertEqual(client.last_http_error['http_status'], 404)
+            self.assertIn('File not found', client.last_http_error['server_response'])
+        finally:
+            server.shutdown(); server.server_close(); thread.join()
+
     def test_history_limit_redaction_and_restart(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'history.json'

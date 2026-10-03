@@ -186,6 +186,16 @@ def build_client(section: configparser.SectionProxy, verify_ssl: bool, speed_lim
     client = LimitedClient(options) if speed_limit > 0 else Client(options)
     client.speed_limit = speed_limit
     client.verify = verify_ssl
+    client.last_http_error = None
+    def capture_http_error(response, **kwargs):
+        if response.status_code >= 400:
+            client.last_http_error = {
+                "http_status": response.status_code,
+                "server_response": response.content[:8192].decode("utf-8", errors="replace"),
+                "server_response_truncated": len(response.content) > 8192,
+            }
+        return response
+    client.session.hooks["response"].append(capture_http_error)
     return client
 
 
@@ -405,6 +415,22 @@ def print_transfer_summary(progress: Progress) -> None:
     )
 
 
+class TransferFailure(RuntimeError):
+    def __init__(self, stage, original, http_error=None):
+        self.stage = stage
+        self.original = original
+        self.http_error = http_error or {}
+        super().__init__(f"{stage}: {original}")
+
+
+def transfer_step(stage, client, operation):
+    client.last_http_error = None
+    try:
+        return operation()
+    except Exception as exc:
+        raise TransferFailure(stage, exc, getattr(client, 'last_http_error', None)) from exc
+
+
 def upload_and_verify_file(
     src_client: Client,
     dest_client: Client,
@@ -412,26 +438,37 @@ def upload_and_verify_file(
     dest_path: str,
 ) -> int:
     dest_dir = posixpath.dirname(dest_path)
-    ensure_dirs(dest_client, dest_dir)
-    with tempfile.NamedTemporaryFile(prefix="nextcloud_src_") as src_tmp, tempfile.NamedTemporaryFile(
-        prefix="nextcloud_dst_"
-    ) as dest_tmp:
-        src_client.download_sync(remote_path=src_path, local_path=src_tmp.name)
-        src_hash = sha256_file(src_tmp.name)
-        src_size = os.path.getsize(src_tmp.name)
-
-        dest_client.upload_sync(remote_path=dest_path, local_path=src_tmp.name)
-        dest_client.download_sync(remote_path=dest_path, local_path=dest_tmp.name)
-        dest_hash = sha256_file(dest_tmp.name)
-        dest_size = os.path.getsize(dest_tmp.name)
-
-    if src_size != dest_size or src_hash != dest_hash:
-        raise RuntimeError(
-            "Verification failed after upload: "
-            f"{src_path} -> {dest_path} "
-            f"(src_size={src_size}, dest_size={dest_size})"
-        )
-    return src_size
+    transfer_step('destination_directory', dest_client, lambda: ensure_dirs(dest_client, dest_dir))
+    stage = 'local_tempfile'
+    try:
+        with tempfile.NamedTemporaryFile(prefix="nextcloud_src_") as src_tmp, tempfile.NamedTemporaryFile(
+            prefix="nextcloud_dst_"
+        ) as dest_tmp:
+            transfer_step('source_download', src_client,
+                          lambda: src_client.download_sync(remote_path=src_path, local_path=src_tmp.name))
+            stage = 'source_hash'
+            src_hash = sha256_file(src_tmp.name)
+            src_size = os.path.getsize(src_tmp.name)
+            transfer_step('destination_upload', dest_client,
+                          lambda: dest_client.upload_sync(remote_path=dest_path, local_path=src_tmp.name))
+            transfer_step('verification_download', dest_client,
+                          lambda: dest_client.download_sync(remote_path=dest_path, local_path=dest_tmp.name))
+            stage = 'destination_hash'
+            dest_hash = sha256_file(dest_tmp.name)
+            dest_size = os.path.getsize(dest_tmp.name)
+        stage = 'sha256_compare'
+        if src_size != dest_size or src_hash != dest_hash:
+            raise RuntimeError(
+                "Verification failed after upload: "
+                f"{src_path} -> {dest_path} "
+                f"(src_size={src_size}, dest_size={dest_size}, "
+                f"src_sha256={src_hash}, dest_sha256={dest_hash})"
+            )
+        return src_size
+    except TransferFailure:
+        raise
+    except Exception as exc:
+        raise TransferFailure(stage, exc) from exc
 
 
 def main() -> int:

@@ -8,6 +8,9 @@ import datetime as dt
 import hashlib
 import json
 import math
+import re
+import base64
+import html
 import os
 import posixpath
 import secrets
@@ -17,7 +20,7 @@ import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 
 import txtoserver as transfer
 
@@ -158,7 +161,7 @@ class Manager:
                         logs=list(self.logs))
 
     def save_failures(self):
-        """UTF-8 TXT, one JSON object per line; no credentials or raw exceptions."""
+        """UTF-8 TXT, one JSON object per line with sanitized diagnostic details."""
         self.failed_file.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary = tempfile.mkstemp(prefix=self.failed_file.name + '.', dir=self.failed_file.parent)
         try:
@@ -172,13 +175,44 @@ class Manager:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
-    def record_failure(self, item):
+    def redact(self, value):
+        text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value)
+        if self.config is not None:
+            for name in ('source', 'destination'):
+                password = self.config[name].get('password', '')
+                if password:
+                    credentials = self.config[name].get('username', '') + ':' + password
+                    for secret in (password, quote(password, safe=''), html.escape(password),
+                                   base64.b64encode(credentials.encode()).decode()):
+                        text = text.replace(secret, '[REDACTED]')
+        text = re.sub(r'(?i)(https?://)[^/\s@]+@', r'\1[REDACTED]@', text)
+        text = re.sub(r'(?i)(authorization\s*[:=]\s*)(?:basic|bearer)\s+[^\s<]+',
+                      r'\1[REDACTED]', text)
+        text = re.sub(r'(?i)((?:password|token|secret|api_key)=[^&\s]*)', '[REDACTED]', text)
+        return text[:8192]
+
+    def record_failure(self, item, exc, stage=None):
+        original = getattr(exc, 'original', exc)
+        details = dict(getattr(exc, 'http_error', {}) or {})
+        response = getattr(original, 'response', None)
+        status = details.get('http_status', getattr(original, 'code', None))
+        body = details.get('server_response', getattr(original, 'message', ''))
+        if response is not None:
+            status = response.status_code
+            body = response.content
+        body = body if body is not None else ''
+        stage = stage or getattr(exc, 'stage', 'unknown')
         with self.lock:
             self.failed[item['id']] = True
             self.failure_records[(self.key, item['source'])] = dict(
                 item, key=self.key, failed_at=dt.datetime.now().astimezone().isoformat(timespec='seconds'),
-                reason='전송 또는 SHA-256 검증 실패')
+                reason='전송 또는 SHA-256 검증 실패', stage=stage,
+                exception_type=type(original).__name__, exception_message=self.redact(str(original)),
+                http_status=status, server_response=self.redact(body),
+                server_response_truncated=bool(details.get('server_response_truncated')) or len(body) > 8192)
             self.save_failures()
+        self.log(f"실패 단계={stage}, HTTP={status if status is not None else '-'}, "
+                 f"{type(original).__name__}: {self.redact(str(original))[:500]}")
 
     def save(self):
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -297,11 +331,13 @@ class Manager:
             dest_root = transfer.normalize_root(self.config['destination']['root'])
             self.log('Destination 디렉토리 확인 및 생성: ' + (dest_root or '/'))
             try:
+                dest.last_http_error = None
                 transfer.ensure_dirs(dest, dest_root)
-            except Exception:
+            except Exception as exc:
                 for item in self.active_plan:
                     if item['id'] not in self.done:
-                        self.record_failure(item)
+                        self.record_failure(item, transfer.TransferFailure(
+                            'destination_directory', exc, getattr(dest, 'last_http_error', None)))
                 raise
             for item in self.active_plan:
                 if self.pause.is_set():
@@ -313,8 +349,8 @@ class Manager:
                 self.log('전송 및 SHA-256 검증: ' + item['source'])
                 try:
                     size = transfer.upload_and_verify_file(source, dest, item['source'], item['destination'])
-                except Exception:
-                    self.record_failure(item)
+                except Exception as exc:
+                    self.record_failure(item, exc)
                     self.log('전송/검증 실패: ' + item['source'] + ' (다시 시작 시 재시도)')
                     continue
                 with self.lock:
