@@ -173,6 +173,48 @@ class LifecycleTests(unittest.TestCase):
                         self.assertIn('Backup/Photos/year', dest.dirs)
                         self.assertEqual(dest.files['Backup/Photos/year/photo.jpg'], b'photo contents')
 
+    def test_persisted_failure_list_retries_only_failed_files(self):
+        entries = [dict(path=f'Photos/{n}.jpg', size=10, etag=str(n)) for n in range(2)]
+        destinations, calls = {}, []
+        class Client:
+            def check(self, path): return True
+            def list(self, *args, **kwargs): return []
+        source, dest = Client(), Client()
+        def tree(client, root):
+            return entries if client is source else list(destinations.values())
+        def upload(sc, dc, sp, dp):
+            calls.append(sp)
+            destinations[dp] = next(dict(entry, path=dp) for entry in entries if entry['path'] == sp)
+            if calls == ['Photos/0.jpg']:
+                raise RuntimeError('secret password must not be saved')
+            return 10
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(web.Manager, 'clients', return_value=(source, dest)), \
+             patch.object(web.transfer, 'list_tree', side_effect=tree), \
+             patch.object(web.transfer, 'upload_and_verify_file', side_effect=upload):
+            path = Path(directory)/'state.json'
+            manager = web.Manager(path)
+            manager.check(settings()); wait(manager)
+            manager.start(); wait(manager)
+            self.assertEqual(manager.status, 'error')
+            records = [json.loads(line) for line in manager.failed_file.read_text().splitlines()]
+            self.assertEqual([r['source'] for r in records], ['Photos/0.jpg'])
+            self.assertNotIn('secret', manager.failed_file.read_text())
+            # Even when partial destination metadata matches, failed files must be reverified.
+            entries.append(dict(path='Photos/2.jpg', size=10, etag='2'))
+            restored = web.Manager(path)
+            restored.check(settings()); wait(restored)
+            self.assertEqual(restored.snapshot()['previous_failed'], 1)
+            restored.start(failed_only=True); wait(restored)
+            self.assertEqual(calls, ['Photos/0.jpg', 'Photos/1.jpg', 'Photos/0.jpg'])
+            self.assertEqual(restored.snapshot()['total_files'], 1)
+            self.assertEqual(restored.snapshot()['percent'], 100)
+            self.assertEqual(restored.failed_file.read_text(), '')
+            restored.check(settings()); wait(restored)
+            with self.assertRaises(ValueError): restored.start(failed_only=True)
+            restored.start(); wait(restored)
+            self.assertEqual(calls[-1], 'Photos/2.jpg')
+
     def test_history_limit_redaction_and_restart(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'history.json'

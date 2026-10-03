@@ -109,10 +109,18 @@ class ConfigHistory:
 
 
 class Manager:
-    def __init__(self, state_file, history_file=None):
+    def __init__(self, state_file, history_file=None, failed_file=None):
         self.lock = threading.RLock()
         self.state_file = Path(state_file)
         self.history = ConfigHistory(history_file or self.state_file.with_suffix('.history.json'))
+        self.failed_file = Path(failed_file or self.state_file.with_suffix('.failed.txt'))
+        self.failure_records = {}
+        if self.failed_file.exists():
+            for line in self.failed_file.read_text(encoding='utf-8').splitlines():
+                if line.strip():
+                    record = json.loads(line)
+                    self.failure_records[(record['key'], record['source'])] = record
+        self.active_plan = None
         self.pause = threading.Event()
         self.logs = deque(maxlen=150)
         self.status = 'idle'
@@ -137,14 +145,40 @@ class Manager:
 
     def snapshot(self):
         with self.lock:
-            total = len(self.plan)
-            completed = sum(item['id'] in self.done for item in self.plan)
+            plan = self.active_plan if self.active_plan is not None else self.plan
+            total = len(plan)
+            completed = sum(item['id'] in self.done for item in plan)
             return dict(status=self.status, error=self.error, current=self.current,
                         total_files=total, completed_files=completed,
-                        total_bytes=sum(item['size'] for item in self.plan),
-                        completed_bytes=sum(item['size'] for item in self.plan if item['id'] in self.done),
+                        total_bytes=sum(item['size'] for item in plan),
+                        completed_bytes=sum(item['size'] for item in plan if item['id'] in self.done),
                         percent=round(completed * 100 / total, 1) if total else (100 if self.status == 'completed' else 0),
-                        skipped=self.skipped, failed=len(self.failed), logs=list(self.logs))
+                        skipped=self.skipped, failed=len(self.failed),
+                        previous_failed=sum(key == self.key for key, path in self.failure_records),
+                        logs=list(self.logs))
+
+    def save_failures(self):
+        """UTF-8 TXT, one JSON object per line; no credentials or raw exceptions."""
+        self.failed_file.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=self.failed_file.name + '.', dir=self.failed_file.parent)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                for record in self.failure_records.values():
+                    stream.write(json.dumps(record, ensure_ascii=False) + '\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.failed_file)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
+    def record_failure(self, item):
+        with self.lock:
+            self.failed[item['id']] = True
+            self.failure_records[(self.key, item['source'])] = dict(
+                item, key=self.key, failed_at=dt.datetime.now().astimezone().isoformat(timespec='seconds'),
+                reason='전송 또는 SHA-256 검증 실패')
+            self.save_failures()
 
     def save(self):
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -167,6 +201,7 @@ class Manager:
             self.key = identity(config)
             self.status, self.error, self.current = 'checking', '', ''
             self.plan, self.failed, self.skipped = [], {}, 0
+            self.active_plan = None
             self.done = dict(self.saved.get('done', {})) if self.saved.get('key') == self.key else {}
             self.worker = threading.Thread(target=self._check, daemon=True)
             self.worker.start()
@@ -203,7 +238,10 @@ class Manager:
                 signature = hashlib.sha256(json.dumps([sp, info[0], info[1], str(info[2])]).encode()).hexdigest()
                 if signature in self.done and (dp not in dmap or dmap[dp][0] != self.done[signature]):
                     del self.done[signature]
-                if signature in self.done or transfer.should_upload(info, dmap.get(dp)):
+                previously_failed = (self.key, sp) in self.failure_records
+                if previously_failed:
+                    self.done.pop(signature, None)
+                if previously_failed or signature in self.done or transfer.should_upload(info, dmap.get(dp)):
                     plan.append(dict(id=signature, source=sp, destination=dp, size=transfer.get_entry_size(entry)))
                 else:
                     skipped += 1
@@ -221,7 +259,7 @@ class Manager:
             self.status, self.error, self.current = 'error', message, ''
         self.log(message)
 
-    def start(self):
+    def start(self, failed_only=False):
         with self.lock:
             if self.status not in ('ready', 'paused', 'error') or self.config is None:
                 raise ValueError('먼저 실행 전 확인을 완료하세요.')
@@ -229,6 +267,17 @@ class Manager:
                 raise ValueError('현재 작업이 끝날 때까지 기다려 주세요.')
             if self.status == 'error' and not self.plan:
                 raise ValueError('실행 전 확인을 다시 진행하세요.')
+            if failed_only:
+                selected = [item for item in self.plan
+                            if (self.key, item['source']) in self.failure_records]
+                if not selected:
+                    raise ValueError('현재 설정과 원본 목록에 일치하는 실패 파일이 없습니다. 실행 전 확인을 다시 진행하세요.')
+                self.active_plan = selected
+                for item in selected:
+                    self.done.pop(item['id'], None)
+                self.log(f'이전 실패 리스트 복사: {len(selected)}개 재전송')
+            elif self.active_plan is None:
+                self.active_plan = self.plan
             self.pause.clear()
             self.status, self.error, self.failed = 'running', '', {}
             self.worker = threading.Thread(target=self._run, daemon=True)
@@ -247,8 +296,14 @@ class Manager:
             source, dest = self.clients()
             dest_root = transfer.normalize_root(self.config['destination']['root'])
             self.log('Destination 디렉토리 확인 및 생성: ' + (dest_root or '/'))
-            transfer.ensure_dirs(dest, dest_root)
-            for item in self.plan:
+            try:
+                transfer.ensure_dirs(dest, dest_root)
+            except Exception:
+                for item in self.active_plan:
+                    if item['id'] not in self.done:
+                        self.record_failure(item)
+                raise
+            for item in self.active_plan:
                 if self.pause.is_set():
                     break
                 if item['id'] in self.done:
@@ -259,13 +314,14 @@ class Manager:
                 try:
                     size = transfer.upload_and_verify_file(source, dest, item['source'], item['destination'])
                 except Exception:
-                    with self.lock:
-                        self.failed[item['id']] = True
+                    self.record_failure(item)
                     self.log('전송/검증 실패: ' + item['source'] + ' (다시 시작 시 재시도)')
                     continue
                 with self.lock:
                     self.done[item['id']] = size
                     self.save()
+                    if self.failure_records.pop((self.key, item['source']), None) is not None:
+                        self.save_failures()
                 self.log('검증 완료: ' + item['source'])
             with self.lock:
                 self.current = ''
@@ -282,7 +338,7 @@ PAGE = r'''<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="view
 body{font:16px system-ui;background:#f2f5f9;color:#203047;max-width:1050px;margin:30px auto;padding:0 20px}section{background:white;padding:22px;border-radius:12px;margin:18px 0}.columns{display:grid;grid-template-columns:1fr 1fr;gap:20px}label{display:block;margin:10px 0}input:not([type=checkbox]){display:block;box-sizing:border-box;width:100%;padding:9px;border:1px solid #bac6d5;border-radius:5px}button{padding:11px 16px;margin:6px;border:0;border-radius:6px;background:#2458aa;color:white;cursor:pointer}button:disabled{opacity:.4;cursor:default}progress{width:100%;height:25px}pre{background:#15243a;color:#d9e6f8;padding:15px;max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}#error{color:#bd2937}@media(max-width:650px){.columns{grid-template-columns:1fr}}
 </style><h1>Nextcloud 서버 전송</h1><p>증분 복사 · 중복 확인 · SHA-256 검증 · 체크포인트 재개</p>
 <section><label>설정 히스토리 (최근 100개)<select id="history"><option value="">이전 설정 선택</option></select></label><p>실행 전 확인을 누르면 설정을 저장합니다. 암호는 마스킹하여 저장하므로 불러온 후 다시 입력하세요.</p><form id="config"><div class="columns" id="fields"></div><label><input id="verify_ssl" type="checkbox" checked> SSL 인증서 검증</label><label>전송 속도 제한 (MiB/s, 0 = 무제한)<input id="speed_limit_mbps" type="number" min="0" step="any" value="0"></label><p>Source 다운로드, Destination 업로드 및 검증 다운로드 각각에 적용됩니다.</p></form>
-<button id="check">실행 전 확인</button><button id="start" disabled>실행 / 이어서 시작</button><button id="pause" disabled>일시 중단</button><p>일시 중단은 현재 파일의 전송 및 검증이 끝난 뒤 적용됩니다. 재실행 시 같은 설정으로 확인하면 완료한 파일을 이어받습니다.</p></section>
+<button id="check">실행 전 확인</button><button id="start" disabled>실행 / 이어서 시작</button><button id="retry_failed" disabled>이전 실패 리스트 복사</button><button id="pause" disabled>일시 중단</button><p>일시 중단은 현재 파일의 전송 및 검증이 끝난 뒤 적용됩니다. 재실행 시 같은 설정으로 확인하면 완료한 파일을 이어받습니다.</p></section>
 <section><strong id="status">대기</strong><p id="summary"></p><progress id="progress" max="100" value="0"></progress><p id="current"></p><p id="error" role="alert"></p><pre id="logs" aria-live="polite"></pre></section>
 <script>
 let token='',busy=false,dirty=true,history=[];const $=id=>document.getElementById(id);
@@ -290,11 +346,11 @@ const labels={webdav_hostname:'서버 URL (https://cloud.example.com)',webdav_ro
 for(const name of ['source','destination']){const box=document.createElement('div');const title=document.createElement('h2');title.textContent=name==='source'?'Source · 원본':'Destination · 대상';box.append(title);for(const [key,label] of Object.entries(labels)){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.id=name+'_'+key;i.type=key==='password'?'password':'text';i.autocomplete=key==='password'?'new-password':'off';l.append(i);box.append(l)}$('fields').append(box)}
 function data(){const d={verify_ssl:$('verify_ssl').checked,speed_limit_mbps:$('speed_limit_mbps').value};for(const n of ['source','destination']){d[n]={};for(const k of Object.keys(labels))d[n][k]=$(n+'_'+k).value}return d}
 async function action(name){if(busy)return;busy=true;try{const r=await fetch('/api/'+name,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token},body:JSON.stringify(name==='check'?data():{})});const d=await r.json();if(!r.ok)throw Error(d.error);if(name==='check'){dirty=false;await loadHistory()}await poll()}catch(e){$('error').textContent=e.message}finally{busy=false}}
-$('check').onclick=()=>action('check');$('start').onclick=()=>action('start');$('pause').onclick=()=>action('pause');$('config').onsubmit=e=>e.preventDefault();$('config').oninput=()=>{dirty=true;$('start').disabled=true};
+$('check').onclick=()=>action('check');$('start').onclick=()=>action('start');$('pause').onclick=()=>action('pause');$('retry_failed').onclick=()=>action('retry_failed');$('config').onsubmit=e=>e.preventDefault();$('config').oninput=()=>{dirty=true;$('start').disabled=true;$('retry_failed').disabled=true};
 const names={idle:'대기',checking:'연결 / 대상 확인 중',ready:'확인 완료',running:'전송 중',pausing:'중단 대기',paused:'일시 중단',completed:'완료',error:'오류'};
 const bytes=n=>{let u=0;while(n>=1024&&u<4){n/=1024;u++}return n.toFixed(u?2:0)+' '+['B','KB','MB','GB','TB'][u]};
-async function poll(){try{const r=await fetch('/api/status');if(!r.ok)throw Error('상태 조회 실패');const d=await r.json();$('status').textContent=names[d.status];$('progress').value=d.percent;$('summary').textContent=`${d.percent}% · 파일 ${d.completed_files}/${d.total_files} · 용량 ${bytes(d.completed_bytes)}/${bytes(d.total_bytes)} · 건너뛰기 ${d.skipped} · 실패 ${d.failed}`;$('current').textContent=d.current;$('error').textContent=d.error;$('logs').textContent=d.logs.join('\n');$('logs').scrollTop=$('logs').scrollHeight;const active=['checking','running','pausing'].includes(d.status);$('check').disabled=active;$('history').disabled=active;for(const i of $('config').elements)i.disabled=active;$('start').disabled=dirty||!['ready','paused','error'].includes(d.status);$('pause').disabled=d.status!=='running'}catch(e){$('error').textContent='웹 서버 연결 실패: '+e.message}}
-function applyConfig(d){for(const n of ['source','destination'])for(const k of Object.keys(labels))$(n+'_'+k).value=k==='password'?'':(d[n]?.[k]||'');$('speed_limit_mbps').value=d.speed_limit_mbps||0;$('verify_ssl').checked=d.verify_ssl;dirty=true;$('start').disabled=true}
+async function poll(){try{const r=await fetch('/api/status');if(!r.ok)throw Error('상태 조회 실패');const d=await r.json();$('status').textContent=names[d.status];$('progress').value=d.percent;$('summary').textContent=`${d.percent}% · 파일 ${d.completed_files}/${d.total_files} · 용량 ${bytes(d.completed_bytes)}/${bytes(d.total_bytes)} · 건너뛰기 ${d.skipped} · 실패 ${d.failed} · 저장된 실패 ${d.previous_failed}`;$('current').textContent=d.current;$('error').textContent=d.error;$('logs').textContent=d.logs.join('\n');$('logs').scrollTop=$('logs').scrollHeight;const active=['checking','running','pausing'].includes(d.status);$('check').disabled=active;$('history').disabled=active;for(const i of $('config').elements)i.disabled=active;$('start').disabled=dirty||!['ready','paused','error'].includes(d.status);$('retry_failed').disabled=dirty||!['ready','paused','error'].includes(d.status)||!d.previous_failed;$('pause').disabled=d.status!=='running'}catch(e){$('error').textContent='웹 서버 연결 실패: '+e.message}}
+function applyConfig(d){for(const n of ['source','destination'])for(const k of Object.keys(labels))$(n+'_'+k).value=k==='password'?'':(d[n]?.[k]||'');$('speed_limit_mbps').value=d.speed_limit_mbps||0;$('verify_ssl').checked=d.verify_ssl;dirty=true;$('start').disabled=true;$('retry_failed').disabled=true}
 async function loadHistory(){const r=await fetch('/api/history');if(!r.ok)throw Error('히스토리 조회 실패');history=await r.json();$('history').replaceChildren(new Option('이전 설정 선택',''));history.forEach((d,index)=>{const label=`${d.saved_at} · ${d.source.webdav_hostname}/${d.source.root} → ${d.destination.webdav_hostname}/${d.destination.root}`;$('history').append(new Option(label,String(index)))})}
 $('history').onchange=()=>{if($('history').value!=='')applyConfig(history[Number($('history').value)])};
 async function init(){const r=await fetch('/api/config');const d=await r.json();token=d.token;for(const n of ['source','destination'])for(const k of Object.keys(labels))$(n+'_'+k).value=d[n]?.[k]||'';$('speed_limit_mbps').value=d.speed_limit_mbps||0;$('verify_ssl').checked=d.verify_ssl;await loadHistory();if(history.length)applyConfig(history[0]);await poll();setInterval(poll,1000)}init();
@@ -349,13 +405,15 @@ def handler_for(manager, defaults, token):
                     manager.check(data)
                 elif self.path == '/api/start':
                     manager.start()
+                elif self.path == '/api/retry_failed':
+                    manager.start(failed_only=True)
                 elif self.path == '/api/pause':
                     manager.request_pause()
                 else:
                     return self.respond(404, {'error': 'Not found'})
                 self.respond(200, manager.snapshot())
             except OSError:
-                self.respond(500, {'error': '설정 히스토리 저장 실패: 파일 경로와 쓰기 권한을 확인하세요.'})
+                self.respond(500, {'error': '설정 또는 실패 목록 저장 실패: 파일 경로와 쓰기 권한을 확인하세요.'})
             except (ValueError, KeyError, TypeError) as exc:
                 self.respond(400, {'error': str(exc)})
     return Handler
@@ -368,6 +426,7 @@ def main():
     parser.add_argument('--config', type=Path, default=transfer.DEFAULT_CONFIG)
     parser.add_argument('--state-file', type=Path, default=transfer.SCRIPT_DIR / 'web_txtoserver.state.json')
     parser.add_argument('--history-file', type=Path, default=transfer.SCRIPT_DIR / 'web_txtoserver.history.json')
+    parser.add_argument('--failed-file', type=Path, default=transfer.SCRIPT_DIR / 'web_txtoserver.failed.txt')
     parser.add_argument('--allow-host', action='append', default=[], help='Additional Host header, including port')
     args = parser.parse_args()
     defaults = {'source': {}, 'destination': {}, 'verify_ssl': True, 'speed_limit_mbps': '0'}
@@ -378,7 +437,7 @@ def main():
                 defaults[name] = {k: config[name].get(k, '') for k in FIELDS if k != 'password'}
         defaults['speed_limit_mbps'] = config.get('settings', 'speed_limit_mbps', fallback='0')
         defaults['verify_ssl'] = config.getboolean('settings', 'verify_ssl', fallback=True)
-    manager = Manager(args.state_file, args.history_file)
+    manager = Manager(args.state_file, args.history_file, args.failed_file)
     server = ThreadingHTTPServer((args.host, args.port), handler_for(manager, defaults, secrets.token_urlsafe(32)))
     port = server.server_address[1]
     server.allowed_hosts = {f'{args.host}:{port}', f'localhost:{port}', f'127.0.0.1:{port}', *args.allow_host}

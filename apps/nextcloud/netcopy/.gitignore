@@ -4,3 +4,5 @@ web_txtoserver.history.json.*
 web_txtoserver.state.json
 web_txtoserver.state.tmp
 __pycache__/
+web_txtoserver.failed.txt
+web_txtoserver.failed.txt.*
