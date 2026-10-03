@@ -39,6 +39,8 @@ import posixpath
 import subprocess
 import sys
 import tempfile
+import time
+from urllib.parse import quote, urlsplit, urlunsplit
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -116,18 +118,73 @@ def load_config(path: str) -> configparser.ConfigParser:
     return parser
 
 
-def build_client(section: configparser.SectionProxy, verify_ssl: bool) -> Client:
+def server_hostname(section) -> str:
+    url = urlsplit(section.get("webdav_hostname", ""))
+    port = section.get("port", "").strip()
+    if port:
+        host = url.hostname or ""
+        if ":" in host:
+            host = f"[{host}]"
+        url = url._replace(netloc=f"{host}:{int(port)}")
+    return urlunsplit(url).rstrip("/")
+
+
+class RateLimiter:
+    def __init__(self, bytes_per_second):
+        self.rate = bytes_per_second
+        self.started = time.monotonic()
+        self.bytes = 0
+
+    def consume(self, size):
+        self.bytes += size
+        delay = self.bytes / self.rate - (time.monotonic() - self.started)
+        if delay > 0:
+            time.sleep(delay)
+
+
+class LimitedReader:
+    def __init__(self, stream, rate):
+        self.stream = stream
+        self.limiter = RateLimiter(rate)
+        self.chunk_size = max(1, min(65536, int(rate / 10)))
+
+    def read(self, size=-1):
+        block = self.stream.read(self.chunk_size if size < 0 else min(size, self.chunk_size))
+        self.limiter.consume(len(block))
+        return block
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+class LimitedClient(Client):
+    """Throttle each sequential file transfer, including verification downloads."""
+    def download_sync(self, remote_path, local_path, **kwargs):
+        limiter = RateLimiter(self.speed_limit)
+        with self.execute_request("download", quote("/" + remote_path.lstrip("/"), safe="/")) as response:
+            with open(local_path, "wb") as stream:
+                chunk_size = max(1, min(65536, int(self.speed_limit / 10)))
+                for block in response.iter_content(chunk_size=chunk_size):
+                    limiter.consume(len(block))
+                    stream.write(block)
+
+    def upload_sync(self, remote_path, local_path, **kwargs):
+        with open(local_path, "rb") as stream:
+            with self.execute_request("upload", quote("/" + remote_path.lstrip("/"), safe="/"),
+                                      data=LimitedReader(stream, self.speed_limit)):
+                pass
+
+
+def build_client(section: configparser.SectionProxy, verify_ssl: bool, speed_limit=0) -> Client:
     options = {
-        "webdav_hostname": section.get("webdav_hostname"),
+        "webdav_hostname": server_hostname(section),
         "webdav_root": section.get("webdav_root"),
         "webdav_login": section.get("username"),
         "webdav_password": section.get("password"),
-        "verbose": False,
+        "webdav_verbose": False,
     }
-    port = section.get("port", fallback="").strip()
-    if port:
-        options["webdav_port"] = int(port)
-    client = Client(options)
+    client = LimitedClient(options) if speed_limit > 0 else Client(options)
+    client.speed_limit = speed_limit
     client.verify = verify_ssl
     return client
 
@@ -253,7 +310,7 @@ def should_upload(src_info: ConfigInfo, dest_info: Optional[ConfigInfo]) -> bool
 
 
 def run_source_propfind(section: configparser.SectionProxy, root: str) -> int:
-    hostname = section.get("webdav_hostname")
+    hostname = server_hostname(section)
     webdav_root = section.get("webdav_root")
     username = section.get("username")
     password = section.get("password")
@@ -298,7 +355,7 @@ def validate_paths(
     root: str,
     label: str,
 ) -> str:
-    hostname = section.get("webdav_hostname", "")
+    hostname = server_hostname(section)
     webdav_root = section.get("webdav_root", "")
     full_path = f"{hostname.rstrip('/')}/{webdav_root.strip('/')}"
     if root:
@@ -312,7 +369,7 @@ def validate_paths(
 
 
 def compose_remote_url(section: configparser.SectionProxy, remote_path: str) -> str:
-    hostname = section.get("webdav_hostname", "").rstrip("/")
+    hostname = server_hostname(section).rstrip("/")
     webdav_root = section.get("webdav_root", "").strip("/")
     normalized_path = normalize_remote_path(remote_path)
     if webdav_root and normalized_path:

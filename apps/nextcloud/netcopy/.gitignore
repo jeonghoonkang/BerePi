@@ -1,0 +1,6 @@
+# Local web settings history and transfer checkpoint
+web_txtoserver.history.json
+web_txtoserver.history.json.*
+web_txtoserver.state.json
+web_txtoserver.state.tmp
+__pycache__/
