@@ -33,5 +33,11 @@
     "sub": "",
     "username": "username",
     "verify_ssl": true
+  },
+  "telegram": {
+    "enabled": false,
+    "executable": "telegram-send",
+    "config_path": "",
+    "timeout_seconds": 60
   }
 }

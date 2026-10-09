@@ -333,3 +333,91 @@ Markdown 이외의 파일은 그대로 표시합니다.
 모든 파일의 수정 시각을 조회하며 JSON의 전체 파일 목록은 유지합니다.
 수정 시각을 확인하지 못한 파일이 있으면 미확인 개수를 함께 표시합니다.
 `--check-status`의 로컬 점검 tree는 기존처럼 모든 파일을 표시합니다.
+
+## Telegram 동시 전송 (선택)
+
+WebDAV 저장에 성공한 보고서를 `telegram-send --file`로 Telegram에도 전송할 수 있습니다.
+시스템 보고서와 `--iptime-list` 보고서 모두 적용되며, WebDAV 저장 대상이 여러 곳이어도
+Telegram에는 보고서별로 한 번만 전송합니다. 긴 보고서와 표를 보존하기 위해 Markdown
+파일을 첨부합니다. WebDAV 저장 후 순서대로 전송하며, Telegram 실패·시간 초과는 경고로
+출력하고 WebDAV 저장 결과와 전송 상태 기록은 유지합니다. WebDAV 저장이 실패하면
+Telegram 전송은 실행하지 않습니다. 상태 점검과 게이트웨이 감시에는 적용되지 않습니다.
+
+먼저 실행 계정에서 설치하고 수신 대상을 설정합니다.
+
+```bash
+pipx install telegram-send
+telegram-send --configure
+```
+
+### `telegram-send --configure` 설정 방법
+
+개인 Telegram 계정으로 받는 경우 다음 순서로 설정합니다. PulseDAV 또는 cron을
+실행할 동일한 OS 계정의 터미널에서 진행하세요.
+
+1. Telegram에서 공식 [@BotFather](https://t.me/BotFather) 대화를 열고 `/newbot`을 보냅니다.
+2. 안내에 따라 봇의 표시 이름과 사용자 이름을 지정합니다. 사용자 이름은 `bot`으로
+   끝나야 합니다. 발급된 **봇 토큰**을 복사합니다.
+3. 터미널에서 `telegram-send --configure`를 실행하고 토큰 입력 요청에 붙여넣은 뒤
+   Enter를 누릅니다.
+4. 터미널에 표시되는 봇 링크를 Telegram에서 열고 **시작(Start)**을 누릅니다.
+   이어서 터미널에 표시된 인증 숫자를 **해당 봇과의 대화에** 메시지로 보냅니다.
+   이 숫자는 봇 토큰이나 Telegram 로그인 인증번호가 아닙니다.
+5. 터미널과 Telegram에 설정 완료 안내가 나타나는지 확인합니다. 설정 파일은
+   자동으로 저장되므로 매번 `--configure`를 실행할 필요가 없습니다.
+6. 아래 명령으로 메시지와 파일 수신을 확인합니다. 파일 전송 명령은 PulseDAV 앱
+   디렉터리에서 실행합니다.
+
+```bash
+telegram-send "PulseDAV Telegram 연결 테스트"
+telegram-send --file README.md
+```
+
+별도 설정 파일을 사용하려면 처음부터 경로를 지정하고, 테스트에도 같은 경로를 사용합니다.
+
+```bash
+telegram-send --config "$HOME/.config/pulsedav/telegram.conf" --configure
+telegram-send --config "$HOME/.config/pulsedav/telegram.conf" "PulseDAV Telegram 연결 테스트"
+```
+
+이 경우 PulseDAV의 `telegram.config_path`에 `~/.config/pulsedav/telegram.conf`를
+지정합니다. 봇 토큰이 들어 있는 설정 파일은 Git에 커밋하지 마세요.
+명령을 찾지 못하면 `pipx ensurepath` 실행 후 터미널을 다시 열고 확인합니다.
+인증 숫자를 보냈는데 설정이 끝나지 않으면 BotFather가 아니라 새로 만든 봇에
+정확한 숫자를 보냈는지 확인하세요.
+
+그룹으로 받으려면 `telegram-send --configure-group`을 실행하고, 안내되는 봇을 그룹에
+추가한 뒤 터미널에 표시된 인증 메시지를 그룹에 보냅니다. 채널로 받으려면
+`telegram-send --configure-channel`을 사용하며 봇을 채널 관리자로 추가해야 합니다.
+별도 설정 경로는 두 명령에도 `--config`로 지정할 수 있습니다.
+
+### PulseDAV 설정
+
+설정 파일의 `telegram` 항목을 다음과 같이 지정합니다. 기본값은 **꺼짐**입니다.
+
+```json
+"telegram": {
+  "enabled": true,
+  "executable": "telegram-send",
+  "config_path": "",
+  "timeout_seconds": 60
+}
+```
+
+- `enabled`: `true`이면 전송, `false`이면 WebDAV에만 저장합니다.
+- `executable`: 실행 파일 이름 또는 절대 경로입니다. cron에서 PATH가 다르면 `/home/user/.local/bin/telegram-send`처럼 지정합니다. 명령 옵션은 이 값에 넣지 않습니다.
+- `config_path`: 빈 문자열이면 telegram-send의 기본 설정을 사용합니다. 별도 설정 파일은 절대 경로 또는 PulseDAV 앱 디렉터리 기준 상대 경로로 지정합니다. `~`도 지원합니다.
+- `timeout_seconds`: Telegram 명령의 최대 실행 시간(양의 정수, 초)입니다.
+
+별도 수신 설정은 `telegram-send --config /path/to/telegram.conf --configure`로 만듭니다.
+cron에서도 해당 설정을 읽을 수 있는 동일한 계정을 사용하세요. 웹 설정 화면의
+**Telegram 전송**에서도 켜기/끄기, 실행 파일, 설정 파일, 제한 시간을 변경할 수 있습니다.
+
+기존 개인 설정 파일을 쓰는 경우 해당 파일에 `telegram` 항목을 추가하거나
+`python3 update_settings.py --config /path/to/this_settings.json`으로 최신 항목을 반영합니다.
+이후 평소처럼 `python3 sender.py --once --config /path/to/this_settings.json`을 실행합니다.
+`--loop`는 시작 시 읽은 설정을 사용하므로 변경 후 프로세스를 재시작해야 합니다.
+보고서 전송 함수의 반환값에는 `telegram.status` (`disabled`, `sent`, `failed`)가 포함됩니다.
+임시 첨부 파일은 성공·실패 후 삭제됩니다.
+
+설치와 CLI 옵션 참고: [telegram-send 공식 문서](https://github.com/rahiel/telegram-send).

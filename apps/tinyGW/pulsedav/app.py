@@ -56,6 +56,13 @@ def main() -> None:
             step=1,
         )
 
+    st.subheader("Telegram 전송")
+    telegram = settings["telegram"]
+    telegram_enabled = st.checkbox("WebDAV 저장 후 Telegram에도 전송", value=bool(telegram["enabled"]))
+    telegram_executable = st.text_input("telegram-send 실행 파일", telegram["executable"])
+    telegram_config = st.text_input("telegram-send 설정 파일 (빈 값: 기본 설정)", telegram["config_path"])
+    telegram_timeout = st.number_input("Telegram 제한 시간(초)", min_value=1, value=int(telegram["timeout_seconds"]))
+
     st.subheader("포함할 정보")
     include_cols = st.columns(4)
     include_settings: dict[str, bool] = {}
@@ -83,6 +90,8 @@ def main() -> None:
         "schedule": {
             "interval_minutes": int(interval_minutes),
         },
+        "telegram": {"enabled": telegram_enabled, "executable": telegram_executable.strip() or "telegram-send",
+                     "config_path": telegram_config.strip(), "timeout_seconds": int(telegram_timeout)},
         "iptime": settings.get("iptime", base["iptime"]),
         "include": include_settings,
     }

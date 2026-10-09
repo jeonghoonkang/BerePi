@@ -9,6 +9,7 @@ import shlex
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -142,6 +143,12 @@ def default_settings() -> dict[str, Any]:
             "username": "username",
             "password": "app-password-or-token",
             "verify_ssl": True,
+        },
+        "telegram": {
+            "enabled": False,
+            "executable": "telegram-send",
+            "config_path": "",
+            "timeout_seconds": 60,
         },
         "metadata": {
             "ddns_name": "gw.example.net",
@@ -1189,6 +1196,42 @@ def format_iptime_markdown(report: str, settings: dict[str, Any]) -> str:
     )
 
 
+
+def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str) -> dict[str, Any]:
+    """Send the WebDAV report as a document; Telegram failures are non-fatal."""
+    config = settings.get("telegram") or {}
+    if not as_bool(config.get("enabled"), False):
+        return {"status": "disabled"}
+    try:
+        executable = str(config.get("executable") or "telegram-send")
+        command = [str(Path(executable).expanduser())]
+        config_path = str(config.get("config_path") or "").strip()
+        if config_path:
+            path = Path(config_path).expanduser()
+            if not path.is_absolute():
+                path = APP_DIR / path
+            command.extend(["--config", str(path)])
+        timeout = int(config.get("timeout_seconds", 60))
+        if timeout <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        with tempfile.TemporaryDirectory(prefix="pulsedav-telegram-") as directory:
+            report_path = Path(directory) / file_name
+            report_path.write_text(markdown, encoding="utf-8")
+            command.extend(["--file", str(report_path)])
+            result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+            if result.returncode:
+                raise RuntimeError(f"telegram-send exit code {result.returncode}")
+        print("[pulsedav] Telegram 전송 완료")
+        return {"status": "sent"}
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError) as exc:
+        # Do not log CLI output: it may include credentials from telegram-send.
+        error = ("telegram-send 실행 파일을 찾을 수 없습니다" if isinstance(exc, FileNotFoundError)
+                 else "Telegram 전송 제한 시간 초과" if isinstance(exc, subprocess.TimeoutExpired)
+                 else "Telegram 전송 실패: 설정 및 telegram-send 실행 환경을 확인하세요")
+        print(f"[pulsedav] {error} (WebDAV 저장 완료)")
+        return {"status": "failed", "error": error}
+
+
 def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:
     settings = settings or load_settings(settings_path)
     errors = validate_settings(settings)
@@ -1211,7 +1254,10 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     except REQUEST_ERRORS as exc:
         raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
 
+    telegram_result = send_telegram_report(settings, markdown, file_name)
+
     return {
+        "telegram": telegram_result,
         "remote_path": remote_paths[0],
         "remote_paths": remote_paths,
         "remote_directory": host_dirs[0],
@@ -1268,7 +1314,10 @@ def send_once(
     }
     save_state(new_state)
 
+    telegram_result = send_telegram_report(settings, markdown, file_name)
+
     return {
+        "telegram": telegram_result,
         "remote_path": remote_paths[0],
         "remote_paths": remote_paths,
         "remote_directory": host_dirs[0],
