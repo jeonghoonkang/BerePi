@@ -1034,12 +1034,16 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
         f"- 운영체제: {snapshot['os']}",
     ]
 
-    if reboot_run:
-        lines.append(f"- 상태 메세지: reboot 시점 전송, up 이후 {snapshot['uptime_minutes']}분")
-    elif is_first_boot_message:
-        lines.append(f"- 상태 메세지: 부팅한 직후 전송, up 이후 {snapshot['uptime_minutes']}분")
-    else:
-        lines.append(f"- 상태 메세지: up 이후 {snapshot['uptime_minutes']}분")
+    minutes = snapshot["uptime_minutes"]
+    collected_at = datetime.strptime(now.rsplit(" ", 1)[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=SEOUL)
+    booted_at = collected_at - timedelta(minutes=minutes)
+    days, remaining_minutes = divmod(minutes, 24 * 60)
+    hours = remaining_minutes // 60
+    prefix = "reboot 시점 전송, " if reboot_run else "부팅한 직후 전송, " if is_first_boot_message else ""
+    lines.append(
+        f"- 상태 메세지: {prefix}up 이후 {minutes}분 "
+        f"({booted_at:%Y-%m-%d %H:%M} KST부터, {days}일 {hours}시간 동작중)"
+    )
 
     lines.extend(
         [
