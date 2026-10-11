@@ -33,6 +33,7 @@ SETTINGS_PATH = APP_DIR / "settings.json"
 STATE_PATH = APP_DIR / "state.json"
 DISK_HISTORY_PATH = APP_DIR / "disk_history.json"
 DISK_ALERT_STATE_PATH = APP_DIR / "disk_alert_state.json"
+MIN_DISK_BYTES = 100_000_000_000  # 100 GB (decimal), based on df filesystem total
 REQUEST_TIMEOUT = 60
 WEBDAV_NS = {"d": "DAV:"}
 RETENTION_MONTHS = 36
@@ -763,7 +764,25 @@ def get_gpu_info() -> dict[str, Any]:
 
 
 def get_disk_usage() -> str:
-    return run_command(["df", "-h"], timeout=15) or "확인 실패"
+    output = run_command(["df", "-Pk"], timeout=15)
+    if len(output.splitlines()) < 2:
+        return "확인 실패"
+    rows = []
+    for line in output.splitlines()[1:]:
+        fields = line.split(None, 5)
+        if len(fields) != 6:
+            continue
+        device, total, used, available, percent, mount = fields
+        try:
+            total, used, available = int(total), int(used), int(available)
+        except ValueError:
+            continue
+        if total * 1024 < MIN_DISK_BYTES:
+            continue
+        rows.append(f"{device}  {total / 1024**2:.2f}  {used / 1024**2:.2f}  "
+                    f"{available / 1024**2:.2f}  {percent}  {mount}")
+    return ('Filesystem  Size(GiB)  Used(GiB)  Available(GiB)  Use%  Mounted on\n'
+            + '\n'.join(rows)) if rows else "100GB 이상 디스크 없음"
 
 
 def get_disk_forecast(alerts: list[str] | None = None, persist: bool = True) -> str:
@@ -782,7 +801,7 @@ def get_disk_forecast(alerts: list[str] | None = None, persist: bool = True) -> 
             total, used, available = int(total), int(used), int(available)
         except ValueError:
             continue
-        if total <= 0 or used + available <= 0:
+        if total * 1024 < MIN_DISK_BYTES or used + available <= 0:
             continue
         capacity = used + available  # df's usable capacity, excluding reserved blocks
         percent = used / capacity * 100
@@ -832,7 +851,7 @@ def get_disk_forecast(alerts: list[str] | None = None, persist: bool = True) -> 
     if not output or len(output.splitlines()) < 2:
         return "- 디스크 예측: 용량 조회 실패"
     if not persist:
-        return '\n'.join(messages) or "- 모든 디스크 사용률 80% 미만"
+        return '\n'.join(messages) or "- 100GB 이상 대상 디스크: 사용률 80% 미만 또는 대상 없음"
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=APP_DIR,
                                          prefix='disk-history-', delete=False) as temporary:
@@ -840,7 +859,7 @@ def get_disk_forecast(alerts: list[str] | None = None, persist: bool = True) -> 
         os.replace(temporary.name, DISK_HISTORY_PATH)
     except OSError:
         messages.append("- 디스크 이력 저장 실패: 앱 디렉터리 쓰기 권한을 확인하세요")
-    return '\n'.join(messages) or "- 모든 디스크 사용률 80% 미만"
+    return '\n'.join(messages) or "- 100GB 이상 대상 디스크: 사용률 80% 미만 또는 대상 없음"
 
 
 def get_screen_list() -> str:
@@ -1319,6 +1338,18 @@ def telegram_host_info(snapshot: dict[str, Any] | None = None) -> str:
     return f"🖥️ Host: {host}\n🏠 Local IP: {internal_ip}\n🌐 Public IP: {public_ip}"
 
 
+def telegram_disk_info(snapshot: dict[str, Any] | None = None) -> str:
+    usage = snapshot.get('disk') if snapshot is not None else None
+    if usage is None:
+        usage = get_disk_usage()
+    rows = []
+    for line in usage.splitlines()[1:]:
+        fields = line.split(None, 5)
+        if len(fields) == 6 and re.fullmatch(r'\d+(?:\.\d+)?%', fields[4]):
+            rows.append(f"💽 {fields[0]} ({fields[5]}): {fields[4]}")
+    return '\n'.join(rows) or f"💽 {usage}"
+
+
 def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str,
                          snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     """Send the WebDAV report as a document; Telegram failures are non-fatal."""
@@ -1337,10 +1368,14 @@ def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str
         timeout = int(config.get("timeout_seconds", 60))
         if timeout <= 0:
             raise ValueError("timeout_seconds must be positive")
+        caption = telegram_host_info(snapshot) + '\n' + telegram_disk_info(snapshot)
+        if len(caption.encode('utf-16-le')) // 2 > 1000:
+            markdown += '\n\n## Telegram 장비·디스크 정보\n\n' + caption + '\n'
+            caption = caption.encode('utf-16-le')[:1900].decode('utf-16-le', errors='ignore') + '\n… 전체 정보는 첨부 파일 참조'
         with tempfile.TemporaryDirectory(prefix="pulsedav-telegram-") as directory:
             report_path = Path(directory) / file_name
             report_path.write_text(markdown, encoding="utf-8")
-            command.extend(["--caption", telegram_host_info(snapshot), "--file", str(report_path)])
+            command.extend(["--caption", caption, "--file", str(report_path)])
             result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
             if result.returncode:
                 raise RuntimeError(f"telegram-send exit code {result.returncode}")
@@ -1360,11 +1395,11 @@ def send_telegram_disk_test(settings: dict[str, Any]) -> dict[str, Any]:
     internal_ip, _ = get_ip_route_default()
     snapshot = {'hostname': hostname(), 'network': {
         'internal_ip': internal_ip, 'public_ip': get_public_ip(),
-    }}
+    }, 'disk': get_disk_usage()}
     report = ("# PulseDAV 디스크 용량 테스트\n\n"
               + f"- 점검 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST\n\n"
               + telegram_host_info(snapshot) + '\n\n## 현재 디스크 용량\n\n```text\n'
-              + get_disk_usage() + '\n```\n\n## 용량 예측\n\n'
+              + snapshot['disk'] + '\n```\n\n## 용량 예측\n\n'
               + get_disk_forecast(persist=False) + '\n')
     test_settings = {**settings, 'telegram': {**settings.get('telegram', {}), 'enabled': True}}
     result = send_telegram_report(test_settings, report, 'disk_test.md', snapshot)

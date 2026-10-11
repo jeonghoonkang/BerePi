@@ -10,15 +10,18 @@ import pulsedav as dav
 
 class DiskForecastTests(unittest.TestCase):
     def forecast(self, used, initial=None, output=None, alerts=None):
+        used *= 100000
+        if initial is not None:
+            initial *= 100000
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'history.json'
             key = json.dumps(['/dev/sda1', '/'], ensure_ascii=False)
             if initial is not None:
                 path.write_text(json.dumps({key: [{
                     'at': (datetime.now(dav.SEOUL) - timedelta(days=10)).isoformat(),
-                    'used_kib': initial, 'capacity_kib': 1000,
+                    'used_kib': initial, 'capacity_kib': 100000000,
                 }]}))
-            data = output if output is not None else f'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 1000 {used} {1000-used} 90% /\n'
+            data = output if output is not None else f'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 100000000 {used} {100000000-used} 90% /\n'
             with patch.object(dav, 'DISK_HISTORY_PATH', path), \
                  patch.object(dav, 'APP_DIR', Path(directory)), \
                  patch.object(dav, 'run_command', return_value=data):
@@ -30,6 +33,19 @@ class DiskForecastTests(unittest.TestCase):
         self.assertIn('약 10.0일 후 100% 예상', text)
         self.assertIn('평균 증가', text)
         self.assertEqual(len(next(iter(history.values()))), 2)
+
+    def test_minimum_disk_size_boundary(self):
+        threshold = (dav.MIN_DISK_BYTES + 1023) // 1024
+        for total, expected in [(threshold - 1, 0), (threshold, 1)]:
+            with self.subTest(total=total):
+                output = f'Filesystem blocks Used Available Capacity Mounted on\n/dev/sda1 {total} {total} 0 100% /\n'
+                alerts = []
+                _, history = self.forecast(0, output=output, alerts=alerts)
+                self.assertEqual(len(alerts), expected)
+                self.assertEqual(len(history), expected)
+                with patch.object(dav, 'run_command', return_value=output):
+                    usage = dav.get_disk_usage()
+                self.assertEqual('/dev/sda1' in usage, bool(expected))
 
     def test_telegram_alert_requires_strictly_more_than_95_percent(self):
         for used, expected in [(900, 0), (950, 0), (951, 1), (1000, 1)]:

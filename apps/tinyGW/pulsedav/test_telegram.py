@@ -42,13 +42,14 @@ class TelegramTests(unittest.TestCase):
             self.assertEqual(path.read_text(), '# 상태\n' + 'x' * 5000)
             self.assertEqual(kwargs['timeout'], 12)
             self.assertEqual(command[command.index('--caption') + 1],
-                             '🖥️ Host: gw\n🏠 Local IP: 192.168.1.2\n🌐 Public IP: 203.0.113.1')
+                             '🖥️ Host: gw\n🏠 Local IP: 192.168.1.2\n🌐 Public IP: 203.0.113.1\n💽 /dev/sda1 (/): 96%')
             return Mock(returncode=0)
         settings = {'telegram': {'enabled': True, 'executable': '/opt/bin/telegram-send',
                                  'config_path': 'bot.conf', 'timeout_seconds': 12}}
         with patch.object(dav.subprocess, 'run', side_effect=run):
             result = dav.send_telegram_report(settings, '# 상태\n' + 'x' * 5000, 'pulse.md',
-                {'hostname': 'gw', 'network': {'internal_ip': '192.168.1.2', 'public_ip': '203.0.113.1'}})
+                {'hostname': 'gw', 'network': {'internal_ip': '192.168.1.2', 'public_ip': '203.0.113.1'},
+                 'disk': 'Filesystem Size(GiB) Used(GiB) Available(GiB) Use% Mounted on\n/dev/sda1 100 96 4 96% /'})
         self.assertEqual(result['status'], 'sent')
         self.assertFalse(paths[0].exists())
 
