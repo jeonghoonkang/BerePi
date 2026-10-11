@@ -21,11 +21,14 @@ class TelegramTests(unittest.TestCase):
             paths.append(path)
             self.assertEqual(path.read_text(), '# 상태\n' + 'x' * 5000)
             self.assertEqual(kwargs['timeout'], 12)
+            self.assertEqual(command[command.index('--caption') + 1],
+                             '🖥️ Host: gw\n🏠 Local IP: 192.168.1.2\n🌐 Public IP: 203.0.113.1')
             return Mock(returncode=0)
         settings = {'telegram': {'enabled': True, 'executable': '/opt/bin/telegram-send',
                                  'config_path': 'bot.conf', 'timeout_seconds': 12}}
         with patch.object(dav.subprocess, 'run', side_effect=run):
-            result = dav.send_telegram_report(settings, '# 상태\n' + 'x' * 5000, 'pulse.md')
+            result = dav.send_telegram_report(settings, '# 상태\n' + 'x' * 5000, 'pulse.md',
+                {'hostname': 'gw', 'network': {'internal_ip': '192.168.1.2', 'public_ip': '203.0.113.1'}})
         self.assertEqual(result['status'], 'sent')
         self.assertFalse(paths[0].exists())
 
@@ -53,7 +56,10 @@ class TelegramTests(unittest.TestCase):
                  patch.object(dav, 'send_telegram_report', return_value={'status': 'failed'}) as telegram:
                 result = sender(dav.default_settings())
                 self.assertEqual(upload.call_count, 2)
-                telegram.assert_called_once_with(unittest.mock.ANY, 'report', result['file_name'])
+                expected = [unittest.mock.ANY, 'report', result['file_name']]
+                if sender is dav.send_once:
+                    expected.append(unittest.mock.ANY)
+                telegram.assert_called_once_with(*expected)
                 self.assertEqual(result['telegram']['status'], 'failed')
                 self.assertEqual(len(result['remote_paths']), 2)
 

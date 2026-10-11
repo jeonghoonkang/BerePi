@@ -1305,7 +1305,20 @@ def format_iptime_markdown(report: str, settings: dict[str, Any]) -> str:
 
 
 
-def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str) -> dict[str, Any]:
+def telegram_host_info(snapshot: dict[str, Any] | None = None) -> str:
+    if snapshot is None:
+        internal_ip, _ = get_ip_route_default()
+        host, public_ip = hostname(), get_public_ip()
+    else:
+        network = snapshot.get('network', {})
+        host = snapshot.get('hostname', '확인 실패')
+        internal_ip = network.get('internal_ip', '확인 실패')
+        public_ip = network.get('public_ip', '확인 실패')
+    return f"🖥️ Host: {host}\n🏠 Local IP: {internal_ip}\n🌐 Public IP: {public_ip}"
+
+
+def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str,
+                         snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     """Send the WebDAV report as a document; Telegram failures are non-fatal."""
     config = settings.get("telegram") or {}
     if not as_bool(config.get("enabled"), False):
@@ -1325,7 +1338,7 @@ def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str
         with tempfile.TemporaryDirectory(prefix="pulsedav-telegram-") as directory:
             report_path = Path(directory) / file_name
             report_path.write_text(markdown, encoding="utf-8")
-            command.extend(["--file", str(report_path)])
+            command.extend(["--caption", telegram_host_info(snapshot), "--file", str(report_path)])
             result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
             if result.returncode:
                 raise RuntimeError(f"telegram-send exit code {result.returncode}")
@@ -1406,7 +1419,7 @@ def send_disk_alert(settings: dict[str, Any], snapshot: dict[str, Any]) -> dict[
             report = (f"# PulseDAV 디스크 용량 경고 - {snapshot['hostname']}\n\n"
                       f"- 점검 시각: {now:%Y-%m-%d %H:%M:%S} KST\n\n"
                       + '\n'.join(snapshot['disk_alerts']) + '\n')
-            result = send_telegram_report(settings, report, 'disk_alert.md')
+            result = send_telegram_report(settings, report, 'disk_alert.md', snapshot)
             if result['status'] == 'sent':
                 state_file.seek(0)
                 state_file.truncate()
@@ -1458,7 +1471,7 @@ def send_once(
     }
     save_state(new_state)
 
-    telegram_result = send_telegram_report(settings, markdown, file_name)
+    telegram_result = send_telegram_report(settings, markdown, file_name, snapshot)
 
     return {
         "telegram": telegram_result,
