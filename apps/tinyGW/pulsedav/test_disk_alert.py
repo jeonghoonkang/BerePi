@@ -10,7 +10,7 @@ import pulsedav as dav
 class DiskAlertTests(unittest.TestCase):
     def test_slots_and_retries(self):
         settings = {'telegram': {'enabled': True}}
-        snapshot = {'hostname': 'test', 'disk_alerts': ['- /: 95%']}
+        snapshot = {'hostname': 'test', 'disk_alerts': ['- /: 96%']}
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(dav, 'DISK_ALERT_STATE_PATH', Path(directory) / 'alert.json'), \
              patch.object(dav, 'send_telegram_report', return_value={'status': 'sent'}) as send, \

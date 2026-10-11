@@ -9,7 +9,7 @@ import pulsedav as dav
 
 
 class DiskForecastTests(unittest.TestCase):
-    def forecast(self, used, initial=None, output=None):
+    def forecast(self, used, initial=None, output=None, alerts=None):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'history.json'
             key = json.dumps(['/dev/sda1', '/'], ensure_ascii=False)
@@ -22,7 +22,7 @@ class DiskForecastTests(unittest.TestCase):
             with patch.object(dav, 'DISK_HISTORY_PATH', path), \
                  patch.object(dav, 'APP_DIR', Path(directory)), \
                  patch.object(dav, 'run_command', return_value=data):
-                text = dav.get_disk_forecast()
+                text = dav.get_disk_forecast(alerts)
             return text, json.loads(path.read_text()) if path.exists() else {}
 
     def test_growth_predicts_ten_days(self):
@@ -30,6 +30,13 @@ class DiskForecastTests(unittest.TestCase):
         self.assertIn('약 10.0일 후 100% 예상', text)
         self.assertIn('평균 증가', text)
         self.assertEqual(len(next(iter(history.values()))), 2)
+
+    def test_telegram_alert_requires_strictly_more_than_95_percent(self):
+        for used, expected in [(900, 0), (950, 0), (951, 1), (1000, 1)]:
+            with self.subTest(used=used):
+                alerts = []
+                self.forecast(used, alerts=alerts)
+                self.assertEqual(len(alerts), expected)
 
     def test_thresholds_and_reset(self):
         text, history = self.forecast(800)

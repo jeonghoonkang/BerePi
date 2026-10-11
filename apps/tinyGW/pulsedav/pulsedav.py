@@ -827,7 +827,7 @@ def get_disk_forecast(alerts: list[str] | None = None) -> str:
         else:
             message += " — 사용률 80% 이상, 이력 기록 중 (90%부터 포화일 예측)"
         messages.append(message)
-        if percent >= 90 and alerts is not None:
+        if percent > 95 and alerts is not None:
             alerts.append(message)
     if not output or len(output.splitlines()) < 2:
         return "- 디스크 예측: 용량 조회 실패"
