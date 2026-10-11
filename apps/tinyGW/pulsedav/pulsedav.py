@@ -621,6 +621,26 @@ def get_ip_route_default() -> tuple[str, str]:
     return internal_ip, gateway
 
 
+def get_mac_address() -> str:
+    """Return the default-route interface's MAC, without inventing a fallback."""
+    if platform.system() == "Darwin":
+        route = run_command(["route", "-n", "get", "default"], timeout=10)
+        interface = re.search(r"^\s*interface:\s*(\S+)", route, re.MULTILINE)
+        if not interface:
+            return "확인 실패"
+        details = run_command(["ifconfig", interface.group(1)], timeout=10)
+        pattern = r"\bether\s+([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b"
+    else:
+        route = run_command(["ip", "route"], timeout=10)
+        interface = re.search(r"^default\s+[^\n]*?\bdev\s+(\S+)", route, re.MULTILINE)
+        if not interface:
+            return "확인 실패"
+        details = run_command(["ip", "link", "show", "dev", interface.group(1)], timeout=10)
+        pattern = r"\blink/ether\s+([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b"
+    match = re.search(pattern, details)
+    return match.group(1).lower() if match else "확인 실패"
+
+
 def get_ip_route_default_darwin() -> tuple[str, str]:
     """Return internal IP and default gateway on macOS."""
     gateway = "확인 실패"
@@ -1048,6 +1068,7 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
     lines.extend(
         [
             f"- 내부 IP: {snapshot['network']['internal_ip']}",
+            f"- MAC 주소: {snapshot['network'].get('mac_address', '확인 실패')}",
             f"- Public IP: {snapshot['network']['public_ip']}",
             f"- 내부 GW: {snapshot['network']['gateway']}",
             f"- DDNS 이름: {snapshot['network']['ddns_name'] or '미설정'}",
@@ -1125,6 +1146,7 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
         "cpu": get_cpu_info(),
         "network": {
             "internal_ip": internal_ip,
+            "mac_address": get_mac_address(),
             "public_ip": get_public_ip(),
             "gateway": gateway,
             "ddns_name": settings["metadata"].get("ddns_name", "").strip(),
