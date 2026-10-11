@@ -31,6 +31,8 @@ except ImportError:  # pragma: no cover - fallback for minimal Python environmen
 APP_DIR = Path(__file__).resolve().parent
 SETTINGS_PATH = APP_DIR / "settings.json"
 STATE_PATH = APP_DIR / "state.json"
+DISK_HISTORY_PATH = APP_DIR / "disk_history.json"
+DISK_ALERT_STATE_PATH = APP_DIR / "disk_alert_state.json"
 REQUEST_TIMEOUT = 60
 WEBDAV_NS = {"d": "DAV:"}
 RETENTION_MONTHS = 36
@@ -764,6 +766,81 @@ def get_disk_usage() -> str:
     return run_command(["df", "-h"], timeout=15) or "확인 실패"
 
 
+def get_disk_forecast(alerts: list[str] | None = None) -> str:
+    """Track >=80% usage and extrapolate available-space exhaustion at >=90%."""
+    now = datetime.now(SEOUL)
+    history = load_json_file(DISK_HISTORY_PATH)
+    updated = {}
+    messages = []
+    output = run_command(["df", "-Pk"], timeout=15)
+    for line in output.splitlines()[1:]:
+        fields = line.split(None, 5)
+        if len(fields) != 6:
+            continue
+        device, total, used, available, _, mount = fields
+        try:
+            total, used, available = int(total), int(used), int(available)
+        except ValueError:
+            continue
+        if total <= 0 or used + available <= 0:
+            continue
+        capacity = used + available  # df's usable capacity, excluding reserved blocks
+        percent = used / capacity * 100
+        if percent < 80:
+            continue  # Start a new observation period after cleanup below 80%.
+        key = json.dumps([device, mount], ensure_ascii=False)
+        samples = []
+        previous = history.get(key, [])
+        for sample in previous if isinstance(previous, list) else []:
+            try:
+                instant = datetime.fromisoformat(sample['at'])
+                if (sample['capacity_kib'] == capacity and instant.tzinfo is not None
+                        and instant < now and isinstance(sample['used_kib'], int)):
+                    samples.append(sample)
+            except (KeyError, TypeError, ValueError):
+                continue
+        samples.sort(key=lambda sample: sample['at'])
+        samples.append({'at': now.isoformat(), 'used_kib': used, 'capacity_kib': capacity})
+        samples = samples[-10000:]
+        updated[key] = samples
+        message = f"- {mount} ({device}): 사용 {percent:.1f}%, 잔여 {max(0, available) / 1024**2:.2f} GiB"
+        if percent >= 90:
+            message += " — 잔여 용량 10% 이하 경고"
+            if available <= 0:
+                message += ", 사용 가능 공간 소진 (100% 도달)"
+            elif len(samples) < 2:
+                message += ", 예상 포화일: 이력 부족 (다음 측정부터 계산)"
+            else:
+                first = samples[0]
+                elapsed_days = (now - datetime.fromisoformat(first['at'])).total_seconds() / 86400
+                rate = (used - first['used_kib']) / elapsed_days
+                message += f", 관측 {elapsed_days:.2f}일 / 평균 증가 {rate / 1024**2:.3f} GiB/일"
+                if rate <= 0:
+                    message += ", 예상 포화일: 증가 추세 없음"
+                else:
+                    days_left = available / rate
+                    try:
+                        full_at = now + timedelta(days=days_left)
+                        message += f", 약 {days_left:.1f}일 후 100% 예상 ({full_at:%Y-%m-%d %H:%M} KST)"
+                    except OverflowError:
+                        message += ", 예상 포화일: 계산 가능한 날짜 범위 초과"
+        else:
+            message += " — 사용률 80% 이상, 이력 기록 중 (90%부터 포화일 예측)"
+        messages.append(message)
+        if percent >= 90 and alerts is not None:
+            alerts.append(message)
+    if not output or len(output.splitlines()) < 2:
+        return "- 디스크 예측: 용량 조회 실패"
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=APP_DIR,
+                                         prefix='disk-history-', delete=False) as temporary:
+            json.dump(updated, temporary, ensure_ascii=False)
+        os.replace(temporary.name, DISK_HISTORY_PATH)
+    except OSError:
+        messages.append("- 디스크 이력 저장 실패: 앱 디렉터리 쓰기 권한을 확인하세요")
+    return '\n'.join(messages) or "- 모든 디스크 사용률 80% 미만"
+
+
 def get_screen_list() -> str:
     return run_command(["screen", "-ls"], timeout=15) or "screen 없음 또는 확인 실패"
 
@@ -1120,6 +1197,7 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
 
     if include.get("disk"):
         lines.extend(["## HDD 공간", "", "```text", snapshot["disk"], "```", ""])
+        lines.extend(["### 디스크 용량 예측", "", snapshot.get("disk_forecast", "- 예측 정보 없음"), ""])
 
     if include.get("user_services"):
         lines.extend(["## 서비스 중 사용자가 실행한 서비스", "", "```text", snapshot["user_services"], "```", ""])
@@ -1138,6 +1216,8 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
 
 def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
     internal_ip, gateway = get_ip_route_default()
+    disk_alerts: list[str] = []
+    disk_forecast = get_disk_forecast(disk_alerts) if settings['include'].get('disk') else ''
     return {
         "hostname": hostname(),
         "os": f"{platform.system()} {platform.release()}",
@@ -1155,6 +1235,8 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
         },
         "gpu": get_gpu_info(),
         "disk": get_disk_usage(),
+        "disk_forecast": disk_forecast,
+        "disk_alerts": disk_alerts,
         "user_services": get_user_services(),
         "screen": get_screen_list(),
         "crontab": get_crontab_list(),
@@ -1301,6 +1383,41 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     }
 
 
+def send_disk_alert(settings: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Send at most once per KST half-day, independently of WebDAV delivery."""
+    if not snapshot.get('disk_alerts'):
+        return {'status': 'not_needed'}
+    if not as_bool(settings.get('telegram', {}).get('enabled'), False):
+        return {'status': 'disabled'}
+    import fcntl
+
+    now = datetime.now(SEOUL)
+    slot = f"{now:%Y-%m-%d}-{'am' if now.hour < 12 else 'pm'}"
+    try:
+        with DISK_ALERT_STATE_PATH.open('a+', encoding='utf-8') as state_file:
+            fcntl.flock(state_file, fcntl.LOCK_EX)
+            state_file.seek(0)
+            try:
+                state = json.load(state_file)
+            except (ValueError, OSError):
+                state = {}
+            if isinstance(state, dict) and state.get('slot') == slot:
+                return {'status': 'already_sent'}
+            report = (f"# PulseDAV 디스크 용량 경고 - {snapshot['hostname']}\n\n"
+                      f"- 점검 시각: {now:%Y-%m-%d %H:%M:%S} KST\n\n"
+                      + '\n'.join(snapshot['disk_alerts']) + '\n')
+            result = send_telegram_report(settings, report, 'disk_alert.md')
+            if result['status'] == 'sent':
+                state_file.seek(0)
+                state_file.truncate()
+                json.dump({'slot': slot, 'sent_at': now.isoformat()}, state_file)
+                state_file.flush()
+            return result
+    except OSError as exc:
+        print('[pulsedav] 디스크 경고 상태 파일 접근 실패: 앱 디렉터리 쓰기 권한을 확인하세요')
+        return {'status': 'failed', 'error': '디스크 경고 상태 저장 실패'}
+
+
 def send_once(
     settings: dict[str, Any] | None = None,
     settings_path: str | Path | None = None,
@@ -1315,6 +1432,7 @@ def send_once(
     current_boot_marker = boot_marker()
     first_boot = state.get("last_boot_marker") != current_boot_marker
     snapshot = collect_snapshot(settings)
+    disk_alert_result = send_disk_alert(settings, snapshot)
     markdown = format_markdown(settings, snapshot, first_boot, reboot_run=reboot_run)
 
     webdav_config = build_webdav_config(settings)
@@ -1344,6 +1462,7 @@ def send_once(
 
     return {
         "telegram": telegram_result,
+        "disk_alert": disk_alert_result,
         "remote_path": remote_paths[0],
         "remote_paths": remote_paths,
         "remote_directory": host_dirs[0],
