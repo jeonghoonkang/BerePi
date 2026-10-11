@@ -766,7 +766,7 @@ def get_disk_usage() -> str:
     return run_command(["df", "-h"], timeout=15) or "확인 실패"
 
 
-def get_disk_forecast(alerts: list[str] | None = None) -> str:
+def get_disk_forecast(alerts: list[str] | None = None, persist: bool = True) -> str:
     """Track >=80% usage and extrapolate available-space exhaustion at >=90%."""
     now = datetime.now(SEOUL)
     history = load_json_file(DISK_HISTORY_PATH)
@@ -831,6 +831,8 @@ def get_disk_forecast(alerts: list[str] | None = None) -> str:
             alerts.append(message)
     if not output or len(output.splitlines()) < 2:
         return "- 디스크 예측: 용량 조회 실패"
+    if not persist:
+        return '\n'.join(messages) or "- 모든 디스크 사용률 80% 미만"
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=APP_DIR,
                                          prefix='disk-history-', delete=False) as temporary:
@@ -1351,6 +1353,22 @@ def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str
                  else "Telegram 전송 실패: 설정 및 telegram-send 실행 환경을 확인하세요")
         print(f"[pulsedav] {error} (WebDAV 저장 완료)")
         return {"status": "failed", "error": error}
+
+
+def send_telegram_disk_test(settings: dict[str, Any]) -> dict[str, Any]:
+    """Explicit manual test, independent of WebDAV and automatic alert state."""
+    internal_ip, _ = get_ip_route_default()
+    snapshot = {'hostname': hostname(), 'network': {
+        'internal_ip': internal_ip, 'public_ip': get_public_ip(),
+    }}
+    report = ("# PulseDAV 디스크 용량 테스트\n\n"
+              + f"- 점검 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST\n\n"
+              + telegram_host_info(snapshot) + '\n\n## 현재 디스크 용량\n\n```text\n'
+              + get_disk_usage() + '\n```\n\n## 용량 예측\n\n'
+              + get_disk_forecast(persist=False) + '\n')
+    test_settings = {**settings, 'telegram': {**settings.get('telegram', {}), 'enabled': True}}
+    result = send_telegram_report(test_settings, report, 'disk_test.md', snapshot)
+    return {**result, 'preview': report}
 
 
 def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:

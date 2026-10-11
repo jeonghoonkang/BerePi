@@ -8,6 +8,26 @@ import pulsedav as dav
 
 
 class TelegramTests(unittest.TestCase):
+    def test_manual_disk_test_ignores_threshold_and_preserves_settings(self):
+        settings = {'telegram': {'enabled': False, 'config_path': 'bot.conf'}}
+        with patch.object(dav, 'get_ip_route_default', return_value=('192.168.1.2', 'gw')), \
+             patch.object(dav, 'get_public_ip', return_value='203.0.113.1'), \
+             patch.object(dav, 'hostname', return_value='test-host'), \
+             patch.object(dav, 'get_disk_usage', return_value='disk 50% /'), \
+             patch.object(dav, 'get_disk_forecast', return_value='80% 미만') as forecast, \
+             patch.object(dav, 'send_telegram_report', return_value={'status': 'sent'}) as send, \
+             patch.object(dav, 'upload_remote_file') as upload, \
+             patch.object(dav, 'save_state') as save:
+            result = dav.send_telegram_disk_test(settings)
+        self.assertEqual(result['status'], 'sent')
+        self.assertIn('disk 50% /', result['preview'])
+        self.assertIn('203.0.113.1', result['preview'])
+        forecast.assert_called_once_with(persist=False)
+        self.assertTrue(send.call_args.args[0]['telegram']['enabled'])
+        self.assertFalse(settings['telegram']['enabled'])
+        upload.assert_not_called()
+        save.assert_not_called()
+
     def test_disabled_does_not_run_command(self):
         with patch.object(dav.subprocess, 'run') as run:
             self.assertEqual(dav.send_telegram_report({}, 'report', 'pulse.md')['status'], 'disabled')

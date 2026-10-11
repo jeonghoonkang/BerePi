@@ -350,6 +350,25 @@ HDD 공간 항목을 켜면 파일시스템별 사용률이 **80% 이상**일 �
 
 ## Telegram 동시 전송 (선택)
 
+### 현재 디스크 용량 테스트 전송
+
+PulseDAV 앱 디렉터리에서 실행합니다. Telegram 수신 설정은 먼저
+`telegram-send --configure`로 완료하세요.
+
+```bash
+python3 sender.py --test-telegram-disk --config this_settings.json
+```
+
+기본 `settings.json`을 사용한다면 `--config this_settings.json`은 생략합니다.
+`python3 pulsedav.py --test-telegram-disk --config this_settings.json`으로도 실행할 수 있습니다.
+현재 디스크 용량(`df -h`), 사용률과 기존 이력에 따른 용량 예측을 `disk_test.md`로
+전송하며, 호스트명·내부 IP·공인 IP를 캡션에 포함합니다.
+수동 테스트이므로 사용률 95% 초과 여부, HDD 공간 포함 설정, `telegram.enabled` 값과
+관계없이 1회 전송합니다. 설정 파일의 Telegram 실행 파일·수신 설정 경로·제한 시간은
+그대로 사용하며, 저장된 설정은 변경하지 않습니다.
+WebDAV에는 저장하지 않고, 디스크 이력과 하루 2회 자동 경고 전송 기록도 변경하지 않습니다.
+콘솔에도 현재 용량과 전송 결과를 표시하며 성공 시 종료 코드 0, 실패 시 1을 반환합니다.
+
 모든 Telegram 첨부 파일의 캡션에 전송 장비 정보를 함께 표시합니다.
 
 ```text
