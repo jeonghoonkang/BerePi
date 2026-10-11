@@ -24,9 +24,18 @@ class TelegramTests(unittest.TestCase):
         self.assertIn('203.0.113.1', result['preview'])
         forecast.assert_called_once_with(persist=False)
         self.assertTrue(send.call_args.args[0]['telegram']['enabled'])
+        self.assertIsNone(send.call_args.args[2])
         self.assertFalse(settings['telegram']['enabled'])
         upload.assert_not_called()
         save.assert_not_called()
+
+    def test_text_only_send_creates_no_attachment(self):
+        with patch.object(dav.subprocess, 'run', return_value=Mock(returncode=0)) as run, \
+             patch.object(dav.tempfile, 'TemporaryDirectory') as temporary:
+            result = dav.send_telegram_report({'telegram': {'enabled': True}}, '디스크 96%', None)
+        self.assertEqual(result['status'], 'sent')
+        self.assertEqual(run.call_args.args[0], ['telegram-send', '--', '디스크 96%'])
+        temporary.assert_not_called()
 
     def test_disabled_does_not_run_command(self):
         with patch.object(dav.subprocess, 'run') as run:

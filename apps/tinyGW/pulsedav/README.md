@@ -365,8 +365,9 @@ python3 sender.py --test-telegram-disk --config this_settings.json
 
 기본 `settings.json`을 사용한다면 `--config this_settings.json`은 생략합니다.
 `python3 pulsedav.py --test-telegram-disk --config this_settings.json`으로도 실행할 수 있습니다.
-현재 100GB 이상 디스크 용량, 사용률과 기존 이력에 따른 용량 예측을 `disk_test.md`로
-전송하며, 호스트명·내부 IP·공인 IP를 캡션에 포함합니다.
+현재 100GB 이상 디스크 용량, 파일시스템 이름·사용률과 기존 이력에 따른 용량 예측을
+호스트명·내부 IP·공인 IP와 함께 **Telegram 문자 메시지로 전송**합니다.
+`disk_test.md` 파일은 생성하거나 첨부하지 않습니다.
 수동 테스트이므로 사용률 95% 초과 여부, HDD 공간 포함 설정, `telegram.enabled` 값과
 관계없이 1회 전송합니다. 설정 파일의 Telegram 실행 파일·수신 설정 경로·제한 시간은
 그대로 사용하며, 저장된 설정은 변경하지 않습니다.

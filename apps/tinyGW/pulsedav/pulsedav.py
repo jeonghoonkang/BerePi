@@ -1350,7 +1350,7 @@ def telegram_disk_info(snapshot: dict[str, Any] | None = None) -> str:
     return '\n'.join(rows) or f"💽 {usage}"
 
 
-def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str,
+def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str | None,
                          snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     """Send the WebDAV report as a document; Telegram failures are non-fatal."""
     config = settings.get("telegram") or {}
@@ -1368,6 +1368,13 @@ def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str
         timeout = int(config.get("timeout_seconds", 60))
         if timeout <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if file_name is None:
+            result = subprocess.run(command + ['--', markdown], capture_output=True, text=True,
+                                    timeout=timeout, check=False)
+            if result.returncode:
+                raise RuntimeError(f"telegram-send exit code {result.returncode}")
+            print("[pulsedav] Telegram 전송 완료")
+            return {'status': 'sent'}
         caption = telegram_host_info(snapshot) + '\n' + telegram_disk_info(snapshot)
         if len(caption.encode('utf-16-le')) // 2 > 1000:
             markdown += '\n\n## Telegram 장비·디스크 정보\n\n' + caption + '\n'
@@ -1386,7 +1393,7 @@ def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str
         error = ("telegram-send 실행 파일을 찾을 수 없습니다" if isinstance(exc, FileNotFoundError)
                  else "Telegram 전송 제한 시간 초과" if isinstance(exc, subprocess.TimeoutExpired)
                  else "Telegram 전송 실패: 설정 및 telegram-send 실행 환경을 확인하세요")
-        print(f"[pulsedav] {error} (WebDAV 저장 완료)")
+        print(f"[pulsedav] {error}")
         return {"status": "failed", "error": error}
 
 
@@ -1396,13 +1403,13 @@ def send_telegram_disk_test(settings: dict[str, Any]) -> dict[str, Any]:
     snapshot = {'hostname': hostname(), 'network': {
         'internal_ip': internal_ip, 'public_ip': get_public_ip(),
     }, 'disk': get_disk_usage()}
-    report = ("# PulseDAV 디스크 용량 테스트\n\n"
-              + f"- 점검 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST\n\n"
-              + telegram_host_info(snapshot) + '\n\n## 현재 디스크 용량\n\n```text\n'
-              + snapshot['disk'] + '\n```\n\n## 용량 예측\n\n'
+    report = ("PulseDAV 디스크 용량 테스트\n\n"
+              + f"점검 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST\n\n"
+              + telegram_host_info(snapshot) + '\n' + telegram_disk_info(snapshot)
+              + '\n\n현재 디스크 용량\n' + snapshot['disk'] + '\n\n용량 예측\n'
               + get_disk_forecast(persist=False) + '\n')
     test_settings = {**settings, 'telegram': {**settings.get('telegram', {}), 'enabled': True}}
-    result = send_telegram_report(test_settings, report, 'disk_test.md', snapshot)
+    result = send_telegram_report(test_settings, report, None, snapshot)
     return {**result, 'preview': report}
 
 
