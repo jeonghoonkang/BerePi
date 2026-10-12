@@ -10,6 +10,30 @@ def report(stamp, rows):
 
 
 class AggregateTests(unittest.TestCase):
+    def test_remote_downloads_latest_named_report_only(self):
+        session = Mock()
+        session.request.return_value.content = report('2026-10-13 10:00:00', 'no disk data').encode()
+        entries = [{'path': f'tinyGW/host/pulse_202610{day}_100000.md', 'is_directory': False}
+                   for day in ('12', '13')]
+        with patch.object(check, 'build_session', return_value=session), \
+             patch.object(check, 'list_directory', return_value=entries):
+            reports, _ = check.collect_webdav({'webdav': {'hostname': 'https://example.test'}})
+        self.assertEqual(len(reports), 1)
+        session.request.assert_called_once()
+        self.assertIn('20261013', session.request.call_args.args[1])
+
+    def test_dns_category_survives_scan_wrapper(self):
+        from pulsedav import REQUEST_ERRORS
+        session = Mock()
+        error = REQUEST_ERRORS[0]('nodename nor servname provided, or not known')
+        with patch.object(check, 'build_session', return_value=session), \
+             patch.object(check, 'list_directory', side_effect=error), \
+             patch('sys.argv', ['check']), patch('builtins.print') as output:
+            self.assertEqual(check.main(), 1)
+        text = '\n'.join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn('dns_error', text)
+        self.assertIn('DNS', text)
+
     def test_missing_config_does_not_connect(self):
         with tempfile.TemporaryDirectory() as directory, \
              patch('sys.argv', ['check', '--config', str(Path(directory) / 'missing.json')]), \
@@ -74,8 +98,12 @@ class AggregateTests(unittest.TestCase):
             self.assertEqual(check.parse_report(path)['disks'], ['💽 /dev/data (/data files): 빈 공간 20%'])
 
     def test_text_send_splits(self):
+        progress = Mock()
         with patch.object(check.subprocess, 'run', return_value=Mock(returncode=0)) as run:
-            check.send_text('x' * 4000, 'telegram-send', '/tmp/bot.conf', 12)
+            check.send_text('x' * 4000, 'telegram-send', '/tmp/bot.conf', 12, progress)
         self.assertEqual(run.call_count, 3)
         self.assertEqual(''.join(c.args[0][-1] for c in run.call_args_list), 'x' * 4000)
         self.assertNotIn('--file', run.call_args.args[0])
+        self.assertEqual(progress.call_count, 6)
+        self.assertIn('전송 시작 #1', progress.call_args_list[0].args[0])
+        self.assertIn('전송 완료 #3', progress.call_args_list[-1].args[0])
