@@ -163,12 +163,22 @@ def save_summary(message: str, directory: Path) -> Path:
     return path
 
 
+def select_reports(reports: list[dict], limit: int | None = None) -> list[dict]:
+    ordered = sorted(reports, key=lambda report: (
+        report.get('at') is None,
+        -report['at'].timestamp() if report.get('at') is not None else 0,
+        report['host'],
+    ))
+    return ordered if limit is None else ordered[:limit]
+
+
 def render(reports: list[dict], errors: list[str]) -> str:
+    reports = select_reports(reports)
     lines = ['🖥️ tinyGW 전체 용량 현황', f'집계 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST',
              f'호스트 수: {len(reports)}', '']
     for report in reports:
         lines.extend([f"🖥️ Host: {report['host']}", f"🏠 Local IP: {report['ip']}",
-                      f"최근 전송 시각: {report['at']:%Y-%m-%d %H:%M:%S} KST",
+                      '최근 전송 시각: ' + (report['at'].strftime('%Y-%m-%d %H:%M:%S KST') if report.get('at') else '정보 없음'),
                       *(report['disks'] or ['💽 100GB 이상 파티션 정보 없음']), ''])
     if errors:
         lines.append(f'⚠️ 읽기/해석 실패 파일: {len(errors)}개 (서버 콘솔 참조)')
@@ -205,7 +215,10 @@ def main() -> int:
     parser.add_argument('--telegram-config', help='telegram-send configuration file')
     parser.add_argument('--executable')
     parser.add_argument('--timeout', type=int)
+    parser.add_argument('--limit', type=int, help='Include only the N most recently reporting hosts')
     args = parser.parse_args()
+    if args.limit is not None and args.limit <= 0:
+        parser.error('--limit must be a positive integer')
     started = time.monotonic()
 
     def progress(message):
@@ -236,6 +249,9 @@ def main() -> int:
         progress(f'집계 완료: 호스트 {len(reports)}개, 읽기/해석 실패 {len(errors)}개')
         for error in errors:
             print(error, file=sys.stderr)
+        total_hosts = len(reports)
+        reports = select_reports(reports, args.limit)
+        progress(f'최근 전송 시각순 정렬 완료: 전체 {total_hosts}개 중 {len(reports)}개 출력')
         message = render(reports, errors)
         logs_directory = args.logs_dir.expanduser().resolve()
         progress(f'집계 로그 저장 시작: {logs_directory}')

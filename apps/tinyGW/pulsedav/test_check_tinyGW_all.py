@@ -1,4 +1,5 @@
 import tempfile
+from datetime import datetime
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -10,6 +11,20 @@ def report(stamp, rows):
 
 
 class AggregateTests(unittest.TestCase):
+    def test_recent_first_and_limit(self):
+        records = [{'host': 'missing', 'at': None},
+                   {'host': 'old', 'at': datetime(2026, 10, 12, tzinfo=check.SEOUL)},
+                   {'host': 'new', 'at': datetime(2026, 10, 13, tzinfo=check.SEOUL)}]
+        self.assertEqual([r['host'] for r in check.select_reports(records)], ['new', 'old', 'missing'])
+        self.assertEqual([r['host'] for r in check.select_reports(records, 1)], ['new'])
+        self.assertEqual(len(check.select_reports(records, 10)), 3)
+
+    def test_limit_requires_positive_integer(self):
+        with patch('sys.argv', ['check', '--limit', '0']), patch('sys.stderr'):
+            with self.assertRaises(SystemExit) as raised:
+                check.main()
+        self.assertEqual(raised.exception.code, 2)
+
     def test_remote_downloads_latest_named_report_only(self):
         session = Mock()
         session.request.return_value.content = report('2026-10-13 10:00:00', 'no disk data').encode()
