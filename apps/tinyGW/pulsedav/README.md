@@ -485,3 +485,35 @@ cron에서도 해당 설정을 읽을 수 있는 동일한 계정을 사용하�
 임시 첨부 파일은 성공·실패 후 삭제됩니다.
 
 설치와 CLI 옵션 참고: [telegram-send 공식 문서](https://github.com/rahiel/telegram-send).
+
+## 서버에서 tinyGW 전체 보고서 집계·Telegram 전송
+
+`check_tinyGW_all.py`는 서버 로컬 `tinyGW` 하위의 `.md` 파일을 재귀적으로 읽고,
+호스트명별 최신 시스템 보고서 하나를 선택합니다. 내부 IP·호스트명·최근 전송 시각과
+100GB 이상 파일시스템의 이름·마운트 경로·빈 공간%를 모아 표시합니다.
+여러 sub 디렉터리에 저장된 동일 호스트는 한 번만 포함하며, ipTIME 보고서는 제외합니다.
+
+PulseDAV 앱 디렉터리에서 실제 저장 경로를 지정해 실행하세요.
+
+```bash
+# 콘솔 확인
+python3 check_tinyGW_all.py --root /srv/webdav/tinyGW
+
+# Telegram 문자 전송
+python3 check_tinyGW_all.py --root /srv/webdav/tinyGW --send
+
+# 별도 수신 설정과 실행 파일 사용
+python3 check_tinyGW_all.py --root /srv/webdav/tinyGW --send \
+  --telegram-config ~/.config/pulsedav/telegram.conf \
+  --executable /home/user/.local/bin/telegram-send --timeout 60
+```
+
+서버 실행 계정에서 먼저 `telegram-send --configure`로 수신 설정을 완료하세요.
+다른 서버로 복사할 때는 `time_utils.py`도 같은 디렉터리에 복사합니다.
+`--root`는 WebDAV URL이 아닌 로컬 경로이며, 기본값은 현재 디렉터리의 `tinyGW`입니다.
+최근 전송 시각은 보고서의 생성 시각입니다. 없으면 `pulse_YYYYMMDD_HHMMSS.md` 파일명,
+그마저 없으면 파일 수정 시각을 사용하므로 실제 업로드 완료 시각과 다를 수 있습니다.
+빈 공간%는 `100 - 사용률`이며 현재 GiB 표기와 예전 `df -h` 보고서를 지원합니다.
+최신 보고서에 용량 정보가 없으면 정보 없음으로 표시합니다.
+첨부 없이 문자만 보내며 긴 목록은 여러 메시지로 나눕니다. 원본 파일은 변경하지 않습니다.
+읽기 실패 파일은 콘솔에 표시하며 집계할 보고서가 없거나 전송 실패 시 종료 코드 1을 반환합니다.
