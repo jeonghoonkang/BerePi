@@ -1,0 +1,100 @@
+"""Read-only local media browser; run with python app.py."""
+import argparse
+import os
+from datetime import datetime
+from pathlib import Path
+
+from flask import Flask, abort, jsonify, render_template, request, send_file
+
+EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4'}
+
+
+def create_app(root=None, start=None):
+    app = Flask(__name__)
+    boundary = Path(root or os.environ.get('PHOTO_BROWSER_ROOT', '/')).expanduser().resolve()
+    initial = Path(start or os.environ.get('PHOTO_BROWSER_START', str(Path.home()))).expanduser().resolve()
+    if not initial.is_relative_to(boundary):
+        initial = boundary
+
+    def checked(value):
+        path = Path(value).expanduser().resolve()
+        if not path.is_relative_to(boundary):
+            abort(403, description='허용된 루트 디렉토리 밖입니다.')
+        if not path.exists():
+            abort(404, description='경로가 없습니다.')
+        return path
+
+    @app.errorhandler(403)
+    @app.errorhandler(404)
+    @app.errorhandler(400)
+    def error(exc):
+        return jsonify(error=exc.description), exc.code
+
+    @app.get('/')
+    def index():
+        return render_template('index.html', initial=str(initial))
+
+    @app.get('/api/browse')
+    def browse():
+        folder = checked(request.args.get('path', str(initial)))
+        if not folder.is_dir():
+            abort(400, description='디렉토리를 입력하세요.')
+        recursive = request.args.get('recursive') == '1'
+        directories, media, skipped = [], [], 0
+        truncated = False
+        try:
+            children = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            abort(403, description='디렉토리를 읽을 권한이 없습니다.')
+        for child in children:
+            try:
+                if child.is_dir() and child.resolve().is_relative_to(boundary):
+                    directories.append(dict(name=child.name, path=str(child.resolve())))
+            except OSError:
+                skipped += 1
+        def walk_error(_):
+            nonlocal skipped
+            skipped += 1
+        if recursive:
+            candidates = (Path(base) / name for base, _, names in os.walk(folder, onerror=walk_error, followlinks=False) for name in names)
+        else:
+            candidates = iter(children)
+        # Bound response memory for very large collections.
+        for child in candidates:
+            if child.suffix.lower() not in EXTENSIONS:
+                continue
+            try:
+                resolved = child.resolve()
+                if not resolved.is_relative_to(boundary) or not resolved.is_file():
+                    continue
+                info = resolved.stat()
+                media.append(dict(name=child.name, path=str(resolved), date=datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d'), modified=info.st_mtime, size=info.st_size, video=child.suffix.lower() == '.mp4'))
+                if len(media) >= 20000:
+                    truncated = True
+                    break
+            except OSError:
+                skipped += 1
+        media.sort(key=lambda item: (-item['modified'], item['path']))
+        return jsonify(path=str(folder), parent=str(folder.parent) if folder != boundary else None, directories=directories, media=media, skipped=skipped, truncated=truncated)
+
+    @app.get('/media')
+    def media():
+        path = checked(request.args.get('path', ''))
+        if not path.is_file() or path.suffix.lower() not in EXTENSIONS:
+            abort(404, description='지원하는 미디어 파일이 아닙니다.')
+        try:
+            return send_file(path, conditional=True)
+        except PermissionError:
+            abort(403, description='파일을 읽을 권한이 없습니다.')
+
+    return app
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', default='127.0.0.1')
+    parser.add_argument('--port', type=int, default=7081)
+    parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
+    parser.add_argument('--directory', help='처음 표시할 폴더 (기본 홈)')
+    args = parser.parse_args()
+    create_app(args.root, args.directory).run(host=args.host, port=args.port, threaded=True)
