@@ -131,7 +131,7 @@ def collect_webdav(settings: dict, progress=lambda message: None) -> tuple[list[
                     pending.append(path)
                 elif path.lower().endswith('.md'):
                     named_pulse = bool(re.fullmatch(r'pulse_\d{8}_\d{6}\.md', Path(path).name))
-                    if Path(path).name.startswith('iptime_') or (named_pulse and found_pulse):
+                    if not named_pulse or found_pulse:
                         continue
                     read_count += 1
                     progress(f'Markdown 읽기 시작 #{read_count}: /{path}')
