@@ -10,6 +10,23 @@ def report(stamp, rows):
 
 
 class AggregateTests(unittest.TestCase):
+    def test_missing_config_does_not_connect(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch('sys.argv', ['check', '--config', str(Path(directory) / 'missing.json')]), \
+             patch.object(check, 'collect_webdav') as collect, patch('builtins.print'):
+            self.assertEqual(check.main(), 1)
+        collect.assert_not_called()
+
+    def test_http_error_is_actionable_without_response_body(self):
+        from pulsedav import SimpleRequestException
+        with patch('sys.argv', ['check']), \
+             patch.object(check, 'collect_webdav', side_effect=RuntimeError('PROPFIND: HTTP 401: secret')), \
+             patch('builtins.print') as output:
+            self.assertEqual(check.main(), 1)
+        text = '\n'.join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn('HTTP 401', text)
+        self.assertNotIn('secret', text)
+
     def test_remote_scan_and_save_before_send(self):
         data = report('2026-10-13 10:00:00', 'Filesystem Size(GiB) Used Available Use% Mounted on\n/dev/data 200 180 20 90% /')
         session = Mock()

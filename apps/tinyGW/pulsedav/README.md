@@ -488,6 +488,12 @@ cron에서도 해당 설정을 읽을 수 있는 동일한 계정을 사용하�
 
 ## WebDAV /tinyGW 전체 보고서 집계·저장·Telegram 전송
 
+설정 파일 경로는 정확한 파일명을 사용하세요. 예를 들어 `this.setting.json`과
+`this_settings.json`은 서로 다른 파일입니다. 파일이 없거나 JSON 형식이 잘못되면
+접속 전에 중단하며, 실제 사용한 설정 경로를 콘솔에 표시합니다.
+HTTP 401은 인증 정보, 403은 읽기 권한, 404는 WebDAV root와 `/tinyGW` 경로를
+확인하세요. HTTP 405는 일반 웹 주소 대신 PROPFIND를 지원하는 WebDAV 주소인지 확인합니다.
+
 `check_tinyGW_all.py`는 PulseDAV 설정의 WebDAV 서버에서 `/tinyGW` 하위 Markdown을
 재귀적으로 읽습니다. 호스트별 최신 시스템 보고서의 내부 IP·호스트명·최근 전송 시각과
 100GB 이상 파일시스템의 이름·마운트 경로·빈 공간%를 집계합니다.

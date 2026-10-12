@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime
 from pathlib import Path
 import re
@@ -11,7 +12,7 @@ import sys
 from time_utils import SEOUL
 from pulsedav import (APP_DIR, REQUEST_ERRORS, build_session, build_webdav_config,
                       compose_webdav_url, load_settings)
-from status_check import list_directory
+from status_check import list_directory, safe_error
 
 MIN_BYTES = 100_000_000_000
 
@@ -100,7 +101,11 @@ def collect_webdav(settings: dict) -> tuple[list[dict], list[str]]:
                 continue
             visited.add(directory)
             # A failed listing must not silently produce an incomplete inventory.
-            for entry in list_directory(session, config, directory):
+            try:
+                entries = list_directory(session, config, directory)
+            except REQUEST_ERRORS as exc:
+                raise RuntimeError(f'WebDAV PROPFIND /{directory}: {safe_error(exc)}') from exc
+            for entry in entries:
                 path = entry['path']
                 if entry.get('error'):
                     errors.append(f"{path}: WebDAV metadata unavailable")
@@ -170,7 +175,17 @@ def main() -> int:
     parser.add_argument('--executable')
     parser.add_argument('--timeout', type=int)
     args = parser.parse_args()
-    settings = load_settings(args.config)
+    config_path = Path(args.config).expanduser().resolve() if args.config else APP_DIR / 'settings.json'
+    try:
+        with config_path.open(encoding='utf-8') as source:
+            raw_settings = json.load(source)
+        if not isinstance(raw_settings, dict) or not isinstance(raw_settings.get('webdav'), dict):
+            raise ValueError('webdav 설정 항목이 필요합니다')
+    except (OSError, ValueError) as exc:
+        print(f'설정 파일을 읽을 수 없거나 형식이 잘못되었습니다: {config_path} ({type(exc).__name__})', file=sys.stderr)
+        return 1
+    print(f'사용 설정 파일: {config_path}')
+    settings = load_settings(config_path)
     telegram = settings.get('telegram', {})
     timeout = args.timeout if args.timeout is not None else int(telegram.get('timeout_seconds', 60))
     if timeout <= 0:
@@ -196,7 +211,16 @@ def main() -> int:
             print('Telegram 전송 완료')
         return 0
     except REQUEST_ERRORS + (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-        print(f'tinyGW 집계/저장/전송 실패: {type(exc).__name__} (접속 설정·권한을 확인하세요)', file=sys.stderr)
+        detail = safe_error(exc)
+        hints = {'HTTP 401': 'WebDAV ID·비밀번호 또는 앱 비밀번호를 확인하세요.',
+                 'HTTP 403': '/tinyGW 디렉터리 목록·파일 읽기 권한을 확인하세요.',
+                 'HTTP 404': 'webdav.hostname·root 및 그 아래 /tinyGW 존재 여부를 확인하세요.',
+                 'HTTP 405': '접속 경로가 PROPFIND를 지원하는 WebDAV 주소인지 확인하세요.',
+                 'tls_certificate_error': '서버 인증서와 신뢰 체인을 확인하세요.',
+                 'dns_error': 'WebDAV 서버 호스트명과 DNS를 확인하세요.',
+                 'timeout': '서버 응답 지연·방화벽·네트워크를 확인하세요.',
+                 'connection_refused': '서버 주소·포트와 서비스 실행 상태를 확인하세요.'}
+        print(f'tinyGW 집계/저장/전송 실패: {detail} — {hints.get(detail, "접속 설정·네트워크·저장 권한을 확인하세요.")}', file=sys.stderr)
         return 1
 
 
