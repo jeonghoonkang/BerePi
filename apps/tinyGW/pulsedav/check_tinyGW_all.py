@@ -9,6 +9,9 @@ import subprocess
 import sys
 
 from time_utils import SEOUL
+from pulsedav import (APP_DIR, REQUEST_ERRORS, build_session, build_webdav_config,
+                      compose_webdav_url, load_settings)
+from status_check import list_directory
 
 MIN_BYTES = 100_000_000_000
 
@@ -22,8 +25,9 @@ def size_bytes(value: str, gib: bool) -> float:
     return float(match[1]) * 1024 ** ('KMGTPE'.index(match[2].upper()) + 1 if match[2] else 0)
 
 
-def parse_report(path: Path) -> dict | None:
-    text = path.read_text(encoding='utf-8')
+def parse_report(path: Path, text: str | None = None, modified: datetime | None = None) -> dict | None:
+    if text is None:
+        text = path.read_text(encoding='utf-8')
     host = re.search(r'^- 호스트명:\s*(.+)$', text, re.M)
     ip = re.search(r'^- 내부 IP:\s*(.+)$', text, re.M)
     if not host or not ip:
@@ -40,7 +44,7 @@ def parse_report(path: Path) -> dict | None:
         if name:
             moment = datetime.strptime(name[1], '%Y%m%d_%H%M%S').replace(tzinfo=SEOUL)
         else:
-            moment = datetime.fromtimestamp(path.stat().st_mtime, SEOUL)
+            moment = modified or datetime.fromtimestamp(path.stat().st_mtime, SEOUL)
     section = re.search(r'^## HDD 공간\s*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
     disks = []
     if section:
@@ -82,6 +86,52 @@ def collect(root: Path) -> tuple[list[dict], list[str]]:
     return [latest[host] for host in sorted(latest)], errors
 
 
+def collect_webdav(settings: dict) -> tuple[list[dict], list[str]]:
+    config = build_webdav_config(settings)
+    session = build_session(config)
+    pending = ['tinyGW']
+    visited = set()
+    latest = {}
+    errors = []
+    try:
+        while pending:
+            directory = pending.pop()
+            if directory in visited:
+                continue
+            visited.add(directory)
+            # A failed listing must not silently produce an incomplete inventory.
+            for entry in list_directory(session, config, directory):
+                path = entry['path']
+                if entry.get('error'):
+                    errors.append(f"{path}: WebDAV metadata unavailable")
+                    continue
+                if entry['is_directory']:
+                    pending.append(path)
+                elif path.lower().endswith('.md'):
+                    try:
+                        response = session.request('GET', compose_webdav_url(config, path), timeout=60)
+                        response.raise_for_status()
+                        modified = datetime.fromisoformat(entry['modified_at']) if entry.get('modified_at') else None
+                        report = parse_report(Path(path), response.content.decode('utf-8-sig'), modified)
+                    except REQUEST_ERRORS + (OSError, UnicodeError, ValueError):
+                        errors.append(f'{path}: report read/parse failed')
+                        continue
+                    if report and (report['host'] not in latest or report['at'] > latest[report['host']]['at']):
+                        latest[report['host']] = report
+    finally:
+        if hasattr(session, 'close'):
+            session.close()
+    return [latest[host] for host in sorted(latest)], errors
+
+
+def save_summary(message: str, directory: Path) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"tinyGW_all_{datetime.now(SEOUL):%Y%m%d_%H%M%S_%f}.txt"
+    with path.open('x', encoding='utf-8') as output:
+        output.write(message + '\n')
+    return path
+
+
 def render(reports: list[dict], errors: list[str]) -> str:
     lines = ['🖥️ tinyGW 전체 용량 현황', f'집계 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST',
              f'호스트 수: {len(reports)}', '']
@@ -112,29 +162,41 @@ def send_text(message: str, executable: str, config: str | None, timeout: int) -
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--root', type=Path, default=Path('tinyGW'), help='Local tinyGW directory (default: ./tinyGW)')
+    parser.add_argument('--config', help='PulseDAV settings JSON for WebDAV and Telegram')
+    parser.add_argument('--root', type=Path, help='Optional local directory instead of WebDAV /tinyGW')
+    parser.add_argument('--logs-dir', type=Path, default=APP_DIR / 'logs', help='Saved summary directory')
     parser.add_argument('--send', action='store_true', help='Send summary as Telegram text')
     parser.add_argument('--telegram-config', help='telegram-send configuration file')
-    parser.add_argument('--executable', default='telegram-send')
-    parser.add_argument('--timeout', type=int, default=60)
+    parser.add_argument('--executable')
+    parser.add_argument('--timeout', type=int)
     args = parser.parse_args()
-    if args.timeout <= 0:
+    settings = load_settings(args.config)
+    telegram = settings.get('telegram', {})
+    timeout = args.timeout if args.timeout is not None else int(telegram.get('timeout_seconds', 60))
+    if timeout <= 0:
         parser.error('--timeout must be positive')
     try:
-        reports, errors = collect(args.root.expanduser().resolve())
+        reports, errors = (collect(args.root.expanduser().resolve()) if args.root else collect_webdav(settings))
         for error in errors:
             print(error, file=sys.stderr)
         message = render(reports, errors)
-        print(message)
+        saved = save_summary(message, args.logs_dir.expanduser().resolve())
+        print(saved.read_text(encoding='utf-8'), end='')
+        print(f'집계 파일 저장: {saved}')
         if not reports:
             print('집계 가능한 PulseDAV 보고서가 없습니다.', file=sys.stderr)
             return 1
         if args.send:
-            send_text(message, args.executable, args.telegram_config, args.timeout)
+            telegram_config = args.telegram_config
+            if telegram_config is None and telegram.get('config_path'):
+                configured = Path(telegram['config_path']).expanduser()
+                telegram_config = str(configured if configured.is_absolute() else APP_DIR / configured)
+            send_text(saved.read_text(encoding='utf-8'), args.executable or telegram.get('executable') or 'telegram-send',
+                      telegram_config, timeout)
             print('Telegram 전송 완료')
         return 0
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-        print(f'tinyGW 집계/전송 실패: {type(exc).__name__}: {exc}', file=sys.stderr)
+    except REQUEST_ERRORS + (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f'tinyGW 집계/저장/전송 실패: {type(exc).__name__} (접속 설정·권한을 확인하세요)', file=sys.stderr)
         return 1
 
 

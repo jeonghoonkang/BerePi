@@ -58,3 +58,4 @@ __pycache__/
 /apps/tinyGW/pulsedav/disk_history.json
 /apps/tinyGW/pulsedav/disk_alert_state.json
 /apps/tinyGW/pulsedav/*.log
+/apps/tinyGW/pulsedav/logs/

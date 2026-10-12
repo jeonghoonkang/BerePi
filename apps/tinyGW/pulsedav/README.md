@@ -486,34 +486,43 @@ cron에서도 해당 설정을 읽을 수 있는 동일한 계정을 사용하�
 
 설치와 CLI 옵션 참고: [telegram-send 공식 문서](https://github.com/rahiel/telegram-send).
 
-## 서버에서 tinyGW 전체 보고서 집계·Telegram 전송
+## WebDAV /tinyGW 전체 보고서 집계·저장·Telegram 전송
 
-`check_tinyGW_all.py`는 서버 로컬 `tinyGW` 하위의 `.md` 파일을 재귀적으로 읽고,
-호스트명별 최신 시스템 보고서 하나를 선택합니다. 내부 IP·호스트명·최근 전송 시각과
-100GB 이상 파일시스템의 이름·마운트 경로·빈 공간%를 모아 표시합니다.
-여러 sub 디렉터리에 저장된 동일 호스트는 한 번만 포함하며, ipTIME 보고서는 제외합니다.
+`check_tinyGW_all.py`는 PulseDAV 설정의 WebDAV 서버에서 `/tinyGW` 하위 Markdown을
+재귀적으로 읽습니다. 호스트별 최신 시스템 보고서의 내부 IP·호스트명·최근 전송 시각과
+100GB 이상 파일시스템의 이름·마운트 경로·빈 공간%를 집계합니다.
+`webdav.sub`에 관계없이 전체 `/tinyGW`를 조회하며, 설정의 WebDAV root를 기준으로 합니다.
 
-PulseDAV 앱 디렉터리에서 실제 저장 경로를 지정해 실행하세요.
+PulseDAV 앱 디렉터리에서 실행하세요.
 
 ```bash
-# 콘솔 확인
-python3 check_tinyGW_all.py --root /srv/webdav/tinyGW
+# WebDAV에서 읽고 logs에 집계 파일 저장
+python3 check_tinyGW_all.py --config this_settings.json
 
-# Telegram 문자 전송
-python3 check_tinyGW_all.py --root /srv/webdav/tinyGW --send
+# 저장된 집계 파일의 내용을 Telegram 문자로 전송
+python3 check_tinyGW_all.py --config this_settings.json --send
 
-# 별도 수신 설정과 실행 파일 사용
-python3 check_tinyGW_all.py --root /srv/webdav/tinyGW --send \
-  --telegram-config ~/.config/pulsedav/telegram.conf \
-  --executable /home/user/.local/bin/telegram-send --timeout 60
+# 별도 Telegram 수신 설정 사용
+python3 check_tinyGW_all.py --config this_settings.json --send \
+  --telegram-config ~/.config/pulsedav/telegram.conf
 ```
 
-서버 실행 계정에서 먼저 `telegram-send --configure`로 수신 설정을 완료하세요.
-다른 서버로 복사할 때는 `time_utils.py`도 같은 디렉터리에 복사합니다.
-`--root`는 WebDAV URL이 아닌 로컬 경로이며, 기본값은 현재 디렉터리의 `tinyGW`입니다.
-최근 전송 시각은 보고서의 생성 시각입니다. 없으면 `pulse_YYYYMMDD_HHMMSS.md` 파일명,
-그마저 없으면 파일 수정 시각을 사용하므로 실제 업로드 완료 시각과 다를 수 있습니다.
-빈 공간%는 `100 - 사용률`이며 현재 GiB 표기와 예전 `df -h` 보고서를 지원합니다.
-최신 보고서에 용량 정보가 없으면 정보 없음으로 표시합니다.
-첨부 없이 문자만 보내며 긴 목록은 여러 메시지로 나눕니다. 원본 파일은 변경하지 않습니다.
-읽기 실패 파일은 콘솔에 표시하며 집계할 보고서가 없거나 전송 실패 시 종료 코드 1을 반환합니다.
+기본 설정은 앱의 `settings.json`입니다. WebDAV 계정은 `/tinyGW` 목록·파일 읽기 권한이
+필요합니다. Telegram은 실행 계정에서 `telegram-send --configure`로 먼저 설정하세요.
+실행 파일·수신 설정 파일·제한 시간은 PulseDAV `telegram` 설정을 사용하며
+`--executable`, `--telegram-config`, `--timeout`으로 재정의할 수 있습니다.
+`--send`는 명시적 수동 전송이므로 `telegram.enabled`와 관계없이 전송합니다.
+
+집계 결과는 기본적으로 `BerePi/apps/tinyGW/pulsedav/logs/` 아래
+`tinyGW_all_YYYYMMDD_HHMMSS_마이크로초.txt`에 UTF-8로 저장합니다.
+`--logs-dir /path/to/logs`로 저장 위치를 바꿀 수 있습니다.
+파일 저장을 완료한 뒤 해당 파일 내용을 다시 읽어 Telegram으로 전송하며 첨부는 없습니다.
+전송 실패 시에도 파일은 남으며, 긴 내용은 여러 문자 메시지로 나눕니다.
+
+기존 로컬 파일 집계는 `--root /srv/webdav/tinyGW`로 선택할 수 있습니다.
+같은 호스트의 중복 보고서는 한 번만 포함하며 ipTIME 등 시스템 보고서가 아닌 파일은 제외합니다.
+최근 전송 시각은 보고서 생성 시각입니다. 없으면 보고서 파일명, 그마저 없으면
+WebDAV 수정 시각(로컬 모드는 파일 수정 시각)을 사용합니다.
+빈 공간%는 `100 - 사용률`로 계산하며 최신 보고서에 용량 정보가 없으면 정보 없음으로 표시합니다.
+원본 파일은 변경하지 않습니다. 파일 읽기 실패는 콘솔과 집계 파일에 건수로 표시하며,
+디렉터리 조회 실패·집계할 보고서 없음·저장 또는 전송 실패 시 종료 코드 1을 반환합니다.

@@ -10,6 +10,31 @@ def report(stamp, rows):
 
 
 class AggregateTests(unittest.TestCase):
+    def test_remote_scan_and_save_before_send(self):
+        data = report('2026-10-13 10:00:00', 'Filesystem Size(GiB) Used Available Use% Mounted on\n/dev/data 200 180 20 90% /')
+        session = Mock()
+        session.request.return_value.content = data.encode('utf-8')
+        entries = [[{'path': 'tinyGW/host', 'is_directory': True}],
+                   [{'path': 'tinyGW/host/pulse_20261013_100000.md', 'is_directory': False}]]
+        with patch.object(check, 'build_session', return_value=session), \
+             patch.object(check, 'list_directory', side_effect=entries):
+            reports, errors = check.collect_webdav({'webdav': {'hostname': 'https://example.test'}})
+        self.assertFalse(errors)
+        self.assertEqual(len(reports), 1)
+        self.assertIn('/tinyGW/host/', session.request.call_args.args[1])
+        session.close.assert_called_once()
+        with tempfile.TemporaryDirectory() as directory:
+            def send(message, *args):
+                files = list(Path(directory).glob('*.txt'))
+                self.assertEqual(len(files), 1)
+                self.assertEqual(message, files[0].read_text())
+            with patch('sys.argv', ['check', '--send', '--logs-dir', directory]), \
+                 patch.object(check, 'collect_webdav', return_value=(reports, [])), \
+                 patch.object(check, 'send_text', side_effect=send) as sender, \
+                 patch('builtins.print'):
+                self.assertEqual(check.main(), 0)
+            sender.assert_called_once()
+
     def test_latest_and_size_filter(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
