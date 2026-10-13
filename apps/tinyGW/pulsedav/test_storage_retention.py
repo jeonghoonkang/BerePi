@@ -130,41 +130,49 @@ class StorageRetentionTests(unittest.TestCase):
                 dav.upload_remote_file(self.config, self.target, b'report')
         session.put.assert_not_called()
 
-    def quota_xml(self, value, status='200'):
-        return ET.fromstring(f'''<d:multistatus xmlns:d="DAV:"><d:response><d:propstat>
-        <d:prop><d:quota-available-bytes>{value}</d:quota-available-bytes></d:prop>
-        <d:status>HTTP/1.1 {status} Status</d:status></d:propstat></d:response></d:multistatus>''')
+    def serverinfo_response(self, value):
+        import json
+        return dav.SimpleResponse(200, json.dumps({'ocs': {'meta': {'statuscode': 200},
+            'data': {'nextcloud': {'system': {'freespace': value}}}}}), b'')
 
-    def test_quota_zero_and_account_root_fallback(self):
-        with patch.object(dav, 'build_session'), patch.object(dav, 'propfind',
-             side_effect=[self.quota_xml('0', '404')] * 3 + [self.quota_xml('0')]) as find:
-            self.assertEqual(dav.get_remote_available_bytes(self.config, self.directory), 0)
-            self.assertEqual(find.call_args.args[1], 'https://example.test/dav/user')
-            self.assertEqual(find.call_args.kwargs['depth'], '0')
-
-    def test_quota_is_available_on_share_ancestor(self):
-        with patch.object(dav, 'build_session'), patch.object(dav, 'propfind',
-             side_effect=[self.quota_xml('', '404'), self.quota_xml('123')]) as find:
-            self.assertEqual(dav.get_remote_available_bytes(self.config, self.directory), 123)
-            self.assertEqual(find.call_args.args[1], 'https://example.test/dav/user/tinyGW/site')
-
-    def test_unknown_quota_prevents_delete_and_upload(self):
+    def test_serverinfo_zero_and_installation_subpath(self):
+        self.config.hostname = 'https://example.test/nextcloud/'
         session = Mock()
-        with patch.object(dav, 'build_session', return_value=session), \
-             patch.object(dav, 'ensure_remote_directories'), \
-             patch.object(dav, 'list_remote_entries', return_value=[self.entry('pulse_20260101_000000.md')]), \
-             patch.object(dav, 'propfind', return_value=self.quota_xml('', '404')), \
-             patch.object(dav, 'delete_remote_path') as delete:
-            with self.assertRaises(dav.WebDAVStorageError):
-                dav.upload_remote_file(self.config, self.target, b'report')
-        delete.assert_not_called()
-        session.put.assert_not_called()
+        session.request.return_value = self.serverinfo_response(0)
+        with patch.object(dav, 'build_session', return_value=session):
+            self.assertEqual(dav.get_remote_available_bytes(self.config, self.directory), 0)
+        args, kwargs = session.request.call_args
+        self.assertEqual(args[0], 'GET')
+        self.assertEqual(args[1], 'https://example.test/nextcloud/ocs/v2.php/apps/serverinfo/api/v1/info?format=json&skipApps=true&skipUpdate=true')
+        self.assertEqual(kwargs['headers']['OCS-APIRequest'], 'true')
+        self.assertEqual(kwargs['timeout'], dav.REQUEST_TIMEOUT)
 
-    def test_unknown_or_unlimited_quota_is_not_treated_as_free(self):
-        for value in ('', '-3', 'unlimited', 'invalid'):
-            with self.subTest(value=value), patch.object(dav, 'build_session'), \
-                 patch.object(dav, 'propfind', return_value=self.quota_xml(value)):
-                with self.assertRaisesRegex(ValueError, '확인할 수 없어'):
+    def test_serverinfo_positive_value(self):
+        session = Mock()
+        session.request.return_value = self.serverinfo_response(123456789)
+        with patch.object(dav, 'build_session', return_value=session):
+            self.assertEqual(dav.get_remote_available_bytes(self.config, self.directory), 123456789)
+
+    def test_invalid_space_prevents_delete_and_upload(self):
+        for value in (None, -3, '123', True, 1.5):
+            session = Mock()
+            session.request.return_value = self.serverinfo_response(value)
+            with self.subTest(value=value), patch.object(dav, 'build_session', return_value=session), \
+                 patch.object(dav, 'ensure_remote_directories'), \
+                 patch.object(dav, 'list_remote_entries', return_value=[self.entry('pulse_20260101_000000.md')]), \
+                 patch.object(dav, 'delete_remote_path') as delete:
+                with self.assertRaises(dav.WebDAVStorageError):
+                    dav.upload_remote_file(self.config, self.target, b'report')
+            delete.assert_not_called()
+            session.put.assert_not_called()
+
+    def test_serverinfo_rejects_http_and_invalid_ocs_responses(self):
+        for status, body in ((401, ''), (403, ''), (404, ''), (200, '<html>login</html>'),
+                             (200, '{}'), (200, '{"ocs":{"meta":{"statuscode":997}}}')):
+            session = Mock()
+            session.request.return_value = dav.SimpleResponse(status, body, b'')
+            with self.subTest(status=status, body=body), patch.object(dav, 'build_session', return_value=session):
+                with self.assertRaises(dav.WebDAVStorageError):
                     dav.get_remote_available_bytes(self.config, self.directory)
 
     def test_directory_listing_uses_successful_properties_and_stays_in_scope(self):

@@ -389,45 +389,37 @@ def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, cont
 
 
 def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str, *, verbose: bool = False) -> int:
-    """Read the server's usable quota; unknown/unlimited is not free space."""
+    """Read Nextcloud serverinfo freespace in bytes (not user quota)."""
+    url = (config.hostname.rstrip("/")
+           + "/ocs/v2.php/apps/serverinfo/api/v1/info?format=json&skipApps=true&skipUpdate=true")
     session = build_session(config)
-    # Quota may be exposed on a share or ancestor rather than the host folder.
-    path = normalize_remote_path(remote_dir)
-    paths = [path]
-    while path:
-        path = posixpath.dirname(path)
-        paths.append(path)
-    for path in paths:
-        if verbose:
-            print(f"[dry-run] PROPFIND Depth=0: /{path or '(WebDAV root)'}", flush=True)
-        root = propfind(session, compose_webdav_url(config, path), depth="0")
-        for propstat in root.findall("d:response/d:propstat", WEBDAV_NS):
-            status = propstat.findtext("d:status", default="", namespaces=WEBDAV_NS).split()
-            if verbose:
-                quota = propstat.find("d:prop/d:quota-available-bytes", WEBDAV_NS)
-                if quota is not None:
-                    print(f"  quota-available-bytes: {(quota.text or '').strip()!r}; "
-                          f"HTTP status: {' '.join(status)}", flush=True)
-            if len(status) < 2 or status[1] != "200":
-                continue
-            value = propstat.findtext("d:prop/d:quota-available-bytes", namespaces=WEBDAV_NS)
-            try:
-                available = int(value)
-            except (TypeError, ValueError):
-                continue
-            if available >= 0:
-                return available
-        if verbose:
-            print("  유효한 용량 정보 없음", flush=True)
-    raise WebDAVStorageError(
-        "서버 여유 공간(quota-available-bytes)을 확인할 수 없어 전송을 중단합니다. "
-        "호스트 폴더부터 설정된 WebDAV 루트까지 조회했지만 유효한 용량 응답이 없습니다. "
-        "서버의 WebDAV quota 지원 및 계정 할당량 설정을 확인해 주세요."
-    )
+    if verbose:
+        print("[dry-run] GET Nextcloud serverinfo API (nextcloud.system.freespace)", flush=True)
+    response = session.request("GET", url, headers={"OCS-APIRequest": "true", "Accept": "application/json"},
+                               timeout=REQUEST_TIMEOUT)
+    if verbose:
+        print(f"  HTTP status: {response.status_code}", flush=True)
+    if response.status_code in (401, 403):
+        raise WebDAVStorageError("Nextcloud serverinfo 접근 권한이 없습니다. WebDAV 설정 계정에 관리자 권한이 필요합니다.")
+    if response.status_code == 404:
+        raise WebDAVStorageError("Nextcloud serverinfo API를 찾을 수 없습니다. serverinfo 앱 활성화 및 hostname의 Nextcloud 설치 경로를 확인하세요.")
+    response.raise_for_status()
+    try:
+        ocs = json.loads(response.text)["ocs"]
+        if str(ocs["meta"]["statuscode"]) not in {"100", "200"}:
+            raise ValueError("OCS failure")
+        value = ocs["data"]["nextcloud"]["system"]["freespace"]
+    except (ValueError, KeyError, TypeError) as exc:
+        raise WebDAVStorageError("Nextcloud serverinfo 응답에서 nextcloud.system.freespace를 확인할 수 없어 전송을 중단합니다.") from exc
+    if verbose:
+        print(f"  nextcloud.system.freespace: {value!r}", flush=True)
+    if type(value) is not int or value < 0:
+        raise WebDAVStorageError("Nextcloud serverinfo의 nextcloud.system.freespace가 유효한 0 이상의 정수 바이트가 아니므로 전송을 중단합니다.")
+    return value
 
 
 def dry_run_remote_quota(settings: dict[str, Any]) -> int:
-    """Probe configured upload directories without writes or report collection."""
+    """Probe server free space for configured targets without writes."""
     errors = validate_settings(settings)
     if errors:
         raise ValueError(" / ".join(errors))
