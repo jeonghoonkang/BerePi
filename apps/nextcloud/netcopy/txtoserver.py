@@ -39,6 +39,8 @@ import posixpath
 import subprocess
 import sys
 import tempfile
+import time
+from urllib.parse import quote, urlsplit, urlunsplit
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -116,19 +118,84 @@ def load_config(path: str) -> configparser.ConfigParser:
     return parser
 
 
-def build_client(section: configparser.SectionProxy, verify_ssl: bool) -> Client:
+def server_hostname(section) -> str:
+    url = urlsplit(section.get("webdav_hostname", ""))
+    port = section.get("port", "").strip()
+    if port:
+        host = url.hostname or ""
+        if ":" in host:
+            host = f"[{host}]"
+        url = url._replace(netloc=f"{host}:{int(port)}")
+    return urlunsplit(url).rstrip("/")
+
+
+class RateLimiter:
+    def __init__(self, bytes_per_second):
+        self.rate = bytes_per_second
+        self.started = time.monotonic()
+        self.bytes = 0
+
+    def consume(self, size):
+        self.bytes += size
+        delay = self.bytes / self.rate - (time.monotonic() - self.started)
+        if delay > 0:
+            time.sleep(delay)
+
+
+class LimitedReader:
+    def __init__(self, stream, rate):
+        self.stream = stream
+        self.limiter = RateLimiter(rate)
+        self.chunk_size = max(1, min(65536, int(rate / 10)))
+
+    def read(self, size=-1):
+        block = self.stream.read(self.chunk_size if size < 0 else min(size, self.chunk_size))
+        self.limiter.consume(len(block))
+        return block
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+class LimitedClient(Client):
+    """Throttle each sequential file transfer, including verification downloads."""
+    def download_sync(self, remote_path, local_path, **kwargs):
+        limiter = RateLimiter(self.speed_limit)
+        with self.execute_request("download", quote("/" + remote_path.lstrip("/"), safe="/")) as response:
+            with open(local_path, "wb") as stream:
+                chunk_size = max(1, min(65536, int(self.speed_limit / 10)))
+                for block in response.iter_content(chunk_size=chunk_size):
+                    limiter.consume(len(block))
+                    stream.write(block)
+
+    def upload_sync(self, remote_path, local_path, **kwargs):
+        with open(local_path, "rb") as stream:
+            with self.execute_request("upload", quote("/" + remote_path.lstrip("/"), safe="/"),
+                                      data=LimitedReader(stream, self.speed_limit)):
+                pass
+
+
+def build_client(section: configparser.SectionProxy, verify_ssl: bool, speed_limit=0) -> Client:
     options = {
-        "webdav_hostname": section.get("webdav_hostname"),
+        "webdav_hostname": server_hostname(section),
         "webdav_root": section.get("webdav_root"),
         "webdav_login": section.get("username"),
         "webdav_password": section.get("password"),
-        "verbose": False,
+        "webdav_verbose": False,
     }
-    port = section.get("port", fallback="").strip()
-    if port:
-        options["webdav_port"] = int(port)
-    client = Client(options)
+    client = LimitedClient(options) if speed_limit > 0 else Client(options)
+    client.speed_limit = speed_limit
     client.verify = verify_ssl
+    client.last_http_error = None
+    def capture_http_error(response, **kwargs):
+        if response.status_code >= 400:
+            client.last_http_error = {
+                "http_status": response.status_code,
+                "server_response": response.content[:8192].decode("utf-8", errors="replace"),
+                "server_response_truncated": len(response.content) > 8192,
+            }
+        return response
+    client.session.hooks["response"].append(capture_http_error)
     return client
 
 
@@ -253,7 +320,7 @@ def should_upload(src_info: ConfigInfo, dest_info: Optional[ConfigInfo]) -> bool
 
 
 def run_source_propfind(section: configparser.SectionProxy, root: str) -> int:
-    hostname = section.get("webdav_hostname")
+    hostname = server_hostname(section)
     webdav_root = section.get("webdav_root")
     username = section.get("username")
     password = section.get("password")
@@ -298,7 +365,7 @@ def validate_paths(
     root: str,
     label: str,
 ) -> str:
-    hostname = section.get("webdav_hostname", "")
+    hostname = server_hostname(section)
     webdav_root = section.get("webdav_root", "")
     full_path = f"{hostname.rstrip('/')}/{webdav_root.strip('/')}"
     if root:
@@ -312,7 +379,7 @@ def validate_paths(
 
 
 def compose_remote_url(section: configparser.SectionProxy, remote_path: str) -> str:
-    hostname = section.get("webdav_hostname", "").rstrip("/")
+    hostname = server_hostname(section).rstrip("/")
     webdav_root = section.get("webdav_root", "").strip("/")
     normalized_path = normalize_remote_path(remote_path)
     if webdav_root and normalized_path:
@@ -348,6 +415,22 @@ def print_transfer_summary(progress: Progress) -> None:
     )
 
 
+class TransferFailure(RuntimeError):
+    def __init__(self, stage, original, http_error=None):
+        self.stage = stage
+        self.original = original
+        self.http_error = http_error or {}
+        super().__init__(f"{stage}: {original}")
+
+
+def transfer_step(stage, client, operation):
+    client.last_http_error = None
+    try:
+        return operation()
+    except Exception as exc:
+        raise TransferFailure(stage, exc, getattr(client, 'last_http_error', None)) from exc
+
+
 def upload_and_verify_file(
     src_client: Client,
     dest_client: Client,
@@ -355,26 +438,37 @@ def upload_and_verify_file(
     dest_path: str,
 ) -> int:
     dest_dir = posixpath.dirname(dest_path)
-    ensure_dirs(dest_client, dest_dir)
-    with tempfile.NamedTemporaryFile(prefix="nextcloud_src_") as src_tmp, tempfile.NamedTemporaryFile(
-        prefix="nextcloud_dst_"
-    ) as dest_tmp:
-        src_client.download_sync(remote_path=src_path, local_path=src_tmp.name)
-        src_hash = sha256_file(src_tmp.name)
-        src_size = os.path.getsize(src_tmp.name)
-
-        dest_client.upload_sync(remote_path=dest_path, local_path=src_tmp.name)
-        dest_client.download_sync(remote_path=dest_path, local_path=dest_tmp.name)
-        dest_hash = sha256_file(dest_tmp.name)
-        dest_size = os.path.getsize(dest_tmp.name)
-
-    if src_size != dest_size or src_hash != dest_hash:
-        raise RuntimeError(
-            "Verification failed after upload: "
-            f"{src_path} -> {dest_path} "
-            f"(src_size={src_size}, dest_size={dest_size})"
-        )
-    return src_size
+    transfer_step('destination_directory', dest_client, lambda: ensure_dirs(dest_client, dest_dir))
+    stage = 'local_tempfile'
+    try:
+        with tempfile.NamedTemporaryFile(prefix="nextcloud_src_") as src_tmp, tempfile.NamedTemporaryFile(
+            prefix="nextcloud_dst_"
+        ) as dest_tmp:
+            transfer_step('source_download', src_client,
+                          lambda: src_client.download_sync(remote_path=src_path, local_path=src_tmp.name))
+            stage = 'source_hash'
+            src_hash = sha256_file(src_tmp.name)
+            src_size = os.path.getsize(src_tmp.name)
+            transfer_step('destination_upload', dest_client,
+                          lambda: dest_client.upload_sync(remote_path=dest_path, local_path=src_tmp.name))
+            transfer_step('verification_download', dest_client,
+                          lambda: dest_client.download_sync(remote_path=dest_path, local_path=dest_tmp.name))
+            stage = 'destination_hash'
+            dest_hash = sha256_file(dest_tmp.name)
+            dest_size = os.path.getsize(dest_tmp.name)
+        stage = 'sha256_compare'
+        if src_size != dest_size or src_hash != dest_hash:
+            raise RuntimeError(
+                "Verification failed after upload: "
+                f"{src_path} -> {dest_path} "
+                f"(src_size={src_size}, dest_size={dest_size}, "
+                f"src_sha256={src_hash}, dest_sha256={dest_hash})"
+            )
+        return src_size
+    except TransferFailure:
+        raise
+    except Exception as exc:
+        raise TransferFailure(stage, exc) from exc
 
 
 def main() -> int:

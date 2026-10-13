@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BerePi · Photo Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body><header><span class="brand">BerePi <b> / PHOTO BROWSER</b></span><h1>폴더 속의 순간들.</h1><p>사진과 동영상을 날짜별로 둘러보세요.</p></header>
+<main><form id="location"><label for="path">시스템 디렉토리</label><div class="pathbar"><button id="up" type="button" aria-label="상위 폴더">↑ 상위</button><input id="path" value="{{ initial }}" required><button type="submit">폴더 열기</button></div></form>
+<div class="tools"><label><input id="recursive" type="checkbox"> 하위 폴더 포함</label><label>날짜 <input id="date" type="date"></label><label>형식 <select id="type"><option value="all">전체</option><option value="image">이미지</option><option value="video">MP4</option></select></label><button id="reset">필터 초기화</button></div>
+<p id="status" role="status" aria-live="polite"></p><nav id="folders" aria-label="하위 폴더"></nav><div id="gallery"></div><button id="more" hidden>더 보기</button></main>
+<dialog id="viewer"><div class="viewerbar"><button id="previous" aria-label="이전 파일">←</button><span id="title"></span><button id="next" aria-label="다음 파일">→</button><button id="close">닫기 ×</button></div><div id="preview"></div><a id="original" target="_blank" rel="noopener">원본 열기 ↗</a></dialog>
+<script src="{{ url_for('static', filename='app.js') }}"></script></body></html>

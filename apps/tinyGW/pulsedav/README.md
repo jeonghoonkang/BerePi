@@ -333,3 +333,232 @@ Markdown 이외의 파일은 그대로 표시합니다.
 모든 파일의 수정 시각을 조회하며 JSON의 전체 파일 목록은 유지합니다.
 수정 시각을 확인하지 못한 파일이 있으면 미확인 개수를 함께 표시합니다.
 `--check-status`의 로컬 점검 tree는 기존처럼 모든 파일을 표시합니다.
+
+## 디스크 용량 예측
+
+용량 표시·이력 기록·예측·Telegram 자동 경고 및 수동 테스트는 **전체 용량 100GB 이상**인
+파일시스템만 대상으로 합니다. `df`가 반환하는 전체 용량 기준이며,
+100GB는 100,000,000,000바이트입니다. 작은 부팅 파티션 등은 제외됩니다.
+
+HDD 공간 항목을 켜면 파일시스템별 사용률이 **80% 이상**일 때
+`disk_history.json`에 측정 시각과 사용량을 자동 기록합니다. **90% 이상(잔여 10% 이하)**이면
+현재 사용률·잔여 용량, 관측 기간, 평균 증가량(GiB/일), 100% 도달까지 남은 일수와
+예상 날짜(KST)를 WebDAV 및 Telegram 보고서에 표시합니다.
+
+평균 증가량은 저장된 최초 측정부터 현재까지의 순증가량을 경과 일수로 나눈 값이며,
+예상 남은 일수는 현재 사용 가능 공간을 평균 증가량으로 나눠 계산합니다.
+예약 블록을 제외한 `df`의 사용 가능 용량을 기준으로 합니다. 증가 속도가 계속 같다는
+가정의 추정치이며, 이력이 부족하거나 사용량이 늘지 않으면 사유를 표시합니다.
+최대 최근 10,000개 측정값을 디스크별로 보관하며, 사용률이 80% 미만이 되거나
+용량이 변경되면 관측 기간을 다시 시작합니다. 이력 파일은 Git에 포함하지 않습니다.
+
+## Telegram 동시 전송 (선택)
+
+### 현재 디스크 용량 테스트 전송
+
+PulseDAV 앱 디렉터리에서 실행합니다. Telegram 수신 설정은 먼저
+`telegram-send --configure`로 완료하세요.
+
+```bash
+python3 sender.py --test-telegram-disk --config this_settings.json
+```
+
+기본 `settings.json`을 사용한다면 `--config this_settings.json`은 생략합니다.
+`python3 pulsedav.py --test-telegram-disk --config this_settings.json`으로도 실행할 수 있습니다.
+현재 100GB 이상 디스크 용량, 파일시스템 이름·사용률과 기존 이력에 따른 용량 예측을
+호스트명·내부 IP·공인 IP와 함께 **Telegram 문자 메시지로 전송**합니다.
+`disk_test.md` 파일은 생성하거나 첨부하지 않습니다.
+수동 테스트이므로 사용률 95% 초과 여부, HDD 공간 포함 설정, `telegram.enabled` 값과
+관계없이 1회 전송합니다. 설정 파일의 Telegram 실행 파일·수신 설정 경로·제한 시간은
+그대로 사용하며, 저장된 설정은 변경하지 않습니다.
+WebDAV에는 저장하지 않고, 디스크 이력과 하루 2회 자동 경고 전송 기록도 변경하지 않습니다.
+콘솔에도 현재 용량과 전송 결과를 표시하며 성공 시 종료 코드 0, 실패 시 1을 반환합니다.
+
+모든 Telegram 첨부 파일의 캡션에 전송 장비 정보를 함께 표시합니다.
+
+```text
+🖥️ Host: gateway-host
+🏠 Local IP: 192.168.1.2
+🌐 Public IP: 203.0.113.1
+💽 /dev/sda1 (/): 96%
+```
+
+100GB 이상 파일시스템의 이름·마운트 경로·사용률을 캡션 문자에 함께 표시합니다.
+디스크가 많아 캡션 길이 제한을 넘으면 전체 목록을 첨부 파일에 포함합니다.
+
+시스템 보고서와 디스크 경고는 수집한 정보를 재사용하며, ipTIME 보고서는 전송 시 조회합니다.
+
+디스크 사용률이 **95% 초과**이고 HDD 공간 항목 및 `telegram.enabled`가 켜져 있으면,
+용량과 예상 포화일을 담은 별도 `disk_alert.md` 경고도 전송합니다.
+한국 시간 기준 오전(00:00~11:59)·오후(12:00~23:59) 각각 최초 점검 시 한 번씩,
+하루 최대 2회 전송합니다. 여러 디스크의 경고는 한 파일에 모읍니다.
+`--loop` 또는 정기 cron 실행이 필요하며, 점검 실행이 없는 시간대의 경고는 소급하지 않습니다.
+WebDAV 저장 전에 경고를 시도하므로 WebDAV 장애가 있어도 전송할 수 있습니다.
+성공한 전송 구간은 `disk_alert_state.json`에 저장해 재시작·중복 실행 시에도 중복을 막고,
+전송 실패 시 다음 점검에서 재시도합니다. 95% 이하면 별도 Telegram 경고를 보내지 않습니다.
+기존 정기 Telegram 보고서 전송은 유지되므로 하루 2회 제한은 별도 디스크 경고에 적용됩니다.
+
+WebDAV 저장에 성공한 보고서를 `telegram-send --file`로 Telegram에도 전송할 수 있습니다.
+시스템 보고서와 `--iptime-list` 보고서 모두 적용되며, WebDAV 저장 대상이 여러 곳이어도
+Telegram에는 보고서별로 한 번만 전송합니다. 긴 보고서와 표를 보존하기 위해 Markdown
+파일을 첨부합니다. WebDAV 저장 후 순서대로 전송하며, Telegram 실패·시간 초과는 경고로
+출력하고 WebDAV 저장 결과와 전송 상태 기록은 유지합니다. WebDAV 저장이 실패하면
+일반 보고서의 Telegram 전송은 실행하지 않습니다. 단, 사용률 **95% 초과 디스크 경고**는
+WebDAV 저장 성공·실패와 관계없이 앞서 설명한 하루 최대 2회 기준으로 전송합니다.
+상태 점검과 게이트웨이 감시에는 적용되지 않습니다.
+
+먼저 실행 계정에서 설치하고 수신 대상을 설정합니다.
+
+```bash
+pipx install telegram-send
+telegram-send --configure
+```
+
+### `telegram-send --configure` 설정 방법
+
+개인 Telegram 계정으로 받는 경우 다음 순서로 설정합니다. PulseDAV 또는 cron을
+실행할 동일한 OS 계정의 터미널에서 진행하세요.
+
+1. Telegram에서 공식 [@BotFather](https://t.me/BotFather) 대화를 열고 `/newbot`을 보냅니다.
+2. 안내에 따라 봇의 표시 이름과 사용자 이름을 지정합니다. 사용자 이름은 `bot`으로
+   끝나야 합니다. 발급된 **봇 토큰**을 복사합니다.
+3. 터미널에서 `telegram-send --configure`를 실행하고 토큰 입력 요청에 붙여넣은 뒤
+   Enter를 누릅니다.
+4. 터미널에 표시되는 봇 링크를 Telegram에서 열고 **시작(Start)**을 누릅니다.
+   이어서 터미널에 표시된 인증 숫자를 **해당 봇과의 대화에** 메시지로 보냅니다.
+   이 숫자는 봇 토큰이나 Telegram 로그인 인증번호가 아닙니다.
+5. 터미널과 Telegram에 설정 완료 안내가 나타나는지 확인합니다. 설정 파일은
+   자동으로 저장되므로 매번 `--configure`를 실행할 필요가 없습니다.
+6. 아래 명령으로 메시지와 파일 수신을 확인합니다. 파일 전송 명령은 PulseDAV 앱
+   디렉터리에서 실행합니다.
+
+```bash
+telegram-send "PulseDAV Telegram 연결 테스트"
+telegram-send --file README.md
+```
+
+별도 설정 파일을 사용하려면 처음부터 경로를 지정하고, 테스트에도 같은 경로를 사용합니다.
+
+```bash
+telegram-send --config "$HOME/.config/pulsedav/telegram.conf" --configure
+telegram-send --config "$HOME/.config/pulsedav/telegram.conf" "PulseDAV Telegram 연결 테스트"
+```
+
+이 경우 PulseDAV의 `telegram.config_path`에 `~/.config/pulsedav/telegram.conf`를
+지정합니다. 봇 토큰이 들어 있는 설정 파일은 Git에 커밋하지 마세요.
+명령을 찾지 못하면 `pipx ensurepath` 실행 후 터미널을 다시 열고 확인합니다.
+인증 숫자를 보냈는데 설정이 끝나지 않으면 BotFather가 아니라 새로 만든 봇에
+정확한 숫자를 보냈는지 확인하세요.
+
+그룹으로 받으려면 `telegram-send --configure-group`을 실행하고, 안내되는 봇을 그룹에
+추가한 뒤 터미널에 표시된 인증 메시지를 그룹에 보냅니다. 채널로 받으려면
+`telegram-send --configure-channel`을 사용하며 봇을 채널 관리자로 추가해야 합니다.
+별도 설정 경로는 두 명령에도 `--config`로 지정할 수 있습니다.
+
+### PulseDAV 설정
+
+설정 파일의 `telegram` 항목을 다음과 같이 지정합니다. 기본값은 **꺼짐**입니다.
+
+```json
+"telegram": {
+  "enabled": true,
+  "executable": "telegram-send",
+  "config_path": "",
+  "timeout_seconds": 60
+}
+```
+
+- `enabled`: `true`이면 전송, `false`이면 WebDAV에만 저장합니다.
+- `executable`: 실행 파일 이름 또는 절대 경로입니다. cron에서 PATH가 다르면 `/home/user/.local/bin/telegram-send`처럼 지정합니다. 명령 옵션은 이 값에 넣지 않습니다.
+- `config_path`: 빈 문자열이면 telegram-send의 기본 설정을 사용합니다. 별도 설정 파일은 절대 경로 또는 PulseDAV 앱 디렉터리 기준 상대 경로로 지정합니다. `~`도 지원합니다.
+- `timeout_seconds`: Telegram 명령의 최대 실행 시간(양의 정수, 초)입니다.
+
+별도 수신 설정은 `telegram-send --config /path/to/telegram.conf --configure`로 만듭니다.
+cron에서도 해당 설정을 읽을 수 있는 동일한 계정을 사용하세요. 웹 설정 화면의
+**Telegram 전송**에서도 켜기/끄기, 실행 파일, 설정 파일, 제한 시간을 변경할 수 있습니다.
+
+기존 개인 설정 파일을 쓰는 경우 해당 파일에 `telegram` 항목을 추가하거나
+`python3 update_settings.py --config /path/to/this_settings.json`으로 최신 항목을 반영합니다.
+이후 평소처럼 `python3 sender.py --once --config /path/to/this_settings.json`을 실행합니다.
+`--loop`는 시작 시 읽은 설정을 사용하므로 변경 후 프로세스를 재시작해야 합니다.
+보고서 전송 함수의 반환값에는 `telegram.status` (`disabled`, `sent`, `failed`)가 포함됩니다.
+임시 첨부 파일은 성공·실패 후 삭제됩니다.
+
+설치와 CLI 옵션 참고: [telegram-send 공식 문서](https://github.com/rahiel/telegram-send).
+
+## WebDAV /tinyGW 전체 보고서 집계·저장·Telegram 전송
+
+실행 시 콘솔에 한국 시간(KST)과 시작 이후 경과 초를 표시합니다.
+설정 검증, 디렉터리 조회, Markdown 읽기·처리 건수, 집계 호스트 수,
+로그 저장, Telegram 메시지별 전송 시작·완료 및 전체 종료 상태를 출력합니다.
+전체 파일 수는 탐색하면서 발견하므로 WebDAV 진행률은 처리 건수로 표시합니다.
+WebDAV의 표준 호스트별 폴더에서는 `pulse_YYYYMMDD_HHMMSS.md` 중 최신 정상 보고서만
+다운로드합니다. 최신 파일을 읽지 못하면 이전 파일을 확인하며, 오래된 보고서의 반복 다운로드를 줄입니다.
+WebDAV에서 ipTIME·LLM 상태 등 다른 종류의 Markdown은 다운로드하지 않습니다.
+진행 출력은 표준 오류(stderr)에 즉시 기록하며 집계 파일·Telegram 본문에는 포함하지 않습니다.
+저장 시작 시 output 디렉터리를, 저장 완료 시 생성된 output 파일의 절대 경로를 표시합니다.
+
+```text
+[2026-10-13 10:00:00 KST | 경과 0.0초] tinyGW 집계 시작
+[2026-10-13 10:00:02 KST | 경과 2.1초] Markdown 처리 완료 #1 (집계 호스트 1개)
+[2026-10-13 10:00:05 KST | 경과 5.3초] 전체 작업 완료
+```
+
+설정 파일 경로는 정확한 파일명을 사용하세요. 예를 들어 `this.setting.json`과
+`this_settings.json`은 서로 다른 파일입니다. 파일이 없거나 JSON 형식이 잘못되면
+접속 전에 중단하며, 실제 사용한 설정 경로를 콘솔에 표시합니다.
+HTTP 401은 인증 정보, 403은 읽기 권한, 404는 WebDAV root와 `/tinyGW` 경로를
+확인하세요. HTTP 405는 일반 웹 주소 대신 PROPFIND를 지원하는 WebDAV 주소인지 확인합니다.
+`dns_error`는 서버 호스트명을 해석할 수 없다는 의미입니다. `webdav.hostname`의 도메인
+오타·DDNS 등록 상태와 실행 장비의 DNS/VPN 연결을 확인하세요. 이 오류는 인증 전 단계입니다.
+
+`check_tinyGW_all.py`는 PulseDAV 설정의 WebDAV 서버에서 `/tinyGW` 하위 Markdown을
+재귀적으로 읽습니다. 호스트별 최신 시스템 보고서의 내부 IP·호스트명·최근 전송 시각과
+100GB 이상 파일시스템의 이름·마운트 경로·빈 공간%를 집계합니다.
+`webdav.sub`에 관계없이 전체 `/tinyGW`를 조회하며, 설정의 WebDAV root를 기준으로 합니다.
+
+PulseDAV 앱 디렉터리에서 실행하세요.
+
+```bash
+# WebDAV에서 읽고 logs에 집계 파일 저장
+python3 check_tinyGW_all.py --config this_settings.json
+
+# 저장된 집계 파일의 내용을 Telegram 문자로 전송
+python3 check_tinyGW_all.py --config this_settings.json --send
+
+# 별도 Telegram 수신 설정 사용
+python3 check_tinyGW_all.py --config this_settings.json --send \
+  --telegram-config ~/.config/pulsedav/telegram.conf
+```
+
+기본 설정은 앱의 `settings.json`입니다. WebDAV 계정은 `/tinyGW` 목록·파일 읽기 권한이
+필요합니다. Telegram은 실행 계정에서 `telegram-send --configure`로 먼저 설정하세요.
+실행 파일·수신 설정 파일·제한 시간은 PulseDAV `telegram` 설정을 사용하며
+`--executable`, `--telegram-config`, `--timeout`으로 재정의할 수 있습니다.
+`--send`는 명시적 수동 전송이므로 `telegram.enabled`와 관계없이 전송합니다.
+
+집계 결과는 기본적으로 `BerePi/apps/tinyGW/pulsedav/logs/` 아래
+`tinyGW_all_YYYYMMDD_HHMMSS_마이크로초.txt`에 UTF-8로 저장합니다.
+`--logs-dir /path/to/logs`로 저장 위치를 바꿀 수 있습니다.
+파일 저장을 완료한 뒤 해당 파일 내용을 다시 읽어 Telegram으로 전송하며 첨부는 없습니다.
+전송 실패 시에도 파일은 남으며, 긴 내용은 여러 문자 메시지로 나눕니다.
+
+기존 로컬 파일 집계는 `--root /srv/webdav/tinyGW`로 선택할 수 있습니다.
+같은 호스트의 중복 보고서는 한 번만 포함하며 ipTIME 등 시스템 보고서가 아닌 파일은 제외합니다.
+최근 전송 시각은 보고서 생성 시각입니다. 없으면 보고서 파일명, 그마저 없으면
+WebDAV 수정 시각(로컬 모드는 파일 수정 시각)을 사용합니다.
+빈 공간%는 `100 - 사용률`로 계산하며 최신 보고서에 용량 정보가 없으면 정보 없음으로 표시합니다.
+원본 파일은 변경하지 않습니다. 파일 읽기 실패는 콘솔과 집계 파일에 건수로 표시하며,
+디렉터리 조회 실패·집계할 보고서 없음·저장 또는 전송 실패 시 종료 코드 1을 반환합니다.
+
+### 집계 호스트 정렬 및 개수 제한
+
+로그와 Telegram 본문은 최근 전송 시각이 최신인 호스트부터 정렬합니다.
+시각 정보가 없으면 마지막에 표시하며, 동일 시각은 호스트명 순서로 정렬합니다.
+`--limit N`으로 최신 N개 호스트만 로그에 저장하고 전송합니다.
+생략하면 전체, 전체 호스트 수보다 크면 존재하는 호스트만 포함합니다.
+N은 양의 정수이며, 최신 순서를 판단하기 위한 집계는 전체 호스트를 대상으로 합니다.
+
+```bash
+python3 check_tinyGW_all.py --config this.setting.json --limit 5 --send
+```

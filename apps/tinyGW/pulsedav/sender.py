@@ -20,6 +20,7 @@ from pulsedav import (
     run_loop,
     send_iptime_list,
     send_once,
+    send_telegram_disk_test,
     warn_docker_group_membership,
 )
 
@@ -27,6 +28,7 @@ from pulsedav import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send system status markdown to WebDAV.")
     parser.add_argument("--once", action="store_true", help="Send one report and exit.")
+    parser.add_argument('--test-telegram-disk', action='store_true', help='Send current disk capacity to Telegram only, regardless of usage or enabled setting.')
     parser.add_argument("--reboot", action="store_true", help="Mark this one-shot send as a reboot-time run.")
     parser.add_argument("--loop", action="store_true", help="Run continuously using the configured interval.")
     parser.add_argument("--interval-minutes", type=int, help="Override interval for loop mode.")
@@ -54,6 +56,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--status-output-dir', help='Directory for server_status.json and server_status.txt.')
     parser.add_argument('--max-age-minutes', type=int, help='Stale recording threshold (default: twice configured interval).')
     args = parser.parse_args()
+    if args.test_telegram_disk and any((args.once, args.loop, args.reboot, args.iptime_list,
+            args.print_crontab, args.install_crontab, args.gateway_watchdog, args.gateway_dry_run,
+            args.check_status, args.check_status_all)):
+        parser.error('--test-telegram-disk runs separately from other modes')
     if (args.check_status or args.check_status_all) and any((args.once, args.loop, args.reboot, args.iptime_list, args.print_crontab, args.install_crontab, args.gateway_watchdog, args.gateway_dry_run)):
         parser.error('status checks cannot be combined with send or crontab modes')
     if args.gateway_dry_run and not args.gateway_watchdog:
@@ -156,6 +162,12 @@ def main() -> int:
         print(f"PulseDAV 실행 실패: {exc}", file=sys.stderr)
         return 1
     settings = load_settings(args.config)
+
+    if args.test_telegram_disk:
+        result = send_telegram_disk_test(settings)
+        print(result['preview'])
+        print(f"Telegram 디스크 테스트: {result['status']}")
+        return 0 if result['status'] == 'sent' else 1
 
     if args.iptime_list:
         try:

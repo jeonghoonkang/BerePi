@@ -9,6 +9,7 @@ import shlex
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -30,6 +31,9 @@ except ImportError:  # pragma: no cover - fallback for minimal Python environmen
 APP_DIR = Path(__file__).resolve().parent
 SETTINGS_PATH = APP_DIR / "settings.json"
 STATE_PATH = APP_DIR / "state.json"
+DISK_HISTORY_PATH = APP_DIR / "disk_history.json"
+DISK_ALERT_STATE_PATH = APP_DIR / "disk_alert_state.json"
+MIN_DISK_BYTES = 100_000_000_000  # 100 GB (decimal), based on df filesystem total
 REQUEST_TIMEOUT = 60
 WEBDAV_NS = {"d": "DAV:"}
 RETENTION_MONTHS = 36
@@ -146,6 +150,12 @@ def default_settings() -> dict[str, Any]:
             "username": "username",
             "password": "app-password-or-token",
             "verify_ssl": True,
+        },
+        "telegram": {
+            "enabled": False,
+            "executable": "telegram-send",
+            "config_path": "",
+            "timeout_seconds": 60,
         },
         "metadata": {
             "ddns_name": "gw.example.net",
@@ -627,6 +637,26 @@ def get_ip_route_default() -> tuple[str, str]:
     return internal_ip, gateway
 
 
+def get_mac_address() -> str:
+    """Return the default-route interface's MAC, without inventing a fallback."""
+    if platform.system() == "Darwin":
+        route = run_command(["route", "-n", "get", "default"], timeout=10)
+        interface = re.search(r"^\s*interface:\s*(\S+)", route, re.MULTILINE)
+        if not interface:
+            return "확인 실패"
+        details = run_command(["ifconfig", interface.group(1)], timeout=10)
+        pattern = r"\bether\s+([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b"
+    else:
+        route = run_command(["ip", "route"], timeout=10)
+        interface = re.search(r"^default\s+[^\n]*?\bdev\s+(\S+)", route, re.MULTILINE)
+        if not interface:
+            return "확인 실패"
+        details = run_command(["ip", "link", "show", "dev", interface.group(1)], timeout=10)
+        pattern = r"\blink/ether\s+([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b"
+    match = re.search(pattern, details)
+    return match.group(1).lower() if match else "확인 실패"
+
+
 def get_ip_route_default_darwin() -> tuple[str, str]:
     """Return internal IP and default gateway on macOS."""
     gateway = "확인 실패"
@@ -747,7 +777,102 @@ def get_gpu_info() -> dict[str, Any]:
 
 
 def get_disk_usage() -> str:
-    return run_command(["df", "-h"], timeout=15) or "확인 실패"
+    output = run_command(["df", "-Pk"], timeout=15)
+    if len(output.splitlines()) < 2:
+        return "확인 실패"
+    rows = []
+    for line in output.splitlines()[1:]:
+        fields = line.split(None, 5)
+        if len(fields) != 6:
+            continue
+        device, total, used, available, percent, mount = fields
+        try:
+            total, used, available = int(total), int(used), int(available)
+        except ValueError:
+            continue
+        if total * 1024 < MIN_DISK_BYTES:
+            continue
+        rows.append(f"{device}  {total / 1024**2:.2f}  {used / 1024**2:.2f}  "
+                    f"{available / 1024**2:.2f}  {percent}  {mount}")
+    return ('Filesystem  Size(GiB)  Used(GiB)  Available(GiB)  Use%  Mounted on\n'
+            + '\n'.join(rows)) if rows else "100GB 이상 디스크 없음"
+
+
+def get_disk_forecast(alerts: list[str] | None = None, persist: bool = True) -> str:
+    """Track >=80% usage and extrapolate available-space exhaustion at >=90%."""
+    now = datetime.now(SEOUL)
+    history = load_json_file(DISK_HISTORY_PATH)
+    updated = {}
+    messages = []
+    output = run_command(["df", "-Pk"], timeout=15)
+    for line in output.splitlines()[1:]:
+        fields = line.split(None, 5)
+        if len(fields) != 6:
+            continue
+        device, total, used, available, _, mount = fields
+        try:
+            total, used, available = int(total), int(used), int(available)
+        except ValueError:
+            continue
+        if total * 1024 < MIN_DISK_BYTES or used + available <= 0:
+            continue
+        capacity = used + available  # df's usable capacity, excluding reserved blocks
+        percent = used / capacity * 100
+        if percent < 80:
+            continue  # Start a new observation period after cleanup below 80%.
+        key = json.dumps([device, mount], ensure_ascii=False)
+        samples = []
+        previous = history.get(key, [])
+        for sample in previous if isinstance(previous, list) else []:
+            try:
+                instant = datetime.fromisoformat(sample['at'])
+                if (sample['capacity_kib'] == capacity and instant.tzinfo is not None
+                        and instant < now and isinstance(sample['used_kib'], int)):
+                    samples.append(sample)
+            except (KeyError, TypeError, ValueError):
+                continue
+        samples.sort(key=lambda sample: sample['at'])
+        samples.append({'at': now.isoformat(), 'used_kib': used, 'capacity_kib': capacity})
+        samples = samples[-10000:]
+        updated[key] = samples
+        message = f"- {mount} ({device}): 사용 {percent:.1f}%, 잔여 {max(0, available) / 1024**2:.2f} GiB"
+        if percent >= 90:
+            message += " — 잔여 용량 10% 이하 경고"
+            if available <= 0:
+                message += ", 사용 가능 공간 소진 (100% 도달)"
+            elif len(samples) < 2:
+                message += ", 예상 포화일: 이력 부족 (다음 측정부터 계산)"
+            else:
+                first = samples[0]
+                elapsed_days = (now - datetime.fromisoformat(first['at'])).total_seconds() / 86400
+                rate = (used - first['used_kib']) / elapsed_days
+                message += f", 관측 {elapsed_days:.2f}일 / 평균 증가 {rate / 1024**2:.3f} GiB/일"
+                if rate <= 0:
+                    message += ", 예상 포화일: 증가 추세 없음"
+                else:
+                    days_left = available / rate
+                    try:
+                        full_at = now + timedelta(days=days_left)
+                        message += f", 약 {days_left:.1f}일 후 100% 예상 ({full_at:%Y-%m-%d %H:%M} KST)"
+                    except OverflowError:
+                        message += ", 예상 포화일: 계산 가능한 날짜 범위 초과"
+        else:
+            message += " — 사용률 80% 이상, 이력 기록 중 (90%부터 포화일 예측)"
+        messages.append(message)
+        if percent > 95 and alerts is not None:
+            alerts.append(message)
+    if not output or len(output.splitlines()) < 2:
+        return "- 디스크 예측: 용량 조회 실패"
+    if not persist:
+        return '\n'.join(messages) or "- 100GB 이상 대상 디스크: 사용률 80% 미만 또는 대상 없음"
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=APP_DIR,
+                                         prefix='disk-history-', delete=False) as temporary:
+            json.dump(updated, temporary, ensure_ascii=False)
+        os.replace(temporary.name, DISK_HISTORY_PATH)
+    except OSError:
+        messages.append("- 디스크 이력 저장 실패: 앱 디렉터리 쓰기 권한을 확인하세요")
+    return '\n'.join(messages) or "- 100GB 이상 대상 디스크: 사용률 80% 미만 또는 대상 없음"
 
 
 def get_screen_list() -> str:
@@ -1040,16 +1165,21 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
         f"- 운영체제: {snapshot['os']}",
     ]
 
-    if reboot_run:
-        lines.append(f"- 상태 메세지: reboot 시점 전송, up 이후 {snapshot['uptime_minutes']}분")
-    elif is_first_boot_message:
-        lines.append(f"- 상태 메세지: 부팅한 직후 전송, up 이후 {snapshot['uptime_minutes']}분")
-    else:
-        lines.append(f"- 상태 메세지: up 이후 {snapshot['uptime_minutes']}분")
+    minutes = snapshot["uptime_minutes"]
+    collected_at = datetime.strptime(now.rsplit(" ", 1)[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=SEOUL)
+    booted_at = collected_at - timedelta(minutes=minutes)
+    days, remaining_minutes = divmod(minutes, 24 * 60)
+    hours = remaining_minutes // 60
+    prefix = "reboot 시점 전송, " if reboot_run else "부팅한 직후 전송, " if is_first_boot_message else ""
+    lines.append(
+        f"- 상태 메세지: {prefix}up 이후 {minutes}분 "
+        f"({booted_at:%Y-%m-%d %H:%M} KST부터, {days}일 {hours}시간 동작중)"
+    )
 
     lines.extend(
         [
             f"- 내부 IP: {snapshot['network']['internal_ip']}",
+            f"- MAC 주소: {snapshot['network'].get('mac_address', '확인 실패')}",
             f"- Public IP: {snapshot['network']['public_ip']}",
             f"- 내부 GW: {snapshot['network']['gateway']}",
             f"- DDNS 이름: {snapshot['network']['ddns_name'] or '미설정'}",
@@ -1101,6 +1231,7 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
 
     if include.get("disk"):
         lines.extend(["## HDD 공간", "", "```text", snapshot["disk"], "```", ""])
+        lines.extend(["### 디스크 용량 예측", "", snapshot.get("disk_forecast", "- 예측 정보 없음"), ""])
 
     if include.get("user_services"):
         lines.extend(["## 서비스 중 사용자가 실행한 서비스", "", "```text", snapshot["user_services"], "```", ""])
@@ -1119,6 +1250,8 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
 
 def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
     internal_ip, gateway = get_ip_route_default()
+    disk_alerts: list[str] = []
+    disk_forecast = get_disk_forecast(disk_alerts) if settings['include'].get('disk') else ''
     return {
         "hostname": hostname(),
         "os": f"{platform.system()} {platform.release()}",
@@ -1127,6 +1260,7 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
         "cpu": get_cpu_info(),
         "network": {
             "internal_ip": internal_ip,
+            "mac_address": get_mac_address(),
             "public_ip": get_public_ip(),
             "gateway": gateway,
             "ddns_name": settings["metadata"].get("ddns_name", "").strip(),
@@ -1135,6 +1269,8 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
         },
         "gpu": get_gpu_info(),
         "disk": get_disk_usage(),
+        "disk_forecast": disk_forecast,
+        "disk_alerts": disk_alerts,
         "user_services": get_user_services(),
         "screen": get_screen_list(),
         "crontab": get_crontab_list(),
@@ -1202,6 +1338,94 @@ def format_iptime_markdown(report: str, settings: dict[str, Any]) -> str:
     )
 
 
+
+def telegram_host_info(snapshot: dict[str, Any] | None = None) -> str:
+    if snapshot is None:
+        internal_ip, _ = get_ip_route_default()
+        host, public_ip = hostname(), get_public_ip()
+    else:
+        network = snapshot.get('network', {})
+        host = snapshot.get('hostname', '확인 실패')
+        internal_ip = network.get('internal_ip', '확인 실패')
+        public_ip = network.get('public_ip', '확인 실패')
+    return f"🖥️ Host: {host}\n🏠 Local IP: {internal_ip}\n🌐 Public IP: {public_ip}"
+
+
+def telegram_disk_info(snapshot: dict[str, Any] | None = None) -> str:
+    usage = snapshot.get('disk') if snapshot is not None else None
+    if usage is None:
+        usage = get_disk_usage()
+    rows = []
+    for line in usage.splitlines()[1:]:
+        fields = line.split(None, 5)
+        if len(fields) == 6 and re.fullmatch(r'\d+(?:\.\d+)?%', fields[4]):
+            rows.append(f"💽 {fields[0]} ({fields[5]}): {fields[4]}")
+    return '\n'.join(rows) or f"💽 {usage}"
+
+
+def send_telegram_report(settings: dict[str, Any], markdown: str, file_name: str | None,
+                         snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Send the WebDAV report as a document; Telegram failures are non-fatal."""
+    config = settings.get("telegram") or {}
+    if not as_bool(config.get("enabled"), False):
+        return {"status": "disabled"}
+    try:
+        executable = str(config.get("executable") or "telegram-send")
+        command = [str(Path(executable).expanduser())]
+        config_path = str(config.get("config_path") or "").strip()
+        if config_path:
+            path = Path(config_path).expanduser()
+            if not path.is_absolute():
+                path = APP_DIR / path
+            command.extend(["--config", str(path)])
+        timeout = int(config.get("timeout_seconds", 60))
+        if timeout <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        if file_name is None:
+            result = subprocess.run(command + ['--', markdown], capture_output=True, text=True,
+                                    timeout=timeout, check=False)
+            if result.returncode:
+                raise RuntimeError(f"telegram-send exit code {result.returncode}")
+            print("[pulsedav] Telegram 전송 완료")
+            return {'status': 'sent'}
+        caption = telegram_host_info(snapshot) + '\n' + telegram_disk_info(snapshot)
+        if len(caption.encode('utf-16-le')) // 2 > 1000:
+            markdown += '\n\n## Telegram 장비·디스크 정보\n\n' + caption + '\n'
+            caption = caption.encode('utf-16-le')[:1900].decode('utf-16-le', errors='ignore') + '\n… 전체 정보는 첨부 파일 참조'
+        with tempfile.TemporaryDirectory(prefix="pulsedav-telegram-") as directory:
+            report_path = Path(directory) / file_name
+            report_path.write_text(markdown, encoding="utf-8")
+            command.extend(["--caption", caption, "--file", str(report_path)])
+            result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+            if result.returncode:
+                raise RuntimeError(f"telegram-send exit code {result.returncode}")
+        print("[pulsedav] Telegram 전송 완료")
+        return {"status": "sent"}
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, RuntimeError) as exc:
+        # Do not log CLI output: it may include credentials from telegram-send.
+        error = ("telegram-send 실행 파일을 찾을 수 없습니다" if isinstance(exc, FileNotFoundError)
+                 else "Telegram 전송 제한 시간 초과" if isinstance(exc, subprocess.TimeoutExpired)
+                 else "Telegram 전송 실패: 설정 및 telegram-send 실행 환경을 확인하세요")
+        print(f"[pulsedav] {error}")
+        return {"status": "failed", "error": error}
+
+
+def send_telegram_disk_test(settings: dict[str, Any]) -> dict[str, Any]:
+    """Explicit manual test, independent of WebDAV and automatic alert state."""
+    internal_ip, _ = get_ip_route_default()
+    snapshot = {'hostname': hostname(), 'network': {
+        'internal_ip': internal_ip, 'public_ip': get_public_ip(),
+    }, 'disk': get_disk_usage()}
+    report = ("PulseDAV 디스크 용량 테스트\n\n"
+              + f"점검 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST\n\n"
+              + telegram_host_info(snapshot) + '\n' + telegram_disk_info(snapshot)
+              + '\n\n현재 디스크 용량\n' + snapshot['disk'] + '\n\n용량 예측\n'
+              + get_disk_forecast(persist=False) + '\n')
+    test_settings = {**settings, 'telegram': {**settings.get('telegram', {}), 'enabled': True}}
+    result = send_telegram_report(test_settings, report, None, snapshot)
+    return {**result, 'preview': report}
+
+
 def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str | Path | None = None) -> dict[str, Any]:
     settings = settings or load_settings(settings_path)
     errors = validate_settings(settings)
@@ -1224,7 +1448,10 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     except REQUEST_ERRORS as exc:
         raise WebDAVConnectionError(friendly_webdav_error_message()) from exc
 
+    telegram_result = send_telegram_report(settings, markdown, file_name)
+
     return {
+        "telegram": telegram_result,
         "remote_path": remote_paths[0],
         "remote_paths": remote_paths,
         "remote_directory": host_dirs[0],
@@ -1242,6 +1469,41 @@ def send_iptime_list(settings: dict[str, Any] | None = None, settings_path: str 
     }
 
 
+def send_disk_alert(settings: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Send at most once per KST half-day, independently of WebDAV delivery."""
+    if not snapshot.get('disk_alerts'):
+        return {'status': 'not_needed'}
+    if not as_bool(settings.get('telegram', {}).get('enabled'), False):
+        return {'status': 'disabled'}
+    import fcntl
+
+    now = datetime.now(SEOUL)
+    slot = f"{now:%Y-%m-%d}-{'am' if now.hour < 12 else 'pm'}"
+    try:
+        with DISK_ALERT_STATE_PATH.open('a+', encoding='utf-8') as state_file:
+            fcntl.flock(state_file, fcntl.LOCK_EX)
+            state_file.seek(0)
+            try:
+                state = json.load(state_file)
+            except (ValueError, OSError):
+                state = {}
+            if isinstance(state, dict) and state.get('slot') == slot:
+                return {'status': 'already_sent'}
+            report = (f"# PulseDAV 디스크 용량 경고 - {snapshot['hostname']}\n\n"
+                      f"- 점검 시각: {now:%Y-%m-%d %H:%M:%S} KST\n\n"
+                      + '\n'.join(snapshot['disk_alerts']) + '\n')
+            result = send_telegram_report(settings, report, 'disk_alert.md', snapshot)
+            if result['status'] == 'sent':
+                state_file.seek(0)
+                state_file.truncate()
+                json.dump({'slot': slot, 'sent_at': now.isoformat()}, state_file)
+                state_file.flush()
+            return result
+    except OSError as exc:
+        print('[pulsedav] 디스크 경고 상태 파일 접근 실패: 앱 디렉터리 쓰기 권한을 확인하세요')
+        return {'status': 'failed', 'error': '디스크 경고 상태 저장 실패'}
+
+
 def send_once(
     settings: dict[str, Any] | None = None,
     settings_path: str | Path | None = None,
@@ -1256,6 +1518,7 @@ def send_once(
     current_boot_marker = boot_marker()
     first_boot = state.get("last_boot_marker") != current_boot_marker
     snapshot = collect_snapshot(settings)
+    disk_alert_result = send_disk_alert(settings, snapshot)
     markdown = format_markdown(settings, snapshot, first_boot, reboot_run=reboot_run)
 
     webdav_config = build_webdav_config(settings)
@@ -1281,7 +1544,11 @@ def send_once(
     }
     save_state(new_state)
 
+    telegram_result = send_telegram_report(settings, markdown, file_name, snapshot)
+
     return {
+        "telegram": telegram_result,
+        "disk_alert": disk_alert_result,
         "remote_path": remote_paths[0],
         "remote_paths": remote_paths,
         "remote_directory": host_dirs[0],
