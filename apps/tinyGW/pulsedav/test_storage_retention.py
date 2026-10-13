@@ -137,10 +137,28 @@ class StorageRetentionTests(unittest.TestCase):
 
     def test_quota_zero_and_account_root_fallback(self):
         with patch.object(dav, 'build_session'), patch.object(dav, 'propfind',
-             side_effect=[self.quota_xml('0', '404'), self.quota_xml('0')]) as find:
+             side_effect=[self.quota_xml('0', '404')] * 3 + [self.quota_xml('0')]) as find:
             self.assertEqual(dav.get_remote_available_bytes(self.config, self.directory), 0)
             self.assertEqual(find.call_args.args[1], 'https://example.test/dav/user')
             self.assertEqual(find.call_args.kwargs['depth'], '0')
+
+    def test_quota_is_available_on_share_ancestor(self):
+        with patch.object(dav, 'build_session'), patch.object(dav, 'propfind',
+             side_effect=[self.quota_xml('', '404'), self.quota_xml('123')]) as find:
+            self.assertEqual(dav.get_remote_available_bytes(self.config, self.directory), 123)
+            self.assertEqual(find.call_args.args[1], 'https://example.test/dav/user/tinyGW/site')
+
+    def test_unknown_quota_prevents_delete_and_upload(self):
+        session = Mock()
+        with patch.object(dav, 'build_session', return_value=session), \
+             patch.object(dav, 'ensure_remote_directories'), \
+             patch.object(dav, 'list_remote_entries', return_value=[self.entry('pulse_20260101_000000.md')]), \
+             patch.object(dav, 'propfind', return_value=self.quota_xml('', '404')), \
+             patch.object(dav, 'delete_remote_path') as delete:
+            with self.assertRaises(dav.WebDAVStorageError):
+                dav.upload_remote_file(self.config, self.target, b'report')
+        delete.assert_not_called()
+        session.put.assert_not_called()
 
     def test_unknown_or_unlimited_quota_is_not_treated_as_free(self):
         for value in ('', '-3', 'unlimited', 'invalid'):

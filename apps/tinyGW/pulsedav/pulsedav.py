@@ -68,6 +68,10 @@ class WebDAVConnectionError(ValueError):
     pass
 
 
+class WebDAVStorageError(ValueError):
+    """Raised when safe upload space cannot be established."""
+
+
 class SimpleResponse:
     def __init__(self, status_code: int, text: str, content: bytes):
         self.status_code = status_code
@@ -377,8 +381,13 @@ def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, cont
 def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str) -> int:
     """Read the server's usable quota; unknown/unlimited is not free space."""
     session = build_session(config)
-    # Some servers expose quota only on the account root.
-    for path in dict.fromkeys((remote_dir, "")):
+    # Quota may be exposed on a share or ancestor rather than the host folder.
+    path = normalize_remote_path(remote_dir)
+    paths = [path]
+    while path:
+        path = posixpath.dirname(path)
+        paths.append(path)
+    for path in paths:
         root = propfind(session, compose_webdav_url(config, path), depth="0")
         for propstat in root.findall("d:response/d:propstat", WEBDAV_NS):
             status = propstat.findtext("d:status", default="", namespaces=WEBDAV_NS).split()
@@ -391,7 +400,11 @@ def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str) -> int:
                 continue
             if available >= 0:
                 return available
-    raise ValueError("서버 여유 공간(quota-available-bytes)을 확인할 수 없어 전송을 중단합니다.")
+    raise WebDAVStorageError(
+        "서버 여유 공간(quota-available-bytes)을 확인할 수 없어 전송을 중단합니다. "
+        "호스트 폴더부터 설정된 WebDAV 루트까지 조회했지만 유효한 용량 응답이 없습니다. "
+        "서버의 WebDAV quota 지원 및 계정 할당량 설정을 확인해 주세요."
+    )
 
 
 def sender_report_timestamp(entry: dict[str, Any], host_dir: str) -> datetime | None:
@@ -433,7 +446,7 @@ def prepare_remote_space(config: WebDAVConfig, remote_path: str, incoming_bytes:
             candidates.append((timestamp, path, entry["size"]))
     candidates.sort()
     if sum(size for _, _, size in candidates) < required - available:
-        raise ValueError("이전 Markdown 보고서를 모두 정리해도 새 보고서에 필요한 공간을 확보할 수 없어 전송을 중단합니다.")
+        raise WebDAVStorageError("이전 Markdown 보고서를 모두 정리해도 새 보고서에 필요한 공간을 확보할 수 없어 전송을 중단합니다.")
 
     deleted: list[str] = []
     for _, path, _ in candidates:
@@ -445,8 +458,8 @@ def prepare_remote_space(config: WebDAVConfig, remote_path: str, incoming_bytes:
         if available >= required:
             return deleted
         if available <= previous_available:
-            raise ValueError("파일 삭제 후에도 서버 여유 공간이 늘지 않았습니다. 휴지통/할당량을 확인해 주세요. 전송을 중단합니다.")
-    raise ValueError("서버 여유 공간이 부족하여 기존 공간을 유지하면서 새 보고서를 전송할 수 없습니다.")
+            raise WebDAVStorageError("파일 삭제 후에도 서버 여유 공간이 늘지 않았습니다. 휴지통/할당량을 확인해 주세요. 전송을 중단합니다.")
+    raise WebDAVStorageError("서버 여유 공간이 부족하여 기존 공간을 유지하면서 새 보고서를 전송할 수 없습니다.")
 
 
 def list_remote_entries(config: WebDAVConfig, remote_dir: str) -> list[dict[str, Any]]:

@@ -14,6 +14,7 @@ from time_utils import SEOUL
 from pulsedav import (
     DEFAULT_INTERVAL_MINUTES,
     WebDAVConnectionError,
+    WebDAVStorageError,
     load_settings,
     resolve_settings_path,
     run_loop,
@@ -159,7 +160,7 @@ def main() -> int:
     if args.iptime_list:
         try:
             result = send_iptime_list(settings, settings_path=args.config)
-        except WebDAVConnectionError as exc:
+        except (WebDAVConnectionError, WebDAVStorageError) as exc:
             print(str(exc))
             return 1
         print(result["preview"])
@@ -185,7 +186,7 @@ def main() -> int:
 
     try:
         result = send_once(settings, settings_path=args.config, reboot_run=args.reboot)
-    except WebDAVConnectionError as exc:
+    except (WebDAVConnectionError, WebDAVStorageError) as exc:
         print(str(exc))
         return 1
     print("PulseDAV 전송 완료")
