@@ -13,6 +13,7 @@ from time_utils import SEOUL
 
 from pulsedav import (
     DEFAULT_INTERVAL_MINUTES,
+    dry_run_remote_quota,
     WebDAVConnectionError,
     WebDAVStorageError,
     load_settings,
@@ -28,6 +29,7 @@ from pulsedav import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send system status markdown to WebDAV.")
     parser.add_argument("--once", action="store_true", help="Send one report and exit.")
+    parser.add_argument("--dry-run", action="store_true", help="Probe WebDAV free-space quota only; never create, delete or upload files. May be combined with --once.")
     parser.add_argument('--test-telegram-disk', action='store_true', help='Send current disk capacity to Telegram only, regardless of usage or enabled setting.')
     parser.add_argument("--reboot", action="store_true", help="Mark this one-shot send as a reboot-time run.")
     parser.add_argument("--loop", action="store_true", help="Run continuously using the configured interval.")
@@ -56,6 +58,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--status-output-dir', help='Directory for server_status.json and server_status.txt.')
     parser.add_argument('--max-age-minutes', type=int, help='Stale recording threshold (default: twice configured interval).')
     args = parser.parse_args()
+    if args.dry_run and any((args.loop, args.reboot, args.iptime_list, args.test_telegram_disk,
+            args.print_crontab, args.install_crontab, args.gateway_watchdog, args.gateway_dry_run,
+            args.check_status, args.check_status_all)):
+        parser.error('--dry-run runs separately from other modes (except --once)')
     if args.test_telegram_disk and any((args.once, args.loop, args.reboot, args.iptime_list,
             args.print_crontab, args.install_crontab, args.gateway_watchdog, args.gateway_dry_run,
             args.check_status, args.check_status_all)):
@@ -132,6 +138,12 @@ def build_crontab_lines(config_path: str | None, interval_minutes: int | None,
 
 def main() -> int:
     args = parse_args()
+    if args.dry_run:
+        try:
+            return dry_run_remote_quota(load_settings(args.config))
+        except (OSError, ValueError) as exc:
+            print(f"[dry-run] 설정/조회 실패: {exc}", file=sys.stderr)
+            return 1
     warn_docker_group_membership()
     if args.check_status or args.check_status_all:
         from status_check import check_status

@@ -388,7 +388,7 @@ def upload_remote_file(config: WebDAVConfig, remote_path: str, data: bytes, cont
     return deleted
 
 
-def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str) -> int:
+def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str, *, verbose: bool = False) -> int:
     """Read the server's usable quota; unknown/unlimited is not free space."""
     session = build_session(config)
     # Quota may be exposed on a share or ancestor rather than the host folder.
@@ -398,9 +398,16 @@ def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str) -> int:
         path = posixpath.dirname(path)
         paths.append(path)
     for path in paths:
+        if verbose:
+            print(f"[dry-run] PROPFIND Depth=0: /{path or '(WebDAV root)'}", flush=True)
         root = propfind(session, compose_webdav_url(config, path), depth="0")
         for propstat in root.findall("d:response/d:propstat", WEBDAV_NS):
             status = propstat.findtext("d:status", default="", namespaces=WEBDAV_NS).split()
+            if verbose:
+                quota = propstat.find("d:prop/d:quota-available-bytes", WEBDAV_NS)
+                if quota is not None:
+                    print(f"  quota-available-bytes: {(quota.text or '').strip()!r}; "
+                          f"HTTP status: {' '.join(status)}", flush=True)
             if len(status) < 2 or status[1] != "200":
                 continue
             value = propstat.findtext("d:prop/d:quota-available-bytes", namespaces=WEBDAV_NS)
@@ -410,11 +417,39 @@ def get_remote_available_bytes(config: WebDAVConfig, remote_dir: str) -> int:
                 continue
             if available >= 0:
                 return available
+        if verbose:
+            print("  유효한 용량 정보 없음", flush=True)
     raise WebDAVStorageError(
         "서버 여유 공간(quota-available-bytes)을 확인할 수 없어 전송을 중단합니다. "
         "호스트 폴더부터 설정된 WebDAV 루트까지 조회했지만 유효한 용량 응답이 없습니다. "
         "서버의 WebDAV quota 지원 및 계정 할당량 설정을 확인해 주세요."
     )
+
+
+def dry_run_remote_quota(settings: dict[str, Any]) -> int:
+    """Probe configured upload directories without writes or report collection."""
+    errors = validate_settings(settings)
+    if errors:
+        raise ValueError(" / ".join(errors))
+    config = build_webdav_config(settings)
+    print("[dry-run] WebDAV 용량 조회만 실행합니다 (파일 생성/삭제/업로드 없음).", flush=True)
+    print_webdav_wait_warning()
+    failed = False
+    for directory in build_host_remote_dirs(config):
+        print(f"[dry-run] 대상 폴더: /{directory}", flush=True)
+        try:
+            available = get_remote_available_bytes(config, directory, verbose=True)
+        except REQUEST_ERRORS:
+            print("[dry-run] 조회 실패: WebDAV 연결/HTTP 오류. 주소, 경로, 인증 및 접근 권한을 확인하세요.", flush=True)
+            failed = True
+        except (WebDAVStorageError, ET.ParseError) as exc:
+            print(f"[dry-run] 조회 실패: {exc}", flush=True)
+            failed = True
+        else:
+            print(f"[dry-run] 조회 성공: 서버 여유={available:,} bytes "
+                  f"({available / 1_000_000_000:.3f} GB), "
+                  f"5GB 이하={'예' if available <= MIN_REMOTE_FREE_BYTES else '아니오'}", flush=True)
+    return 1 if failed else 0
 
 
 def sender_report_timestamp(entry: dict[str, Any], host_dir: str) -> datetime | None:
