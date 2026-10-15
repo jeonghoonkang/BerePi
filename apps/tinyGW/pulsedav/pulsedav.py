@@ -664,6 +664,37 @@ def get_ip_route_default() -> tuple[str, str]:
     return internal_ip, gateway
 
 
+def get_physical_nic_macs() -> list[dict[str, str]]:
+    """List physical wired Ethernet interfaces, including disconnected ports."""
+    interfaces: list[dict[str, str]] = []
+    if platform.system() == "Linux":
+        try:
+            devices = sorted(Path("/sys/class/net").iterdir())
+        except OSError:
+            return interfaces
+        for device in devices:
+            # Virtual links have no device parent; Wi-Fi also uses ARPHRD_ETHER.
+            if not (device / "device").exists() or (device / "wireless").exists() or (device / "phy80211").exists():
+                continue
+            try:
+                if (device / "type").read_text().strip() != "1":
+                    continue
+                mac = (device / "address").read_text().strip().lower()
+            except OSError:
+                continue
+            if re.fullmatch(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", mac) and mac != "00:00:00:00:00:00":
+                interfaces.append({"interface": device.name, "mac_address": mac})
+    elif platform.system() == "Darwin":
+        output = run_command(["networksetup", "-listallhardwareports"], timeout=10)
+        for block in re.split(r"\n\s*\n", output):
+            port = re.search(r"^Hardware Port:\s*(.+)$", block, re.MULTILINE)
+            name = re.search(r"^Device:\s*(\S+)", block, re.MULTILINE)
+            mac = re.search(r"^Ethernet Address:\s*([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b", block, re.MULTILINE)
+            if port and name and mac and "ethernet" in port.group(1).lower() and "bluetooth" not in port.group(1).lower():
+                interfaces.append({"interface": name.group(1), "mac_address": mac.group(1).lower()})
+    return interfaces
+
+
 def get_mac_address() -> str:
     """Return the default-route interface's MAC, without inventing a fallback."""
     if platform.system() == "Darwin":
@@ -1233,6 +1264,14 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
         )
 
     if include.get("network"):
+        lines.extend(["## 물리 유선 NIC MAC 주소", ""])
+        physical_nics = snapshot["network"].get("physical_nics", [])
+        if physical_nics:
+            for nic in physical_nics:
+                lines.append(f"- {nic['interface']}: {nic['mac_address']}")
+        else:
+            lines.append("물리 유선 NIC 없음 또는 확인 실패")
+        lines.append("")
         lines.extend(
             [
                 "## 네트워크",
@@ -1288,6 +1327,7 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
         "network": {
             "internal_ip": internal_ip,
             "mac_address": get_mac_address(),
+            "physical_nics": get_physical_nic_macs(),
             "public_ip": get_public_ip(),
             "gateway": gateway,
             "ddns_name": settings["metadata"].get("ddns_name", "").strip(),

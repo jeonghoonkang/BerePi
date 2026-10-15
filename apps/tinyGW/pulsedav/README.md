@@ -6,6 +6,7 @@
 
 - CPU 상태
 - 내부 IP 주소
+- 기본 경로 인터페이스의 MAC 주소 및 물리 유선 NIC별 이름/MAC 주소 (`include.network` 활성화 시 별도 목록 표시). Linux는 `/sys/class/net`의 실제 장치 연결을 확인하여 연결이 끊긴 포트도 포함하고 Wi-Fi·Docker 브리지·veth·VPN 등 가상 인터페이스는 제외합니다. macOS는 `networksetup -listallhardwareports`의 Ethernet 포트를 수집합니다. MAC 주소는 현재 운영체제가 사용하는 값입니다.
 - Public IP 주소
 - 내부 GW 주소
 - DDNS 이름
