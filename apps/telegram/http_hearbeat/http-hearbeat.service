@@ -1,0 +1,21 @@
+[Unit]
+Description=External LLM Routing Telegram heartbeat
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=llm-monitor
+WorkingDirectory=/opt/http_hearbeat
+EnvironmentFile=/opt/http_hearbeat/.env
+ExecStart=/usr/bin/python3 /opt/http_hearbeat/heartbeat.py --config /opt/http_hearbeat/config.json
+Restart=always
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/http_hearbeat
+
+[Install]
+WantedBy=multi-user.target
