@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf }}"><title>BerePi Music</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main><h1>BerePi Music</h1><p>Spotify 계정과 내 HTTP 음악 서버를 한 곳에서 재생합니다.</p>
+<p id="status" role="status" aria-live="polite">준비됨</p>
+<section><h2>Spotify</h2>{% if not configured %}<p>.env에 Spotify Client ID / Secret을 설정하세요. HTTP 파일은 바로 사용할 수 있습니다.</p>{% endif %}
+<a href="/login">Spotify 로그인</a> <button id="logout">로그아웃</button><p id="profile">계정 연결 전</p>
+<p>브라우저 전체 곡 재생: Premium · HTTPS 또는 로컬 127.0.0.1 · DRM 지원 브라우저 필요</p>
+<button id="connect">브라우저 플레이어 연결</button> <button id="likes">좋아요 곡</button> <button id="playlists">내 재생목록</button>
+<div id="library"></div><button id="more" hidden>더 불러오기</button></section>
+<section><h2>HTTP 음악 파일</h2><p>직접 파일 URL을 입력하거나, CORS가 허용된 Apache/nginx 디렉토리 목록을 불러오세요.</p>
+<form id="fileForm"><label>파일 URL <input id="fileUrl" type="url" required placeholder="http://music-server/album/song.mp3"></label><button>파일 추가</button></form>
+<form id="directoryForm"><label>폴더 URL <input id="directoryUrl" type="url" required placeholder="http://music-server/music/"></label><button>폴더 열기</button></form><div id="directory"></div></section>
+<section><h2>재생 큐</h2><p id="now">선택된 곡 없음</p><button id="previous">이전</button><button id="toggle">재생 / 일시정지</button><button id="next">다음</button><button id="clear">큐 비우기</button><ol id="queue"></ol>
+<audio id="audio" controls preload="metadata"></audio><p id="spotifyState"></p></section>
+</main><script src="/static/app.js"></script></body></html>
