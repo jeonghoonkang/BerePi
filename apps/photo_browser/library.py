@@ -152,7 +152,7 @@ class Library:
     def local(self, value):
         path = Path(value).expanduser().resolve()
         if not path.is_relative_to(self.boundary):
-            raise ValueError('허용된 루트 디렉토리 밖입니다.')
+            raise ValueError(f'허용된 루트 디렉토리 밖입니다.\n허용된 루트 디렉토리: {self.boundary}')
         return path
 
     def config(self):

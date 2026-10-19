@@ -34,7 +34,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
     def checked(value):
         path = Path(value).expanduser().resolve()
         if not path.is_relative_to(boundary):
-            abort(403, description='허용된 루트 디렉토리 밖입니다.')
+            abort(403, description=f'허용된 루트 디렉토리 밖입니다.\n허용된 루트 디렉토리: {boundary}')
         if not path.exists():
             abort(404, description='경로가 없습니다.')
         return path
