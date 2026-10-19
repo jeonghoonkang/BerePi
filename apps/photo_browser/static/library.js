@@ -3,6 +3,8 @@
   const el = id => document.getElementById(id);
   let config, page = [], offset = 0, total = 0, chosen = new Set(), undoId;
   const watchers = new Map(), jobCards = new Map();
+  const jobsPage = document.body.classList.contains('jobs-page');
+  let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
   const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
   const notify = message => { el('notice').textContent = message; };
@@ -86,25 +88,35 @@
     return `전체 ${progress.total.toLocaleString()}개 · 처리 ${progress.processed.toLocaleString()}개 (${progress.percent ?? 0}%) · 신규 ${progress.added} · 갱신 ${progress.updated} · 변경 없음 ${progress.unchanged} · 제외 ${progress.ignored} · 오류 ${progress.error_count ?? progress.errors?.length ?? 0}`;
   }
   function drawJob(status) {
+    if (jobsPage && !visibleJobs.has(status.job_id)) return;
     let card = jobCards.get(status.job_id);
     if (!card) {
       const row = make('details', '', 'source-row job-card'), title = make('summary'), text = make('p'), bar = make('progress'), file = make('p'), warning = make('p', '', 'scan-warning');
       row.open = activeStates.includes(status.status);
-      bar.max = 100; bar.setAttribute('aria-label', '스캔 처리 진행률');
+      bar.max = 100; bar.setAttribute('aria-label', '작업 처리 진행률');
       const stop = action('중지하고 저장', async () => { const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {}); drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.'); });
-      row.append(title, text, bar, file, warning, stop); el('scan-jobs').prepend(row);
-      card = {row, title, text, bar, file, warning, stop}; jobCards.set(status.job_id, card);
+      const resume = action('병합 이어하기', () => job('api/merge', {preview: false, resume: card.mergeId}));
+      row.append(title, text, bar, file, warning, stop, resume); el('scan-jobs').prepend(row);
+      card = {row, title, text, bar, file, warning, stop, resume}; jobCards.set(status.job_id, card);
+    }
+    card.createdAt = status.created_at;
+    if (!jobsPage) {
+      const ordered = [...jobCards.entries()].sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt));
+      for (const [id, old] of ordered.slice(3)) { old.row.remove(); jobCards.delete(id); }
+      for (const [, entry] of ordered.slice(0, 3)) el('scan-jobs').append(entry.row);
     }
     const p = status.result || status.progress;
-    card.title.textContent = `${status.source_id || '파일 작업'} · ${stateNames[status.status] || status.status}`;
-    card.text.textContent = status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
-    card.bar.hidden = status.kind !== 'scan';
-    if (p?.inventory_complete) card.bar.value = p.percent ?? 0; else card.bar.removeAttribute('value');
+    card.title.textContent = `${status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.text.textContent = status.kind === 'merge' ? `전체 ${p?.total ?? 0}개 · 처리 ${p?.processed ?? 0}개 (${p?.percent ?? 0}%)` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
+    card.bar.hidden = !['scan', 'merge'].includes(status.kind);
+    if (p?.inventory_complete || status.kind === 'merge') card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
     card.file.textContent = p?.current_file ? `현재 파일: ${p.current_file}` : '';
     const disk = p?.disk;
     card.warning.textContent = [p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
-    card.stop.hidden = status.kind !== 'scan' || !activeStates.includes(status.status);
+    card.stop.hidden = !['scan', 'merge'].includes(status.kind) || !activeStates.includes(status.status);
     card.stop.disabled = status.status === 'stopping';
+    card.mergeId = p?.merge_id;
+    card.resume.hidden = status.kind !== 'merge' || !card.mergeId || !['stopped', 'interrupted', 'failed'].includes(status.status);
   }
   function watchJob(id) {
     if (watchers.has(id)) return watchers.get(id);
@@ -112,13 +124,13 @@
       let status;
       do {
         status = await api('api/jobs/' + id); drawJob(status);
-        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || '파일 작업'}`;
+        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
         if (activeStates.includes(status.status)) await new Promise(resolve => setTimeout(resolve, 1000));
       } while (activeStates.includes(status.status));
       el('job-result').textContent = JSON.stringify(status.result || status.error || status.warning, null, 2);
       await loadConfig(); await facets(); await load();
       const warning = status.result?.warning || status.error || status.warning;
-      notify(warning || '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.');
+      notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
     })();
     watchers.set(id, watching);
     watching.finally(() => watchers.delete(id)).catch(() => {});
@@ -130,7 +142,15 @@
     await watchJob(result.job_id);
   }
   async function loadJobs() {
-    const result = await api('api/jobs');
+    const result = await api(`api/jobs?limit=${jobsPage ? 20 : 3}&offset=${jobsOffset}`);
+    visibleJobs = new Set(result.items.map(item => item.job_id));
+    for (const [id, card] of jobCards) if (!visibleJobs.has(id)) { card.row.remove(); jobCards.delete(id); }
+    if (jobsPage) {
+      el('jobs-pagination').hidden = false;
+      el('jobs-prev').disabled = jobsOffset === 0;
+      el('jobs-next').disabled = jobsOffset + 20 >= result.total;
+      el('jobs-page-info').textContent = `${Math.floor(jobsOffset / 20) + 1} / ${Math.max(1, Math.ceil(result.total / 20))}페이지 · 전체 ${result.total}개`;
+    }
     for (const status of result.items.slice().reverse()) {
       drawJob(status);
       if (activeStates.includes(status.status)) safe(() => watchJob(status.job_id))();
@@ -199,5 +219,7 @@
   }
   el('refresh-trash').onclick = safe(loadTrash); el('refresh-duplicates').onclick = safe(loadDuplicates);
   el('refresh-jobs').onclick = safe(async () => { await loadConfig(); await loadJobs(); });
-  tab('library-panel'); safe(async () => { await loadConfig(); await facets(); await load(); await loadJobs(); })();
+  el('jobs-prev').onclick = safe(async () => { jobsOffset = Math.max(0, jobsOffset - 20); await loadJobs(); });
+  el('jobs-next').onclick = safe(async () => { jobsOffset += 20; await loadJobs(); });
+  tab(jobsPage ? 'sources-panel' : 'library-panel'); safe(async () => { await loadConfig(); await facets(); await load(); await loadJobs(); })();
 })();

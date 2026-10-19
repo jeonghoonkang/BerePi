@@ -105,6 +105,26 @@ class LibraryTests(unittest.TestCase):
         target = Path(result['operations'][0]['destination'])
         self.assertIn(target.read_bytes(), (original.read_bytes(), other.read_bytes()))
 
+    def test_merge_stop_and_resume_after_restart(self):
+        for index in range(4):
+            self.photo(f'photo{index}.jpg')
+        self.library.scan('local')
+        stop = [False]
+        def progress(state):
+            if state['processed'] >= 1:
+                stop[0] = True
+        result = self.library.merge(progress=progress, stopped=lambda: stop[0])
+        self.assertEqual(result['status'], 'stopped')
+        self.assertEqual(result['processed'], 1)
+        self.assertEqual(len(list((self.root / 'organized').rglob('*.jpg'))), 1)
+        from library import Library
+        restarted = Library(self.root / 'db', self.root)
+        result = restarted.merge(resume=result['merge_id'])
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['processed'], 4)
+        self.assertTrue(all(op['status'] == 'copied' for op in result['operations']))
+        self.assertEqual(len(list((self.root / 'organized').rglob('*.jpg'))), 4)
+
     def test_changed_original_no_overwrite_and_integrity(self):
         source = self.photo()
         self.library.scan('local')

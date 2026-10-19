@@ -23,7 +23,7 @@ def register_library(app, boundary, db):
         previous = read_json(path)
         if previous['status'] in {'queued', 'running', 'stopping'}:
             previous['status'] = 'interrupted'
-            previous['warning'] = '서버가 재시작되었습니다. 소스의 이어하기 버튼으로 재개하세요.'
+            previous['warning'] = '서버가 재시작되었습니다. 이어하기 버튼으로 재개하세요.'
             atomic_json(path, previous)
         jobs[previous['job_id']] = previous
     tickets = {}
@@ -62,6 +62,8 @@ def register_library(app, boundary, db):
         job_id = uid()
         stop = threading.Event()
         with guard:
+            if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
+                raise ValueError('이미 병합 작업이 실행 중입니다.')
             if kind == 'scan' and any(j.get('source_id') == source_id and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('이 소스는 이미 스캔 중입니다.')
             jobs[job_id] = {'job_id': job_id, 'status': 'queued', 'kind': kind, 'source_id': source_id, 'created_at': now()}
@@ -81,8 +83,8 @@ def register_library(app, boundary, db):
             with guard:
                 jobs[job_id]['status'] = 'stopping' if stop.is_set() else 'running'
             try:
-                result = function(progress, stop.is_set) if kind == 'scan' else function()
-                update = {'status': result.get('status', 'completed') if kind == 'scan' else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -123,15 +125,16 @@ def register_library(app, boundary, db):
     def job_list():
         with guard:
             ordered = sorted(jobs.values(), key=lambda j: j['created_at'], reverse=True)
-            recent = {j['job_id'] for j in ordered[:30]}
-            return jsonify(items=[j for j in ordered if j['job_id'] in recent or j['status'] in {'queued', 'running', 'stopping'}])
+            limit = min(100, max(1, int(request.args.get('limit', 30))))
+            offset = max(0, int(request.args.get('offset', 0)))
+            return jsonify(items=ordered[offset:offset + limit], total=len(ordered), offset=offset, limit=limit)
 
     @app.post('/api/jobs/<job_id>/stop')
     def stop_scan(job_id):
         with guard:
             job = jobs.get(job_id)
-            if not job or job.get('kind') != 'scan':
-                raise ValueError('중지할 스캔 작업이 없습니다.')
+            if not job or job.get('kind') not in {'scan', 'merge'}:
+                raise ValueError('중지할 스캔 또는 병합 작업이 없습니다.')
             if job['status'] in {'queued', 'running', 'stopping'}:
                 controls[job_id].set()
                 job['status'] = 'stopping'
@@ -214,7 +217,12 @@ def register_library(app, boundary, db):
         preview = data.get('preview', True)
         if not isinstance(preview, bool):
             raise ValueError('preview는 boolean이어야 합니다.')
-        return launch(lambda: library.merge(values or None, preview))
+        if preview:
+            return launch(lambda: library.merge(values or None, True))
+        resume = data.get('resume')
+        if resume is not None:
+            component(resume)
+        return launch(lambda progress, stopped: library.merge(values or None, False, progress, stopped, resume), 'merge')
 
     @app.post('/api/verify')
     def verify():

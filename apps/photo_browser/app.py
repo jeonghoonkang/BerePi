@@ -47,9 +47,10 @@ def create_app(root=None, start=None, db=None, limit=20000):
         return jsonify(error=exc.description), exc.code
 
     @app.get('/')
+    @app.get('/jobs')
     def index():
         return render_template('index.html', initial=str(initial), boundary=str(boundary),
-                               db_path=str(app.extensions['photo_library'].db), scan_limit=limit)
+                               db_path=str(app.extensions['photo_library'].db), scan_limit=limit, jobs_page=request.path == '/jobs')
 
     @app.get('/api/browse')
     def browse():

@@ -360,13 +360,44 @@ class Library:
                     item['revision'] += 1
             self.commit(items)
 
-    def merge(self, ids=None, preview=False):
+    def merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None):
         with self.writing():
             items = self.items()
             root = self.local(self.config()['managed_root'])
-            operations = []
+            progress = progress or (lambda state: None)
+            stopped = stopped or (lambda: False)
+            session_path = self.db / 'merges' / ((component(resume) if resume else uid()) + '.json')
+            if resume:
+                if preview or not session_path.exists():
+                    raise ValueError('이어갈 병합 작업이 없습니다.')
+                state = read_json(session_path)
+                if state['managed_root'] != str(root):
+                    raise ValueError('관리 경로가 변경되어 이어갈 수 없습니다.')
+            else:
+                state = {'merge_id': session_path.stem, 'managed_root': str(root),
+                         'ids': [i['media_id'] for i in items if i['lifecycle']['status'] == 'active' and (not ids or i['media_id'] in ids)],
+                         'operations': [], 'status': 'running'}
+            operations = state['operations']
+            completed = {op['media_id'] for op in operations}
+            wanted = set(state['ids'])
+            def checkpoint(status='running'):
+                state.update(status=status, processed=len(operations), total=len(wanted),
+                             percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
+                             inventory_complete=True, updated_at=now())
+                if not preview:
+                    self.commit(items)
+                    atomic_json(session_path, state)
+                progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
+            checkpoint()
+            interrupted = False
             for item in items:
-                if item['lifecycle']['status'] != 'active' or (ids and item['media_id'] not in ids):
+                if item['media_id'] not in wanted or item['media_id'] in completed:
+                    continue
+                if not preview and stopped():
+                    interrupted = True
+                    break
+                if item['lifecycle']['status'] != 'active':
+                    operations.append({'media_id': item['media_id'], 'status': 'skipped'})
                     continue
                 c, date = item['classification'], item['capture']['date_key']
                 year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
@@ -401,9 +432,14 @@ class Library:
                     item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now()})
                 except Exception as exc:
                     op.update(status='error', error=str(exc))
-            if not preview:
-                self.commit(items)
-            report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now()}
+                if len(operations) % 25 == 0:
+                    checkpoint()
+                else:
+                    progress({'merge_id': state['merge_id'], 'total': len(wanted), 'processed': len(operations), 'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target)})
+            checkpoint('stopped' if interrupted else 'completed')
+            report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
+                      'merge_id': state['merge_id'], 'status': state['status'],
+                      'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
             atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
             return report
 
