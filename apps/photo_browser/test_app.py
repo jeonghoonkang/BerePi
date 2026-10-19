@@ -30,6 +30,21 @@ class BrowserTests(unittest.TestCase):
         child = self.client.get('/api/browse', query_string={'path': str(self.root / '하위 폴더')}).json
         self.assertEqual(child['parent'], str(self.root))
 
+    def test_scan_limit(self):
+        for index in range(110):
+            (self.root / '하위 폴더' / f'{index:03}.jpg').write_bytes(b'image')
+        client = create_app(self.root, self.root, self.root / 'db', limit=100).test_client()
+        result = client.get('/api/browse', query_string={'recursive': '1'}).json
+        self.assertEqual(len(result['media']), 100)
+        self.assertEqual(result['limit'], 100)
+        self.assertTrue(result['truncated'])
+        result = client.get('/api/browse').json
+        self.assertEqual(len(result['media']), 1)
+        self.assertFalse(result['truncated'])
+        for invalid in (0, -1, 'abc'):
+            with self.assertRaises(__import__('argparse').ArgumentTypeError):
+                create_app(self.root, self.root, self.root / 'db', limit=invalid)
+
     def test_media_range_and_access_boundary(self):
         response = self.client.get('/media', query_string={'path': str(self.root / '하위 폴더' / 'clip.mp4')}, headers={'Range': 'bytes=2-5'})
         self.assertEqual(response.status_code, 206)

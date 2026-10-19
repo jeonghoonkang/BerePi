@@ -28,7 +28,7 @@ function render() {
   if (!data) return;
   filtered = data.media.filter(item => (!$('date').value || item.date === $('date').value) && ($('type').value === 'all' || item.video === ($('type').value === 'video')));
   shown = 0; $('gallery').replaceChildren(); appendPage();
-  $('status').textContent = `${filtered.length.toLocaleString()}개 미디어 · ${data.directories.length}개 폴더 · 파일 수정일 기준` + (data.skipped ? ` · 읽지 못한 항목 ${data.skipped}개` : '') + (data.truncated ? ' · 20,000개까지만 검색했습니다. 더 작은 폴더를 선택하세요.' : '') + (!filtered.length ? ' · 표시할 미디어가 없습니다.' : '');
+  $('status').textContent = `${filtered.length.toLocaleString()}개 미디어 · ${data.directories.length}개 폴더 · 파일 수정일 기준` + (data.skipped ? ` · 읽지 못한 항목 ${data.skipped}개` : '') + (data.truncated ? ` · ${data.limit.toLocaleString()}개까지만 검색했습니다. 더 작은 폴더를 선택하세요.` : '') + (!filtered.length ? ' · 표시할 미디어가 없습니다.' : '');
 }
 function appendPage() {
   const end = Math.min(shown + 100, filtered.length);

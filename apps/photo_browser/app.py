@@ -9,7 +9,18 @@ from flask import Flask, abort, jsonify, render_template, request, send_file
 EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4'}
 
 
-def create_app(root=None, start=None, db=None):
+def positive_limit(value):
+    try:
+        limit = int(value)
+    except (ValueError, TypeError):
+        raise argparse.ArgumentTypeError('스캔 한도는 1 이상의 정수여야 합니다.')
+    if limit < 1:
+        raise argparse.ArgumentTypeError('스캔 한도는 1 이상의 정수여야 합니다.')
+    return limit
+
+
+def create_app(root=None, start=None, db=None, limit=20000):
+    limit = positive_limit(limit)
     app = Flask(__name__)
     boundary = Path(root or os.environ.get('PHOTO_BROWSER_ROOT', '/')).expanduser().resolve()
     initial = Path(start or os.environ.get('PHOTO_BROWSER_START', str(Path.home()))).expanduser().resolve()
@@ -73,13 +84,13 @@ def create_app(root=None, start=None, db=None):
                     continue
                 info = resolved.stat()
                 media.append(dict(name=child.name, path=str(resolved), date=datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d'), modified=info.st_mtime, size=info.st_size, video=child.suffix.lower() == '.mp4'))
-                if len(media) >= 20000:
+                if len(media) >= limit:
                     truncated = True
                     break
             except OSError:
                 skipped += 1
         media.sort(key=lambda item: (-item['modified'], item['path']))
-        return jsonify(path=str(folder), parent=str(folder.parent) if folder != boundary else None, directories=directories, media=media, skipped=skipped, truncated=truncated)
+        return jsonify(path=str(folder), parent=str(folder.parent) if folder != boundary else None, directories=directories, media=media, skipped=skipped, truncated=truncated, limit=limit)
 
     @app.get('/media')
     def media():
@@ -101,5 +112,6 @@ if __name__ == '__main__':
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
     parser.add_argument('--directory', help='처음 표시할 폴더 (기본 홈)')
     parser.add_argument('--db', help='JSON DB 디렉토리')
+    parser.add_argument('--limit', type=positive_limit, default=20000, help='기존 폴더 탐색에서 요청당 스캔할 최대 미디어 수 (기본 20000)')
     args = parser.parse_args()
-    create_app(args.root, args.directory, args.db).run(host=args.host, port=args.port, threaded=True)
+    create_app(args.root, args.directory, args.db, limit=args.limit).run(host=args.host, port=args.port, threaded=True)

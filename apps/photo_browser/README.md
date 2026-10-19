@@ -465,3 +465,19 @@ Windows에서는 저장소 루트에서 다음과 같이 실행합니다.
 ```
 
 `test_app.py`는 기존 폴더 탐색·파일 제공·경로 경계를, `test_library.py`는 월별 분할·병합 검증·모의 HTTP/WebDAV·휴지통을, `test_scan_engine.py`는 중지·이어하기·전체 재스캔·용량 부족·저널 손상·별도 프로세스 강제 종료 후 복구를 검사합니다. 테스트는 임시 디렉토리와 로컬 모의 서버를 사용하며 실제 사진 저장소나 원격 계정에 연결하지 않습니다.
+
+### 폴더 스캔 개수 제한
+
+`--limit 100`을 추가하면 **기존 폴더 탐색**에서 스캔 시작을 누를 때마다
+지원 사진·동영상을 최대 100개까지만 수집하고 중단합니다. 하위 폴더 포함에도
+같은 한도가 적용됩니다. 기본값은 20000이며 1 이상의 정수만 허용합니다.
+전체를 스캔한 뒤 100개를 표시하는 방식이 아니라 탐색 중 먼저 찾은 100개를
+수집한 후 수정일순으로 표시합니다. 소스·스캔·병합의 JSON 라이브러리 스캔에는
+적용되지 않습니다. 실행만으로 자동 스캔을 시작하지 않습니다.
+
+```bash
+cd ~/devel_opment/BerePi/apps/photo_browser
+.venv/bin/python app.py --host 0.0.0.0 \
+  --root "$HOME/bk_dir/tinyosmooo_photo/BK" \
+  --directory "$HOME/bk_dir/tinyosmooo_photo/BK/photo" --limit 100
+```
