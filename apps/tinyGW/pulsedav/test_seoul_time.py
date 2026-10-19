@@ -1,9 +1,10 @@
 import os
+import runpy
 import shlex
 import subprocess
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,26 @@ class FixedDatetime(datetime):
 
 
 class SeoulTimeTests(unittest.TestCase):
+    def test_missing_zoneinfo_module_uses_kst(self):
+        with patch.dict(sys.modules, {'zoneinfo': None}):
+            seoul = runpy.run_path(str(Path(sender.__file__).with_name('time_utils.py')))['SEOUL']
+        instant = datetime(2026, 9, 25, 23, 30, tzinfo=timezone.utc).astimezone(seoul)
+        self.assertEqual(instant.isoformat(), '2026-09-26T08:30:00+09:00')
+        self.assertEqual(instant.tzname(), 'KST')
+        self.assertEqual(instant.utcoffset(), timedelta(hours=9))
+
+    def test_missing_timezone_database_uses_kst(self):
+        from types import SimpleNamespace
+        class MissingZone(KeyError):
+            pass
+        def missing_zone(name):
+            raise MissingZone(name)
+        module = SimpleNamespace(ZoneInfo=missing_zone, ZoneInfoNotFoundError=MissingZone)
+        with patch.dict(sys.modules, {'zoneinfo': module}):
+            seoul = runpy.run_path(str(Path(sender.__file__).with_name('time_utils.py')))['SEOUL']
+        self.assertEqual(datetime(2026, 1, 1, tzinfo=seoul).utcoffset(), timedelta(hours=9))
+        self.assertEqual(datetime(2026, 1, 1, tzinfo=seoul).tzname(), 'KST')
+
     def test_display_and_gateway_log_cross_utc_date_boundary(self):
         with patch.object(sender, 'datetime', FixedDatetime):
             self.assertEqual(sender.current_time_text(), '2026-09-26 08:30:00 KST')
