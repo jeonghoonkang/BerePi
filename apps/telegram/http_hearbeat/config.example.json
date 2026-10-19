@@ -1,0 +1,12 @@
+{
+  "name": "운영 LLM Routing",
+  "url": "https://llm-routing.example.com",
+  "bot_token": "",
+  "chat_id": "",
+  "password": "",
+  "interval_seconds": 60,
+  "timeout_seconds": 120,
+  "max_status_age_seconds": 300,
+  "failure_threshold": 2,
+  "reminder_seconds": 3600
+}
