@@ -282,7 +282,7 @@ class Library:
                 if control:
                     control()
                 url = urljoin(source['root'].rstrip('/') + '/', entry['path'])
-                if Path(urlsplit(url).path).suffix.lower() in EXTENSIONS:
+                if Path(urlsplit(url).path).suffix.lower() in EXTENSIONS and not Path(unquote(urlsplit(url).path)).name.startswith('._'):
                     yield url, entry
         else:
             pending, seen = [source['root'].rstrip('/') + '/'], set()
@@ -311,7 +311,7 @@ class Library:
                     if prop.find('.//{DAV:}collection') is not None:
                         if source.get('recursive', True) and url.rstrip('/') != folder.rstrip('/'):
                             pending.append(url.rstrip('/') + '/')
-                    elif Path(urlsplit(url).path).suffix.lower() in EXTENSIONS:
+                    elif Path(urlsplit(url).path).suffix.lower() in EXTENSIONS and not Path(unquote(urlsplit(url).path)).name.startswith('._'):
                         yield url, {'modified': prop.findtext('{DAV:}getlastmodified'), 'size': prop.findtext('{DAV:}getcontentlength')}
 
     @contextmanager
@@ -370,7 +370,10 @@ class Library:
                     continue
                 c, date = item['classification'], item['capture']['date_key']
                 year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
-                target = root / c['category_id'] / c['owner_id'] / year / month / (item['sha256'] + Path(item['name']).suffix.lower())
+                name = item['name']
+                if not name or name in {'.', '..'} or '/' in name or '\\' in name:
+                    raise ValueError('유효하지 않은 원본 파일명입니다.')
+                target = root / c['category_id'] / c['owner_id'] / year / month / name
                 if not target.resolve().is_relative_to(root):
                     raise ValueError('관리 경로 밖입니다.')
                 op = {'media_id': item['media_id'], 'destination': str(target), 'status': 'planned'}

@@ -4,3 +4,7 @@ body{overflow-wrap:anywhere}.tools>*{min-width:0}.source-row{min-width:0}input,s
 .scan-warning{color:#ffd38a;white-space:pre-wrap}#scan-jobs progress{width:100%;height:18px;accent-color:#a4efc5}#scan-jobs h4{margin:0 0 10px}#managed-form label{display:block;margin:10px 0}#scan-min-free{width:130px}
 
 #status{white-space:pre-wrap}
+
+.path-settings{border:1px solid #394555;border-radius:10px;padding:16px;margin:16px 0}.path-settings summary{cursor:pointer;color:#a4efc5}.path-settings dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 20px}.path-settings dt{color:#9cabbc}.path-settings dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:600px){.path-settings dl{grid-template-columns:1fr}.path-settings dd{margin-bottom:10px}}
+
+.job-card>summary{cursor:pointer;font-weight:600}.job-card>summary:focus-visible{outline:2px solid #a4efc5;outline-offset:4px}.job-card[open]>summary{margin-bottom:12px}

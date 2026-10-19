@@ -32,6 +32,13 @@ class ScanControlTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_skip_appledouble_files(self):
+        (self.source / '._hidden.jpg').write_bytes(b'AppleDouble metadata')
+        self.library.scan('photos')
+        items = self.library.items()
+        self.assertEqual(len(items), 5)
+        self.assertFalse(any(item['name'].startswith('._') for item in items))
+
     def stop_after(self, count, listing=False):
         stop = threading.Event()
         def progress(state):

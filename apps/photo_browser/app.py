@@ -30,6 +30,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
     from library_api import register_library
     register_library(app, boundary, db or os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')))
     app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
+    app.config['PHOTO_BROWSER_START'] = str(initial)
 
     def checked(value):
         path = Path(value).expanduser().resolve()
@@ -47,7 +48,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
 
     @app.get('/')
     def index():
-        return render_template('index.html', initial=str(initial))
+        return render_template('index.html', initial=str(initial), boundary=str(boundary),
+                               db_path=str(app.extensions['photo_library'].db), scan_limit=limit)
 
     @app.get('/api/browse')
     def browse():
@@ -76,7 +78,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
             candidates = iter(children)
         # Bound response memory for very large collections.
         for child in candidates:
-            if child.suffix.lower() not in EXTENSIONS:
+            if child.name.startswith('._') or child.suffix.lower() not in EXTENSIONS:
                 continue
             try:
                 resolved = child.resolve()
@@ -114,4 +116,17 @@ if __name__ == '__main__':
     parser.add_argument('--db', help='JSON DB 디렉토리')
     parser.add_argument('--limit', type=positive_limit, default=20000, help='기존 폴더 탐색에서 요청당 스캔할 최대 미디어 수 (기본 20000)')
     args = parser.parse_args()
-    create_app(args.root, args.directory, args.db, limit=args.limit).run(host=args.host, port=args.port, threaded=True)
+    app = create_app(args.root, args.directory, args.db, limit=args.limit)
+    library = app.extensions['photo_library']
+    config = library.config()
+    print('\n사진 브라우저 경로 설정', flush=True)
+    print(f'허용된 루트 디렉토리: {library.boundary}', flush=True)
+    print(f"시작 디렉토리: {app.config['PHOTO_BROWSER_START']}", flush=True)
+    print(f'JSON DB 디렉토리: {library.db}', flush=True)
+    print(f"관리 디렉토리: {config['managed_root']}", flush=True)
+    for source in config.get('sources', []):
+        print(f"소스 [{source['source_id']}]: {source['root']}", flush=True)
+    if not config.get('sources'):
+        print('소스: 등록된 소스 없음', flush=True)
+    print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
+    app.run(host=args.host, port=args.port, threaded=True)

@@ -2,6 +2,14 @@
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BerePi · Photo Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
 <body><header><span class="brand">BerePi <b> / PHOTO BROWSER</b></span><h1>폴더 속의 순간들.</h1><p>사진과 동영상을 날짜별로 둘러보세요.</p></header>
 <main><nav class="tabs" aria-label="탐색 메뉴"><button data-tab="library-panel">라이브러리</button><button data-tab="sources-panel">소스·스캔·병합</button><button data-tab="trash-panel">휴지통</button><button data-tab="duplicates-panel">중복 파일</button><button data-tab="folder-panel">기존 폴더 탐색</button></nav>
+<details class="path-settings" open><summary>현재 경로 설정</summary><dl>
+<dt>허용된 루트 디렉토리</dt><dd>{{ boundary }}</dd>
+<dt>시작 디렉토리</dt><dd>{{ initial }}</dd>
+<dt>JSON DB 디렉토리</dt><dd>{{ db_path }}</dd>
+<dt>관리 디렉토리</dt><dd id="current-managed-path">불러오는 중…</dd>
+<dt>소스 경로</dt><dd id="current-source-paths">불러오는 중…</dd>
+<dt>기존 폴더 탐색 스캔 한도</dt><dd>{{ scan_limit }}개</dd>
+</dl></details>
 <p id="notice" role="status" aria-live="polite"></p><button id="undo-trash" hidden>방금 삭제 실행 취소</button>
 <section id="library-panel" class="panel"><h2>미디어 라이브러리</h2><form id="library-filters" class="tools">
 <label>검색 <input name="q" placeholder="파일명·이벤트·태그"></label><label>이벤트 <select name="event" id="filter-event"><option value="">전체</option></select></label><label>태그 <select name="tag" id="filter-tag"><option value="">전체</option></select></label><label>사람 <select name="person" id="filter-person"><option value="">전체</option></select></label><label>카테고리 <select name="category" id="filter-category"><option value="">전체</option></select></label><label>소유자 <select name="owner" id="filter-owner"><option value="">전체</option></select></label>

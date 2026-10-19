@@ -109,7 +109,7 @@ class ScanEngine:
             for name in sorted(files):
                 self.check()
                 path = Path(base) / name
-                if path.suffix.lower() in EXTENSIONS and not path.is_symlink():
+                if not name.startswith('._') and path.suffix.lower() in EXTENSIONS and not path.is_symlink():
                     resolved = library.local(path)
                     if not resolved.is_relative_to(managed) and not resolved.is_relative_to(library.db):
                         yield resolved.as_uri(), {'path': str(resolved)}

@@ -88,7 +88,8 @@
   function drawJob(status) {
     let card = jobCards.get(status.job_id);
     if (!card) {
-      const row = make('article', '', 'source-row'), title = make('h4'), text = make('p'), bar = make('progress'), file = make('p'), warning = make('p', '', 'scan-warning');
+      const row = make('details', '', 'source-row job-card'), title = make('summary'), text = make('p'), bar = make('progress'), file = make('p'), warning = make('p', '', 'scan-warning');
+      row.open = activeStates.includes(status.status);
       bar.max = 100; bar.setAttribute('aria-label', '스캔 처리 진행률');
       const stop = action('중지하고 저장', async () => { const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {}); drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.'); });
       row.append(title, text, bar, file, warning, stop); el('scan-jobs').prepend(row);
@@ -137,6 +138,10 @@
   }
   async function loadConfig() {
     config = await api('api/config'); el('managed-root').value = config.managed_root; el('scan-min-free').value = config.scan_min_free_mb ?? 512; el('source-list').replaceChildren();
+    el('current-managed-path').textContent = config.managed_root;
+    el('current-source-paths').textContent = config.sources.length
+      ? config.sources.map(source => `${source.source_id}: ${source.root}`).join('\n')
+      : '등록된 소스 없음';
     const sessions = (await api('api/scans')).items;
     config.sources.forEach(source => {
       const row = make('div', '', 'source-row'); row.append(make('p', `${source.source_id} · ${source.protocol} · ${source.root}`));

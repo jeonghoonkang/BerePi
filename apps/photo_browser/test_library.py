@@ -60,7 +60,8 @@ class LibraryTests(unittest.TestCase):
 
     def test_merge_verified_shared_trash_restore_and_purge(self):
         first = self.photo()
-        (self.source / 'copy.jpg').write_bytes(first.read_bytes())
+        (self.source / 'nested').mkdir()
+        (self.source / 'nested' / first.name).write_bytes(first.read_bytes())
         self.library.scan('local')
         ids = [i['media_id'] for i in self.library.items()]
         self.assertTrue(all(o['status'] == 'planned' for o in self.library.merge(preview=True)['operations']))
@@ -89,6 +90,21 @@ class LibraryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.library.restore(trash['trash_id'])
 
+    def test_merge_preserves_original_names_and_rejects_collision(self):
+        original = self.photo('가족 사진.JPG')
+        (self.source / 'nested').mkdir()
+        other = self.source / 'nested' / original.name
+        with Image.open(original) as image:
+            exif = image.getexif()
+        Image.new('RGB', (8, 8), 'blue').save(other, exif=exif)
+        self.library.scan('local')
+        preview = self.library.merge(preview=True)
+        self.assertTrue(all(Path(op['destination']).name == original.name for op in preview['operations']))
+        result = self.library.merge()
+        self.assertEqual(sorted(op['status'] for op in result['operations']), ['copied', 'error'])
+        target = Path(result['operations'][0]['destination'])
+        self.assertIn(target.read_bytes(), (original.read_bytes(), other.read_bytes()))
+
     def test_changed_original_no_overwrite_and_integrity(self):
         source = self.photo()
         self.library.scan('local')
@@ -114,7 +130,8 @@ class LibraryTests(unittest.TestCase):
 
     def test_purging_shared_trash_preserves_other_undo(self):
         source = self.photo()
-        (self.source / 'copy.jpg').write_bytes(source.read_bytes())
+        (self.source / 'nested').mkdir()
+        (self.source / 'nested' / source.name).write_bytes(source.read_bytes())
         self.library.scan('local')
         self.library.merge()
         ids = [i['media_id'] for i in self.library.items()]
@@ -127,7 +144,8 @@ class LibraryTests(unittest.TestCase):
 
     def test_last_shared_trash_purge_removes_retained_bytes(self):
         source = self.photo()
-        (self.source / 'copy.jpg').write_bytes(source.read_bytes())
+        (self.source / 'nested').mkdir()
+        (self.source / 'nested' / source.name).write_bytes(source.read_bytes())
         self.library.scan('local')
         self.library.merge()
         ids = [i['media_id'] for i in self.library.items()]
