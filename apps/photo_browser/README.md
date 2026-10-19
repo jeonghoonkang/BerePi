@@ -107,6 +107,31 @@ apps/photo_browser/.venv/bin/python apps/photo_browser/app.py \
 
 ## 라이브러리 사용 순서
 
+### CLI에서 설정·스캔 상태 확인 및 병합
+
+웹에서 저장한 DB를 서버 없이도 조회하고 병합할 수 있습니다. 저장소 루트에서 서버와 동일한 `--db`, `--root`를 지정하세요. Python 3.10 이상과 위 설치 환경을 사용합니다.
+
+```bash
+# 저장된 설정과 실제 DB·허용 루트 확인
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data config
+
+# 등록된 모든 소스의 최신 스캔 상태·처리 수·오류·JSON 발행 여부 확인
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data status
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data status --source-id local_photos
+
+# 대상 경로 미리보기 후 전체 병합 복사 실행
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --preview
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge
+
+# 일부 항목만 병합하거나 중지한 병합 이어하기
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --media-id MEDIA_ID
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --resume MERGE_ID
+```
+
+출력은 JSON입니다. `status`의 `scan_complete`는 스캔 완료와 월별 JSON 발행을 모두 확인하며, 개별 파일 실패는 `error_count`와 `scan.errors`에서 확인합니다. 아직 스캔하지 않은 소스는 `not_scanned`입니다. `running`은 마지막 저장 상태이므로 강제 종료 후에도 남을 수 있습니다. 실시간 서버 작업 상태는 웹 화면에서 확인하세요.
+
+`--db`를 생략하면 `PHOTO_BROWSER_DB`, 환경변수도 없으면 `apps/photo_browser/db`를 사용합니다. 기존 설정이 없는 DB는 오류로 처리합니다. 원격 병합에는 서버와 같은 인증 환경변수를 설정해야 합니다. 병합은 동기 실행되며 종료할 때 결과와 `merge_id`를 출력합니다. `Ctrl+C`는 현재 파일 처리 후 중지 상태를 저장합니다. 중지·복사 오류는 종료 코드 1, 정상 완료와 조회는 0을 반환합니다. 원본은 유지하며 기존 대상 파일의 내용이 다르면 덮어쓰지 않습니다. 서버가 실행 중이어도 사용할 수 있지만 다른 쓰기 작업과 겹치면 기존 DB 잠금에 의해 거부됩니다.
+
 1. `소스·스캔·병합`에서 **관리 디렉토리**를 먼저 저장합니다. `--root` 안에 있으며 DB와 분리된 경로를 지정하세요.
 2. 소스 ID, 프로토콜, 경로, 카테고리, 소유자 ID를 등록합니다. 추가 디렉토리도 별도 소스로 등록할 수 있습니다.
 3. `스캔 / JSON 생성`으로 등록합니다. 로컬 증분 스캔은 용량·수정 시각이 같은 항목의 재분석을 생략합니다. `처음부터 전체 재스캔`은 목록·해시·메타데이터를 처음부터 다시 읽습니다. 중지한 스캔은 `중단 지점부터 이어하기`로 재개합니다.
