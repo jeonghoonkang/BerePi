@@ -1,4 +1,4 @@
-"""Read-only local media browser; run with python app.py."""
+"""Local media browser and JSON media library; run with python app.py."""
 import argparse
 import os
 from datetime import datetime
@@ -9,12 +9,16 @@ from flask import Flask, abort, jsonify, render_template, request, send_file
 EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4'}
 
 
-def create_app(root=None, start=None):
+def create_app(root=None, start=None, db=None):
     app = Flask(__name__)
     boundary = Path(root or os.environ.get('PHOTO_BROWSER_ROOT', '/')).expanduser().resolve()
     initial = Path(start or os.environ.get('PHOTO_BROWSER_START', str(Path.home()))).expanduser().resolve()
     if not initial.is_relative_to(boundary):
         initial = boundary
+
+    from library_api import register_library
+    register_library(app, boundary, db or os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')))
+    app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 
     def checked(value):
         path = Path(value).expanduser().resolve()
@@ -96,5 +100,6 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=7081)
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
     parser.add_argument('--directory', help='처음 표시할 폴더 (기본 홈)')
+    parser.add_argument('--db', help='JSON DB 디렉토리')
     args = parser.parse_args()
-    create_app(args.root, args.directory).run(host=args.host, port=args.port, threaded=True)
+    create_app(args.root, args.directory, args.db).run(host=args.host, port=args.port, threaded=True)

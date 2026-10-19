@@ -52,4 +52,4 @@ $('close').onclick = () => $('viewer').close();
 $('viewer').addEventListener('close', () => $('preview').replaceChildren());
 $('previous').onclick = () => openViewer(selected - 1); $('next').onclick = () => openViewer(selected + 1);
 $('viewer').addEventListener('keydown', event => { if (event.key === 'ArrowLeft') openViewer(selected - 1); if (event.key === 'ArrowRight') openViewer(selected + 1); });
-browse($('path').value);
+// Folder scanning starts only when the user opens a folder.

@@ -14,7 +14,7 @@ class BrowserTests(unittest.TestCase):
         (self.root / '하위 폴더' / 'clip.mp4').write_bytes(b'0123456789')
         (self.root / 'private.txt').write_text('not media')
         os.utime(self.root / '사진.JPG', (1700000000, 1700000000))
-        self.client = create_app(self.root, self.root).test_client()
+        self.client = create_app(self.root, self.root, self.root / 'db').test_client()
 
     def tearDown(self):
         self.temp.cleanup()
@@ -22,7 +22,7 @@ class BrowserTests(unittest.TestCase):
     def test_navigation_and_recursive_scan(self):
         result = self.client.get('/api/browse', query_string={'path': str(self.root)}).json
         self.assertIsNone(result['parent'])
-        self.assertEqual(result['directories'][0]['name'], '하위 폴더')
+        self.assertIn('하위 폴더', [directory['name'] for directory in result['directories']])
         self.assertEqual(len(result['media']), 1)
         self.assertEqual(result['media'][0]['date'], __import__('datetime').datetime.fromtimestamp(1700000000).strftime('%Y-%m-%d'))
         result = self.client.get('/api/browse', query_string={'path': str(self.root), 'recursive': '1'}).json
@@ -37,7 +37,10 @@ class BrowserTests(unittest.TestCase):
         response.close()
         self.assertEqual(self.client.get('/media', query_string={'path': str(self.root / 'private.txt')}).status_code, 404)
         self.assertEqual(self.client.get('/api/browse', query_string={'path': '/'}).status_code, 403)
-        (self.root / 'escape.jpg').symlink_to('/etc/passwd')
+        try:
+            (self.root / 'escape.jpg').symlink_to('/etc/passwd')
+        except OSError:
+            return  # Windows accounts without symlink privileges.
         self.assertEqual(self.client.get('/media', query_string={'path': str(self.root / 'escape.jpg')}).status_code, 403)
 
     def test_page_and_missing_folder(self):

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "managed_root": "/data/photo_library",
+  "scan_min_free_mb": 512,
+  "sources": [
+    {
+      "source_id": "local_photos",
+      "protocol": "file",
+      "root": "/data/incoming",
+      "category": "family",
+      "owner_id": "person001",
+      "recursive": true
+    },
+    {
+      "source_id": "nas_photos",
+      "protocol": "webdav",
+      "root": "https://nas.example.com/dav/photos/",
+      "category": "family",
+      "owner_id": "person001",
+      "credential_ref": "NAS_PHOTOS",
+      "recursive": true
+    }
+  ]
+}
