@@ -168,6 +168,7 @@ class Library:
             if root == self.boundary or root == self.db or self.db.is_relative_to(root) or root.is_relative_to(self.db):
                 raise ValueError('관리 디렉토리는 루트 또는 DB와 분리된 하위 경로를 지정하세요.')
             ids = set()
+            roots = {}
             for source in config.get('sources', []):
                 if not isinstance(source, dict) or not isinstance(source.get('root'), str):
                     raise ValueError('소스에는 경로 문자열이 필요합니다.')
@@ -186,10 +187,64 @@ class Library:
                         raise ValueError('원격 경로는 인증정보·쿼리 없는 HTTP(S) URL이어야 합니다.')
                 else:
                     raise ValueError('지원하지 않는 프로토콜입니다.')
+                key = self.source_key(source)
+                if key in roots:
+                    raise ValueError(f'같은 경로가 이미 등록되어 있습니다. 기존 소스 ID: {roots[key]}')
+                roots[key] = source['source_id']
             minimum = config.get('scan_min_free_mb', 512)
             if isinstance(minimum, bool) or not isinstance(minimum, int) or not 32 <= minimum <= 1048576:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
+
+    def source_key(self, source):
+        protocol = source.get('protocol', 'file')
+        if protocol == 'file':
+            return protocol, str(self.local(source['root']))
+        parsed = urlsplit(source['root'])
+        return protocol, (parsed.scheme.lower(), parsed.netloc.lower(), unquote(parsed.path).rstrip('/'))
+
+    def rename_source(self, old, new):
+        old, new = component(old), component(new)
+        with self.writing():
+            config = self.config()
+            source = next((s for s in config['sources'] if s['source_id'] == old), None)
+            if not source:
+                raise ValueError('기존 소스를 찾지 못했습니다.')
+            if old == new:
+                return config
+            if any(s['source_id'] == new for s in config['sources']):
+                raise ValueError('이미 사용 중인 소스 ID입니다.')
+            def replace(value):
+                if isinstance(value, dict):
+                    return {k: new if k == 'source_id' and v == old else replace(v) for k, v in value.items()}
+                if isinstance(value, list):
+                    return [replace(v) for v in value]
+                return value
+            items = replace(self.items())
+            # Resume journals contain media locations as well as the source snapshot.
+            scans = self.db / 'scans'
+            for path in scans.rglob('*.json'):
+                atomic_json(path, replace(read_json(path)))
+            for path in scans.rglob('*.jsonl'):
+                temporary = path.with_name(path.name + '.rename.tmp')
+                try:
+                    with path.open(encoding='utf-8') as reader, temporary.open('w', encoding='utf-8') as writer:
+                        for line in reader:
+                            try:
+                                record = json.loads(line)
+                            except json.JSONDecodeError:
+                                break  # Ignore an incomplete trailing journal record.
+                            writer.write(json.dumps(replace(record), ensure_ascii=False) + '\n')
+                    os.replace(temporary, path)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            pointer = scans / 'sessions' / (old + '.json')
+            if pointer.exists():
+                os.replace(pointer, pointer.with_name(new + '.json'))
+            self.commit(items)
+            source['source_id'] = new
+            atomic_json(self.db / 'config.json', config)
+            return config
 
     def items(self, filters=None):
         manifest = read_json(self.db / 'index.json', {'chunks': []})

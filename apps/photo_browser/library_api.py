@@ -113,6 +113,22 @@ def register_library(app, boundary, db):
         library.save_config(body())
         return jsonify(library.config())
 
+    @app.post('/api/sources/check')
+    def check_source():
+        data = body()
+        key = library.source_key(data)
+        existing = next((s for s in library.config()['sources'] if library.source_key(s) == key), None)
+        return jsonify(existing=existing)
+
+    @app.post('/api/sources/rename')
+    def rename_source():
+        data = body()
+        with guard:
+            if any(j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
+                raise ValueError('실행 중인 작업을 중지한 뒤 소스 ID를 변경하세요.')
+            result = library.rename_source(data['old_id'], data['new_id'])
+        return jsonify(result)
+
     @app.get('/api/jobs/<job_id>')
     def job_status(job_id):
         with guard:

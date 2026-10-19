@@ -32,6 +32,15 @@ class ScanControlTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_rename_paused_source_preserves_resume(self):
+        result = self.stop_after(2)
+        self.assertEqual(result['status'], 'stopped')
+        self.library.rename_source('photos', 'renamed')
+        result = self.library.scan('renamed', mode='resume')
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(len(self.library.items()), 5)
+        self.assertTrue(all(item['locations'][0]['source_id'] == 'renamed' for item in self.library.items()))
+
     def test_skip_appledouble_files(self):
         (self.source / '._hidden.jpg').write_bytes(b'AppleDouble metadata')
         self.library.scan('photos')

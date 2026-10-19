@@ -169,6 +169,12 @@
       if (session) row.append(make('p', `${stateNames[session.status] || session.status} · ${progressText(session)}`));
       const resume = action('중단 지점부터 이어하기', () => job('api/scan', {source_id: source.source_id, mode: 'resume'}));
       resume.disabled = !session || session.status === 'completed' || session.status === 'running';
+      row.append(action('소스 ID 변경', async () => {
+        const newId = prompt(`현재 소스 ID: ${source.source_id}\n새 소스 ID를 입력하세요.`, source.source_id);
+        if (!newId || newId === source.source_id) return;
+        await api('api/sources/rename', 'POST', {old_id: source.source_id, new_id: newId});
+        await loadConfig(); notify('소스 ID와 사진·스캔 기록의 연결을 변경했습니다.');
+      }));
       row.append(resume, action('처음부터 전체 재스캔', async () => { if (confirm('중단 지점 대신 처음부터 파일 목록과 메타데이터를 다시 검사합니까? 이벤트·태그와 원본은 유지됩니다.')) await job('api/scan', {source_id: source.source_id, mode: 'restart'}); }));
       row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => { for (const [key, value] of Object.entries(source)) { const input = el('source-form').elements.namedItem(key); if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; } } }), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
       el('source-list').append(row);
@@ -177,6 +183,14 @@
   el('managed-form').onsubmit = safe(async event => { event.preventDefault(); await api('api/config', 'PUT', {...config, managed_root: el('managed-root').value, scan_min_free_mb: Number(el('scan-min-free').value)}); await loadConfig(); notify('관리 경로와 스캔 여유 공간 기준을 저장했습니다.'); });
   el('source-form').onsubmit = safe(async event => {
     event.preventDefault(); const form = el('source-form'), source = Object.fromEntries(new FormData(form)); source.recursive = form.elements.recursive.checked;
+    const {existing} = await api('api/sources/check', 'POST', source);
+    if (existing && existing.source_id !== source.source_id) {
+      if (!confirm(`같은 경로의 기존 소스 ID는 ${existing.source_id}입니다.\n${source.source_id}(으)로 변경하시겠습니까? 취소하면 기존 ID를 불러옵니다.`)) {
+        form.elements.source_id.value = existing.source_id;
+        notify(`기존 소스 ID ${existing.source_id}를 사용합니다. 내용을 확인한 뒤 다시 등록하세요.`); return;
+      }
+      config = await api('api/sources/rename', 'POST', {old_id: existing.source_id, new_id: source.source_id});
+    }
     await api('api/config', 'PUT', {...config, sources: [...config.sources.filter(s => s.source_id !== source.source_id), source]}); await loadConfig(); notify('소스를 저장했습니다. 스캔 버튼으로 JSON을 생성하세요.');
   });
   el('merge-preview').onclick = safe(() => job('api/merge', {preview: true}));

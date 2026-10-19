@@ -105,6 +105,22 @@ class LibraryTests(unittest.TestCase):
         target = Path(result['operations'][0]['destination'])
         self.assertIn(target.read_bytes(), (original.read_bytes(), other.read_bytes()))
 
+    def test_duplicate_source_path_and_rename(self):
+        self.photo()
+        self.library.scan('local')
+        before = self.library.items()[0]['media_id']
+        duplicate = dict(self.config, sources=self.config['sources'] + [dict(self.config['sources'][0], source_id='other', root=str(self.source / '.'))])
+        with self.assertRaisesRegex(ValueError, '기존 소스 ID: local'):
+            self.library.save_config(duplicate)
+        check = self.post('/api/sources/check', {'root': str(self.source / '.'), 'protocol': 'file'})
+        self.assertEqual(check.json['existing']['source_id'], 'local')
+        renamed = self.post('/api/sources/rename', {'old_id': 'local', 'new_id': 'family_photos'})
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(self.library.items()[0]['locations'][0]['source_id'], 'family_photos')
+        self.library.scan('family_photos')
+        self.assertEqual(len(self.library.items()), 1)
+        self.assertEqual(self.library.items()[0]['media_id'], before)
+
     def test_merge_stop_and_resume_after_restart(self):
         for index in range(4):
             self.photo(f'photo{index}.jpg')
