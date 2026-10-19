@@ -2,6 +2,14 @@ const $ = id => document.getElementById(id);
 let data = null, filtered = [], shown = 0, selected = 0, controller;
 const mediaURL = path => 'media?path=' + encodeURIComponent(path);
 function button(text, action) { const el = document.createElement('button'); el.textContent = text; el.onclick = action; return el; }
+function prepareScan(path) {
+  if (controller) controller.abort();
+  $('path').value = path;
+  data = null; filtered = []; shown = 0;
+  $('gallery').replaceChildren(); $('folders').replaceChildren();
+  $('more').hidden = true; $('up').disabled = true;
+  $('status').textContent = '경로와 하위 폴더 포함 여부를 선택한 후 스캔 시작을 누르세요.';
+}
 async function browse(path) {
   if (controller) controller.abort();
   controller = new AbortController();
@@ -12,7 +20,7 @@ async function browse(path) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '폴더를 열지 못했습니다.');
     data = result; $('path').value = data.path; $('up').disabled = !data.parent;
-    for (const folder of data.directories) $('folders').append(button('📁 ' + folder.name, () => browse(folder.path)));
+    for (const folder of data.directories) $('folders').append(button('📁 ' + folder.name, () => prepareScan(folder.path)));
     render();
   } catch (error) { if (error.name !== 'AbortError') { data = null; $('up').disabled = true; $('status').textContent = error.message; } }
 }
@@ -43,8 +51,9 @@ function openViewer(index) {
   if (!$('viewer').open) $('viewer').showModal();
 }
 $('location').onsubmit = event => { event.preventDefault(); browse($('path').value); };
-$('up').onclick = () => { if (data?.parent) browse(data.parent); };
-$('recursive').onchange = () => browse($('path').value);
+$('up').onclick = () => { if (data?.parent) prepareScan(data.parent); };
+$('recursive').onchange = () => prepareScan($('path').value);
+$('path').oninput = () => prepareScan($('path').value);
 $('date').onchange = $('type').onchange = render;
 $('reset').onclick = () => { $('date').value = ''; $('type').value = 'all'; render(); };
 $('more').onclick = appendPage;
@@ -52,4 +61,4 @@ $('close').onclick = () => $('viewer').close();
 $('viewer').addEventListener('close', () => $('preview').replaceChildren());
 $('previous').onclick = () => openViewer(selected - 1); $('next').onclick = () => openViewer(selected + 1);
 $('viewer').addEventListener('keydown', event => { if (event.key === 'ArrowLeft') openViewer(selected - 1); if (event.key === 'ArrowRight') openViewer(selected + 1); });
-// Folder scanning starts only when the user opens a folder.
+// Only submitting the scan form starts a directory scan.
