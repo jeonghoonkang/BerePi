@@ -89,17 +89,48 @@
     if (!progress.inventory_complete) return `전체 파일 목록 집계 중 · 현재 ${progress.total.toLocaleString()}개 발견 · 전체 개수 확인 중`;
     return `전체 ${progress.total.toLocaleString()}개 · 처리 ${progress.processed.toLocaleString()}개 (${progress.percent ?? 0}%) · 신규 ${progress.added} · 갱신 ${progress.updated} · 변경 없음 ${progress.unchanged} · 제외 ${progress.ignored} · 오류 ${progress.error_count ?? progress.errors?.length ?? 0}`;
   }
+  function jobSummary(status) {
+    const result = status.result;
+    if (!result) return [];
+    const count = value => Number(value || 0).toLocaleString();
+    if (status.kind === 'scan') {
+      const lines = [
+        `스캔 분석: 신규 ${count(result.added)}개 · 갱신 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
+        `월별 JSON: ${result.published ? '반영 완료' : '반영 완료되지 않음 · 작업 상태와 경고를 확인하세요.'}`,
+        '원본 사진·동영상은 변경하지 않았습니다. 사진 복사본 생성은 별도의 병합 실행이 필요합니다.',
+      ];
+      if (result.updated) lines.push('갱신은 스캔 분석 결과를 다시 반영한 개수이며, 사진 내용이나 태그가 변경된 개수는 아닙니다.');
+      lines.push(`제외 ${count(result.ignored)}개 · 처리 오류 ${count(result.errors?.length ?? result.error_count)}개`);
+      return lines;
+    }
+    if (status.kind === 'merge') {
+      const operations = result.operations || [];
+      const counts = {};
+      operations.forEach(operation => { counts[operation.status] = (counts[operation.status] || 0) + 1; });
+      return [
+        result.preview ? `미리보기: 복사 예정 ${count(counts.planned)}개 · 실제 복사하지 않음` : `병합 결과: 새 복사 ${count(counts.copied)}개 · 기존 파일 재사용 ${count(counts.reused)}개 · 건너뜀 ${count(counts.skipped)}개 · 오류 ${count(counts.error)}개`,
+        result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
+      ];
+    }
+    if (status.kind === 'source_rename') {
+      return ['소스 ID 변경 작업을 완료했습니다. 현재 ID는 소스 목록에서 확인하세요.',
+        '사진 JSON과 스캔 기록의 소스 연결을 변경했습니다. 사진 파일의 위치와 태그는 유지합니다.'];
+    }
+    return [];
+  }
   function drawJob(status) {
     if (jobsPage && !visibleJobs.has(status.job_id)) return;
     let card = jobCards.get(status.job_id);
     if (!card) {
       const row = make('details', '', 'source-row job-card'), title = make('summary'), text = make('p'), bar = make('progress'), file = make('p'), warning = make('p', '', 'scan-warning');
+      const changes = make('section'), changesTitle = make('h4', '주요 처리 결과 · 반영 사항'), changesList = make('ul');
+      changes.append(changesTitle, changesList);
       row.open = activeStates.includes(status.status);
       bar.max = 100; bar.setAttribute('aria-label', '작업 처리 진행률');
       const stop = action('중지하고 저장', async () => { const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {}); drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.'); });
       const resume = action('병합 이어하기', () => job('api/merge', {preview: false, resume: card.mergeId}));
-      row.append(title, text, bar, file, warning, stop, resume); el('scan-jobs').prepend(row);
-      card = {row, title, text, bar, file, warning, stop, resume}; jobCards.set(status.job_id, card);
+      row.append(title, text, bar, file, warning, changes, stop, resume); el('scan-jobs').prepend(row);
+      card = {row, title, text, bar, file, warning, changes, changesList, stop, resume}; jobCards.set(status.job_id, card);
     }
     card.createdAt = status.created_at;
     if (!jobsPage) {
@@ -108,6 +139,9 @@
       for (const [, entry] of ordered.slice(0, 3)) el('scan-jobs').append(entry.row);
     }
     const p = status.result || status.progress;
+    const summary = jobSummary(status);
+    card.changes.hidden = !summary.length;
+    card.changesList.replaceChildren(...summary.map(line => make('li', line)));
     card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
     card.text.textContent = status.kind === 'merge' ? `전체 ${p?.total ?? 0}개 · 처리 ${p?.processed ?? 0}개 (${p?.percent ?? 0}%)` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
     card.bar.hidden = !['scan', 'merge'].includes(status.kind);
