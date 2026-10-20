@@ -1,5 +1,6 @@
 """Library HTTP API and single-worker background jobs."""
 import hmac
+import json
 import os
 import shutil
 import threading
@@ -21,7 +22,24 @@ def register_library(app, boundary, db):
     jobs, guard = {}, threading.Lock()
     controls = {}
     for path in (library.db / 'jobs').glob('*.json'):
-        previous = read_json(path)
+        try:
+            previous = read_json(path)
+            if (not isinstance(previous, dict) or not isinstance(previous.get('job_id'), str)
+                    or not isinstance(previous.get('status'), str)
+                    or not isinstance(previous.get('created_at'), str)):
+                raise ValueError('작업 기록의 필수 필드가 올바르지 않습니다.')
+        except (json.JSONDecodeError, UnicodeError, ValueError) as exc:
+            # Preserve corrupt history verbatim; never infer a successful result
+            # or change the media database from an incomplete job report.
+            backup = path.parent / 'corrupt' / (path.name + '.' + uid() + '.bak')
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(path, backup)
+            previous = {'job_id': path.stem, 'status': 'failed', 'kind': 'recovery',
+                        'created_at': now(), 'finished_at': now(),
+                        'error': f'손상된 작업 기록을 보존하고 건너뛰었습니다: {backup}. 오류: {exc}',
+                        'warning': '이 기록만으로 이전 작업의 완료 여부를 판단할 수 없습니다. 사진·스캔·병합 상태를 확인하세요.'}
+            atomic_json(path, previous)
+            app.logger.warning(previous['error'])
         if previous['status'] in {'queued', 'running', 'stopping'}:
             previous['status'] = 'interrupted'
             previous['warning'] = '서버가 재시작되었습니다. 이어하기 버튼으로 재개하세요.'

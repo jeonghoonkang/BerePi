@@ -100,6 +100,25 @@ class BrowserTests(unittest.TestCase):
             return  # Windows accounts without symlink privileges.
         self.assertEqual(self.client.get('/media', query_string={'path': str(self.root / 'escape.jpg')}).status_code, 403)
 
+    def test_corrupt_job_history_is_preserved_and_does_not_block_startup(self):
+        jobs = self.root / 'recovery-db' / 'jobs'
+        jobs.mkdir(parents=True)
+        broken = b'{"job_id":"broken", "result": [1,2'
+        (jobs / 'broken.json').write_bytes(broken)
+        (jobs / 'invalid.json').write_text('[]')
+        client = create_app(self.root, self.root, jobs.parent).test_client()
+        response = client.get('/api/jobs')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['total'], 2)
+        self.assertTrue(all(job['status'] == 'failed' for job in response.json['items']))
+        backups = list((jobs / 'corrupt').glob('*.bak'))
+        self.assertEqual(len(backups), 2)
+        self.assertIn(broken, [p.read_bytes() for p in backups])
+        self.assertEqual(client.get('/').status_code, 200)
+        restarted = create_app(self.root, self.root, jobs.parent).test_client()
+        self.assertEqual(restarted.get('/api/jobs').json['total'], 2)
+        self.assertEqual(len(list((jobs / 'corrupt').glob('*.bak'))), 2)
+
     def test_page_and_missing_folder(self):
         self.assertEqual(self.client.get('/').status_code, 200)
         response = self.client.get('/static/app.js')

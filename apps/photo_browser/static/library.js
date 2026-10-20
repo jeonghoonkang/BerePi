@@ -150,7 +150,7 @@
     const summary = jobSummary(status);
     card.changes.hidden = !summary.length;
     card.changesList.replaceChildren(...summary.map(line => make('li', line)));
-    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '병합 정보 갱신·미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
     card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
     card.bar.hidden = !['scan', 'merge', 'merge_preview'].includes(status.kind);
     if (p?.inventory_complete || (['merge', 'merge_preview'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
@@ -168,7 +168,7 @@
       let status;
       do {
         status = await api('api/jobs/' + id); drawJob(status);
-        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge_preview' ? '병합 정보 갱신·미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
+        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
         if (status.kind === 'merge_preview') {
           const progress = status.result || status.progress;
           el('job-status').textContent += ' · ' + mergeProgress(progress);
@@ -299,8 +299,7 @@
     }
     await api('api/config', 'PUT', {...config, sources: [...config.sources.filter(s => s.source_id !== source.source_id), source]}); await loadConfig(); notify('소스를 저장했습니다. 스캔 버튼으로 JSON을 생성하세요.');
   });
-  el('merge-preview').onclick = safe(() => job('api/merge', {preview: true}));
-  el('merge-refresh').onclick = safe(async () => {
+  el('merge-preview').onclick = safe(async () => {
     if (el('managed-root').value !== config.managed_root || Number(el('scan-min-free').value) !== (config.scan_min_free_mb ?? 512)) {
       throw new Error('관리 경로·여유 공간 기준을 먼저 저장한 뒤 갱신하세요.');
     }
