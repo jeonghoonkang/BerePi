@@ -4,6 +4,7 @@
   let config, page = [], offset = 0, total = 0, chosen = new Set(), undoId;
   const watchers = new Map(), jobCards = new Map();
   const jobsPage = document.body.classList.contains('jobs-page');
+  const sourcesOnly = new URLSearchParams(window.location.search).get('panel') === 'sources';
   let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
   const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
@@ -21,7 +22,7 @@
     document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== id; });
     document.querySelectorAll('[data-tab]').forEach(button => { button.setAttribute('aria-pressed', button.dataset.tab === id); });
   }
-  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
+  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'library-panel') { await facets(); offset = null; await load(); } if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
   function selection() { el('selection-count').textContent = `${chosen.size}개 선택`; }
   async function facets() {
     const values = await api('api/facets');
@@ -185,7 +186,8 @@
           warning: status.result.warning,
         }, null, 2);
       }
-      await loadConfig(); await facets(); await load();
+      await loadConfig();
+      if (!el('library-panel').hidden) { await facets(); await load(); }
       const warning = status.result?.warning || status.error || status.warning;
       notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
     })();
@@ -287,18 +289,46 @@
     }
   };
   el('managed-form').onsubmit = safe(async event => { event.preventDefault(); await api('api/config', 'PUT', {...config, managed_root: el('managed-root').value, scan_min_free_mb: Number(el('scan-min-free').value)}); await loadConfig(); notify('관리 경로와 스캔 여유 공간 기준을 저장했습니다.'); });
-  el('source-form').onsubmit = safe(async event => {
-    event.preventDefault(); const form = el('source-form'), source = Object.fromEntries(new FormData(form)); source.recursive = form.elements.recursive.checked;
-    const {existing} = await api('api/sources/check', 'POST', source);
-    if (existing && existing.source_id !== source.source_id) {
-      if (!confirm(`같은 경로의 기존 소스 ID는 ${existing.source_id}입니다.\n${source.source_id}(으)로 변경하시겠습니까? 취소하면 기존 ID를 불러옵니다.`)) {
-        form.elements.source_id.value = existing.source_id;
-        notify(`기존 소스 ID ${existing.source_id}를 사용합니다. 내용을 확인한 뒤 다시 등록하세요.`); return;
+  el('source-form').addEventListener('invalid', event => {
+    el('source-save-status').textContent = `필수 입력 또는 형식을 확인하세요: ${event.target.name}`;
+  }, true);
+  el('source-form').onsubmit = async event => {
+    event.preventDefault();
+    const form = el('source-form'), source = Object.fromEntries(new FormData(form));
+    source.recursive = form.elements.namedItem('recursive').checked;
+    const status = el('source-save-status'), button = el('source-save');
+    if (button.disabled) return;
+    button.disabled = true;
+    status.textContent = '소스 설정을 저장하고 있습니다…';
+    let saved = false;
+    try {
+      const {existing} = await api('api/sources/check', 'POST', source);
+      if (existing && existing.source_id !== source.source_id) {
+        if (!confirm(`같은 경로의 기존 소스 ID는 ${existing.source_id}입니다.\n${source.source_id}(으)로 변경하시겠습니까?`)) {
+          status.textContent = '소스 ID 변경을 취소했습니다. 설정은 저장하지 않았습니다.';
+          return;
+        }
+        await api('api/sources/rename', 'POST', {old_id: existing.source_id, new_id: source.source_id});
       }
-      config = await api('api/sources/rename', 'POST', {old_id: existing.source_id, new_id: source.source_id});
+      // Read current settings to avoid overwriting other sources with a stale UI copy.
+      const latest = await api('api/config');
+      await api('api/config', 'PUT', {...latest, sources: [...latest.sources.filter(s => s.source_id !== source.source_id), source]});
+      const verified = await api('api/config');
+      const stored = verified.sources.find(s => s.source_id === source.source_id);
+      if (!stored || stored.category !== source.category || stored.owner_id !== source.owner_id) {
+        throw new Error('저장 후 카테고리·소유자가 입력값과 다릅니다. 다른 창에서 설정을 변경 중인지 확인하세요.');
+      }
+      saved = true;
+      await loadConfig();
+      status.textContent = `저장 확인 완료: ${stored.source_id} · 카테고리 ${stored.category} · 소유자 ${stored.owner_id}. 기존 사진에도 반영하려면 위의 ‘기존 사진에 카테고리·소유자 적용’을 누르세요.`;
+      notify(`소스 설정을 저장했습니다: ${stored.category} / ${stored.owner_id}`);
+    } catch (error) {
+      status.textContent = (saved ? '설정은 저장됐지만 화면 갱신에 실패했습니다. ' : '저장 완료를 확인하지 못했습니다. ') + error.message;
+      notify(status.textContent);
+    } finally {
+      button.disabled = false;
     }
-    await api('api/config', 'PUT', {...config, sources: [...config.sources.filter(s => s.source_id !== source.source_id), source]}); await loadConfig(); notify('소스를 저장했습니다. 스캔 버튼으로 JSON을 생성하세요.');
-  });
+  };
   el('merge-preview').onclick = safe(async () => {
     if (el('managed-root').value !== config.managed_root || Number(el('scan-min-free').value) !== (config.scan_min_free_mb ?? 512)) {
       throw new Error('관리 경로·여유 공간 기준을 먼저 저장한 뒤 갱신하세요.');
@@ -348,5 +378,10 @@
   el('refresh-jobs').onclick = safe(async () => { await loadConfig(); await loadJobs(); });
   el('jobs-prev').onclick = safe(async () => { jobsOffset = Math.max(0, jobsOffset - 20); await loadJobs(); });
   el('jobs-next').onclick = safe(async () => { jobsOffset += 20; await loadJobs(); });
-  tab(jobsPage ? 'sources-panel' : 'library-panel'); safe(async () => { await loadConfig(); await facets(); await load(); await loadJobs(); })();
+  tab(jobsPage || sourcesOnly ? 'sources-panel' : 'library-panel');
+  safe(async () => {
+    await loadConfig();
+    if (!jobsPage && !sourcesOnly) { await facets(); await load(); }
+    await loadJobs();
+  })();
 })();

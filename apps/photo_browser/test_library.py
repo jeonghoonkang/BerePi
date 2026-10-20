@@ -244,6 +244,18 @@ class LibraryTests(unittest.TestCase):
         self.library.commit([])
         self.assertEqual(self.library.facets()['tags'], [])
 
+    def test_save_existing_source_category_is_returned_and_persisted(self):
+        config = self.client.get('/api/config').json
+        config['sources'][0]['category'] = 'photobox'
+        self.assertEqual(self.client.put('/api/config', json=config, headers=self.headers).status_code, 200)
+        config = self.client.get('/api/config').json
+        config['sources'][0]['category'] = 'photo_box'
+        response = self.client.put('/api/config', json=config, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['sources'][0]['category'], 'photo_box')
+        self.assertEqual(self.client.get('/api/config').json['sources'][0]['category'], 'photo_box')
+        self.assertEqual(read_json(self.library.db / 'config.json')['sources'][0]['category'], 'photo_box')
+
     def test_duplicate_source_path_and_rename(self):
         self.photo()
         self.library.scan('local')
