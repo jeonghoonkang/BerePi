@@ -36,7 +36,7 @@ function appendPage() {
     const item = filtered[i];
     if (i === 0 || item.date !== filtered[i - 1].date) { const heading = document.createElement('h2'); heading.textContent = item.date; $('gallery').append(heading); }
     const card = button('', () => openViewer(i)); card.className = 'card';
-    if (item.video) { const placeholder = document.createElement('div'); placeholder.className = 'video-placeholder'; placeholder.textContent = '▶ MP4'; card.append(placeholder); }
+    if (item.video) { const placeholder = document.createElement('div'); placeholder.className = 'video-placeholder'; placeholder.textContent = '▶ 동영상'; card.append(placeholder); }
     else { const image = document.createElement('img'); image.src = mediaURL(item.path); image.alt = item.name; image.loading = 'lazy'; card.append(image); }
     const caption = document.createElement('span'); caption.textContent = item.name; card.title = item.path; card.append(caption); $('gallery').append(card);
   }

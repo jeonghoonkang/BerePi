@@ -30,6 +30,22 @@ class BrowserTests(unittest.TestCase):
         child = self.client.get('/api/browse', query_string={'path': str(self.root / '하위 폴더')}).json
         self.assertEqual(child['parent'], str(self.root))
 
+    def test_all_formats_are_browsable_and_served(self):
+        formats = {'jpg': False, 'jpeg': False, 'png': False, 'gif': False,
+                   'webp': False, 'mov': True, 'avi': True, 'mp4': True}
+        folder = self.root / 'formats'
+        folder.mkdir()
+        for extension in formats:
+            (folder / f'file.{extension.upper()}').write_bytes(b'0123456789')
+        result = self.client.get('/api/browse', query_string={'path': str(folder)}).json
+        self.assertEqual(len(result['media']), len(formats))
+        for item in result['media']:
+            with self.subTest(name=item['name']):
+                self.assertEqual(item['video'], formats[Path(item['name']).suffix[1:].lower()])
+                with self.client.get('/media', query_string={'path': item['path']}, headers={'Range': 'bytes=2-5'}) as response:
+                    self.assertEqual(response.status_code, 206)
+                    self.assertEqual(response.data, b'2345')
+
     def test_scan_limit(self):
         for index in range(110):
             (self.root / '하위 폴더' / f'{index:03}.jpg').write_bytes(b'image')

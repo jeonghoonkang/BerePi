@@ -6,7 +6,7 @@ from pathlib import Path
 
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
-EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4'}
+from library import EXTENSIONS, VIDEO_EXTENSIONS
 
 
 def positive_limit(value):
@@ -86,7 +86,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
                 if not resolved.is_relative_to(boundary) or not resolved.is_file():
                     continue
                 info = resolved.stat()
-                media.append(dict(name=child.name, path=str(resolved), date=datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d'), modified=info.st_mtime, size=info.st_size, video=child.suffix.lower() == '.mp4'))
+                media.append(dict(name=child.name, path=str(resolved), date=datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d'), modified=info.st_mtime, size=info.st_size, video=child.suffix.lower() in VIDEO_EXTENSIONS))
                 if len(media) >= limit:
                     truncated = True
                     break

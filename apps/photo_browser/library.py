@@ -18,7 +18,9 @@ from urllib.parse import urljoin, urlsplit, unquote
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
-EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.webp'}
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi'}
+EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 
 def now():
@@ -72,7 +74,7 @@ def metadata(path):
     if hasattr(stat, 'st_birthtime'):
         result.update(date_key=datetime.fromtimestamp(stat.st_birthtime).strftime('%Y-%m-%d'), date_basis='filesystem_created_at')
     try:
-        if path.suffix.lower() in {'.mp4', '.mov'}:
+        if path.suffix.lower() in VIDEO_EXTENSIONS:
             probe = subprocess.run(['ffprobe', '-v', 'quiet', '-show_format', '-show_streams', '-of', 'json', str(path)], capture_output=True, text=True, timeout=30, check=True)
             data = json.loads(probe.stdout)
             tags = data.get('format', {}).get('tags', {})

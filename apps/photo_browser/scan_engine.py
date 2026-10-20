@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from library import EXTENSIONS, atomic_json, component, digest, metadata, now, read_json, uid
+from library import EXTENSIONS, VIDEO_EXTENSIONS, atomic_json, component, digest, metadata, now, read_json, uid
 
 MIB = 1024 * 1024
 RECORD_ESTIMATE = 16384
@@ -153,7 +153,7 @@ class ScanEngine:
             sha256 = digest(path, control=self.check)
             item = copy.deepcopy(old) if old else {'media_id': uid(), 'classification': {'category_id': source.get('category', 'family'), 'owner_id': source.get('owner_id', 'default'), 'person_ids': [], 'events': [], 'tags': []}, 'locations': [], 'lifecycle': {'status': 'active'}, 'revision': 0}
             changed = not old or old['sha256'] != sha256
-            item.update(name=unquote(Path(urlsplit(uri).path).name), media_type='video' if path.suffix.lower() in {'.mp4', '.mov'} else 'image', size_bytes=stat.st_size,
+            item.update(name=unquote(Path(urlsplit(uri).path).name), media_type='video' if path.suffix.lower() in VIDEO_EXTENSIONS else 'image', size_bytes=stat.st_size,
                         mtime_ns=stat.st_mtime_ns if 'path' in info else None, capture=capture, sha256=sha256, last_seen_at=now(), revision=item['revision'] + 1)
             item['locations'] = [location] + [loc for loc in item['locations'] if loc['role'] == 'managed']
             if changed:

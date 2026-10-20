@@ -274,6 +274,27 @@ class LibraryTests(unittest.TestCase):
             server.server_close()
             thread.join()
 
+    def test_all_formats_scan_and_merge(self):
+        for extension in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+            Image.new('RGB', (8, 8), 'red').save(self.source / f'photo.{extension}')
+        for extension in ('mp4', 'mov', 'avi'):
+            (self.source / f'clip.{extension.upper()}').write_bytes(extension.encode())
+        payload = {'format': {'duration': '2'}, 'streams': [{'codec_type': 'video', 'width': 16, 'height': 16}]}
+        with patch('library.subprocess.run', return_value=type('Probe', (), {'stdout': json.dumps(payload)})()) as probe:
+            self.library.scan('local')
+        self.assertEqual(probe.call_count, 3)
+        items = self.library.items()
+        self.assertEqual(len(items), 8)
+        for item in items:
+            expected = 'video' if Path(item['name']).suffix.lower() in {'.mp4', '.mov', '.avi'} else 'image'
+            self.assertEqual(item['media_type'], expected)
+        result = self.library.merge()
+        self.assertEqual(len(result['operations']), 8)
+        for operation in result['operations']:
+            self.assertEqual(operation['status'], 'copied')
+            destination = Path(operation['destination'])
+            self.assertEqual(destination.read_bytes(), (self.source / destination.name).read_bytes())
+
     def test_video_capture_metadata(self):
         video = self.source / 'clip.mp4'
         video.write_bytes(b'video')
