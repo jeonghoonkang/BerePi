@@ -64,7 +64,7 @@ def register_library(app, boundary, db):
         stop = threading.Event()
         with guard:
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
-            if (kind == 'source_rename' and active) or any(j.get('kind') == 'source_rename' for j in active):
+            if (kind in {'source_rename', 'source_update'} and active) or any(j.get('kind') in {'source_rename', 'source_update'} for j in active):
                 raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('이미 병합 작업이 실행 중입니다.')
@@ -87,8 +87,8 @@ def register_library(app, boundary, db):
             with guard:
                 jobs[job_id]['status'] = 'stopping' if stop.is_set() else 'running'
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge'} else function()
-                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge'} else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -123,6 +123,11 @@ def register_library(app, boundary, db):
         key = library.source_key(data)
         existing = next((s for s in library.config()['sources'] if library.source_key(s) == key), None)
         return jsonify(existing=existing)
+
+    @app.post('/api/sources/apply-classification')
+    def apply_source_classification():
+        source_id = component(body()['source_id'])
+        return launch(lambda: library.apply_source_classification(source_id), 'source_update', source_id)
 
     @app.post('/api/sources/rename')
     def rename_source():
@@ -244,13 +249,7 @@ def register_library(app, boundary, db):
 
     @app.get('/api/facets')
     def facets():
-        result = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
-        for item in library.items():
-            if item['lifecycle']['status'] == 'active':
-                for key in result:
-                    value = item['classification'][key]
-                    result[key].update(value if isinstance(value, list) else [value])
-        return jsonify({key: sorted(values) for key, values in result.items()})
+        return jsonify(library.facets())
 
     @app.get('/api/library/<media_id>')
     def get_media(media_id):
@@ -273,7 +272,7 @@ def register_library(app, boundary, db):
         if not isinstance(preview, bool):
             raise ValueError('preview는 boolean이어야 합니다.')
         if preview:
-            return launch(lambda: library.merge(values or None, True))
+            return launch(lambda progress, stopped: library.merge(values or None, True, progress=progress), 'merge_preview')
         resume = data.get('resume')
         if resume is not None:
             component(resume)

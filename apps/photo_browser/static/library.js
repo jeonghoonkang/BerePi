@@ -103,7 +103,7 @@
       lines.push(`제외 ${count(result.ignored)}개 · 처리 오류 ${count(result.errors?.length ?? result.error_count)}개`);
       return lines;
     }
-    if (status.kind === 'merge') {
+    if (['merge', 'merge_preview'].includes(status.kind)) {
       const operations = result.operations || [];
       const counts = {};
       operations.forEach(operation => { counts[operation.status] = (counts[operation.status] || 0) + 1; });
@@ -112,11 +112,19 @@
         result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
       ];
     }
+    if (status.kind === 'source_update') {
+      return [`소스 ${result.source_id}: 대상 ${count(result.matched)}개 · 분류 변경 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
+        `적용 카테고리: ${result.category_id} · 소유자: ${result.owner_id}`, result.warning];
+    }
     if (status.kind === 'source_rename') {
       return ['소스 ID 변경 작업을 완료했습니다. 현재 ID는 소스 목록에서 확인하세요.',
         '사진 JSON과 스캔 기록의 소스 연결을 변경했습니다. 사진 파일의 위치와 태그는 유지합니다.'];
     }
     return [];
+  }
+  function mergeProgress(progress) {
+    if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
+    return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%)`;
   }
   function drawJob(status) {
     if (jobsPage && !visibleJobs.has(status.job_id)) return;
@@ -142,10 +150,10 @@
     const summary = jobSummary(status);
     card.changes.hidden = !summary.length;
     card.changesList.replaceChildren(...summary.map(line => make('li', line)));
-    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
-    card.text.textContent = status.kind === 'merge' ? `전체 ${p?.total ?? 0}개 · 처리 ${p?.processed ?? 0}개 (${p?.percent ?? 0}%)` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
-    card.bar.hidden = !['scan', 'merge'].includes(status.kind);
-    if (p?.inventory_complete || status.kind === 'merge') card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
+    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '병합 정보 갱신·미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
+    card.bar.hidden = !['scan', 'merge', 'merge_preview'].includes(status.kind);
+    if (p?.inventory_complete || (['merge', 'merge_preview'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
     card.file.textContent = p?.current_file ? `현재 파일: ${p.current_file}` : '';
     const disk = p?.disk;
     card.warning.textContent = [p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
@@ -160,10 +168,23 @@
       let status;
       do {
         status = await api('api/jobs/' + id); drawJob(status);
-        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
+        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge_preview' ? '병합 정보 갱신·미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
+        if (status.kind === 'merge_preview') {
+          const progress = status.result || status.progress;
+          el('job-status').textContent += ' · ' + mergeProgress(progress);
+          if (activeStates.includes(status.status)) el('merge-settings').textContent = mergeProgress(progress) + (progress?.current_file ? `\n현재 출력 경로: ${progress.current_file}` : '');
+        }
         if (activeStates.includes(status.status)) await new Promise(resolve => setTimeout(resolve, 1000));
       } while (activeStates.includes(status.status));
       el('job-result').textContent = JSON.stringify(status.result || status.error || status.warning, null, 2);
+      if (status.result?.settings) {
+        el('merge-settings').textContent = '병합에 적용된 설정 · 경로 확인\n' + JSON.stringify({
+          created_at: status.result.created_at, total: status.result.total,
+          settings: status.result.settings,
+          destination_conflicts: status.result.destination_conflicts,
+          warning: status.result.warning,
+        }, null, 2);
+      }
       await loadConfig(); await facets(); await load();
       const warning = status.result?.warning || status.error || status.warning;
       notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
@@ -212,6 +233,11 @@
         el('rename-source-dialog').showModal();
         el('rename-source-new').focus();
         el('rename-source-new').select();
+      }));
+      row.append(make('p', `신규 사진 기본값: 카테고리 ${source.category || 'family'} · 소유자 ${source.owner_id || 'default'}`));
+      row.append(action('기존 사진에 카테고리·소유자 적용', async () => {
+        if (!confirm(`소스 ${source.source_id}의 기존 활성 사진을 카테고리 ${source.category || 'family'}, 소유자 ${source.owner_id || 'default'}로 변경합니까?\n개별 지정한 카테고리·소유자도 교체합니다. 태그·이벤트·사람과 파일 위치는 유지합니다.\n등록 폼의 변경 사항은 먼저 저장하세요.`)) return;
+        await job('api/sources/apply-classification', {source_id: source.source_id});
       }));
       row.append(resume, action('처음부터 전체 재스캔', async () => { if (confirm('중단 지점 대신 처음부터 파일 목록과 메타데이터를 다시 검사합니까? 이벤트·태그와 원본은 유지됩니다.')) await job('api/scan', {source_id: source.source_id, mode: 'restart'}); }));
       row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => { for (const [key, value] of Object.entries(source)) { const input = el('source-form').elements.namedItem(key); if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; } } }), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
@@ -274,6 +300,14 @@
     await api('api/config', 'PUT', {...config, sources: [...config.sources.filter(s => s.source_id !== source.source_id), source]}); await loadConfig(); notify('소스를 저장했습니다. 스캔 버튼으로 JSON을 생성하세요.');
   });
   el('merge-preview').onclick = safe(() => job('api/merge', {preview: true}));
+  el('merge-refresh').onclick = safe(async () => {
+    if (el('managed-root').value !== config.managed_root || Number(el('scan-min-free').value) !== (config.scan_min_free_mb ?? 512)) {
+      throw new Error('관리 경로·여유 공간 기준을 먼저 저장한 뒤 갱신하세요.');
+    }
+    el('job-result').textContent = '';
+    el('merge-settings').textContent = '현재 저장된 설정과 사진 분류로 병합 경로를 다시 계산하고 있습니다…';
+    await job('api/merge', {preview: true});
+  });
   el('merge-run').onclick = safe(async () => { if (confirm('활성 파일 전체를 월별 관리 디렉토리에 병합 복사합니까?')) await job('api/merge', {preview: false}); });
   el('verify-selected').onclick = safe(() => job('api/verify', {ids: selected(), full: true}));
   el('trash-selected').onclick = safe(async () => {

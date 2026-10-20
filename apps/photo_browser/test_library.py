@@ -137,6 +137,113 @@ class LibraryTests(unittest.TestCase):
             self.assertTrue(all(result == item for result in results))
             self.assertEqual(reads.call_count, 17)  # 8 manifests + 8 target chunks + one index build
 
+    def test_merge_preview_reports_intermediate_progress_without_copying(self):
+        import copy
+        self.photo()
+        self.library.scan('local')
+        sample = self.library.items()[0]
+        items = []
+        for index in range(205):
+            item = copy.deepcopy(sample)
+            item['media_id'] = str(index)
+            item['name'] = f'{index}.jpg'
+            items.append(item)
+        self.library.commit(items)
+        updates = []
+        result = self.library.merge(preview=True, progress=updates.append)
+        self.assertEqual(updates[0]['phase'], 'loading')
+        self.assertEqual([p['processed'] for p in updates[1:]], [0, 100, 200, 205])
+        self.assertEqual(updates[-1]['percent'], 100)
+        self.assertTrue(updates[-1]['current_file'].endswith('.jpg'))
+        self.assertEqual(len(result['operations']), 205)
+        self.assertFalse(Path(self.config['managed_root']).exists())
+        response = self.post('/api/merge', {'preview': True})
+        self.assertEqual(response.status_code, 202)
+        for _ in range(200):
+            status = self.client.get('/api/jobs/' + response.json['job_id']).json
+            if status['status'] not in ('queued', 'running'):
+                break
+            time.sleep(0.01)
+        self.assertEqual(status['kind'], 'merge_preview')
+        self.assertEqual(status['status'], 'completed')
+        self.assertEqual(status['progress']['percent'], 100)
+
+    def test_apply_source_classification_and_refresh_merge_paths(self):
+        self.photo()
+        self.library.scan('local')
+        original = self.library.items()[0]
+        self.library.edit([original['media_id']], {'tags': ['keep'], 'events': ['trip']})
+        old_plan = self.library.merge(preview=True)
+        self.assertIn('/family/alice/', old_plan['operations'][0]['destination'])
+        config = self.library.config()
+        config['sources'][0].update(category='photo_save', owner_id='tinyos')
+        self.library.save_config(config)
+        result = self.library.apply_source_classification('local')
+        self.assertEqual(result['updated'], 1)
+        item = self.library.items()[0]
+        self.assertEqual(item['classification']['tags'], ['keep'])
+        self.assertEqual(item['classification']['events'], ['trip'])
+        self.assertEqual(item['locations'], original['locations'])
+        refreshed = self.library.merge(preview=True)
+        self.assertIn('/photo_save/tinyos/', refreshed['operations'][0]['destination'])
+        self.assertEqual(refreshed['operations'][0]['classification']['category_id'], 'photo_save')
+        self.assertEqual(refreshed['settings']['managed_root'], config['managed_root'])
+        self.assertEqual(refreshed['destination_conflicts'], [])
+        self.assertFalse(Path(refreshed['operations'][0]['destination']).exists())
+        self.assertEqual(self.library.apply_source_classification('local')['updated'], 0)
+        with self.assertRaises(ValueError):
+            self.library.apply_source_classification('missing')
+
+    def test_source_classification_only_changes_matching_active_items(self):
+        import copy
+        self.photo()
+        self.library.scan('local')
+        active = self.library.items()[0]
+        other = copy.deepcopy(active)
+        other['media_id'] = 'other'
+        other['locations'][0]['source_id'] = 'different'
+        trashed = copy.deepcopy(active)
+        trashed['media_id'] = 'trashed'
+        trashed['lifecycle']['status'] = 'trashed'
+        self.library.commit([active, other, trashed])
+        config = self.library.config()
+        config['sources'][0]['category'] = 'photo_save'
+        self.library.save_config(config)
+        result = self.library.apply_source_classification('local')
+        self.assertEqual(result['matched'], 1)
+        self.assertEqual(self.library.item('other')['classification']['category_id'], 'family')
+        self.assertEqual(self.library.item('trashed')['classification']['category_id'], 'family')
+
+    def test_facets_summary_and_legacy_streaming_cache(self):
+        import copy
+        self.photo()
+        self.library.scan('local')
+        active = self.library.items()[0]
+        active['classification']['tags'] = ['visible']
+        trashed = copy.deepcopy(active)
+        trashed['media_id'] = 'trashed'
+        trashed['lifecycle']['status'] = 'trashed'
+        trashed['classification']['tags'] = ['hidden']
+        self.library.commit([active, trashed])
+        with patch.object(self.library, 'items', side_effect=AssertionError('full DB read')), patch('library.read_json', wraps=read_json) as reads:
+            response = self.client.get('/api/facets')
+            self.assertEqual(response.json['tags'], ['visible'])
+            self.assertEqual(reads.call_count, 1)
+        index_path = self.library.db / 'index.json'
+        index = read_json(index_path)
+        index.pop('active_facets')
+        index_path.write_text(json.dumps(index), encoding='utf-8')
+        with patch.object(self.library, 'items', side_effect=AssertionError('full DB read')):
+            self.assertEqual(self.library.facets()['tags'], ['visible'])
+            with patch('library.read_json', wraps=read_json) as reads:
+                self.assertEqual(self.library.facets()['tags'], ['visible'])
+                self.assertEqual(reads.call_count, 1)
+        active['classification']['tags'] = ['new']
+        self.library.commit([active])
+        self.assertEqual(self.library.facets()['tags'], ['new'])
+        self.library.commit([])
+        self.assertEqual(self.library.facets()['tags'], [])
+
     def test_duplicate_source_path_and_rename(self):
         self.photo()
         self.library.scan('local')

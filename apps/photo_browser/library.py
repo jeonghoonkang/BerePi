@@ -122,6 +122,9 @@ class Library:
         self.lookup_lock = threading.Lock()
         self.lookup_generation = None
         self.lookup_chunks = {}
+        self.facets_lock = threading.Lock()
+        self.facets_generation = None
+        self.facets_cache = None
         if not (self.db / 'config.json').exists():
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(self.db.parent / 'library'), 'sources': []})
 
@@ -201,6 +204,33 @@ class Library:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
 
+    def apply_source_classification(self, source_id):
+        source_id = component(source_id)
+        with self.writing():
+            source = next((s for s in self.config()['sources'] if s['source_id'] == source_id), None)
+            if source is None:
+                raise ValueError('소스를 찾지 못했습니다.')
+            category = component(source.get('category', 'family'))
+            owner = component(source.get('owner_id', 'default'))
+            items = self.items()
+            matched = updated = 0
+            for item in items:
+                if item['lifecycle']['status'] != 'active' or not any(
+                    loc['role'] == 'source' and loc.get('source_id') == source_id for loc in item['locations']
+                ):
+                    continue
+                matched += 1
+                classification = item['classification']
+                if classification['category_id'] != category or classification['owner_id'] != owner:
+                    classification.update(category_id=category, owner_id=owner)
+                    item['revision'] += 1
+                    updated += 1
+            if updated:
+                self.commit(items)
+            return dict(source_id=source_id, category_id=category, owner_id=owner,
+                        matched=matched, updated=updated, unchanged=matched - updated,
+                        warning='기존 관리 복사본은 이동하지 않았습니다. 병합 정보를 갱신해 새 출력 경로를 확인하세요.')
+
     def source_key(self, source):
         protocol = source.get('protocol', 'file')
         if protocol == 'file':
@@ -274,6 +304,27 @@ class Library:
             return next((item for item in read_json(self.db / relative)['items']
                          if item['media_id'] == media_id), None)
 
+    def facets(self):
+        # Old databases are read one immutable chunk at a time, once per generation.
+        # New manifests contain the active-item summary directly.
+        with self.facets_lock:
+            manifest = read_json(self.db / 'index.json', {'chunks': []})
+            if 'active_facets' in manifest:
+                return manifest['active_facets']
+            generation = tuple(chunk['path'] for chunk in manifest['chunks'])
+            if generation != self.facets_generation:
+                values = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
+                for chunk in manifest['chunks']:
+                    for item in read_json(self.db / chunk['path'])['items']:
+                        if item['lifecycle']['status'] != 'active':
+                            continue
+                        for key in values:
+                            value = item['classification'][key]
+                            values[key].update(value if isinstance(value, list) else [value])
+                self.facets_cache = {key: sorted(value) for key, value in values.items()}
+                self.facets_generation = generation
+            return self.facets_cache
+
     def items(self, filters=None):
         manifest = read_json(self.db / 'index.json', {'chunks': []})
         chunks = manifest['chunks']
@@ -326,7 +377,15 @@ class Library:
         atomic_json(self.db / duplicate_path, {'schema_version': 1, 'exact': [{'sha256': key, 'members': ids} for key, ids in exact.items() if len(ids) > 1], 'candidates': [{'reason': 'same_capture_time_and_nearby_gps', 'members': ids} for ids in candidates.values() if len(ids) > 1]})
         if control:
             control()
-        atomic_json(self.db / 'index.json', {'schema_version': 1, 'updated_at': now(), 'chunks': chunks, 'count': len(items), 'duplicates': duplicate_path})
+        active_facets = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
+        for item in items:
+            if item['lifecycle']['status'] != 'active':
+                continue
+            for key in active_facets:
+                value = item['classification'][key]
+                active_facets[key].update(value if isinstance(value, list) else [value])
+        active_facets = {key: sorted(value) for key, value in active_facets.items()}
+        atomic_json(self.db / 'index.json', {'schema_version': 1, 'updated_at': now(), 'chunks': chunks, 'count': len(items), 'duplicates': duplicate_path, 'active_facets': active_facets})
         atomic_json(self.db / 'duplicates' / 'latest.json', {'generation_file': duplicate_path})
         # Old generations are retained for crash recovery; maintenance can remove them offline.
 
@@ -445,9 +504,10 @@ class Library:
 
     def merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None):
         with self.writing():
+            progress = progress or (lambda state: None)
+            progress({'phase': 'loading', 'inventory_complete': False, 'processed': 0})
             items = self.items()
             root = self.local(self.config()['managed_root'])
-            progress = progress or (lambda state: None)
             stopped = stopped or (lambda: False)
             session_path = self.db / 'merges' / ((component(resume) if resume else uid()) + '.json')
             if resume:
@@ -491,8 +551,14 @@ class Library:
                 if not target.resolve().is_relative_to(root):
                     raise ValueError('관리 경로 밖입니다.')
                 op = {'media_id': item['media_id'], 'destination': str(target), 'status': 'planned'}
+                op['classification'] = {'category_id': c['category_id'], 'owner_id': c['owner_id']}
+                op['date_key'] = date
+                op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
                 operations.append(op)
                 if preview:
+                    state['current_file'] = str(target)
+                    if len(operations) % 100 == 0:
+                        checkpoint()
                     continue
                 try:
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -523,6 +589,23 @@ class Library:
             report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
                       'merge_id': state['merge_id'], 'status': state['status'],
                       'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
+            report['settings'] = {'boundary': str(self.boundary), 'db': str(self.db),
+                                  'managed_root': str(root), 'sources': self.config()['sources'],
+                                  'layout': 'managed_root/category_id/owner_id/year/month/name'}
+            destinations = {}
+            conflicts = set()
+            by_id = {item['media_id']: item for item in items}
+            for operation in operations:
+                destination = operation.get('destination')
+                if not destination:
+                    continue
+                sha = by_id[operation['media_id']]['sha256']
+                if destination in destinations and destinations[destination] != sha:
+                    conflicts.add(destination)
+                destinations[destination] = sha
+            report['destination_conflicts'] = sorted(conflicts)
+            report['warning'] = ('같은 출력 경로에 서로 다른 내용의 파일이 예정되어 있습니다. 분류나 파일명을 조정하세요.'
+                                 if conflicts else '현재 DB 분류와 저장된 설정으로 경로를 계산했습니다. 실제 파일 내용·접근 권한·여유 공간 검증은 별도로 확인하세요.')
             atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
             return report
 
