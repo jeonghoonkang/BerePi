@@ -121,6 +121,48 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(len(self.library.items()), 1)
         self.assertEqual(self.library.items()[0]['media_id'], before)
 
+    def test_source_rename_background_job(self):
+        self.photo()
+        self.library.scan('local')
+        original_id = self.library.items()[0]['media_id']
+        response = self.post('/api/sources/rename', {'old_id': 'local', 'new_id': '134server', 'background': True})
+        self.assertEqual(response.status_code, 202)
+        job_id = response.json['job_id']
+        for _ in range(200):
+            status = self.client.get(f'/api/jobs/{job_id}').json
+            if status['status'] not in ('queued', 'running'):
+                break
+            time.sleep(0.01)
+        self.assertEqual(status['status'], 'completed')
+        self.assertEqual(status['result']['sources'][0]['source_id'], '134server')
+        self.assertEqual(self.library.config()['sources'][0]['source_id'], '134server')
+        item = self.library.items()[0]
+        self.assertEqual(item['media_id'], original_id)
+        self.assertEqual(item['locations'][0]['source_id'], '134server')
+
+    def test_background_rename_rejects_overlapping_jobs(self):
+        started, release = threading.Event(), threading.Event()
+        def slow_rename(old, new):
+            started.set()
+            release.wait(5)
+            return self.config
+        with patch.object(self.library, 'rename_source', side_effect=slow_rename):
+            response = self.post('/api/sources/rename', {'old_id': 'local', 'new_id': 'new', 'background': True})
+            self.assertEqual(response.status_code, 202)
+            try:
+                self.assertTrue(started.wait(2))
+                overlap = self.post('/api/sources/rename', {'old_id': 'local', 'new_id': 'other', 'background': True})
+                self.assertEqual(overlap.status_code, 400)
+                scan = self.post('/api/scan', {'source_id': 'local'})
+                self.assertEqual(scan.status_code, 400)
+            finally:
+                release.set()
+                for _ in range(200):
+                    status = self.client.get('/api/jobs/' + response.json['job_id']).json
+                    if status['status'] == 'completed':
+                        break
+                    time.sleep(0.01)
+
     def test_merge_stop_and_resume_after_restart(self):
         for index in range(4):
             self.photo(f'photo{index}.jpg')

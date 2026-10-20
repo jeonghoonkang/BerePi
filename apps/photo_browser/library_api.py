@@ -63,6 +63,9 @@ def register_library(app, boundary, db):
         job_id = uid()
         stop = threading.Event()
         with guard:
+            active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
+            if (kind == 'source_rename' and active) or any(j.get('kind') == 'source_rename' for j in active):
+                raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('이미 병합 작업이 실행 중입니다.')
             if kind == 'scan' and any(j.get('source_id') == source_id and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
@@ -124,6 +127,9 @@ def register_library(app, boundary, db):
     @app.post('/api/sources/rename')
     def rename_source():
         data = body()
+        if data.get('background'):
+            old, new = component(data['old_id']), component(data['new_id'])
+            return launch(lambda: library.rename_source(old, new), 'source_rename', old)
         with guard:
             if any(j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('실행 중인 작업을 중지한 뒤 소스 ID를 변경하세요.')

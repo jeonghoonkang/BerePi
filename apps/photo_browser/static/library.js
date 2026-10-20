@@ -108,7 +108,7 @@
       for (const [, entry] of ordered.slice(0, 3)) el('scan-jobs').append(entry.row);
     }
     const p = status.result || status.progress;
-    card.title.textContent = `${status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
     card.text.textContent = status.kind === 'merge' ? `전체 ${p?.total ?? 0}개 · 처리 ${p?.processed ?? 0}개 (${p?.percent ?? 0}%)` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
     card.bar.hidden = !['scan', 'merge'].includes(status.kind);
     if (p?.inventory_complete || status.kind === 'merge') card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
@@ -171,17 +171,61 @@
       if (session) row.append(make('p', `${stateNames[session.status] || session.status} · ${progressText(session)}`));
       const resume = action('중단 지점부터 이어하기', () => job('api/scan', {source_id: source.source_id, mode: 'resume'}));
       resume.disabled = !session || session.status === 'completed' || session.status === 'running';
-      row.append(action('소스 ID 변경', async () => {
-        const newId = prompt(`현재 소스 ID: ${source.source_id}\n새 소스 ID를 입력하세요.`, source.source_id);
-        if (!newId || newId === source.source_id) return;
-        await api('api/sources/rename', 'POST', {old_id: source.source_id, new_id: newId});
-        await loadConfig(); notify('소스 ID와 사진·스캔 기록의 연결을 변경했습니다.');
+      row.append(action('소스 ID 변경', () => {
+        el('rename-source-old').textContent = source.source_id;
+        el('rename-source-new').value = source.source_id;
+        el('rename-source-status').textContent = '';
+        el('rename-source-dialog').showModal();
+        el('rename-source-new').focus();
+        el('rename-source-new').select();
       }));
       row.append(resume, action('처음부터 전체 재스캔', async () => { if (confirm('중단 지점 대신 처음부터 파일 목록과 메타데이터를 다시 검사합니까? 이벤트·태그와 원본은 유지됩니다.')) await job('api/scan', {source_id: source.source_id, mode: 'restart'}); }));
       row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => { for (const [key, value] of Object.entries(source)) { const input = el('source-form').elements.namedItem(key); if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; } } }), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
       el('source-list').append(row);
     });
   }
+  let renaming = false;
+  el('rename-source-cancel').onclick = () => el('rename-source-dialog').close();
+  el('rename-source-dialog').addEventListener('cancel', event => { if (renaming) event.preventDefault(); });
+  el('rename-source-form').onsubmit = async event => {
+    event.preventDefault();
+    if (renaming) return;
+    const oldId = el('rename-source-old').textContent;
+    const newId = el('rename-source-new').value.trim();
+    if (!newId || newId === oldId) {
+      el('rename-source-status').textContent = '현재 ID와 다른 새 ID를 입력하세요.';
+      return;
+    }
+    renaming = true;
+    el('rename-source-submit').disabled = el('rename-source-cancel').disabled = el('rename-source-new').disabled = true;
+    el('rename-source-status').textContent = '사진 JSON과 스캔 기록을 변경하고 있습니다. 완료될 때까지 기다려 주세요…';
+    let saved = false;
+    try {
+      const started = await api('api/sources/rename', 'POST', {old_id: oldId, new_id: newId, background: true});
+      let status;
+      do {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        status = await api(`api/jobs/${encodeURIComponent(started.job_id)}`);
+        el('rename-source-status').textContent = '서버에서 사진 JSON과 스캔 기록을 변경 중입니다. 완료 여부를 확인하고 있습니다…';
+      } while (['queued', 'running', 'stopping'].includes(status.status));
+      if (status.status !== 'completed') throw new Error(status.error || status.warning || `작업 상태: ${status.status}`);
+      config = status.result;
+      saved = true;
+      el('rename-source-old').textContent = newId;
+      const sourceId = el('source-form').elements.namedItem('source_id');
+      if (sourceId.value === oldId) sourceId.value = newId;
+      await loadConfig();
+      el('rename-source-dialog').close();
+      notify(`소스 ID를 ${oldId} → ${newId}(으)로 저장했습니다. 사진·태그·스캔 기록의 연결을 유지했습니다.`);
+    } catch (error) {
+      el('rename-source-status').textContent = saved
+        ? `ID는 ${newId}(으)로 저장됐지만 화면 갱신에 실패했습니다. 페이지를 새로고침하세요. ${error.message}`
+        : `완료를 확인하지 못했습니다. ${error.message} · 연결이 끊겨도 서버 작업은 계속될 수 있습니다. 페이지를 새로고침해 현재 소스 ID와 작업 상태를 확인하세요.`;
+    } finally {
+      renaming = false;
+      el('rename-source-submit').disabled = el('rename-source-cancel').disabled = el('rename-source-new').disabled = false;
+    }
+  };
   el('managed-form').onsubmit = safe(async event => { event.preventDefault(); await api('api/config', 'PUT', {...config, managed_root: el('managed-root').value, scan_min_free_mb: Number(el('scan-min-free').value)}); await loadConfig(); notify('관리 경로와 스캔 여유 공간 기준을 저장했습니다.'); });
   el('source-form').onsubmit = safe(async event => {
     event.preventDefault(); const form = el('source-form'), source = Object.fromEntries(new FormData(form)); source.recursive = form.elements.recursive.checked;

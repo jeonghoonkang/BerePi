@@ -1,5 +1,6 @@
 """Local media browser and JSON media library; run with python app.py."""
 import argparse
+import faulthandler
 import os
 from datetime import datetime
 from pathlib import Path
@@ -121,6 +122,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
 
 
 if __name__ == '__main__':
+    # Preserve all Python thread stacks if the interpreter/native code crashes.
+    faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=7081)
