@@ -103,6 +103,10 @@ apps/photo_browser/.venv/bin/python apps/photo_browser/app.py \
   --host 0.0.0.0 --port 7081 --root /data --directory /data/photos
 ```
 
+`--root`는 앱이 접근할 수 있는 **최상위 폴더**입니다. 사진이 있는 폴더 자체 또는 그 상위 폴더를 지정할 수 있습니다. `--directory`는 앱을 열었을 때 **처음 표시할 사진 폴더**이며, 작업 파일이나 관리 복사본을 저장하는 디렉토리가 아닙니다. 위 예시에서는 `/data/photos`에서 탐색을 시작하고 `/data` 내부의 다른 폴더로 이동할 수 있습니다.
+
+사진의 관리 복사본을 저장할 **관리 디렉토리**(`managed_root`)는 앱의 `소스·스캔·병합` 설정에서 별도로 지정합니다. `--directory`를 지정해도 스캔 소스로 자동 등록되지 않습니다.
+
 `--root` 기본값은 `/`이므로 앱 실행 계정이 읽을 수 있는 경로를 탐색할 수 있습니다. 공유 서버에서는 공개할 폴더를 `--root`로 제한하세요. 기존 폴더 탐색은 파일을 변경하지 않으며, 라이브러리의 삭제는 관리 복사본만 대상으로 합니다.
 
 ## 라이브러리 사용 순서
@@ -160,6 +164,7 @@ python3 apps/photo_browser/cli.py --db /data/photo_db --root /data compare --qui
 | 경로 | 용도 | 예시 |
 | --- | --- | --- |
 | 허용 루트 `--root` | 로컬 파일 접근을 허용할 경계 | `/data` |
+| 시작 폴더 `--directory` | 앱을 열었을 때 처음 표시할 폴더 | `/data/photos` |
 | 소스 `sources[].root` | 원본을 읽을 디렉토리 또는 원격 URL | `/data/incoming` |
 | 관리 경로 `managed_root` | 병합 복사본과 `.trash` 보관 | `/data/photo_library` |
 | DB `--db` | 설정, 인덱스, 메타데이터, 체크포인트 보관 | `/data/photo_db` |
