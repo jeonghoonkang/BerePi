@@ -1,6 +1,7 @@
 import datetime as dt
 import sqlite3
 import unittest
+from unittest.mock import patch
 
 import ssh_monitor as app
 
@@ -26,6 +27,20 @@ class MonitorTests(unittest.TestCase):
         self.assertIn("실패: 2회", text)
         self.assertIn("성공 인증: 1회", text)
         self.assertIn("성공 ID: tinyos(1)", text)
+
+    def test_send_daily_query_returns_report_without_firewall_changes(self):
+        day = dt.date.today() - dt.timedelta(days=1)
+        ts, _ = app.local_day_bounds(day)
+        self.db.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?)",
+                        ("yesterday", ts + 1, "accepted", "operator", "10.0.0.58", "publickey", 0))
+        with patch.object(app, "block_daily_attackers") as block:
+            report = app.answer_query(self.db, "daily")
+        self.assertIn("어제 " + day.isoformat(), report)
+        self.assertIn("성공 인증: 1회", report)
+        self.assertIn("누적(최근 30일 백필 이후)", report)
+        self.assertIn("operator: 1회", report)
+        self.assertNotIn("질문 예시:", report)
+        block.assert_not_called()
 
     def test_daily_report_sends_success_ids_separately(self):
         day = dt.date.today() - dt.timedelta(days=1)

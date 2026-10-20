@@ -11,6 +11,7 @@ python3 ssh_monitor.py query 3일전
 python3 ssh_monitor.py query 59.14.241.229 언제부터
 python3 ssh_monitor.py send
 python3 ssh_monitor.py send 오늘
+python3 ssh_monitor.py send daily
 python3 ssh_monitor.py send 59.14.241.229 언제부터
 python3 ssh_monitor.py daily
 ```
@@ -19,6 +20,10 @@ python3 ssh_monitor.py daily
 생략하면 오늘 현재까지의 통계와 누적 통계를 함께 보내며, `오늘`, `어제`, `누적`, 날짜 또는
 IP를 지정하면 해당 조회 결과만 보냅니다. 수동 `send`는 통계 확인만 수행하고 UFW 자동
 차단은 실행하지 않습니다.
+
+`send daily`는 전날 통계, 누적 통계, 성공 로그인 ID 전체 목록을 전송합니다.
+systemd에서 이 명령을 사용하면 질문 예시 대신 일일 보고서를 받습니다.
+`daily` 단독 명령과 달리 UFW 자동 차단은 실행하지 않습니다.
 
 Telegram에서 즉시 전체 현황을 확인하려면 `/ssh_now`를 입력하십시오. 특정 기간이나 IP는
 기존처럼 `/ssh 오늘`, `/ssh 3일전`, `/ssh 누적`, `/ssh 59.14.241.229 언제부터`로 확인할

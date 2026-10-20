@@ -422,6 +422,9 @@ def ip_report(conn, ip):
 
 def answer_query(conn, text):
     normalized = text.strip()
+    if normalized.lower() == "daily":
+        # systemd uses `send daily`: report only, without firewall changes.
+        return daily_report(conn) + "\n\n" + successful_login_report(conn)
     ip_match = re.search(r"(?:\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F]{0,4}:[0-9a-fA-F:]+", normalized)
     if ip_match:
         return ip_report(conn, ip_match.group(0))
