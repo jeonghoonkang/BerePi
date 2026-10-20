@@ -254,7 +254,7 @@ def register_library(app, boundary, db):
 
     @app.get('/api/library/<media_id>')
     def get_media(media_id):
-        item = next((i for i in library.items() if i['media_id'] == media_id), None)
+        item = library.item(media_id)
         if not item:
             abort(404, description='미디어가 없습니다.')
         return jsonify(item)
@@ -322,8 +322,8 @@ def register_library(app, boundary, db):
 
     @app.get('/api/library/<media_id>/file')
     def library_file(media_id):
-        item = next((i for i in library.items() if i['media_id'] == media_id and i['lifecycle']['status'] == 'active'), None)
-        if not item:
+        item = library.item(media_id)
+        if not item or item['lifecycle']['status'] != 'active':
             abort(404, description='미디어가 없습니다.')
         location = next((l for l in reversed(item['locations']) if l['role'] == 'managed' and l['status'] == 'available'), item['locations'][0])
         if location['protocol'] == 'file':

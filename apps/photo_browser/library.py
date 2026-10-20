@@ -119,6 +119,9 @@ class Library:
         self.boundary = Path(boundary).resolve()
         self.db.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.lookup_lock = threading.Lock()
+        self.lookup_generation = None
+        self.lookup_chunks = {}
         if not (self.db / 'config.json').exists():
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(self.db.parent / 'library'), 'sources': []})
 
@@ -247,6 +250,29 @@ class Library:
             source['source_id'] = new
             atomic_json(self.db / 'config.json', config)
             return config
+
+    def item(self, media_id):
+        """Resolve one item without materializing the complete media collection.
+
+        Chunk generations are immutable. Serialize index construction so concurrent
+        image requests share one small ID-to-chunk map instead of decoding the
+        entire collection independently.
+        """
+        with self.lookup_lock:
+            manifest = read_json(self.db / 'index.json', {'chunks': []})
+            generation = tuple(entry['path'] for entry in manifest['chunks'])
+            if generation != self.lookup_generation:
+                chunks = {}
+                for relative in generation:
+                    for item in read_json(self.db / relative)['items']:
+                        chunks[item['media_id']] = relative
+                self.lookup_chunks = chunks
+                self.lookup_generation = generation
+            relative = self.lookup_chunks.get(media_id)
+            if relative is None:
+                return None
+            return next((item for item in read_json(self.db / relative)['items']
+                         if item['media_id'] == media_id), None)
 
     def items(self, filters=None):
         manifest = read_json(self.db / 'index.json', {'chunks': []})

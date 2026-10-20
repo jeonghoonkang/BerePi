@@ -105,6 +105,38 @@ class LibraryTests(unittest.TestCase):
         target = Path(result['operations'][0]['destination'])
         self.assertIn(target.read_bytes(), (original.read_bytes(), other.read_bytes()))
 
+    def test_item_lookup_reads_only_target_chunk_and_refreshes(self):
+        self.photo()
+        self.library.scan('local')
+        item = self.library.items()[0]
+        media_id = item['media_id']
+        self.assertEqual(self.library.item(media_id), item)
+        with patch('library.read_json', wraps=read_json) as reads, patch.object(self.library, 'items', side_effect=AssertionError('full collection loaded')):
+            with self.client.get(f'/api/library/{media_id}/file') as response:
+                self.assertEqual(response.status_code, 200)
+            self.assertEqual(reads.call_count, 2)  # manifest + one media chunk
+            self.assertEqual(self.client.get(f'/api/library/{media_id}').json['media_id'], media_id)
+            self.assertEqual(self.client.get('/api/library/missing/file').status_code, 404)
+        item['classification']['tags'] = ['updated']
+        self.library.commit([item])
+        self.assertEqual(self.library.item(media_id)['classification']['tags'], ['updated'])
+        item['lifecycle']['status'] = 'trashed'
+        self.library.commit([item])
+        self.assertEqual(self.client.get(f'/api/library/{media_id}/file').status_code, 404)
+        self.library.commit([])
+        self.assertIsNone(self.library.item(media_id))
+
+    def test_concurrent_item_lookup_builds_one_index(self):
+        from concurrent.futures import ThreadPoolExecutor
+        self.photo()
+        self.library.scan('local')
+        item = self.library.items()[0]
+        with patch('library.read_json', wraps=read_json) as reads:
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                results = list(pool.map(self.library.item, [item['media_id']] * 8))
+            self.assertTrue(all(result == item for result in results))
+            self.assertEqual(reads.call_count, 17)  # 8 manifests + 8 target chunks + one index build
+
     def test_duplicate_source_path_and_rename(self):
         self.photo()
         self.library.scan('local')
