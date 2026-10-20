@@ -44,10 +44,11 @@
   el('detail-close').onclick = () => el('library-detail').close();
   el('library-detail').onclose = () => el('detail-preview').replaceChildren();
   async function load() {
-    const params = new URLSearchParams(new FormData(el('library-filters'))); params.set('offset', offset);
+    const params = new URLSearchParams(new FormData(el('library-filters')));
+    if (offset !== null) params.set('offset', offset);
     const result = await api('api/library?' + params);
-    page = result.items; total = result.total; chosen.clear(); selection(); el('select-page').checked = false;
-    el('library-count').textContent = `${total.toLocaleString()}개 · ${offset + (total ? 1 : 0)}–${offset + page.length}`;
+    page = result.items; total = result.total; offset = result.offset; chosen.clear(); selection(); el('select-page').checked = false;
+    el('library-count').textContent = `${total.toLocaleString()}개 · ${offset + (page.length ? 1 : 0)}–${offset + page.length}` + (result.window ? ` · 기준 ${result.window.date}: 당일 ${result.window.on_date.toLocaleString()}개 · 이전 ${result.window.before.toLocaleString()}/${result.window.before_total.toLocaleString()}개 · 이후 ${result.window.after.toLocaleString()}/${result.window.after_total.toLocaleString()}개 · 전후 각각 최대 ${result.window.per_side.toLocaleString()}개 (다른 검색 조건 적용)` : '');
     el('library-prev').disabled = offset === 0; el('library-next').disabled = offset + page.length >= total;
     el('library-gallery').replaceChildren();
     for (const item of page) {
@@ -60,7 +61,8 @@
       card.append(check, button); el('library-gallery').append(card);
     }
   }
-  el('library-filters').onsubmit = safe(async event => { event.preventDefault(); offset = 0; await load(); });
+  el('library-filters').onsubmit = safe(async event => { event.preventDefault(); offset = null; await load(); });
+  el('library-date').onchange = safe(async () => { offset = null; await load(); });
   el('library-filters').onreset = () => setTimeout(safe(async () => { offset = 0; await load(); }), 0);
   el('library-prev').onclick = safe(async () => { offset = Math.max(0, offset - 100); await load(); });
   el('library-next').onclick = safe(async () => { offset += 100; await load(); });

@@ -274,6 +274,39 @@ class LibraryTests(unittest.TestCase):
             server.server_close()
             thread.join()
 
+    def test_date_window_uses_half_browse_limit_and_starts_on_date(self):
+        import copy
+        self.photo()
+        self.library.scan('local')
+        sample = self.library.items()[0]
+        items = []
+        for index, day in enumerate(('01', '02', '03', '04', '04', '05', '06', '07')):
+            item = copy.deepcopy(sample)
+            item['media_id'] = str(index)
+            item['capture'].update(date_key=f'2024-03-{day}', captured_at=f'2024-03-{day}T12:00:00Z')
+            items.append(item)
+        self.app.config['PHOTO_BROWSER_LIMIT'] = 4
+        with patch.object(self.library, 'items', return_value=items):
+            result = self.client.get('/api/library?date=2024-03-04').json
+            self.assertEqual(result['total'], 6)
+            self.assertEqual(result['offset'], 2)
+            self.assertEqual(result['window']['per_side'], 2)
+            self.assertEqual(result['window']['on_date'], 2)
+            self.assertEqual(result['window']['before_total'], 3)
+            self.assertEqual(result['window']['after_total'], 3)
+            self.assertEqual([i['capture']['date_key'] for i in result['items']], ['2024-03-04'] * 2 + ['2024-03-03', '2024-03-02'])
+            newer = self.client.get('/api/library?date=2024-03-04&offset=0&limit=2').json
+            self.assertEqual([i['capture']['date_key'] for i in newer['items']], ['2024-03-06', '2024-03-05'])
+            missing = self.client.get('/api/library?date=2024-03-08').json
+            self.assertEqual(missing['window']['on_date'], 0)
+            self.assertEqual(len(missing['items']), 2)
+            filtered = self.client.get('/api/library?date=2024-03-04&from=2024-03-04&to=2024-03-04').json
+            self.assertEqual(filtered['total'], 2)
+            self.app.config['PHOTO_BROWSER_LIMIT'] = 1
+            small = self.client.get('/api/library?date=2024-03-04').json
+            self.assertEqual(small['total'], 2)
+        self.assertEqual(self.client.get('/api/library?date=bad').status_code, 400)
+
     def test_all_formats_scan_and_merge(self):
         for extension in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
             Image.new('RGB', (8, 8), 'red').save(self.source / f'photo.{extension}')

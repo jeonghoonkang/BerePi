@@ -5,6 +5,7 @@ import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -198,10 +199,42 @@ def register_library(app, boundary, db):
         query = request.args.get('q', '').casefold()
         if query:
             items = [i for i in items if query in (i['name'] + ' ' + ' '.join(i['classification']['events'] + i['classification']['tags'] + i['classification']['person_ids'])).casefold()]
-        items.sort(key=lambda i: (i['capture']['date_key'], i['media_id']), reverse=True)
-        offset = max(0, int(request.args.get('offset', 0)))
+        def chronology(item):
+            capture = item['capture']
+            value = capture.get('captured_at') or capture.get('filesystem_modified_at')
+            try:
+                stamp = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                if stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+                timestamp = stamp.timestamp()
+            except (ValueError, TypeError, AttributeError):
+                timestamp = 0
+            return capture['date_key'], timestamp, item['media_id']
+        items.sort(key=chronology, reverse=True)
+        window = None
+        anchor = request.args.get('date')
+        default_offset = 0
+        if anchor:
+            try:
+                if date.fromisoformat(anchor).isoformat() != anchor:
+                    raise ValueError
+            except ValueError:
+                abort(400, description='기준 날짜는 YYYY-MM-DD 형식이어야 합니다.')
+            half = app.config['PHOTO_BROWSER_LIMIT'] // 2
+            dated = [i for i in items if i['capture']['date_key'] != 'unknown']
+            after = [i for i in dated if i['capture']['date_key'] > anchor]
+            same = [i for i in dated if i['capture']['date_key'] == anchor]
+            before = [i for i in dated if i['capture']['date_key'] < anchor]
+            selected_after = after[-half:] if half else []
+            selected_before = before[:half]
+            items = selected_after + same + selected_before
+            default_offset = len(selected_after) if same or selected_before else max(0, len(items) - 100)
+            window = dict(date=anchor, per_side=half, before=len(selected_before),
+                          on_date=len(same), after=len(selected_after),
+                          before_total=len(before), after_total=len(after))
+        offset = max(0, int(request.args.get('offset', default_offset)))
         limit = min(100, max(1, int(request.args.get('limit', 100))))
-        return jsonify(total=len(items), items=items[offset:offset + limit])
+        return jsonify(total=len(items), items=items[offset:offset + limit], offset=offset, window=window)
 
     @app.get('/api/facets')
     def facets():

@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let data = null, filtered = [], shown = 0, selected = 0, controller;
+let data = null, filtered = [], shown = 0, selected = 0, controller, loading = false;
 const mediaURL = path => 'media?path=' + encodeURIComponent(path);
 function button(text, action) { const el = document.createElement('button'); el.textContent = text; el.onclick = action; return el; }
 function prepareScan(path) {
@@ -7,28 +7,45 @@ function prepareScan(path) {
   $('path').value = path;
   data = null; filtered = []; shown = 0;
   $('gallery').replaceChildren(); $('folders').replaceChildren();
-  $('more').hidden = true; $('up').disabled = true;
+  $('more').hidden = true; $('load-more').hidden = true; $('up').disabled = true;
   $('status').textContent = '경로와 하위 폴더 포함 여부를 선택한 후 스캔 시작을 누르세요.';
 }
-async function browse(path) {
+async function browse(path, append = false) {
   if (controller) controller.abort();
   controller = new AbortController();
-  $('status').textContent = '폴더를 읽고 있습니다…';
-  $('gallery').replaceChildren(); $('folders').replaceChildren(); $('more').hidden = true;
+  const activeController = controller;
+  loading = true; $('load-more').disabled = true;
+  $('status').textContent = '전체 파일 수와 용량을 집계하고 있습니다…';
+  if (!append) { data = null; $('gallery').replaceChildren(); $('folders').replaceChildren(); $('more').hidden = true; $('load-more').hidden = true; }
   try {
-    const response = await fetch('api/browse?' + new URLSearchParams({path, recursive: $('recursive').checked ? '1' : '0'}), {signal: controller.signal});
+    const response = await fetch('api/browse?' + new URLSearchParams({path, recursive: $('recursive').checked ? '1' : '0', offset: append ? data.next_offset : 0}), {signal: controller.signal});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '폴더를 열지 못했습니다.');
-    data = result; $('path').value = data.path; $('up').disabled = !data.parent;
+    const previousShown = shown;
+    data = append ? {...result, media: data.media.concat(result.media)} : result;
+    data.media.sort((a, b) => b.modified - a.modified || a.path.localeCompare(b.path));
+    $('path').value = data.path; $('up').disabled = !data.parent;
+    $('folders').replaceChildren();
     for (const folder of data.directories) $('folders').append(button('📁 ' + folder.name, () => prepareScan(folder.path)));
-    render();
-  } catch (error) { if (error.name !== 'AbortError') { data = null; $('up').disabled = true; $('status').textContent = error.message; } }
+    render(append ? previousShown + 100 : 100);
+  } catch (error) { if (error.name !== 'AbortError') { if (!append) { data = null; $('up').disabled = true; } $('status').textContent = error.message; } }
+  finally { if (controller === activeController) { loading = false; $('load-more').disabled = false; } }
 }
-function render() {
+function formatBytes(bytes) {
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  let value = bytes, index = 0;
+  while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
+  return `${value.toLocaleString(undefined, {maximumFractionDigits: 2})} ${units[index]}`;
+}
+function render(target = 100) {
   if (!data) return;
   filtered = data.media.filter(item => (!$('date').value || item.date === $('date').value) && ($('type').value === 'all' || item.video === ($('type').value === 'video')));
-  shown = 0; $('gallery').replaceChildren(); appendPage();
-  $('status').textContent = `${filtered.length.toLocaleString()}개 미디어 · ${data.directories.length}개 폴더 · 파일 수정일 기준` + (data.skipped ? ` · 읽지 못한 항목 ${data.skipped}개` : '') + (data.truncated ? ` · ${data.limit.toLocaleString()}개까지만 검색했습니다. 더 작은 폴더를 선택하세요.` : '') + (!filtered.length ? ' · 표시할 미디어가 없습니다.' : '');
+  shown = 0; $('gallery').replaceChildren();
+  const desired = typeof target === 'number' ? target : 100;
+  do { appendPage(); } while (shown < Math.min(desired, filtered.length));
+  $('load-more').hidden = !data.truncated;
+  $('load-more').textContent = `다음 ${Math.min(data.limit, data.total - data.next_offset).toLocaleString()}개 불러오기`;
+  $('status').textContent = `전체 ${data.total.toLocaleString()}개 · 총 용량 ${formatBytes(data.total_bytes)} (${data.total_bytes.toLocaleString()}바이트) · 불러옴 ${data.media.length.toLocaleString()}개 · 필터 결과 ${filtered.length.toLocaleString()}개 · 파일 수정일 기준` + (data.skipped ? ` · 읽지 못한 항목 ${data.skipped}개: 전체 집계에서 제외` : '') + (data.truncated ? ` · 남은 ${Math.max(0, data.total - data.next_offset).toLocaleString()}개는 다음 파일 불러오기로 조회하세요.` : ' · 전체 불러오기 완료');
 }
 function appendPage() {
   const end = Math.min(shown + 100, filtered.length);
@@ -57,6 +74,7 @@ $('path').oninput = () => prepareScan($('path').value);
 $('date').onchange = $('type').onchange = render;
 $('reset').onclick = () => { $('date').value = ''; $('type').value = 'all'; render(); };
 $('more').onclick = appendPage;
+$('load-more').onclick = () => { if (data?.truncated && !loading) browse(data.path, true); };
 $('close').onclick = () => $('viewer').close();
 $('viewer').addEventListener('close', () => $('preview').replaceChildren());
 $('previous').onclick = () => openViewer(selected - 1); $('next').onclick = () => openViewer(selected + 1);

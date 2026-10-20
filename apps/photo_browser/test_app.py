@@ -61,6 +61,32 @@ class BrowserTests(unittest.TestCase):
             with self.assertRaises(__import__('argparse').ArgumentTypeError):
                 create_app(self.root, self.root, self.root / 'db', limit=invalid)
 
+    def test_browse_batches_and_total_size(self):
+        folder = self.root / 'batches'
+        folder.mkdir()
+        for index in range(7):
+            (folder / f'{index}.jpg').write_bytes(b'x' * (index + 1))
+        (folder / 'ignored.txt').write_bytes(b'ignored')
+        client = create_app(self.root, self.root, self.root / 'db', limit=3).test_client()
+        paths = []
+        for offset, count, truncated in ((0, 3, True), (3, 3, True), (6, 1, False), (7, 0, False)):
+            page = client.get('/api/browse', query_string={'path': str(folder), 'offset': offset}).json
+            self.assertEqual(page['total'], 7)
+            self.assertEqual(page['total_bytes'], 28)
+            self.assertEqual(len(page['media']), count)
+            self.assertEqual(page['truncated'], truncated)
+            self.assertEqual(page['next_offset'], offset + count)
+            paths.extend(item['path'] for item in page['media'])
+        self.assertEqual(len(set(paths)), 7)
+        for offset in ('-1', 'abc', '1.5'):
+            self.assertEqual(client.get('/api/browse', query_string={'offset': offset}).status_code, 400)
+        exact = client.get('/api/browse', query_string={'path': str(folder), 'offset': 4}).json
+        self.assertFalse(exact['truncated'])
+        empty = self.root / 'empty'
+        empty.mkdir()
+        page = client.get('/api/browse', query_string={'path': str(empty)}).json
+        self.assertEqual((page['total'], page['total_bytes'], page['media']), (0, 0, []))
+
     def test_media_range_and_access_boundary(self):
         response = self.client.get('/media', query_string={'path': str(self.root / '하위 폴더' / 'clip.mp4')}, headers={'Range': 'bytes=2-5'})
         self.assertEqual(response.status_code, 206)
