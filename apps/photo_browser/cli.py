@@ -19,6 +19,9 @@ def main(argv=None):
     commands.add_parser('config', help='저장된 설정 조회')
     status = commands.add_parser('status', help='소스별 최신 스캔 상태 조회')
     status.add_argument('--source-id', help='특정 소스만 조회')
+    compare = commands.add_parser('compare', help='원본·병합 파일 수/용량 및 복사 무결성 비교')
+    compare.add_argument('--source-id', help='특정 소스만 비교 (기본 전체)')
+    compare.add_argument('--quick', action='store_true', help='SHA-256 없이 크기만 비교')
     merge = commands.add_parser('merge', help='병합 복사 실행 (원본 유지)')
     options = merge.add_mutually_exclusive_group()
     options.add_argument('--preview', action='store_true', help='복사 없이 대상 경로 확인')
@@ -51,6 +54,9 @@ def main(argv=None):
                     'error_count': len(state.get('errors', [])) if state else 0,
                     'scan': state,
                 })
+        elif args.command == 'compare':
+            from copy_check import compare_copies
+            result = compare_copies(library, args.source_id, args.quick)
         else:
             stop = threading.Event()
             previous = signal.signal(signal.SIGINT, lambda *_: stop.set())
@@ -59,6 +65,8 @@ def main(argv=None):
             finally:
                 signal.signal(signal.SIGINT, previous)
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        if args.command == 'compare':
+            return 0 if result['ok'] else 1
         if args.command == 'merge':
             return 1 if result['status'] != 'completed' or any(op['status'] == 'error' for op in result['operations']) else 0
         return 0

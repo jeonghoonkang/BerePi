@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -66,6 +67,84 @@ class CliTests(unittest.TestCase):
             code, error = self.call('merge')
         self.assertEqual(code, 1)
         self.assertIn('다른 작업', error)
+
+    def test_compare_success_counts_and_same_size_corruption(self):
+        self.library.scan('photos')
+        report = self.library.merge()
+        code, result = self.call('compare')
+        self.assertEqual(code, 0)
+        self.assertTrue(result['ok'])
+        size = (self.source / 'photo.jpg').stat().st_size
+        self.assertEqual(result['sources'][0]['file_count'], 1)
+        self.assertEqual(result['sources'][0]['total_bytes'], size)
+        self.assertEqual(result['managed']['file_count'], 1)
+        self.assertEqual(result['managed']['total_bytes'], size)
+        self.assertEqual(result['verified_item_count'], 1)
+        Path(report['operations'][0]['destination']).write_bytes(b'x' * size)
+        self.assertEqual(self.call('compare', '--quick')[0], 0)
+        code, result = self.call('compare')
+        self.assertEqual(code, 1)
+        self.assertEqual(result['issues'][0]['status'], 'copy_mismatch')
+        self.assertEqual(result['verified_item_count'], 0)
+
+    def test_compare_missing_copy_new_source_and_changed_source(self):
+        self.library.scan('photos')
+        self.assertEqual(self.call('compare')[1]['issues'][0]['status'], 'copy_not_registered')
+        report = self.library.merge()
+        Path(report['operations'][0]['destination']).unlink()
+        (self.source / 'new.jpg').write_bytes(b'new photo')
+        (self.source / 'photo.jpg').write_bytes(b'changed')
+        code, result = self.call('compare')
+        self.assertEqual(code, 1)
+        self.assertEqual({i['status'] for i in result['issues']},
+                         {'not_scanned', 'source_changed', 'copy_missing_or_unreadable'})
+
+    def test_compare_missing_source_and_lock(self):
+        self.library.scan('photos')
+        self.library.merge()
+        (self.source / 'photo.jpg').unlink()
+        self.assertEqual(self.call('compare')[1]['issues'][0]['status'], 'source_missing_or_unreadable')
+        with self.library.writing():
+            self.assertEqual(self.call('compare')[0], 1)
+        self.assertEqual(self.call('compare', '--source-id', 'unknown')[0], 1)
+
+    def test_compare_shared_copy_and_ignored_files(self):
+        second = self.root / 'second'
+        second.mkdir()
+        (second / 'photo.jpg').write_bytes((self.source / 'photo.jpg').read_bytes())
+        config = self.library.config()
+        config['sources'].append({'source_id': 'second', 'root': str(second), 'protocol': 'file'})
+        self.library.save_config(config)
+        self.library.scan('photos')
+        self.library.scan('second')
+        self.library.merge()
+        (self.source / 'notes.txt').write_text('ignored')
+        (self.source / '._photo.jpg').write_bytes(b'ignored')
+        code, result = self.call('compare')
+        self.assertEqual(code, 0)
+        self.assertEqual(sum(s['file_count'] for s in result['sources']), 2)
+        self.assertEqual(result['managed']['compared_copy_count'], 1)
+        self.assertEqual(result['verified_item_count'], 2)
+
+    def test_compare_does_not_change_metadata_and_excludes_trash(self):
+        self.library.scan('photos')
+        self.library.merge()
+        trash = self.root / 'managed' / '.trash'
+        trash.mkdir()
+        (trash / 'old.jpg').write_bytes(b'old')
+        before = {p: p.read_bytes() for p in self.db.rglob('*.json')}
+        code, report = self.call('compare')
+        self.assertEqual(code, 0)
+        self.assertEqual(report['managed']['file_count'], 1)
+        self.assertEqual(before, {p: p.read_bytes() for p in self.db.rglob('*.json')})
+
+    def test_compare_inventory_error_is_failure(self):
+        self.library.scan('photos')
+        self.library.merge()
+        with patch('copy_check.os.walk', side_effect=PermissionError('denied')):
+            code, result = self.call('compare')
+        self.assertEqual(code, 1)
+        self.assertIn('inventory_failed', {i['status'] for i in result['issues']})
 
 
 if __name__ == '__main__':

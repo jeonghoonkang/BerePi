@@ -126,11 +126,24 @@ python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge
 # 일부 항목만 병합하거나 중지한 병합 이어하기
 python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --media-id MEDIA_ID
 python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --resume MERGE_ID
+
+# 원본과 관리 복사본의 파일 수·용량·SHA-256 비교
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data compare
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data compare --source-id local_photos
+
+# 빠른 크기 비교 (동일 크기의 내용 손상은 검출하지 못함)
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data compare --quick
 ```
 
 출력은 JSON입니다. `status`의 `scan_complete`는 스캔 완료와 월별 JSON 발행을 모두 확인하며, 개별 파일 실패는 `error_count`와 `scan.errors`에서 확인합니다. 아직 스캔하지 않은 소스는 `not_scanned`입니다. `running`은 마지막 저장 상태이므로 강제 종료 후에도 남을 수 있습니다. 실시간 서버 작업 상태는 웹 화면에서 확인하세요.
 
 `--db`를 생략하면 `PHOTO_BROWSER_DB`, 환경변수도 없으면 `apps/photo_browser/db`를 사용합니다. 기존 설정이 없는 DB는 오류로 처리합니다. 원격 병합에는 서버와 같은 인증 환경변수를 설정해야 합니다. 병합은 동기 실행되며 종료할 때 결과와 `merge_id`를 출력합니다. `Ctrl+C`는 현재 파일 처리 후 중지 상태를 저장합니다. 중지·복사 오류는 종료 코드 1, 정상 완료와 조회는 0을 반환합니다. 원본은 유지하며 기존 대상 파일의 내용이 다르면 덮어쓰지 않습니다. 서버가 실행 중이어도 사용할 수 있지만 다른 쓰기 작업과 겹치면 기존 DB 잠금에 의해 거부됩니다.
+
+`compare`는 원본 디렉토리를 다시 탐색하고 DB에 등록된 활성 원본·관리 복사본과 비교합니다. `sources`에는 소스별 실제 미디어 파일 수·총 바이트와 DB의 활성 항목 수·바이트를, `managed`에는 관리 디렉토리 전체 미디어 파일 수·총 바이트와 비교한 고유 복사본 수·바이트를 출력합니다. `--source-id`로 제한해도 `managed.file_count`와 `managed.total_bytes`는 전체 관리 디렉토리 집계입니다. 스캔과 같은 확장자만 대상으로 하며 AppleDouble(`._*`), 심볼릭 링크, DB·관리 디렉토리 및 `.trash`는 원본 탐색에서 제외합니다. 텍스트 파일 등은 집계하지 않습니다.
+
+기본 검증은 현재 원본과 관리 복사본의 크기·SHA-256이 스캔 당시 값과 같은지 확인합니다. 파일 수가 같더라도 내용이 다르면 실패합니다. 중복 원본이 하나의 관리 복사본을 공유하거나 휴지통 처리한 항목이 있으면 단순 합계가 달라질 수 있으므로, 합계의 일치만으로 성공을 판정하지 않습니다. 비활성 원본은 복사 검증에서 제외하고 `excluded_inactive_count`로 표시합니다. 추가로 남아 있는 관리 파일은 전체 집계에 포함하되 복사 실패로 판정하지 않습니다.
+
+`ok: true` 및 종료 코드 0은 선택한 소스에서 문제를 발견하지 않았다는 뜻입니다. 문제는 `issues`에 원본 누락·변경, 미스캔 파일(`not_scanned`), 미등록 복사본(`copy_not_registered`), 복사본 누락·접근 실패, 내용 불일치(`copy_mismatch`) 등으로 표시하며 종료 코드 1을 반환합니다. `verified_item_count`는 원본과 하나 이상의 등록된 복사본이 검증을 통과한 항목 수입니다. 파일과 메타데이터를 수정하지 않으며, 서버 작업과 겹치지 않도록 DB 작업 잠금을 획득합니다. 외부 프로그램의 파일 변경까지 막지는 않으므로 원본 파일 변경이 없는 동안 실행하세요. 원격 소스는 목록을 다시 읽고 파일을 내려받아 비교하므로 인증 환경변수·네트워크와 임시 공간이 필요하고 시간이 걸릴 수 있습니다.
 
 1. `소스·스캔·병합`에서 **관리 디렉토리**를 먼저 저장합니다. `--root` 안에 있으며 DB와 분리된 경로를 지정하세요.
 2. 소스 ID, 프로토콜, 경로, 카테고리, 소유자 ID를 등록합니다. 추가 디렉토리도 별도 소스로 등록할 수 있습니다.
