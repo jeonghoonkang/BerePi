@@ -117,7 +117,7 @@ class ScanEngine:
                 directories.clear()
 
     def process(self, source, uri, info, old):
-        if old and old['lifecycle']['status'] != 'active':
+        if old and old['lifecycle']['status'] not in {'active', 'source_unregistered'}:
             return None, 'ignored'
         location = {'source_id': self.source_id, 'role': 'source', 'protocol': source.get('protocol', 'file'), 'uri': uri,
                     'host': socket.gethostname() if 'path' in info else urlsplit(uri).hostname,
@@ -130,6 +130,8 @@ class ScanEngine:
             if not self.full and old and 'path' in info and old['size_bytes'] == stat.st_size and old.get('mtime_ns') == stat.st_mtime_ns:
                 item = copy.deepcopy(old)
                 item['last_seen_at'] = now()
+                if item['lifecycle']['status'] == 'source_unregistered':
+                    item['lifecycle'] = {'status': 'active'}
                 for loc in item['locations']:
                     if loc.get('source_id') == self.source_id and loc['uri'] == uri:
                         loc['status'] = 'available'
@@ -152,6 +154,8 @@ class ScanEngine:
                     capture.update(date_key='unknown', date_basis='unknown', filesystem_modified_at=None)
             sha256 = digest(path, control=self.check)
             item = copy.deepcopy(old) if old else {'media_id': uid(), 'classification': {'category_id': source.get('category', 'family'), 'owner_id': source.get('owner_id', 'default'), 'person_ids': [], 'events': [], 'tags': []}, 'locations': [], 'lifecycle': {'status': 'active'}, 'revision': 0}
+            if item['lifecycle']['status'] == 'source_unregistered':
+                item['lifecycle'] = {'status': 'active'}
             changed = not old or old['sha256'] != sha256
             item.update(name=unquote(Path(urlsplit(uri).path).name), media_type='video' if path.suffix.lower() in VIDEO_EXTENSIONS else 'image', size_bytes=stat.st_size,
                         mtime_ns=stat.st_mtime_ns if 'path' in info else None, capture=capture, sha256=sha256, last_seen_at=now(), revision=item['revision'] + 1)
@@ -172,7 +176,7 @@ class ScanEngine:
                 # Edits/trash operations made while paused take precedence over journal copies.
                 item = copy.deepcopy(item)
                 item['classification'] = current['classification']
-                item['lifecycle'] = current['lifecycle']
+                item['lifecycle'] = {'status': 'active'} if current['lifecycle']['status'] == 'source_unregistered' else current['lifecycle']
                 item['locations'] = [loc for loc in item['locations'] if loc['role'] == 'source'] + [loc for loc in current['locations'] if loc['role'] == 'managed']
                 if current.get('sha256') != item['sha256']:
                     for loc in item['locations'][1:]:

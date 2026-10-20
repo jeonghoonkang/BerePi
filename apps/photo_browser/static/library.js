@@ -7,7 +7,7 @@
   const sourcesOnly = new URLSearchParams(window.location.search).get('panel') === 'sources';
   let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
-  const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
+  const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', blocked_low_space:'공간 부족 · 실행 안 함', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
   const notify = message => { el('notice').textContent = message; };
   async function api(path, method = 'GET', data) {
     const response = await fetch(path, {method, cache: 'no-store', headers: {'Content-Type': 'application/json', 'X-Photo-Browser': '1'}, body: data === undefined ? undefined : JSON.stringify(data)});
@@ -94,6 +94,7 @@
     const result = status.result;
     if (!result) return [];
     const count = value => Number(value || 0).toLocaleString();
+    if (status.status === 'blocked_low_space') return [result.warning, '새 사진 복사와 병합 DB 반영을 시작하지 않았습니다. 공간 확보 후 전체 병합 실행을 다시 누르세요.'];
     if (status.kind === 'scan') {
       const lines = [
         `스캔 분석: 신규 ${count(result.added)}개 · 갱신 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
@@ -113,6 +114,9 @@
         result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
       ];
     }
+    if (status.kind === 'source_cleanup') {
+      return [`관리 복사본 삭제 ${count(result.deleted_managed_files)}개 · 공유 복사본 보존 ${count(result.retained_shared_files)}개`, result.warning];
+    }
     if (status.kind === 'source_update') {
       return [`소스 ${result.source_id}: 대상 ${count(result.matched)}개 · 분류 변경 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
         `적용 카테고리: ${result.category_id} · 소유자: ${result.owner_id}`, result.warning];
@@ -124,6 +128,7 @@
     return [];
   }
   function mergeProgress(progress) {
+    if (progress?.phase === 'checking_space') return `복사 용량·여유 공간 계산 중 · ${(progress.checked ?? 0).toLocaleString()}/${(progress.check_total ?? 0).toLocaleString()}개 확인`;
     if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
     return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%)`;
   }
@@ -157,7 +162,8 @@
     if (p?.inventory_complete || (['merge', 'merge_preview'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
     card.file.textContent = p?.current_file ? `현재 파일: ${p.current_file}` : '';
     const disk = p?.disk;
-    card.warning.textContent = [p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
+    const spaceText = p?.disk_space ? `신규 복사 ${(p.disk_space.copy_bytes / 1073741824).toFixed(2)} GiB · DB 예상 증가 ${(p.disk_space.db_estimated_bytes / 1073741824).toFixed(2)} GiB\n` + p.disk_space.volumes.map(v => `${v.path}: 여유 ${(v.free_bytes / 1073741824).toFixed(2)} GiB / 필요 ${(v.required_bytes / 1073741824).toFixed(2)} GiB (여유 기준 포함)`).join('\n') : '';
+    card.warning.textContent = [spaceText, p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
     card.stop.hidden = !['scan', 'merge'].includes(status.kind) || !activeStates.includes(status.status);
     card.stop.disabled = status.status === 'stopping';
     card.mergeId = p?.merge_id;
@@ -186,9 +192,12 @@
           warning: status.result.warning,
         }, null, 2);
       }
+      const warning = status.result?.warning || status.error || status.warning;
+      if (status.status === 'blocked_low_space') {
+        notify(warning); alert(warning); return;
+      }
       await loadConfig();
       if (!el('library-panel').hidden) { await facets(); await load(); }
-      const warning = status.result?.warning || status.error || status.warning;
       notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
     })();
     watchers.set(id, watching);
@@ -374,6 +383,42 @@
       if (!result[key].length) el('duplicates-list').append(make('p', '해당 항목이 없습니다.'));
     }
   }
+  async function loadDuplicateSources() {
+    const status = el('duplicate-sources-status'), list = el('duplicate-sources-list');
+    const button = el('find-duplicate-sources');
+    button.disabled = true; list.replaceChildren(); status.textContent = '스캔 DB의 소스별 파일 목록을 비교하고 있습니다…';
+    try {
+      const result = await api('api/duplicate-sources');
+      status.textContent = `중복 후보 ${result.groups.length}개 그룹 · ${result.basis}`;
+      for (const group of result.groups) {
+        const row = make('section', '', 'source-row');
+        row.append(make('h3', `${group.sources.length}개 소스 · ${group.file_count.toLocaleString()}개 파일 · ${group.total_bytes.toLocaleString()}바이트`));
+        row.append(make('p', group.same_content ? '스캔 당시 SHA-256도 모두 같습니다.' : '주의: 파일 목록과 크기는 같지만 SHA-256이 다른 파일이 있습니다. 내용이 동일한 소스로 판단하지 마세요.'));
+        for (const source of group.sources) {
+          const line = make('p', `${source.source_id} · ${source.root} `);
+          const keep = make('select'); keep.setAttribute('aria-label', `${source.source_id} 대신 유지할 소스`);
+          group.sources.filter(other => other.source_id !== source.source_id).forEach(other => keep.add(new Option(`유지: ${other.source_id}`, other.source_id)));
+          line.append(keep, action('소스 해제·관리 복사본 삭제', async () => {
+            if (!confirm(`${source.source_id} 등록을 해제하고 ${keep.value}를 유지합니까?\n원본 파일은 유지합니다. 이 소스 전용 관리 복사본은 영구 삭제합니다. 다른 소스가 참조하는 공유 복사본은 유지합니다.`)) return;
+            await job('api/duplicate-sources/unregister', {source_id: source.source_id, keep_id: keep.value, fingerprint: group.fingerprint, background: true});
+            await loadConfig(); await loadDuplicateSources();
+          }));
+          row.append(line);
+        }
+        const details = make('details'), title = make('summary', '비교한 파일 목록');
+        const listing = make('pre'); let shown = 0;
+        const more = action('파일 목록 100개 더 보기', () => {
+          const batch = group.files.slice(shown, shown + 100);
+          listing.append(document.createTextNode(batch.map(file => `${file.relative_path} · ${file.size_bytes.toLocaleString()}바이트`).join('\n') + '\n'));
+          shown += batch.length; more.hidden = shown >= group.files.length;
+        });
+        details.append(title, listing, more); row.append(details); list.append(row);
+        more.click();
+      }
+    } catch (error) { status.textContent = error.message; throw error; }
+    finally { button.disabled = false; }
+  }
+  el('find-duplicate-sources').onclick = safe(loadDuplicateSources);
   el('refresh-trash').onclick = safe(loadTrash); el('refresh-duplicates').onclick = safe(loadDuplicates);
   el('refresh-jobs').onclick = safe(async () => { await loadConfig(); await loadJobs(); });
   el('jobs-prev').onclick = safe(async () => { jobsOffset = Math.max(0, jobsOffset - 20); await loadJobs(); });

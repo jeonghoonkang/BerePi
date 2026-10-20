@@ -256,6 +256,100 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/config').json['sources'][0]['category'], 'photo_box')
         self.assertEqual(read_json(self.library.db / 'config.json')['sources'][0]['category'], 'photo_box')
 
+    def test_duplicate_sources_compare_and_unregister_without_deleting_files(self):
+        import shutil
+        original = self.photo()
+        backup = self.root / 'backup'
+        backup.mkdir()
+        shutil.copy2(original, backup / original.name)
+        config = self.library.config()
+        config['sources'].append(dict(config['sources'][0], source_id='backup', root=str(backup)))
+        self.library.save_config(config)
+        self.library.scan('local')
+        self.library.scan('backup')
+        report = self.client.get('/api/duplicate-sources').json
+        self.assertEqual(len(report['groups']), 1)
+        group = report['groups'][0]
+        self.assertTrue(group['same_content'])
+        self.assertEqual(group['file_count'], 1)
+        self.assertEqual(group['total_bytes'], original.stat().st_size)
+        self.assertEqual(group['files'][0]['relative_path'], original.name)
+        rejected = self.post('/api/duplicate-sources/unregister', {'source_id': 'backup', 'keep_id': 'local', 'fingerprint': 'stale'})
+        self.assertEqual(rejected.status_code, 400)
+        count = len(self.library.items())
+        removed = self.post('/api/duplicate-sources/unregister', {'source_id': 'backup', 'keep_id': 'local', 'fingerprint': group['fingerprint']})
+        self.assertEqual(removed.status_code, 200)
+        self.assertEqual([s['source_id'] for s in self.library.config()['sources']], ['local'])
+        self.assertTrue(original.exists())
+        self.assertTrue((backup / original.name).exists())
+        self.assertEqual(len(self.library.items()), count)
+        self.assertEqual(self.library.duplicate_sources()['groups'], [])
+
+    def test_duplicate_source_cleanup_removes_only_exclusive_managed_files(self):
+        import shutil
+        original = self.photo()
+        backup = self.root / 'backup'
+        backup.mkdir()
+        shutil.copy2(original, backup / original.name)
+        config = self.library.config()
+        backup_config = dict(config['sources'][0], source_id='backup', root=str(backup))
+        config['sources'].append(backup_config)
+        self.library.save_config(config)
+        self.library.scan('local')
+        self.library.scan('backup')
+        root = Path(config['managed_root'])
+        root.mkdir()
+        own, shared = root / 'exclusive.jpg', root / 'shared.jpg'
+        shutil.copy2(original, own)
+        shutil.copy2(original, shared)
+        items = self.library.items()
+        for item in items:
+            item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(shared), 'status': 'available'})
+            if item['locations'][0]['source_id'] == 'backup':
+                item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(own), 'status': 'available'})
+        self.library.commit(items)
+        group = self.library.duplicate_sources()['groups'][0]
+        result = self.library.unregister_duplicate_source('backup', 'local', group['fingerprint'])
+        self.assertEqual(result['deleted_managed_files'], 1)
+        self.assertEqual(result['retained_shared_files'], 1)
+        self.assertFalse(own.exists())
+        self.assertTrue(shared.exists())
+        self.assertTrue(original.exists())
+        self.assertTrue((backup / original.name).exists())
+        removed = next(item for item in self.library.items() if item['locations'][0]['source_id'] == 'backup')
+        self.assertEqual(removed['lifecycle']['status'], 'source_unregistered')
+        archive = read_json(self.library.db / 'source_cleanup' / (result['cleanup_id'] + '.json'))
+        self.assertTrue(any(loc.get('path') == str(own) for item in archive['items_before'] for loc in item['locations']))
+        config = self.library.config()
+        config['sources'].append(backup_config)
+        self.library.save_config(config)
+        self.library.scan('backup')
+        restored = next(item for item in self.library.items() if item['media_id'] == removed['media_id'])
+        self.assertEqual(restored['lifecycle']['status'], 'active')
+
+    def test_duplicate_sources_distinguishes_contents_and_file_lists(self):
+        import copy
+        self.photo()
+        self.library.scan('local')
+        first = self.library.items()[0]
+        second = copy.deepcopy(first)
+        second['media_id'] = 'second'
+        second['sha256'] = 'different'
+        backup = self.root / 'backup'
+        config = self.library.config()
+        config['sources'].append(dict(config['sources'][0], source_id='backup', root=str(backup)))
+        self.library.save_config(config)
+        second['locations'][0].update(source_id='backup', path=str(backup / first['name']), uri=(backup / first['name']).as_uri())
+        self.library.commit([first, second])
+        self.assertFalse(self.library.duplicate_sources()['groups'][0]['same_content'])
+        second['locations'][0]['path'] = str(backup / 'another.jpg')
+        self.library.commit([first, second])
+        self.assertEqual(self.library.duplicate_sources()['groups'], [])
+        second['locations'][0]['path'] = str(backup / first['name'])
+        second['size_bytes'] += 1
+        self.library.commit([first, second])
+        self.assertEqual(self.library.duplicate_sources()['groups'], [])
+
     def test_duplicate_source_path_and_rename(self):
         self.photo()
         self.library.scan('local')
@@ -313,6 +407,45 @@ class LibraryTests(unittest.TestCase):
                     if status['status'] == 'completed':
                         break
                     time.sleep(0.01)
+
+    def test_merge_low_space_blocks_before_copy_or_db_commit(self):
+        from types import SimpleNamespace
+        self.photo()
+        self.library.scan('local')
+        index = (self.library.db / 'index.json').read_bytes()
+        with patch('library.shutil.disk_usage', return_value=SimpleNamespace(free=0)), patch('library.shutil.copy2') as copy_file:
+            result = self.library.merge()
+        self.assertEqual(result['status'], 'blocked_low_space')
+        self.assertFalse(result['disk_space']['ok'])
+        self.assertGreater(result['disk_space']['copy_bytes'], 0)
+        self.assertEqual(result['operations'], [])
+        copy_file.assert_not_called()
+        self.assertFalse(Path(self.config['managed_root']).exists())
+        self.assertEqual((self.library.db / 'index.json').read_bytes(), index)
+        self.assertFalse((self.library.db / 'merges').exists())
+
+    def test_merge_space_counts_unique_targets_and_excludes_existing_files(self):
+        import copy
+        from types import SimpleNamespace
+        self.photo()
+        self.library.scan('local')
+        item = self.library.items()[0]
+        duplicate = copy.deepcopy(item)
+        duplicate['media_id'] = 'duplicate'
+        root = Path(self.config['managed_root'])
+        with patch('library.shutil.disk_usage', return_value=SimpleNamespace(free=10**12)):
+            space = self.library.merge_space(root, [item, duplicate], [item, duplicate], lambda p: None)
+            self.assertTrue(space['ok'])
+            self.assertEqual(space['copy_files'], 1)
+            self.assertEqual(space['copy_bytes'], item['size_bytes'])
+            self.assertEqual(len(space['volumes']), 1)
+            self.assertEqual(space['volumes'][0]['required_bytes'], space['copy_bytes'] + space['db_estimated_bytes'] + space['volumes'][0]['reserve_bytes'])
+            target = self.library.merge_target(root, item)
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b'existing')
+            space = self.library.merge_space(root, [item], [item], lambda p: None)
+            self.assertEqual(space['copy_bytes'], 0)
+            self.assertEqual(space['copy_files'], 0)
 
     def test_merge_stop_and_resume_after_restart(self):
         for index in range(4):

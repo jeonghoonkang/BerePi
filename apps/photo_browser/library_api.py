@@ -82,7 +82,7 @@ def register_library(app, boundary, db):
         stop = threading.Event()
         with guard:
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
-            if (kind in {'source_rename', 'source_update'} and active) or any(j.get('kind') in {'source_rename', 'source_update'} for j in active):
+            if (kind in {'source_rename', 'source_update', 'source_cleanup'} and active) or any(j.get('kind') in {'source_rename', 'source_update', 'source_cleanup'} for j in active):
                 raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('이미 병합 작업이 실행 중입니다.')
@@ -305,6 +305,21 @@ def register_library(app, boundary, db):
     @app.get('/api/duplicates')
     def duplicates():
         return jsonify(library.duplicates())
+
+    @app.get('/api/duplicate-sources')
+    def duplicate_sources():
+        return jsonify(library.duplicate_sources())
+
+    @app.post('/api/duplicate-sources/unregister')
+    def unregister_duplicate_source():
+        data = body()
+        if data.get('background'):
+            return launch(lambda: library.unregister_duplicate_source(component(data['source_id']), component(data['keep_id']), data['fingerprint']), 'source_cleanup', data['source_id'])
+        with guard:
+            if any(j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
+                raise ValueError('실행 중인 작업이 끝난 뒤 등록을 해제하세요.')
+            result = library.unregister_duplicate_source(component(data['source_id']), component(data['keep_id']), data['fingerprint'])
+        return jsonify(result)
 
     @app.get('/api/trash')
     def trash_list():
