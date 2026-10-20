@@ -169,11 +169,102 @@ python3 apps/photo_browser/cli.py --db /data/photo_db --root /data compare --qui
 | 관리 경로 `managed_root` | 병합 복사본과 `.trash` 보관 | `/data/photo_library` |
 | DB `--db` | 설정, 인덱스, 메타데이터, 체크포인트 보관 | `/data/photo_db` |
 
+**입력 소스 사진 디렉토리**는 `소스·스캔·병합 → 소스 등록`에서 경로(`sources[].root`)로 지정합니다. `/data/photos1`, `/data/photos2`처럼 여러 원본 폴더를 별도 소스로 등록한 뒤 각각 스캔할 수 있습니다. `--directory`는 화면의 탐색 시작 위치만 지정하며 병합 입력 소스를 등록하지 않습니다.
+
+**출력 디렉토리와 병합 파일이 생성되는 디렉토리는 관리 디렉토리(`managed_root`)를 뜻합니다.** `소스·스캔·병합 → 관리 디렉토리`에서 `/data/photo_library` 같은 경로를 입력하고 저장하세요. 별도의 `--output` 실행 옵션은 없습니다. 실제 사진·동영상 복사본은 다음 구조로 생성됩니다.
+
+```text
+/data/photo_library/카테고리/소유자/연도/월/원본파일명
+# 예: /data/photo_library/family/default/2026/10/IMG_0001.jpg
+```
+
+촬영 날짜가 없는 파일은 연도와 월에 `unknown/unknown`을 사용합니다. 병합은 여러 사진을 한 파일로 합치는 작업이 아니라, 원본 파일을 유지하면서 위 폴더 구조에 복사하는 작업입니다. 같은 DB와 관리 디렉토리를 유지하면 첫 번째 소스 병합 후 두 번째 소스를 병합해도 결과가 같은 라이브러리에 누적됩니다. 대상 경로에 같은 내용의 파일이 있으면 재사용하며, 내용이 다르면 덮어쓰지 않고 오류로 기록합니다.
+
+`--db`는 설정·인덱스·메타데이터·체크포인트 등 JSON 파일의 저장 위치입니다. 사진 복사본은 DB가 아니라 관리 디렉토리에 저장됩니다. 프론트엔드의 **현재 경로 설정**에서 입력 소스, 출력 관리 디렉토리, DB 경로와 각 역할을 확인할 수 있습니다.
+
 관리 경로는 허용 루트 내부의 별도 하위 디렉토리여야 하며 DB와 서로 포함 관계가 될 수 없습니다. 관리 경로 자체나 DB를 스캔 소스로 지정하지 마세요. 상위 디렉토리를 스캔할 때는 관리 경로·DB·디렉토리 심볼릭 링크를 순회 대상에서 제외합니다. DB는 별도 디스크에 지정할 수도 있지만, 관리 복사본과 로컬 소스는 허용 루트 안에 있어야 합니다.
 
 최초 자동 생성되는 관리 경로는 기본적으로 `DB 상위 디렉토리/library`입니다. 제한된 `--root`를 사용했다면 이 기본 경로가 허용 루트 밖일 수 있으므로, 첫 스캔 전에 설정 화면에서 실제 경로를 저장하세요.
 
-### JSON 구조 예시
+### 권장 폴더 배치
+
+원본 사진, 병합 복사본, JSON DB를 같은 상위 폴더 아래의 서로 분리된 폴더에 두면 역할을 구분하기 쉽습니다.
+
+```text
+/data/photo_system/
+├── originals/                 # 입력 원본
+│   ├── phone/
+│   ├── camera/
+│   └── old_backup/
+├── photo_library/             # 병합 복사본 출력
+│   └── family/default/2026/10/IMG_0001.jpg
+└── db/                        # JSON 설정·메타데이터·작업 기록
+```
+
+저장소 루트에서 다음과 같이 실행합니다.
+
+```bash
+apps/photo_browser/.venv/bin/python apps/photo_browser/app.py \
+  --root /data/photo_system \
+  --directory /data/photo_system/originals \
+  --db /data/photo_system/db
+```
+
+`소스·스캔·병합`에서 관리 디렉토리를 `/data/photo_system/photo_library`로 저장하고, 아래 원본 폴더들을 별도 소스로 등록한 다음 각각 스캔하고 병합합니다.
+
+| 소스 ID | 원본 경로 |
+| --- | --- |
+| `phone` | `/data/photo_system/originals/phone` |
+| `camera` | `/data/photo_system/originals/camera` |
+| `old_backup` | `/data/photo_system/originals/old_backup` |
+
+`originals` 전체를 소스로 등록했다면 그 하위의 `phone` 등을 다시 별도 소스로 등록하는 중첩은 피하세요. DB와 관리 디렉토리는 서로 포함되지 않게 유지합니다. 백업할 때는 관리 복사본과 DB를 함께 보관해야 앱에서 추가한 태그와 원본·복사본 위치 관계도 복원할 수 있습니다. 앱에서 입력한 태그는 JSON DB에 저장되며 사진 파일 내부에 새로 기록되지 않습니다.
+
+### JSON 경로 설계 권장안 (향후 개선)
+
+**현재 구현은 사진 항목의 `locations`에 절대 경로와 URI를 저장합니다.** 병합 복사가 성공하면 같은 사진 항목에 `role: managed` 위치가 추가되며 원본 위치와 공통 태그·촬영 정보는 유지됩니다. 아래 상대 경로 구조는 아직 구현되지 않은 개선 제안입니다. 적용하려면 경로를 읽고 쓰는 코드와 기존 DB를 함께 변환해야 하므로 기존 JSON만 직접 수정하지 마세요.
+
+장기적으로는 설정에 실제 저장 위치인 절대 경로를 모으고, 개별 사진에는 기준점과 상대 경로를 저장하는 구성을 권장합니다. 다음은 필요한 필드만 발췌한 설정 예시입니다.
+
+```json
+{
+  "managed_root": "/data/photo_system/photo_library",
+  "sources": [
+    {
+      "source_id": "phone",
+      "protocol": "file",
+      "root": "/data/photo_system/originals/phone"
+    }
+  ]
+}
+```
+
+개별 사진 항목의 제안 구조는 다음과 같습니다.
+
+```json
+{
+  "media_id": "고유ID",
+  "sha256": "파일내용해시",
+  "classification": {
+    "tags": ["가족", "여행"]
+  },
+  "locations": [
+    {
+      "role": "source",
+      "source_id": "phone",
+      "relative_path": "DCIM/IMG_0001.jpg"
+    },
+    {
+      "role": "managed",
+      "relative_path": "family/default/2026/10/IMG_0001.jpg"
+    }
+  ]
+}
+```
+
+원본은 `source_id`에 해당하는 소스의 `root`와 상대 경로를 합쳐 찾고, 관리 복사본은 `managed_root`와 상대 경로를 합쳐 찾도록 합니다. 태그 등 공통 메타데이터는 사진 항목 한 곳에서 관리합니다. 이 구조에서는 저장 장치나 상위 폴더가 바뀌어도 설정의 기준 경로만 변경할 수 있습니다. 구현 시 상대 경로가 기준 폴더 밖으로 벗어나지 않도록 검증하고, 원격 소스 URL 처리와 기존 절대 경로 DB의 변환도 함께 지원해야 합니다.
+
+### JSON 구조 예시 (현재 구현)
 
 월별 청크는 `schema_version`, `item_count`, `items`를 포함합니다. 다음은 핵심 필드만 발췌한 예시이며, 실제 파일에는 수정 시각·해상도·검증 결과 등이 추가됩니다.
 

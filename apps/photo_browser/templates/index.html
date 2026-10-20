@@ -3,11 +3,11 @@
 <body{% if jobs_page %} class="jobs-page"{% endif %}><header><span class="brand">BerePi <b> / PHOTO BROWSER</b></span><h1>폴더 속의 순간들.</h1><p>사진과 동영상을 날짜별로 둘러보세요.</p></header>
 <main><nav class="tabs" aria-label="탐색 메뉴"><button data-tab="library-panel">라이브러리</button><button data-tab="sources-panel">소스·스캔·병합</button><button data-tab="trash-panel">휴지통</button><button data-tab="duplicates-panel">중복 파일</button><button data-tab="folder-panel">기존 폴더 탐색</button></nav>
 <details class="path-settings" open><summary>현재 경로 설정</summary><dl>
-<dt>허용된 루트 디렉토리</dt><dd>{{ boundary }}</dd>
-<dt>시작 디렉토리</dt><dd>{{ initial }}</dd>
-<dt>JSON DB 디렉토리</dt><dd>{{ db_path }}</dd>
-<dt>관리 디렉토리</dt><dd id="current-managed-path">불러오는 중…</dd>
-<dt>소스 경로</dt><dd id="current-source-paths">불러오는 중…</dd>
+<dt>허용된 루트 디렉토리 (--root)</dt><dd>{{ boundary }}<br><small>로컬 소스와 출력 디렉토리가 위치할 수 있는 접근 범위입니다.</small></dd>
+<dt>탐색 시작 디렉토리 (--directory)</dt><dd>{{ initial }}<br><small>처음 표시할 폴더입니다. 병합 입력 소스는 아래 소스 설정에서 별도로 등록합니다.</small></dd>
+<dt>JSON DB 디렉토리 (--db)</dt><dd>{{ db_path }}<br><small>설정·인덱스·메타데이터·작업 기록을 저장합니다. 사진 복사본의 출력 위치는 관리 디렉토리입니다.</small></dd>
+<dt>출력 디렉토리 (관리 디렉토리)</dt><dd><span id="current-managed-path">불러오는 중…</span><br><small>병합한 사진·동영상 복사본은 이 경로 아래 카테고리/소유자/연도/월/원본파일명으로 생성됩니다. 촬영 날짜가 없으면 연도와 월은 unknown입니다. 소스·스캔·병합 → 관리 디렉토리에서 지정합니다.</small></dd>
+<dt>소스 사진 디렉토리 (입력)</dt><dd><span id="current-source-paths">불러오는 중…</span><br><small>스캔 후 병합할 원본 폴더 또는 원격 URL입니다. 소스·스캔·병합 → 소스 등록에서 여러 개를 추가할 수 있습니다. 같은 DB와 관리 디렉토리를 사용하면 병합 결과가 누적되며 원본은 유지됩니다.</small></dd>
 <dt>기존 폴더 탐색 스캔 한도</dt><dd>{{ scan_limit }}개</dd>
 </dl></details>
 <p id="notice" role="status" aria-live="polite"></p><button id="undo-trash" hidden>방금 삭제 실행 취소</button>
