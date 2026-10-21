@@ -17,6 +17,9 @@ from library import Library, atomic_json, component, now, read_json, uid
 
 def register_library(app, boundary, db):
     library = Library(db, boundary)
+    from downloads import DownloadStore, download_name
+    downloads = DownloadStore(library)
+    app.extensions['photo_downloads'] = downloads
     app.extensions['photo_library'] = library
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='photo-library')
     jobs, guard = {}, threading.Lock()
@@ -107,7 +110,7 @@ def register_library(app, boundary, db):
                 jobs[job_id]['started_at'] = now()
                 atomic_json(library.db / 'jobs' / (job_id + '.json'), jobs[job_id])
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview'} else function()
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download'} else function()
                 update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
@@ -412,4 +415,20 @@ def register_library(app, boundary, db):
                     temporary.unlink(missing_ok=True)
         if not path.is_file():
             abort(404, description='파일이 없습니다.')
-        return send_file(path, conditional=True)
+        return send_file(path, conditional=True, as_attachment=request.args.get('download') == '1', download_name=download_name(item['name']))
+
+    @app.post('/api/downloads')
+    def prepare_download():
+        values = ids(body())
+        downloads.selected_items(values)
+        return launch(lambda progress, stopped: downloads.prepare(values, progress), 'download')
+
+    @app.get('/api/downloads/<token>')
+    def download_archive(token):
+        value = downloads.get(token)
+        if not value:
+            abort(404, description='다운로드가 없거나 만료되었습니다. 파일을 다시 선택하세요.')
+        path, metadata = value
+        response = send_file(path, conditional=True, as_attachment=True, download_name=metadata['filename'])
+        response.headers['Cache-Control'] = 'no-store'
+        return response

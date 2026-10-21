@@ -34,6 +34,7 @@
     }
   }
   function detail(item) {
+    el('detail-download').href = `api/library/${encodeURIComponent(item.media_id)}/file?download=1`;
     const container = el('detail-preview'); container.replaceChildren();
     const media = make(item.media_type === 'video' ? 'video' : 'img');
     media.src = `api/library/${encodeURIComponent(item.media_id)}/file`;
@@ -69,6 +70,35 @@
   el('library-next').onclick = safe(async () => { offset += 100; await load(); });
   el('select-page').onchange = event => { el('library-gallery').querySelectorAll('input[type=checkbox]').forEach(check => { check.checked = event.target.checked; if (check.checked) chosen.add(check.dataset.id); else chosen.delete(check.dataset.id); }); selection(); };
   function selected() { if (!chosen.size) throw new Error('파일을 선택하세요.'); return [...chosen]; }
+  function saveDownload(url) {
+    const link = make('a'); link.href = url; link.download = ''; link.target = '_blank'; link.rel = 'noopener';
+    document.body.append(link); link.click(); link.remove();
+  }
+  el('download-selected').onclick = safe(async () => {
+    const values = selected();
+    if (values.length === 1) {
+      saveDownload(`api/library/${encodeURIComponent(values[0])}/file?download=1`);
+      notify('선택한 파일의 다운로드를 요청했습니다. 브라우저 다운로드 목록을 확인하세요.');
+      return;
+    }
+    const button = el('download-selected'); button.disabled = true;
+    try {
+      notify(`${values.length}개 파일을 ZIP으로 준비합니다…`);
+      const started = await api('api/downloads', 'POST', {ids: values});
+      let status;
+      do {
+        status = await api('api/jobs/' + started.job_id);
+        if (status.status === 'failed') throw new Error(status.error || 'ZIP 준비에 실패했습니다.');
+        if (activeStates.includes(status.status)) {
+          notify(status.status === 'queued' ? 'ZIP 준비 대기 중입니다. 실행 중인 작업이 끝나면 시작합니다.' : `ZIP 준비 중 · ${status.progress?.processed ?? 0}/${values.length}개`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } while (activeStates.includes(status.status));
+      if (!status.result?.download_id) throw new Error('다운로드 결과가 없습니다. 작업 내역을 확인하세요.');
+      saveDownload(`api/downloads/${encodeURIComponent(status.result.download_id)}`);
+      notify(`${status.result.file_count}개 파일의 ZIP 다운로드를 요청했습니다. 링크는 1시간 동안 작업 내역에서 다시 사용할 수 있습니다.`);
+    } finally { button.disabled = false; }
+  });
   const fields = {events: '이벤트 이름', tags: '태그', person_ids: '사람 ID', category_id: '카테고리', owner_id: '소유자 ID'};
   for (const [key, label] of Object.entries(fields)) {
     const row = make('label', '', 'edit-row'), check = make('input'), input = make('input'); check.type = 'checkbox'; check.id = 'apply-' + key; input.id = 'edit-' + key;
@@ -118,6 +148,7 @@
     if (status.kind === 'source_cleanup') {
       return [`관리 복사본 삭제 ${count(result.deleted_managed_files)}개 · 공유 복사본 보존 ${count(result.retained_shared_files)}개`, result.warning];
     }
+    if (status.kind === 'download') return [`ZIP 준비 완료: ${count(result.file_count)}개 파일`, '다운로드 링크는 준비 완료 후 1시간 동안 사용할 수 있습니다.'];
     if (status.kind === 'source_update') {
       return [`소스 ${result.source_id}: 대상 ${count(result.matched)}개 · 분류 변경 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
         `적용 카테고리: ${result.category_id} · 소유자: ${result.owner_id}`, result.warning];
@@ -179,13 +210,18 @@
     updateJobClock(card);
     card.reports.replaceChildren();
     if (status.result?.history_report) reportLinks(card.reports, status.result.history_report.report_id);
+    if (status.kind === 'download' && status.result?.download_id) {
+      if (status.result.expires_at <= Date.now() / 1000) card.reports.textContent = '다운로드 링크가 만료되었습니다. 파일을 다시 선택하세요.';
+      else { const link = make('a', '선택 파일 ZIP 다운로드'); link.href = `api/downloads/${encodeURIComponent(status.result.download_id)}`; link.download = ''; link.target = '_blank'; link.rel = 'noopener'; card.reports.append(link); }
+    }
     const summary = jobSummary(status);
     card.changes.hidden = !summary.length;
     card.changesList.replaceChildren(...summary.map(line => make('li', line)));
-    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
-    card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
-    card.bar.hidden = !['scan', 'merge', 'merge_preview'].includes(status.kind);
-    if (p?.inventory_complete || (['merge', 'merge_preview'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
+    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : status.kind === 'download' ? '선택 파일 ZIP 다운로드' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'download' ? `ZIP 준비: ${p?.processed ?? p?.file_count ?? 0}/${p?.total ?? p?.file_count ?? 0}개` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
+    card.bar.hidden = !['scan', 'merge', 'merge_preview', 'download'].includes(status.kind);
+    if (status.kind === 'download' && status.result?.download_id) card.bar.value = 100;
+    else if (p?.inventory_complete || (['merge', 'merge_preview', 'download'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
     card.file.textContent = p?.current_file ? `현재 파일: ${p.current_file}` : '';
     const disk = p?.disk;
     const spaceText = p?.disk_space ? `신규 복사 ${(p.disk_space.copy_bytes / 1073741824).toFixed(2)} GiB · DB 예상 증가 ${(p.disk_space.db_estimated_bytes / 1073741824).toFixed(2)} GiB\n` + p.disk_space.volumes.map(v => `${v.path}: 여유 ${(v.free_bytes / 1073741824).toFixed(2)} GiB / 필요 ${(v.required_bytes / 1073741824).toFixed(2)} GiB (여유 기준 포함)`).join('\n') : '';
