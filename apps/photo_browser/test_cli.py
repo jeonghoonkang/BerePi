@@ -54,7 +54,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(report['operations'][0]['status'], 'copied')
         self.assertEqual(target.read_bytes(), (self.source / 'photo.jpg').read_bytes())
         target.write_bytes(b'conflict')
-        self.assertEqual(self.call('merge')[0], 1)
+        code, renamed = self.call('merge')
+        self.assertEqual(code, 0)
+        self.assertEqual(renamed['operations'][0]['status'], 'copied')
+        self.assertEqual(Path(renamed['operations'][0]['destination']).name, 'photo_중복.jpg')
         self.assertEqual(target.read_bytes(), b'conflict')
 
     def test_missing_db_does_not_create_config(self):

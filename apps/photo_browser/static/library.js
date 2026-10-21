@@ -111,6 +111,7 @@
       operations.forEach(operation => { counts[operation.status] = (counts[operation.status] || 0) + 1; });
       return [
         result.preview ? `미리보기: 복사 예정 ${count(counts.planned)}개 · 실제 복사하지 않음` : `병합 결과: 새 복사 ${count(counts.copied)}개 · 기존 파일 재사용 ${count(counts.reused)}개 · 건너뜀 ${count(counts.skipped)}개 · 오류 ${count(counts.error)}개`,
+        `파일명 충돌로 이름을 구분한 항목: ${count(result.renamed_count)}개 (_중복, _중복_2 등)`,
         result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
       ];
     }

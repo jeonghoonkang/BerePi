@@ -624,10 +624,59 @@ class Library:
             raise ValueError('관리 경로 밖입니다.')
         return target
 
+    def resolve_merge_target(self, root, item, reserved, hashes):
+        """Choose the same non-destructive path for preview, capacity check and copy."""
+        original = self.merge_target(root, item)
+        number = 0
+        while True:
+            suffix = '' if number == 0 else ('_중복' if number == 1 else f'_중복_{number}')
+            candidate = original.with_name(original.stem + suffix + original.suffix)
+            if not candidate.parent.resolve().is_relative_to(root):
+                raise ValueError('관리 경로 밖입니다.')
+            key = os.path.normcase(str(candidate.absolute()))
+            # Never reuse or replace a symlink, directory or other non-regular entry.
+            if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
+                number += 1
+                continue
+            if candidate.exists():
+                stat = candidate.stat()
+                signature = (key, stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+                if signature not in hashes:
+                    hashes[signature] = digest(candidate)
+                if hashes[signature] != item['sha256']:
+                    number += 1
+                    continue
+            if key in reserved and reserved[key] != item['sha256']:
+                number += 1
+                continue
+            reserved[key] = item['sha256']
+            return candidate
+
+    @staticmethod
+    def publish_merge_copy(temporary, target):
+        """Publish verified bytes without ever replacing an existing filename."""
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            raise
+        except OSError:
+            # FAT/exFAT and some remote filesystems do not support hard links.
+            # Exclusive creation still prevents a late-arriving file being overwritten.
+            with target.open('xb') as output:
+                try:
+                    with temporary.open('rb') as source:
+                        shutil.copyfileobj(source, output)
+                except BaseException:
+                    output.close()
+                    target.unlink(missing_ok=True)
+                    raise
+            shutil.copystat(temporary, target)
+
     def merge_space(self, root, items, pending, progress):
         targets = {}
+        reserved, hashes = {}, {}
         for index, item in enumerate(pending):
-            target = self.merge_target(root, item)
+            target = self.resolve_merge_target(root, item, reserved, hashes)
             if not target.exists():
                 key = str(target.resolve())
                 targets[key] = max(targets.get(key, 0), item['size_bytes'])
@@ -702,6 +751,7 @@ class Library:
                 progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
             checkpoint()
             interrupted = False
+            reserved, hashes = {}, {}
             for item in items:
                 if item['media_id'] not in wanted or item['media_id'] in completed:
                     continue
@@ -718,16 +768,21 @@ class Library:
                 op['date_key'] = date
                 op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
                 operations.append(op)
-                if preview:
-                    state['current_file'] = str(target)
-                    if len(operations) % 100 == 0:
-                        checkpoint()
-                    continue
                 try:
+                    original = target
+                    target = self.resolve_merge_target(root, item, reserved, hashes)
+                    def record_target():
+                        op.update(destination=str(target), original_destination=str(original), renamed=target != original)
+                        if target != original:
+                            op['rename_reason'] = 'name_collision'
+                    record_target()
+                    if preview:
+                        state['current_file'] = str(target)
+                        if len(operations) % 100 == 0:
+                            checkpoint()
+                        continue
                     target.parent.mkdir(parents=True, exist_ok=True)
                     if target.exists():
-                        if digest(target) != item['sha256']:
-                            raise ValueError('대상 파일 내용 불일치: 덮어쓰지 않습니다.')
                         op['status'] = 'reused'
                     else:
                         temporary = target.with_name('.' + uid() + '.part')
@@ -736,10 +791,21 @@ class Library:
                                 shutil.copy2(source, temporary)
                             if digest(temporary) != item['sha256']:
                                 raise ValueError('복사 검증 실패: 원본이 변경되었을 수 있습니다.')
-                            os.replace(temporary, target)
+                            while True:
+                                try:
+                                    self.publish_merge_copy(temporary, target)
+                                    op['status'] = 'copied'
+                                    break
+                                except FileExistsError:
+                                    # A file appeared after planning; compare it and choose again.
+                                    hashes.clear()
+                                    target = self.resolve_merge_target(root, item, reserved, hashes)
+                                    record_target()
+                                    if target.exists():
+                                        op['status'] = 'reused'
+                                        break
                         finally:
                             temporary.unlink(missing_ok=True)
-                        op['status'] = 'copied'
                     item['locations'] = [l for l in item['locations'] if not (l['role'] == 'managed' and l.get('path') == str(target))]
                     item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now()})
                 except Exception as exc:
@@ -769,8 +835,9 @@ class Library:
                     conflicts.add(destination)
                 destinations[destination] = sha
             report['destination_conflicts'] = sorted(conflicts)
+            report['renamed_count'] = sum(bool(op.get('renamed')) for op in operations)
             report['warning'] = ('같은 출력 경로에 서로 다른 내용의 파일이 예정되어 있습니다. 분류나 파일명을 조정하세요.'
-                                 if conflicts else '현재 DB 분류와 저장된 설정으로 경로를 계산했습니다. 실제 파일 내용·접근 권한·여유 공간 검증은 별도로 확인하세요.')
+                                 if conflicts else '동일 이름·동일 내용은 재사용하며, 내용이 다르면 _중복, _중복_2 등의 이름으로 보존합니다. 미리보기 이후 파일이 바뀌면 실행 경로도 달라질 수 있습니다.')
             atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
             return report
 

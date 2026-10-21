@@ -90,7 +90,7 @@ class LibraryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.library.restore(trash['trash_id'])
 
-    def test_merge_preserves_original_names_and_rejects_collision(self):
+    def test_merge_preserves_all_different_contents_with_duplicate_suffix(self):
         original = self.photo('가족 사진.JPG')
         (self.source / 'nested').mkdir()
         other = self.source / 'nested' / original.name
@@ -99,11 +99,19 @@ class LibraryTests(unittest.TestCase):
         Image.new('RGB', (8, 8), 'blue').save(other, exif=exif)
         self.library.scan('local')
         preview = self.library.merge(preview=True)
-        self.assertTrue(all(Path(op['destination']).name == original.name for op in preview['operations']))
+        self.assertEqual({Path(op['destination']).name for op in preview['operations']}, {'가족 사진.JPG', '가족 사진_중복.JPG'})
+        self.assertEqual(preview['destination_conflicts'], [])
+        self.assertEqual(preview['renamed_count'], 1)
         result = self.library.merge()
-        self.assertEqual(sorted(op['status'] for op in result['operations']), ['copied', 'error'])
-        target = Path(result['operations'][0]['destination'])
-        self.assertIn(target.read_bytes(), (original.read_bytes(), other.read_bytes()))
+        self.assertEqual([op['status'] for op in result['operations']], ['copied', 'copied'])
+        self.assertEqual([op['destination'] for op in result['operations']], [op['destination'] for op in preview['operations']])
+        self.assertEqual({Path(op['destination']).read_bytes() for op in result['operations']}, {original.read_bytes(), other.read_bytes()})
+        self.assertEqual([op['status'] for op in self.library.merge()['operations']], ['reused', 'reused'])
+        self.assertEqual(len(list(Path(self.config['managed_root']).rglob('*.JPG'))), 2)
+        for item in self.library.items():
+            managed = next(loc for loc in item['locations'] if loc['role'] == 'managed')
+            source = Path(item['locations'][0]['path'])
+            self.assertEqual(Path(managed['path']).read_bytes(), source.read_bytes())
 
     def test_item_lookup_reads_only_target_chunk_and_refreshes(self):
         self.photo()
@@ -442,10 +450,109 @@ class LibraryTests(unittest.TestCase):
             self.assertEqual(space['volumes'][0]['required_bytes'], space['copy_bytes'] + space['db_estimated_bytes'] + space['volumes'][0]['reserve_bytes'])
             target = self.library.merge_target(root, item)
             target.parent.mkdir(parents=True)
-            target.write_bytes(b'existing')
+            target.write_bytes((self.source / 'photo.jpg').read_bytes())
             space = self.library.merge_space(root, [item], [item], lambda p: None)
             self.assertEqual(space['copy_bytes'], 0)
             self.assertEqual(space['copy_files'], 0)
+            target.write_bytes(b'different existing contents')
+            space = self.library.merge_space(root, [item], [item], lambda p: None)
+            self.assertEqual(space['copy_bytes'], item['size_bytes'])
+            self.assertEqual(space['copy_files'], 1)
+
+    def test_merge_skips_occupied_duplicate_names_and_reuses_matching_suffix(self):
+        self.photo('사진1.jpg')
+        self.library.scan('local')
+        item = self.library.items()[0]
+        target = self.library.merge_target(Path(self.config['managed_root']), item)
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b'original occupied')
+        target.with_name('사진1_중복.jpg').write_bytes(b'first suffix occupied')
+        target.with_name('사진1_중복_2.jpg').mkdir()
+        report = self.library.merge()
+        destination = Path(report['operations'][0]['destination'])
+        self.assertEqual(destination.name, '사진1_중복_3.jpg')
+        self.assertEqual(report['operations'][0]['rename_reason'], 'name_collision')
+        self.assertEqual(target.read_bytes(), b'original occupied')
+        self.assertEqual(target.with_name('사진1_중복.jpg').read_bytes(), b'first suffix occupied')
+        self.assertEqual(self.library.merge()['operations'][0]['status'], 'reused')
+        self.assertEqual(destination.read_bytes(), (self.source / '사진1.jpg').read_bytes())
+
+    def test_merge_late_filename_collision_never_overwrites(self):
+        self.photo()
+        self.library.scan('local')
+        original_publish = self.library.publish_merge_copy
+        calls = []
+        def collision(temporary, target):
+            if not calls:
+                calls.append(target)
+                target.write_bytes(b'late external file')
+                raise FileExistsError(str(target))
+            original_publish(temporary, target)
+        with patch.object(self.library, 'publish_merge_copy', side_effect=collision):
+            report = self.library.merge()
+        self.assertEqual(report['operations'][0]['status'], 'copied')
+        self.assertEqual(Path(report['operations'][0]['destination']).name, 'photo_중복.jpg')
+        self.assertEqual(calls[0].read_bytes(), b'late external file')
+        self.assertEqual(Path(report['operations'][0]['destination']).read_bytes(), (self.source / 'photo.jpg').read_bytes())
+
+    def test_merge_identical_same_names_share_a_single_copy(self):
+        source = self.photo()
+        (self.source / 'nested').mkdir()
+        (self.source / 'nested/photo.jpg').write_bytes(source.read_bytes())
+        self.library.scan('local')
+        preview = self.library.merge(preview=True)
+        self.assertEqual(len({op['destination'] for op in preview['operations']}), 1)
+        result = self.library.merge()
+        self.assertEqual([op['status'] for op in result['operations']], ['copied', 'reused'])
+        self.assertEqual(result['renamed_count'], 0)
+
+    def test_merge_late_identical_file_is_reused(self):
+        source = self.photo()
+        self.library.scan('local')
+        def appeared(temporary, target):
+            target.write_bytes(source.read_bytes())
+            raise FileExistsError(str(target))
+        with patch.object(self.library, 'publish_merge_copy', side_effect=appeared):
+            report = self.library.merge()
+        self.assertEqual(report['operations'][0]['status'], 'reused')
+        self.assertEqual(report['renamed_count'], 0)
+
+    def test_exclusive_publication_fallback_does_not_replace_late_file(self):
+        temporary = self.root / 'verified.part'
+        target = self.root / 'occupied.jpg'
+        temporary.write_bytes(b'verified bytes')
+        target.write_bytes(b'existing bytes')
+        with patch('library.os.link', side_effect=OSError('unsupported')):
+            with self.assertRaises(FileExistsError):
+                self.library.publish_merge_copy(temporary, target)
+        self.assertEqual(target.read_bytes(), b'existing bytes')
+
+    def test_merge_exclusive_copy_on_filesystem_without_hardlinks(self):
+        self.photo()
+        self.library.scan('local')
+        with patch('library.os.link', side_effect=OSError('hardlinks unsupported')):
+            report = self.library.merge()
+        self.assertEqual(report['operations'][0]['status'], 'copied')
+        self.assertEqual(Path(report['operations'][0]['destination']).read_bytes(), (self.source / 'photo.jpg').read_bytes())
+
+    def test_merge_stop_resume_preserves_collision_renames(self):
+        self.photo('photo.jpg')
+        for name, color in [('one', 'blue'), ('two', 'green')]:
+            folder = self.source / name
+            folder.mkdir()
+            with Image.open(self.source / 'photo.jpg') as image:
+                exif = image.getexif()
+            Image.new('RGB', (8, 8), color).save(folder / 'photo.jpg', exif=exif)
+        self.library.scan('local')
+        stop = [False]
+        def progress(state):
+            if state.get('processed', 0) >= 1:
+                stop[0] = True
+        report = self.library.merge(progress=progress, stopped=lambda: stop[0])
+        self.assertEqual(report['status'], 'stopped')
+        report = self.library.merge(resume=report['merge_id'])
+        self.assertEqual([op['status'] for op in report['operations']], ['copied'] * 3)
+        self.assertEqual({Path(op['destination']).name for op in report['operations']}, {'photo.jpg', 'photo_중복.jpg', 'photo_중복_2.jpg'})
 
     def test_merge_stop_and_resume_after_restart(self):
         for index in range(4):
