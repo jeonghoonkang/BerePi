@@ -423,6 +423,11 @@ def register_library(app, boundary, db):
         downloads.selected_items(values)
         return launch(lambda progress, stopped: downloads.prepare(values, progress), 'download')
 
+    @app.post('/api/folder-downloads')
+    def prepare_folder_download():
+        items = downloads.folder_items(body().get('paths'))
+        return launch(lambda progress, stopped: downloads.prepare_folder(items, progress), 'download')
+
     @app.get('/api/downloads/<token>')
     def download_archive(token):
         value = downloads.get(token)

@@ -149,7 +149,9 @@ def create_app(root=None, start=None, db=None, limit=20000):
         if not path.is_file() or path.suffix.lower() not in EXTENSIONS:
             abort(404, description='지원하는 미디어 파일이 아닙니다.')
         try:
-            return send_file(path, conditional=True)
+            from downloads import download_name
+            return send_file(path, conditional=True, as_attachment=request.args.get('download') == '1',
+                             download_name=download_name(path.name))
         except PermissionError:
             abort(403, description='파일을 읽을 권한이 없습니다.')
 

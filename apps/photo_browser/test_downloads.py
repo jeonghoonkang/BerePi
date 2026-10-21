@@ -45,6 +45,60 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(response.data, Path(item['locations'][0]['path']).read_bytes())
         response.close()
 
+    def test_folder_download_without_library_registration(self):
+        folder = self.root / 'unregistered'
+        (folder / 'nested').mkdir(parents=True)
+        paths = [folder / '사진.jpg', folder / 'nested' / '사진.jpg', folder / 'clip.mp4']
+        for index, path in enumerate(paths):
+            path.write_bytes(bytes([index]) * 17)
+        response = self.client.get('/media', query_string={'path': str(paths[0]), 'download': '1'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('attachment', response.headers['Content-Disposition'])
+        self.assertEqual(response.data, paths[0].read_bytes())
+        response.close()
+        started = self.client.post('/api/folder-downloads', json={'paths': list(map(str, paths))}, headers=self.headers)
+        self.assertEqual(started.status_code, 202)
+        for _ in range(300):
+            status = self.client.get('/api/jobs/' + started.json['job_id']).json
+            if status['status'] not in {'queued', 'running'}:
+                break
+            time.sleep(0.01)
+        self.assertEqual(status['status'], 'completed', status)
+        response = self.client.get('/api/downloads/' + status['result']['download_id'])
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            self.assertEqual(archive.namelist(), ['사진.jpg', '사진_중복.jpg', 'clip.mp4'])
+            self.assertEqual([archive.read(name) for name in archive.namelist()], [p.read_bytes() for p in paths])
+        response.close()
+        self.assertEqual(len(self.library.items()), 2)
+
+    def test_folder_invalid_requests_and_boundary(self):
+        valid = [str(self.source / '가족.jpg')]
+        for paths in [None, [], valid * 101, [1], [''], [str(self.root)], [str(self.root / 'x.txt')], [str(self.root.parent / 'outside.jpg')]]:
+            self.assertEqual(self.client.post('/api/folder-downloads', json={'paths': paths}, headers=self.headers).status_code, 400)
+        self.assertEqual(self.client.post('/api/folder-downloads', json={'paths': valid}).status_code, 403)
+        with patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'}):
+            self.assertEqual(self.client.post('/api/folder-downloads', json={'paths': valid}, headers=self.headers).status_code, 401)
+            self.assertEqual(self.client.get('/media', query_string={'path': valid[0], 'download': '1'}).status_code, 401)
+
+    def test_folder_changed_missing_or_low_disk_cleans_zip(self):
+        path = self.source / '가족.jpg'
+        items = self.store.folder_items([str(path)])
+        path.write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError, '변경'):
+            self.store.prepare_folder(items)
+        self.assertEqual(list(self.store.directory.glob('*')), [])
+        items = self.store.folder_items([str(path)])
+        path.unlink()
+        with self.assertRaises(OSError):
+            self.store.prepare_folder(items)
+        self.assertEqual(list(self.store.directory.glob('*')), [])
+        path.write_bytes(b'restored')
+        items = self.store.folder_items([str(path)])
+        with patch('downloads.shutil.disk_usage', return_value=SimpleNamespace(free=0)):
+            with self.assertRaisesRegex(ValueError, '공간'):
+                self.store.prepare_folder(items)
+        self.assertEqual(list(self.store.directory.glob('*')), [])
+
     def test_zip_keeps_all_bytes_and_disambiguates_duplicate_names(self):
         progress = []
         metadata = self.store.prepare(self.ids, progress.append)

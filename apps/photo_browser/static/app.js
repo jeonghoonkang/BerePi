@@ -1,12 +1,25 @@
 const $ = id => document.getElementById(id);
 let data = null, filtered = [], shown = 0, selected = 0, controller, loading = false;
 const mediaURL = path => 'media?path=' + encodeURIComponent(path);
+const folderChosen = new Set();
+function folderSelection() {
+  $('folder-selection-count').textContent = `${folderChosen.size} / 100개 선택`;
+  const checks = [...$('gallery').querySelectorAll('input[type=checkbox]')];
+  $('folder-select-visible').checked = checks.length > 0 && checks.every(check => check.checked);
+  $('folder-select-visible').indeterminate = checks.some(check => check.checked) && !checks.every(check => check.checked);
+}
+function clearFolderSelection() { folderChosen.clear(); folderSelection(); }
+function folderSaveDownload(url) {
+  const link = document.createElement('a'); link.href = url; link.download = ''; link.target = '_blank'; link.rel = 'noopener';
+  document.body.append(link); link.click(); link.remove();
+}
 function button(text, action) { const el = document.createElement('button'); el.textContent = text; el.onclick = action; return el; }
 function prepareScan(path) {
   if (controller) controller.abort();
   $('path').value = path;
   data = null; filtered = []; shown = 0;
   $('gallery').replaceChildren(); $('folders').replaceChildren();
+  clearFolderSelection();
   $('more').hidden = true; $('load-more').hidden = true; $('up').disabled = true;
   $('status').textContent = '경로와 하위 폴더 포함 여부를 선택한 후 스캔 시작을 누르세요.';
 }
@@ -16,6 +29,7 @@ async function browse(path, append = false) {
   const activeController = controller;
   const recursive = $('recursive').checked;
   loading = true; $('load-more').disabled = true;
+  clearFolderSelection();
   $('status').textContent = '전체 파일 수와 용량을 집계하고 있습니다…';
   $('directory-update-status').textContent = '폴더를 불러오는 중…';
   if (!append) { data = null; $('gallery').replaceChildren(); $('folders').replaceChildren(); $('more').hidden = true; $('load-more').hidden = true; }
@@ -52,6 +66,7 @@ function formatBytes(bytes) {
 }
 function render(target = 100) {
   if (!data) return;
+  clearFolderSelection();
   filtered = data.media.filter(item => (!$('date').value || item.date === $('date').value) && ($('type').value === 'all' || item.video === ($('type').value === 'video')));
   shown = 0; $('gallery').replaceChildren();
   const desired = typeof target === 'number' ? target : 100;
@@ -68,9 +83,18 @@ function appendPage() {
     const card = button('', () => openViewer(i)); card.className = 'card';
     if (item.video) { const placeholder = document.createElement('div'); placeholder.className = 'video-placeholder'; placeholder.textContent = '▶ 동영상'; card.append(placeholder); }
     else { const image = document.createElement('img'); image.src = mediaURL(item.path); image.alt = item.name; image.loading = 'lazy'; card.append(image); }
-    const caption = document.createElement('span'); caption.textContent = item.name; card.title = item.path; card.append(caption); $('gallery').append(card);
+    const caption = document.createElement('span'); caption.textContent = item.name; card.title = item.path; card.append(caption);
+    const wrapper = document.createElement('div'); wrapper.className = 'library-card';
+    const check = document.createElement('input'); check.type = 'checkbox'; check.dataset.path = item.path; check.setAttribute('aria-label', `${item.name} 선택`);
+    check.onchange = () => {
+      if (check.checked && folderChosen.size >= 100) { check.checked = false; $('folder-download-status').textContent = '한 번에 최대 100개까지 선택하세요.'; }
+      else if (check.checked) folderChosen.add(item.path); else folderChosen.delete(item.path);
+      folderSelection();
+    };
+    wrapper.append(check, card); $('gallery').append(wrapper);
   }
   shown = end; $('more').hidden = shown >= filtered.length;
+  folderSelection();
 }
 function openViewer(index) {
   selected = (index + filtered.length) % filtered.length;
@@ -78,6 +102,7 @@ function openViewer(index) {
   const element = document.createElement(item.video ? 'video' : 'img'); element.src = mediaURL(item.path);
   if (item.video) { element.controls = true; element.autoplay = true; } else element.alt = item.name;
   $('preview').append(element); $('title').textContent = item.name; $('original').href = mediaURL(item.path);
+  $('folder-viewer-download').href = mediaURL(item.path) + '&download=1';
   if (!$('viewer').open) $('viewer').showModal();
 }
 $('location').onsubmit = event => { event.preventDefault(); browse($('path').value); };
@@ -122,6 +147,43 @@ $('date').onchange = $('type').onchange = render;
 $('reset').onclick = () => { $('date').value = ''; $('type').value = 'all'; render(); };
 $('more').onclick = appendPage;
 $('load-more').onclick = () => { if (data?.truncated && !loading) browse(data.path, true); };
+$('folder-select-visible').onchange = event => {
+  const select = event.target.checked;
+  folderChosen.clear();
+  const checks = [...$('gallery').querySelectorAll('input[type=checkbox]')];
+  checks.forEach((check, index) => { check.checked = select && index < 100; if (check.checked) folderChosen.add(check.dataset.path); });
+  if (select && checks.length > 100) $('folder-download-status').textContent = '표시된 파일 중 앞의 100개를 선택했습니다.';
+  folderSelection();
+};
+$('folder-download-selected').onclick = async () => {
+  const paths = [...folderChosen];
+  const message = text => { $('folder-download-status').textContent = text; };
+  if (!paths.length) { message('다운로드할 파일을 선택하세요.'); return; }
+  if (paths.length === 1) { folderSaveDownload(mediaURL(paths[0]) + '&download=1'); message('파일 다운로드를 요청했습니다. 브라우저 다운로드 목록을 확인하세요.'); return; }
+  const button = $('folder-download-selected'); button.disabled = true;
+  async function requestJSON(url, options) {
+    const response = await fetch(url, options), result = await response.json();
+    if (!response.ok) throw new Error(result.error || '다운로드 준비에 실패했습니다.');
+    return result;
+  }
+  try {
+    message(`${paths.length}개 파일을 ZIP으로 준비합니다…`);
+    const started = await requestJSON('api/folder-downloads', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Photo-Browser': '1'}, body: JSON.stringify({paths})});
+    let status;
+    do {
+      status = await requestJSON('api/jobs/' + started.job_id);
+      if (status.status === 'failed') throw new Error(status.error || 'ZIP 준비에 실패했습니다.');
+      if (['queued', 'running', 'stopping'].includes(status.status)) {
+        message(status.status === 'queued' ? 'ZIP 준비 대기 중입니다.' : `ZIP 준비 중 · ${status.progress?.processed ?? 0}/${paths.length}개`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } while (['queued', 'running', 'stopping'].includes(status.status));
+    if (!status.result?.download_id) throw new Error('다운로드 결과가 없습니다. 작업 내역을 확인하세요.');
+    folderSaveDownload('api/downloads/' + encodeURIComponent(status.result.download_id));
+    message(`${status.result.file_count}개 파일의 ZIP 다운로드를 요청했습니다. 작업 내역에서 1시간 동안 다시 받을 수 있습니다.`);
+  } catch (error) { message(error.message); }
+  finally { button.disabled = false; }
+};
 $('close').onclick = () => $('viewer').close();
 $('viewer').addEventListener('close', () => $('preview').replaceChildren());
 $('previous').onclick = () => openViewer(selected - 1); $('next').onclick = () => openViewer(selected + 1);
