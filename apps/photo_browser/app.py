@@ -36,6 +36,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
     app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
     app.config['PHOTO_BROWSER_START'] = str(initial)
     app.config['PHOTO_BROWSER_LIMIT'] = limit
+    from uploads import InsufficientUploadSpace, register_uploads
+    register_uploads(app)
     from server_network import ServerNetwork
     server_network = ServerNetwork()
     app.extensions['server_network'] = server_network
@@ -55,6 +57,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
     @app.errorhandler(403)
     @app.errorhandler(404)
     @app.errorhandler(400)
+    @app.errorhandler(413)
+    @app.errorhandler(InsufficientUploadSpace)
     def error(exc):
         return jsonify(error=exc.description), exc.code
 
