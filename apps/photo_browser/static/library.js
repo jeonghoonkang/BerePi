@@ -22,7 +22,7 @@
     document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== id; });
     document.querySelectorAll('[data-tab]').forEach(button => { button.setAttribute('aria-pressed', button.dataset.tab === id); });
   }
-  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'library-panel') { await facets(); offset = null; await load(); } if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
+  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'library-panel') { await facets(); offset = null; await load(); } if (button.dataset.tab === 'sources-panel') await loadMergeReports(); if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
   function selection() { el('selection-count').textContent = `${chosen.size}개 선택`; }
   async function facets() {
     const values = await api('api/facets');
@@ -129,10 +129,29 @@
     return [];
   }
   function mergeProgress(progress) {
+    if (progress?.phase === 'report_inventory') return `보고서용 관리 디렉토리 집계 중 · ${(progress.report_files ?? 0).toLocaleString()}개 확인`;
     if (progress?.phase === 'checking_space') return `복사 용량·여유 공간 계산 중 · ${(progress.checked ?? 0).toLocaleString()}/${(progress.check_total ?? 0).toLocaleString()}개 확인`;
     if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
     return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%)`;
   }
+  function updateJobClock(card) {
+    const status = card.clockStatus;
+    card.timing.hidden = status?.kind !== 'merge';
+    if (card.timing.hidden) return;
+    if (status.status === 'queued') { card.timing.textContent = '대기 중 · 병합 시작 전'; return; }
+    const p = status.result || status.progress || {};
+    const started = Date.parse(p.merge_started_at || status.merge_started_at || status.started_at || status.created_at);
+    const end = activeStates.includes(status.status) ? card.serverClock + performance.now() - card.observedAt : Date.parse(status.finished_at || p.updated_at || status.created_at);
+    if (!Number.isFinite(started) || !Number.isFinite(end)) { card.timing.textContent = '시작 시각 정보 없음'; return; }
+    let seconds = Math.max(0, Math.floor((end - started) / 1000));
+    const days = Math.floor(seconds / 86400); seconds %= 86400;
+    const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
+    const duration = `${days ? days + '일 ' : ''}${String(hours).padStart(2, '0')}시간 ${String(minutes).padStart(2, '0')}분 ${String(seconds % 60).padStart(2, '0')}초`;
+    const date = new Intl.DateTimeFormat('ko-KR', {timeZone:'Asia/Seoul', dateStyle:'medium', timeStyle:'medium'}).format(new Date(started));
+    card.timing.textContent = `최초 병합 시작: ${date} (KST) · 경과 시간: ${duration}`;
+    card.timing.title = '최초 병합 시작부터 현재 또는 작업 종료까지의 시간입니다. 이어하기의 경우 중지·대기 시간도 포함합니다.';
+  }
+  setInterval(() => { for (const card of jobCards.values()) updateJobClock(card); }, 1000);
   function drawJob(status) {
     if (jobsPage && !visibleJobs.has(status.job_id)) return;
     let card = jobCards.get(status.job_id);
@@ -144,8 +163,10 @@
       bar.max = 100; bar.setAttribute('aria-label', '작업 처리 진행률');
       const stop = action('중지하고 저장', async () => { const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {}); drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.'); });
       const resume = action('병합 이어하기', () => job('api/merge', {preview: false, resume: card.mergeId}));
-      row.append(title, text, bar, file, warning, changes, stop, resume); el('scan-jobs').prepend(row);
-      card = {row, title, text, bar, file, warning, changes, changesList, stop, resume}; jobCards.set(status.job_id, card);
+      const reports = make('p');
+      const timing = make('p', '', 'job-timing');
+      row.append(title, timing, text, bar, file, warning, changes, reports, stop, resume); el('scan-jobs').prepend(row);
+      card = {row, title, timing, text, bar, file, warning, changes, changesList, reports, stop, resume}; jobCards.set(status.job_id, card);
     }
     card.createdAt = status.created_at;
     if (!jobsPage) {
@@ -154,6 +175,10 @@
       for (const [, entry] of ordered.slice(0, 3)) el('scan-jobs').append(entry.row);
     }
     const p = status.result || status.progress;
+    card.clockStatus = status; card.observedAt = performance.now(); card.serverClock = Date.parse(status.server_time) || Date.now();
+    updateJobClock(card);
+    card.reports.replaceChildren();
+    if (status.result?.history_report) reportLinks(card.reports, status.result.history_report.report_id);
     const summary = jobSummary(status);
     card.changes.hidden = !summary.length;
     card.changesList.replaceChildren(...summary.map(line => make('li', line)));
@@ -198,6 +223,7 @@
         notify(warning); alert(warning); return;
       }
       await loadConfig();
+      if (status.kind === 'merge') await loadMergeReports();
       if (!el('library-panel').hidden) { await facets(); await load(); }
       notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
     })();
@@ -205,6 +231,31 @@
     watching.finally(() => watchers.delete(id)).catch(() => {});
     return watching;
   }
+  let reportOffset = 0;
+  function reportLinks(container, id) {
+    for (const [format, label] of [['html', 'HTML 보고서 보기'], ['json', 'JSON 다운로드']]) {
+      const link = make('a', label);
+      link.href = `api/merge-reports/${encodeURIComponent(id)}/${format}${format === 'json' ? '?download=1' : ''}`;
+      link.target = '_blank'; link.rel = 'noopener'; link.style.marginRight = '16px'; container.append(link);
+    }
+  }
+  async function loadMergeReports(more = false) {
+    if (!more) { reportOffset = 0; el('merge-report-list').replaceChildren(); }
+    const result = await api(`api/merge-reports?offset=${reportOffset}&limit=20`);
+    for (const report of result.items) {
+      const row = make('article', '', 'source-row'), counts = report.summary;
+      row.append(make('p', `${new Date(report.started_at).toLocaleString('ko-KR')} · ${stateNames[report.status] || report.status} · ${report.duration_seconds ?? '진행 중'}초`));
+      row.append(make('p', `병합 ID: ${report.merge_id}${report.resumed ? ' · 이어하기' : ''}`));
+      row.append(make('p', `대상 ${counts.target_count} · 새 복사 ${counts.copied_count} · 동일 내용 재사용 ${counts.reused_count} · 이름 변경 복사 ${counts.renamed_copied_count} · 오류 ${counts.error_count}`));
+      if (report.after) row.append(make('p', `관리 파일 ${report.before.file_count} → ${report.after.file_count}개 · ${(report.before.total_bytes / 1048576).toFixed(2)} → ${(report.after.total_bytes / 1048576).toFixed(2)} MiB`));
+      reportLinks(row, report.report_id); el('merge-report-list').append(row);
+    }
+    reportOffset += result.items.length;
+    el('more-merge-reports').hidden = reportOffset >= result.total;
+    if (!result.total) el('merge-report-list').append(make('p', '아직 저장된 병합 실행 보고서가 없습니다.'));
+  }
+  el('refresh-merge-reports').onclick = safe(() => loadMergeReports());
+  el('more-merge-reports').onclick = safe(() => loadMergeReports(true));
   async function job(path, data) {
     const result = await api(path, 'POST', data);
     notify('작업을 시작했습니다. 소스·스캔 화면에서 진행률과 중지 버튼을 확인할 수 있습니다.');
@@ -429,5 +480,6 @@
     await loadConfig();
     if (!jobsPage && !sourcesOnly) { await facets(); await load(); }
     await loadJobs();
+    if (!jobsPage) await loadMergeReports();
   })();
 })();

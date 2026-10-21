@@ -30,6 +30,9 @@ def create_app(root=None, start=None, db=None, limit=20000):
 
     from library_api import register_library
     register_library(app, boundary, db or os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')))
+    from directory_history import DirectoryHistory
+    directory_history = DirectoryHistory(app.extensions['photo_library'].db)
+    app.extensions['directory_history'] = directory_history
     app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
     app.config['PHOTO_BROWSER_START'] = str(initial)
     app.config['PHOTO_BROWSER_LIMIT'] = limit
@@ -60,6 +63,31 @@ def create_app(root=None, start=None, db=None, limit=20000):
     def index():
         return render_template('index.html', initial=str(initial), boundary=str(boundary),
                                db_path=str(app.extensions['photo_library'].db), scan_limit=limit, jobs_page=request.path == '/jobs')
+
+    @app.get('/api/directory-history')
+    def get_directory_history():
+        entries, invalid = directory_history.entries()
+        visible = []
+        for entry in entries:
+            try:
+                if Path(entry['path']).resolve().is_relative_to(boundary):
+                    visible.append(entry)
+            except (OSError, RuntimeError):
+                continue
+        return jsonify(items=visible, limit=directory_history.limit, total=len(visible), invalid_lines=invalid)
+
+    @app.post('/api/directory-history')
+    def save_directory_history():
+        value = request.get_json(silent=True)
+        if not isinstance(value, dict) or not isinstance(value.get('path'), str) or not value['path'].strip():
+            abort(400, description='디렉토리 경로를 입력하세요.')
+        recursive = value.get('recursive', False)
+        if not isinstance(recursive, bool):
+            abort(400, description='recursive는 boolean이어야 합니다.')
+        path = checked(value['path'])
+        if not path.is_dir():
+            abort(400, description='디렉토리를 입력하세요.')
+        return jsonify(item=directory_history.add(path, recursive)), 201
 
     @app.get('/api/browse')
     def browse():

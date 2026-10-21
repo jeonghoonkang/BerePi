@@ -104,6 +104,8 @@ def register_library(app, boundary, db):
                         last_saved = time.monotonic()
             with guard:
                 jobs[job_id]['status'] = 'stopping' if stop.is_set() else 'running'
+                jobs[job_id]['started_at'] = now()
+                atomic_json(library.db / 'jobs' / (job_id + '.json'), jobs[job_id])
             try:
                 result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview'} else function()
                 update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview'} else 'completed', 'result': result}
@@ -159,13 +161,26 @@ def register_library(app, boundary, db):
             result = library.rename_source(data['old_id'], data['new_id'])
         return jsonify(result)
 
+    def job_with_clock(job):
+        value = {**job, 'server_time': now()}
+        if job.get('kind') == 'merge':
+            detail = job.get('result') or job.get('progress') or {}
+            if detail.get('merge_started_at'):
+                value['merge_started_at'] = detail['merge_started_at']
+            else:
+                merge_id = detail.get('merge_id')
+                stamps = [j.get('started_at') or j['created_at'] for j in jobs.values()
+                          if merge_id and ((j.get('result') or j.get('progress') or {}).get('merge_id') == merge_id)]
+                value['merge_started_at'] = min(stamps) if stamps else job.get('started_at') or job['created_at']
+        return value
+
     @app.get('/api/jobs/<job_id>')
     def job_status(job_id):
         with guard:
             job = jobs.get(job_id)
             if not job:
                 abort(404, description='작업이 없습니다.')
-            return jsonify(job)
+            return jsonify(job_with_clock(job))
 
     @app.get('/api/jobs')
     def job_list():
@@ -173,7 +188,7 @@ def register_library(app, boundary, db):
             ordered = sorted(jobs.values(), key=lambda j: j['created_at'], reverse=True)
             limit = min(100, max(1, int(request.args.get('limit', 30))))
             offset = max(0, int(request.args.get('offset', 0)))
-            return jsonify(items=ordered[offset:offset + limit], total=len(ordered), offset=offset, limit=limit)
+            return jsonify(items=[job_with_clock(j) for j in ordered[offset:offset + limit]], total=len(ordered), offset=offset, limit=limit)
 
     @app.post('/api/jobs/<job_id>/stop')
     def stop_scan(job_id):
@@ -184,7 +199,7 @@ def register_library(app, boundary, db):
             if job['status'] in {'queued', 'running', 'stopping'}:
                 controls[job_id].set()
                 job['status'] = 'stopping'
-            return jsonify(job)
+            return jsonify(job_with_clock(job))
 
     @app.get('/api/scans')
     def scan_states():
@@ -295,6 +310,27 @@ def register_library(app, boundary, db):
         if resume is not None:
             component(resume)
         return launch(lambda progress, stopped: library.merge(values or None, False, progress, stopped, resume), 'merge')
+
+    @app.get('/api/merge-reports')
+    def merge_reports():
+        from merge_history import list_reports
+        values = list_reports(library)
+        offset = max(0, int(request.args.get('offset', 0)))
+        limit = max(1, min(100, int(request.args.get('limit', 20))))
+        return jsonify(items=values[offset:offset + limit], total=len(values))
+
+    @app.get('/api/merge-reports/<report_id>/<format>')
+    def merge_report_file(report_id, format):
+        if format not in {'json', 'html'}:
+            abort(404, description='지원하지 않는 보고서 형식입니다.')
+        directory = library.db / 'reports' / 'merges'
+        path = directory / (component(report_id) + '.' + format)
+        if path.is_symlink() or not path.resolve().is_relative_to(directory.resolve()) or not path.is_file():
+            abort(404, description='보고서가 없습니다.')
+        response = send_file(path, as_attachment=request.args.get('download') == '1', download_name=path.name,
+                             mimetype='application/json' if format == 'json' else 'text/html')
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @app.post('/api/verify')
     def verify():

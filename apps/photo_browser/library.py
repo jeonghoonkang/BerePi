@@ -711,135 +711,170 @@ class Library:
 
     def merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None):
         with self.writing():
-            progress = progress or (lambda state: None)
-            progress({'phase': 'loading', 'inventory_complete': False, 'processed': 0})
-            items = self.items()
+            if preview:
+                return self._merge(ids, True, progress, stopped, resume)
+            from merge_history import MergeHistory, first_merge_start
             root = self.local(self.config()['managed_root'])
-            stopped = stopped or (lambda: False)
-            session_path = self.db / 'merges' / ((component(resume) if resume else uid()) + '.json')
-            if resume:
-                if preview or not session_path.exists():
-                    raise ValueError('이어갈 병합 작업이 없습니다.')
-                state = read_json(session_path)
-                if state['managed_root'] != str(root):
-                    raise ValueError('관리 경로가 변경되어 이어갈 수 없습니다.')
-            else:
-                state = {'merge_id': session_path.stem, 'managed_root': str(root),
-                         'ids': [i['media_id'] for i in items if i['lifecycle']['status'] == 'active' and (not ids or i['media_id'] in ids)],
-                         'operations': [], 'status': 'running'}
-            operations = state['operations']
-            completed = {op['media_id'] for op in operations}
-            wanted = set(state['ids'])
-            if not preview:
-                pending = [item for item in items if item['media_id'] in wanted
-                           and item['media_id'] not in completed and item['lifecycle']['status'] == 'active']
-                space = self.merge_space(root, items, pending, progress)
-                state['disk_space'] = space
-                if not space['ok']:
-                    details = ' / '.join(f"{v['path']}: 여유 {v['free_bytes'] / 1048576:.1f} MiB, 필요 {v['required_bytes'] / 1048576:.1f} MiB"
-                                         for v in space['volumes'] if v['free_bytes'] < v['required_bytes'])
-                    return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
-                            'total': len(wanted), 'processed': len(operations), 'percent': 0,
-                            'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
-            def checkpoint(status='running'):
-                state.update(status=status, processed=len(operations), total=len(wanted),
-                             percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
-                             inventory_complete=True, updated_at=now())
-                if not preview:
-                    self.commit(items)
-                    atomic_json(session_path, state)
-                progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
-            checkpoint()
-            interrupted = False
-            reserved, hashes = {}, {}
-            for item in items:
-                if item['media_id'] not in wanted or item['media_id'] in completed:
-                    continue
-                if not preview and stopped():
-                    interrupted = True
-                    break
-                if item['lifecycle']['status'] != 'active':
-                    operations.append({'media_id': item['media_id'], 'status': 'skipped'})
-                    continue
-                c, date = item['classification'], item['capture']['date_key']
-                target = self.merge_target(root, item)
-                op = {'media_id': item['media_id'], 'destination': str(target), 'status': 'planned'}
-                op['classification'] = {'category_id': c['category_id'], 'owner_id': c['owner_id']}
-                op['date_key'] = date
-                op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
-                operations.append(op)
+            run_started_at = now()
+            merge_started_at = first_merge_start(self, resume, run_started_at) if resume else run_started_at
+            original_progress = progress or (lambda state: None)
+            def timed_progress(state):
+                original_progress({**state, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at})
+            history = MergeHistory(self, root, resume, timed_progress)
+            history.merge_started_at = merge_started_at
+            try:
+                result = self._merge(ids, False, timed_progress, stopped, resume, history)
+            except BaseException as exc:
                 try:
-                    original = target
-                    target = self.resolve_merge_target(root, item, reserved, hashes)
-                    def record_target():
-                        op.update(destination=str(target), original_destination=str(original), renamed=target != original)
-                        if target != original:
-                            op['rename_reason'] = 'name_collision'
-                    record_target()
-                    if preview:
-                        state['current_file'] = str(target)
-                        if len(operations) % 100 == 0:
-                            checkpoint()
-                        continue
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    if target.exists():
-                        op['status'] = 'reused'
-                    else:
-                        temporary = target.with_name('.' + uid() + '.part')
-                        try:
-                            with self.materialize(item['locations'][0]) as source:
-                                shutil.copy2(source, temporary)
-                            if digest(temporary) != item['sha256']:
-                                raise ValueError('복사 검증 실패: 원본이 변경되었을 수 있습니다.')
-                            while True:
-                                try:
-                                    self.publish_merge_copy(temporary, target)
-                                    op['status'] = 'copied'
-                                    break
-                                except FileExistsError:
-                                    # A file appeared after planning; compare it and choose again.
-                                    hashes.clear()
-                                    target = self.resolve_merge_target(root, item, reserved, hashes)
-                                    record_target()
-                                    if target.exists():
-                                        op['status'] = 'reused'
-                                        break
-                        finally:
-                            temporary.unlink(missing_ok=True)
-                    item['locations'] = [l for l in item['locations'] if not (l['role'] == 'managed' and l.get('path') == str(target))]
-                    item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now()})
-                except Exception as exc:
-                    op.update(status='error', error=str(exc))
-                if len(operations) % 25 == 0:
-                    checkpoint()
-                else:
-                    progress({'merge_id': state['merge_id'], 'total': len(wanted), 'processed': len(operations), 'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target)})
-            checkpoint('stopped' if interrupted else 'completed')
-            report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
-                      'merge_id': state['merge_id'], 'status': state['status'],
-                      'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
-            if 'disk_space' in state:
-                report['disk_space'] = state['disk_space']
-            report['settings'] = {'boundary': str(self.boundary), 'db': str(self.db),
-                                  'managed_root': str(root), 'sources': self.config()['sources'],
-                                  'layout': 'managed_root/category_id/owner_id/year/month/name'}
-            destinations = {}
-            conflicts = set()
-            by_id = {item['media_id']: item for item in items}
-            for operation in operations:
-                destination = operation.get('destination')
-                if not destination:
+                    history.finish({'status': 'interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', 'warning': str(exc)})
+                except Exception:
+                    pass  # Preserve the original failure; the initial report may remain running.
+                raise
+            try:
+                result['history_report'] = history.finish(result)
+            except Exception as exc:
+                result['history_report_error'] = str(exc)
+                result['warning'] = (result.get('warning', '') + '\n병합 보고서 저장 실패: ' + str(exc)).strip()
+            result.update(merge_started_at=merge_started_at, run_started_at=run_started_at)
+            if result.get('plan_id'):
+                atomic_json(self.db / 'plans' / (result['plan_id'] + '.json'), result)
+            return result
+
+    def _merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None, history=None):
+        progress = progress or (lambda state: None)
+        progress({'phase': 'loading', 'inventory_complete': False, 'processed': 0})
+        items = self.items()
+        root = self.local(self.config()['managed_root'])
+        stopped = stopped or (lambda: False)
+        session_path = self.db / 'merges' / ((history.merge_id if history else component(resume) if resume else uid()) + '.json')
+        if resume:
+            if preview or not session_path.exists():
+                raise ValueError('이어갈 병합 작업이 없습니다.')
+            state = read_json(session_path)
+            if state['managed_root'] != str(root):
+                raise ValueError('관리 경로가 변경되어 이어갈 수 없습니다.')
+        else:
+            state = {'merge_id': session_path.stem, 'managed_root': str(root),
+                     'ids': [i['media_id'] for i in items if i['lifecycle']['status'] == 'active' and (not ids or i['media_id'] in ids)],
+                     'operations': [], 'status': 'running'}
+        operations = state['operations']
+        completed = {op['media_id'] for op in operations}
+        wanted = set(state['ids'])
+        if history:
+            state['merge_started_at'] = history.merge_started_at
+            state['run_started_at'] = history.data['started_at']
+            history.bind(state, items)
+            state.setdefault('history_report_ids', []).append(history.report_id)
+        if not preview:
+            pending = [item for item in items if item['media_id'] in wanted
+                       and item['media_id'] not in completed and item['lifecycle']['status'] == 'active']
+            space = self.merge_space(root, items, pending, progress)
+            state['disk_space'] = space
+            if not space['ok']:
+                details = ' / '.join(f"{v['path']}: 여유 {v['free_bytes'] / 1048576:.1f} MiB, 필요 {v['required_bytes'] / 1048576:.1f} MiB"
+                                     for v in space['volumes'] if v['free_bytes'] < v['required_bytes'])
+                return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
+                        'total': len(wanted), 'processed': len(operations), 'percent': 0,
+                        'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
+        def checkpoint(status='running'):
+            state.update(status=status, processed=len(operations), total=len(wanted),
+                         percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
+                         inventory_complete=True, updated_at=now())
+            if not preview:
+                self.commit(items)
+                atomic_json(session_path, state)
+            progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
+        checkpoint()
+        interrupted = False
+        reserved, hashes = {}, {}
+        for item in items:
+            if item['media_id'] not in wanted or item['media_id'] in completed:
+                continue
+            if not preview and stopped():
+                interrupted = True
+                break
+            if item['lifecycle']['status'] != 'active':
+                operations.append({'media_id': item['media_id'], 'status': 'skipped'})
+                continue
+            c, date = item['classification'], item['capture']['date_key']
+            target = self.merge_target(root, item)
+            op = {'media_id': item['media_id'], 'destination': str(target), 'status': 'planned'}
+            op['classification'] = {'category_id': c['category_id'], 'owner_id': c['owner_id']}
+            op['date_key'] = date
+            op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
+            operations.append(op)
+            try:
+                original = target
+                target = self.resolve_merge_target(root, item, reserved, hashes)
+                def record_target():
+                    op.update(destination=str(target), original_destination=str(original), renamed=target != original)
+                    if target != original:
+                        op['rename_reason'] = 'name_collision'
+                record_target()
+                if preview:
+                    state['current_file'] = str(target)
+                    if len(operations) % 100 == 0:
+                        checkpoint()
                     continue
-                sha = by_id[operation['media_id']]['sha256']
-                if destination in destinations and destinations[destination] != sha:
-                    conflicts.add(destination)
-                destinations[destination] = sha
-            report['destination_conflicts'] = sorted(conflicts)
-            report['renamed_count'] = sum(bool(op.get('renamed')) for op in operations)
-            report['warning'] = ('같은 출력 경로에 서로 다른 내용의 파일이 예정되어 있습니다. 분류나 파일명을 조정하세요.'
-                                 if conflicts else '동일 이름·동일 내용은 재사용하며, 내용이 다르면 _중복, _중복_2 등의 이름으로 보존합니다. 미리보기 이후 파일이 바뀌면 실행 경로도 달라질 수 있습니다.')
-            atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
-            return report
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if target.exists():
+                    op['status'] = 'reused'
+                else:
+                    temporary = target.with_name('.' + uid() + '.part')
+                    try:
+                        with self.materialize(item['locations'][0]) as source:
+                            shutil.copy2(source, temporary)
+                        if digest(temporary) != item['sha256']:
+                            raise ValueError('복사 검증 실패: 원본이 변경되었을 수 있습니다.')
+                        while True:
+                            try:
+                                self.publish_merge_copy(temporary, target)
+                                op['status'] = 'copied'
+                                break
+                            except FileExistsError:
+                                # A file appeared after planning; compare it and choose again.
+                                hashes.clear()
+                                target = self.resolve_merge_target(root, item, reserved, hashes)
+                                record_target()
+                                if target.exists():
+                                    op['status'] = 'reused'
+                                    break
+                    finally:
+                        temporary.unlink(missing_ok=True)
+                item['locations'] = [l for l in item['locations'] if not (l['role'] == 'managed' and l.get('path') == str(target))]
+                item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now()})
+            except Exception as exc:
+                op.update(status='error', error=str(exc))
+            if len(operations) % 25 == 0:
+                checkpoint()
+            else:
+                progress({'merge_id': state['merge_id'], 'total': len(wanted), 'processed': len(operations), 'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target)})
+        checkpoint('stopped' if interrupted else 'completed')
+        report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
+                  'merge_id': state['merge_id'], 'status': state['status'],
+                  'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
+        if 'disk_space' in state:
+            report['disk_space'] = state['disk_space']
+        report['settings'] = {'boundary': str(self.boundary), 'db': str(self.db),
+                              'managed_root': str(root), 'sources': self.config()['sources'],
+                              'layout': 'managed_root/category_id/owner_id/year/month/name'}
+        destinations = {}
+        conflicts = set()
+        by_id = {item['media_id']: item for item in items}
+        for operation in operations:
+            destination = operation.get('destination')
+            if not destination:
+                continue
+            sha = by_id[operation['media_id']]['sha256']
+            if destination in destinations and destinations[destination] != sha:
+                conflicts.add(destination)
+            destinations[destination] = sha
+        report['destination_conflicts'] = sorted(conflicts)
+        report['renamed_count'] = sum(bool(op.get('renamed')) for op in operations)
+        report['warning'] = ('같은 출력 경로에 서로 다른 내용의 파일이 예정되어 있습니다. 분류나 파일명을 조정하세요.'
+                             if conflicts else '동일 이름·동일 내용은 재사용하며, 내용이 다르면 _중복, _중복_2 등의 이름으로 보존합니다. 미리보기 이후 파일이 바뀌면 실행 경로도 달라질 수 있습니다.')
+        atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
+        return report
 
     def trash(self, ids):
         with self.writing():

@@ -14,21 +14,34 @@ async function browse(path, append = false) {
   if (controller) controller.abort();
   controller = new AbortController();
   const activeController = controller;
+  const recursive = $('recursive').checked;
   loading = true; $('load-more').disabled = true;
   $('status').textContent = '전체 파일 수와 용량을 집계하고 있습니다…';
+  $('directory-update-status').textContent = '폴더를 불러오는 중…';
   if (!append) { data = null; $('gallery').replaceChildren(); $('folders').replaceChildren(); $('more').hidden = true; $('load-more').hidden = true; }
   try {
-    const response = await fetch('api/browse?' + new URLSearchParams({path, recursive: $('recursive').checked ? '1' : '0', offset: append ? data.next_offset : 0}), {signal: controller.signal});
+    const response = await fetch('api/browse?' + new URLSearchParams({path, recursive: recursive ? '1' : '0', offset: append ? data.next_offset : 0}), {signal: controller.signal});
     const result = await response.json();
+    if (controller !== activeController) return;
     if (!response.ok) throw new Error(result.error || '폴더를 열지 못했습니다.');
     const previousShown = shown;
     data = append ? {...result, media: data.media.concat(result.media)} : result;
     data.media.sort((a, b) => b.modified - a.modified || a.path.localeCompare(b.path));
     $('path').value = data.path; $('up').disabled = !data.parent;
+    $('directory-path').value = data.path;
+    $('directory-update-status').textContent = `현재 표시 경로: ${data.path}`;
     $('folders').replaceChildren();
     for (const folder of data.directories) $('folders').append(button('📁 ' + folder.name, () => prepareScan(folder.path)));
     render(append ? previousShown + 100 : 100);
-  } catch (error) { if (error.name !== 'AbortError') { if (!append) { data = null; $('up').disabled = true; } $('status').textContent = error.message; } }
+    if (!append) {
+      try {
+        const saved = await fetch('api/directory-history', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Photo-Browser': '1'}, body: JSON.stringify({path: result.path, recursive})});
+        const history = await saved.json();
+        if (!saved.ok) throw new Error(history.error || '히스토리를 저장하지 못했습니다.');
+        await loadDirectoryHistory(history.item.id);
+      } catch (error) { $('directory-history-status').textContent = `사진 조회는 완료했지만 히스토리 저장·갱신에 실패했습니다: ${error.message}`; }
+    }
+  } catch (error) { if (error.name !== 'AbortError' && controller === activeController) { if (!append) { data = null; $('up').disabled = true; } $('status').textContent = error.message; $('directory-update-status').textContent = error.message; } }
   finally { if (controller === activeController) { loading = false; $('load-more').disabled = false; } }
 }
 function formatBytes(bytes) {
@@ -68,6 +81,40 @@ function openViewer(index) {
   if (!$('viewer').open) $('viewer').showModal();
 }
 $('location').onsubmit = event => { event.preventDefault(); browse($('path').value); };
+$('directory-update').onsubmit = event => {
+  event.preventDefault();
+  const path = $('directory-path').value.trim();
+  if (!path) { $('directory-update-status').textContent = '디렉토리 경로를 입력하세요.'; return; }
+  $('path').value = path;
+  $('date').value = ''; $('type').value = 'all';
+  document.querySelector('[data-tab="folder-panel"]').click();
+  browse(path);
+};
+let directoryHistory = [];
+async function loadDirectoryHistory(selectedId = '') {
+  try {
+    const response = await fetch('api/directory-history', {cache: 'no-store'});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '히스토리를 불러오지 못했습니다.');
+    directoryHistory = result.items;
+    $('directory-history').replaceChildren(new Option('이전 경로 선택', ''));
+    for (const item of directoryHistory) {
+      const date = new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium'}).format(new Date(item.recorded_at));
+      $('directory-history').add(new Option(`${date} · ${item.path}${item.recursive ? ' · 하위 폴더 포함' : ''}`, item.id));
+    }
+    $('directory-history').value = selectedId;
+    $('directory-history-status').textContent = `${result.total.toLocaleString()} / ${result.limit.toLocaleString()}개 저장 · 한국 표준시(KST)` + (result.invalid_lines ? ` · 읽지 못한 기록 ${result.invalid_lines}개` : '');
+  } catch (error) { $('directory-history-status').textContent = error.message; }
+}
+$('directory-history-apply').onclick = () => {
+  const item = directoryHistory.find(entry => entry.id === $('directory-history').value);
+  if (!item) { $('directory-history-status').textContent = '적용할 경로를 선택하세요.'; return; }
+  $('directory-path').value = item.path;
+  $('recursive').checked = item.recursive;
+  $('directory-update').requestSubmit();
+};
+$('directory-history-refresh').onclick = () => loadDirectoryHistory();
+loadDirectoryHistory();
 $('up').onclick = () => { if (data?.parent) prepareScan(data.parent); };
 $('recursive').onchange = () => prepareScan($('path').value);
 $('path').oninput = () => prepareScan($('path').value);
