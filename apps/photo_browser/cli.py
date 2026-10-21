@@ -22,6 +22,13 @@ def main(argv=None):
     compare = commands.add_parser('compare', help='원본·병합 파일 수/용량 및 복사 무결성 비교')
     compare.add_argument('--source-id', help='특정 소스만 비교 (기본 전체)')
     compare.add_argument('--quick', action='store_true', help='SHA-256 없이 크기만 비교')
+    backup = commands.add_parser('backup', help='DB와 관리 파일을 검증된 백업 폴더로 복사')
+    backup.add_argument('--destination', required=True, help='새 백업 디렉토리')
+    check = commands.add_parser('backup-check', help='백업의 파일 목록·크기·SHA-256 검증')
+    check.add_argument('--backup', required=True, help='백업 디렉토리')
+    restore = commands.add_parser('restore', help='백업을 새 장치·경로에 검증 복원')
+    restore.add_argument('--backup', required=True, help='manifest.json이 있는 백업 디렉토리')
+    restore.add_argument('--destination', required=True, help='새 복원 디렉토리 (db/managed 생성)')
     merge = commands.add_parser('merge', help='병합 복사 실행 (원본 유지)')
     options = merge.add_mutually_exclusive_group()
     options.add_argument('--preview', action='store_true', help='복사 없이 대상 경로 확인')
@@ -31,6 +38,14 @@ def main(argv=None):
     if args.command == 'merge' and args.resume and args.media_id:
         parser.error('--resume과 --media-id는 함께 사용할 수 없습니다.')
     try:
+        if args.command == 'backup-check':
+            from backup import verify_backup
+            print(json.dumps(verify_backup(args.backup), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == 'restore':
+            from backup import restore_backup
+            print(json.dumps(restore_backup(args.backup, args.destination), ensure_ascii=False, indent=2))
+            return 0
         db = Path(args.db).expanduser().resolve()
         if not (db / 'config.json').is_file():
             raise ValueError(f'설정 DB가 없습니다: {db}. 서버에서 설정한 DB 경로를 지정하세요.')
@@ -54,6 +69,9 @@ def main(argv=None):
                     'error_count': len(state.get('errors', [])) if state else 0,
                     'scan': state,
                 })
+        elif args.command == 'backup':
+            from backup import create_backup
+            result = create_backup(library, args.destination)
         elif args.command == 'compare':
             from copy_check import compare_copies
             result = compare_copies(library, args.source_id, args.quick)
@@ -70,7 +88,10 @@ def main(argv=None):
         if args.command == 'merge':
             return 1 if result['status'] != 'completed' or any(op['status'] == 'error' for op in result['operations']) else 0
         return 0
-    except (ValueError, OSError, KeyError) as exc:
+    except KeyboardInterrupt:
+        print('사용자 요청으로 중단했습니다.', file=sys.stderr)
+        return 130
+    except (ValueError, OSError, KeyError, TypeError) as exc:
         print(f'오류: {exc}', file=sys.stderr)
         return 1
 
