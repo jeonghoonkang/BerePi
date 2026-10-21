@@ -1,12 +1,13 @@
 """Local media browser and JSON media library; run with python app.py."""
 import argparse
+import faulthandler
 import os
 from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
-EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4'}
+from library import EXTENSIONS, VIDEO_EXTENSIONS
 
 
 def positive_limit(value):
@@ -31,6 +32,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
     register_library(app, boundary, db or os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')))
     app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
     app.config['PHOTO_BROWSER_START'] = str(initial)
+    app.config['PHOTO_BROWSER_LIMIT'] = limit
     from server_network import ServerNetwork
     server_network = ServerNetwork()
     app.extensions['server_network'] = server_network
@@ -66,7 +68,13 @@ def create_app(root=None, start=None, db=None, limit=20000):
             abort(400, description='디렉토리를 입력하세요.')
         recursive = request.args.get('recursive') == '1'
         directories, media, skipped = [], [], 0
-        truncated = False
+        try:
+            offset = int(request.args.get('offset', '0'))
+            if offset < 0:
+                raise ValueError
+        except ValueError:
+            abort(400, description='offset은 0 이상의 정수여야 합니다.')
+        total, total_bytes = 0, 0
         try:
             children = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
         except OSError:
@@ -81,10 +89,15 @@ def create_app(root=None, start=None, db=None, limit=20000):
             nonlocal skipped
             skipped += 1
         if recursive:
-            candidates = (Path(base) / name for base, _, names in os.walk(folder, onerror=walk_error, followlinks=False) for name in names)
+            def walk():
+                for base, dirs, names in os.walk(folder, onerror=walk_error, followlinks=False):
+                    dirs[:] = sorted(d for d in dirs if not (Path(base) / d).is_symlink())
+                    for name in sorted(names):
+                        yield Path(base) / name
+            candidates = walk()
         else:
             candidates = iter(children)
-        # Bound response memory for very large collections.
+        # Count the entire collection while retaining only the requested batch.
         for child in candidates:
             if child.name.startswith('._') or child.suffix.lower() not in EXTENSIONS:
                 continue
@@ -93,14 +106,14 @@ def create_app(root=None, start=None, db=None, limit=20000):
                 if not resolved.is_relative_to(boundary) or not resolved.is_file():
                     continue
                 info = resolved.stat()
-                media.append(dict(name=child.name, path=str(resolved), date=datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d'), modified=info.st_mtime, size=info.st_size, video=child.suffix.lower() == '.mp4'))
-                if len(media) >= limit:
-                    truncated = True
-                    break
+                total_bytes += info.st_size
+                if offset <= total < offset + limit:
+                    media.append(dict(name=child.name, path=str(resolved), date=datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d'), modified=info.st_mtime, size=info.st_size, video=child.suffix.lower() in VIDEO_EXTENSIONS))
+                total += 1
             except OSError:
                 skipped += 1
         media.sort(key=lambda item: (-item['modified'], item['path']))
-        return jsonify(path=str(folder), parent=str(folder.parent) if folder != boundary else None, directories=directories, media=media, skipped=skipped, truncated=truncated, limit=limit)
+        return jsonify(path=str(folder), parent=str(folder.parent) if folder != boundary else None, directories=directories, media=media, skipped=skipped, truncated=offset + len(media) < total, limit=limit, offset=offset, next_offset=offset + len(media), total=total, total_bytes=total_bytes)
 
     @app.get('/media')
     def media():
@@ -116,6 +129,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
 
 
 if __name__ == '__main__':
+    # Preserve all Python thread stacks if the interpreter/native code crashes.
+    faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=7081)

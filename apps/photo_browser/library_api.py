@@ -1,10 +1,12 @@
 """Library HTTP API and single-worker background jobs."""
 import hmac
+import json
 import os
 import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -20,7 +22,24 @@ def register_library(app, boundary, db):
     jobs, guard = {}, threading.Lock()
     controls = {}
     for path in (library.db / 'jobs').glob('*.json'):
-        previous = read_json(path)
+        try:
+            previous = read_json(path)
+            if (not isinstance(previous, dict) or not isinstance(previous.get('job_id'), str)
+                    or not isinstance(previous.get('status'), str)
+                    or not isinstance(previous.get('created_at'), str)):
+                raise ValueError('작업 기록의 필수 필드가 올바르지 않습니다.')
+        except (json.JSONDecodeError, UnicodeError, ValueError) as exc:
+            # Preserve corrupt history verbatim; never infer a successful result
+            # or change the media database from an incomplete job report.
+            backup = path.parent / 'corrupt' / (path.name + '.' + uid() + '.bak')
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(path, backup)
+            previous = {'job_id': path.stem, 'status': 'failed', 'kind': 'recovery',
+                        'created_at': now(), 'finished_at': now(),
+                        'error': f'손상된 작업 기록을 보존하고 건너뛰었습니다: {backup}. 오류: {exc}',
+                        'warning': '이 기록만으로 이전 작업의 완료 여부를 판단할 수 없습니다. 사진·스캔·병합 상태를 확인하세요.'}
+            atomic_json(path, previous)
+            app.logger.warning(previous['error'])
         if previous['status'] in {'queued', 'running', 'stopping'}:
             previous['status'] = 'interrupted'
             previous['warning'] = '서버가 재시작되었습니다. 이어하기 버튼으로 재개하세요.'
@@ -62,6 +81,9 @@ def register_library(app, boundary, db):
         job_id = uid()
         stop = threading.Event()
         with guard:
+            active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
+            if (kind in {'source_rename', 'source_update', 'source_cleanup'} and active) or any(j.get('kind') in {'source_rename', 'source_update', 'source_cleanup'} for j in active):
+                raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('이미 병합 작업이 실행 중입니다.')
             if kind == 'scan' and any(j.get('source_id') == source_id and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
@@ -83,8 +105,8 @@ def register_library(app, boundary, db):
             with guard:
                 jobs[job_id]['status'] = 'stopping' if stop.is_set() else 'running'
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge'} else function()
-                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge'} else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -120,9 +142,17 @@ def register_library(app, boundary, db):
         existing = next((s for s in library.config()['sources'] if library.source_key(s) == key), None)
         return jsonify(existing=existing)
 
+    @app.post('/api/sources/apply-classification')
+    def apply_source_classification():
+        source_id = component(body()['source_id'])
+        return launch(lambda: library.apply_source_classification(source_id), 'source_update', source_id)
+
     @app.post('/api/sources/rename')
     def rename_source():
         data = body()
+        if data.get('background'):
+            old, new = component(data['old_id']), component(data['new_id'])
+            return launch(lambda: library.rename_source(old, new), 'source_rename', old)
         with guard:
             if any(j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('실행 중인 작업을 중지한 뒤 소스 ID를 변경하세요.')
@@ -198,24 +228,50 @@ def register_library(app, boundary, db):
         query = request.args.get('q', '').casefold()
         if query:
             items = [i for i in items if query in (i['name'] + ' ' + ' '.join(i['classification']['events'] + i['classification']['tags'] + i['classification']['person_ids'])).casefold()]
-        items.sort(key=lambda i: (i['capture']['date_key'], i['media_id']), reverse=True)
-        offset = max(0, int(request.args.get('offset', 0)))
+        def chronology(item):
+            capture = item['capture']
+            value = capture.get('captured_at') or capture.get('filesystem_modified_at')
+            try:
+                stamp = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                if stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+                timestamp = stamp.timestamp()
+            except (ValueError, TypeError, AttributeError):
+                timestamp = 0
+            return capture['date_key'], timestamp, item['media_id']
+        items.sort(key=chronology, reverse=True)
+        window = None
+        anchor = request.args.get('date')
+        default_offset = 0
+        if anchor:
+            try:
+                if date.fromisoformat(anchor).isoformat() != anchor:
+                    raise ValueError
+            except ValueError:
+                abort(400, description='기준 날짜는 YYYY-MM-DD 형식이어야 합니다.')
+            half = app.config['PHOTO_BROWSER_LIMIT'] // 2
+            dated = [i for i in items if i['capture']['date_key'] != 'unknown']
+            after = [i for i in dated if i['capture']['date_key'] > anchor]
+            same = [i for i in dated if i['capture']['date_key'] == anchor]
+            before = [i for i in dated if i['capture']['date_key'] < anchor]
+            selected_after = after[-half:] if half else []
+            selected_before = before[:half]
+            items = selected_after + same + selected_before
+            default_offset = len(selected_after) if same or selected_before else max(0, len(items) - 100)
+            window = dict(date=anchor, per_side=half, before=len(selected_before),
+                          on_date=len(same), after=len(selected_after),
+                          before_total=len(before), after_total=len(after))
+        offset = max(0, int(request.args.get('offset', default_offset)))
         limit = min(100, max(1, int(request.args.get('limit', 100))))
-        return jsonify(total=len(items), items=items[offset:offset + limit])
+        return jsonify(total=len(items), items=items[offset:offset + limit], offset=offset, window=window)
 
     @app.get('/api/facets')
     def facets():
-        result = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
-        for item in library.items():
-            if item['lifecycle']['status'] == 'active':
-                for key in result:
-                    value = item['classification'][key]
-                    result[key].update(value if isinstance(value, list) else [value])
-        return jsonify({key: sorted(values) for key, values in result.items()})
+        return jsonify(library.facets())
 
     @app.get('/api/library/<media_id>')
     def get_media(media_id):
-        item = next((i for i in library.items() if i['media_id'] == media_id), None)
+        item = library.item(media_id)
         if not item:
             abort(404, description='미디어가 없습니다.')
         return jsonify(item)
@@ -234,7 +290,7 @@ def register_library(app, boundary, db):
         if not isinstance(preview, bool):
             raise ValueError('preview는 boolean이어야 합니다.')
         if preview:
-            return launch(lambda: library.merge(values or None, True))
+            return launch(lambda progress, stopped: library.merge(values or None, True, progress=progress), 'merge_preview')
         resume = data.get('resume')
         if resume is not None:
             component(resume)
@@ -249,6 +305,21 @@ def register_library(app, boundary, db):
     @app.get('/api/duplicates')
     def duplicates():
         return jsonify(library.duplicates())
+
+    @app.get('/api/duplicate-sources')
+    def duplicate_sources():
+        return jsonify(library.duplicate_sources())
+
+    @app.post('/api/duplicate-sources/unregister')
+    def unregister_duplicate_source():
+        data = body()
+        if data.get('background'):
+            return launch(lambda: library.unregister_duplicate_source(component(data['source_id']), component(data['keep_id']), data['fingerprint']), 'source_cleanup', data['source_id'])
+        with guard:
+            if any(j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
+                raise ValueError('실행 중인 작업이 끝난 뒤 등록을 해제하세요.')
+            result = library.unregister_duplicate_source(component(data['source_id']), component(data['keep_id']), data['fingerprint'])
+        return jsonify(result)
 
     @app.get('/api/trash')
     def trash_list():
@@ -283,8 +354,8 @@ def register_library(app, boundary, db):
 
     @app.get('/api/library/<media_id>/file')
     def library_file(media_id):
-        item = next((i for i in library.items() if i['media_id'] == media_id and i['lifecycle']['status'] == 'active'), None)
-        if not item:
+        item = library.item(media_id)
+        if not item or item['lifecycle']['status'] != 'active':
             abort(404, description='미디어가 없습니다.')
         location = next((l for l in reversed(item['locations']) if l['role'] == 'managed' and l['status'] == 'available'), item['locations'][0])
         if location['protocol'] == 'file':

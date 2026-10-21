@@ -1,5 +1,6 @@
 """JSON backed media library. Originals are never moved or deleted."""
 import base64
+import copy
 import hashlib
 import json
 import os
@@ -18,7 +19,9 @@ from urllib.parse import urljoin, urlsplit, unquote
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
-EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.webp'}
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi'}
+EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 
 def now():
@@ -72,7 +75,7 @@ def metadata(path):
     if hasattr(stat, 'st_birthtime'):
         result.update(date_key=datetime.fromtimestamp(stat.st_birthtime).strftime('%Y-%m-%d'), date_basis='filesystem_created_at')
     try:
-        if path.suffix.lower() in {'.mp4', '.mov'}:
+        if path.suffix.lower() in VIDEO_EXTENSIONS:
             probe = subprocess.run(['ffprobe', '-v', 'quiet', '-show_format', '-show_streams', '-of', 'json', str(path)], capture_output=True, text=True, timeout=30, check=True)
             data = json.loads(probe.stdout)
             tags = data.get('format', {}).get('tags', {})
@@ -117,6 +120,12 @@ class Library:
         self.boundary = Path(boundary).resolve()
         self.db.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.lookup_lock = threading.Lock()
+        self.lookup_generation = None
+        self.lookup_chunks = {}
+        self.facets_lock = threading.Lock()
+        self.facets_generation = None
+        self.facets_cache = None
         if not (self.db / 'config.json').exists():
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(self.db.parent / 'library'), 'sources': []})
 
@@ -196,6 +205,143 @@ class Library:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
 
+    def apply_source_classification(self, source_id):
+        source_id = component(source_id)
+        with self.writing():
+            source = next((s for s in self.config()['sources'] if s['source_id'] == source_id), None)
+            if source is None:
+                raise ValueError('소스를 찾지 못했습니다.')
+            category = component(source.get('category', 'family'))
+            owner = component(source.get('owner_id', 'default'))
+            items = self.items()
+            matched = updated = 0
+            for item in items:
+                if item['lifecycle']['status'] != 'active' or not any(
+                    loc['role'] == 'source' and loc.get('source_id') == source_id for loc in item['locations']
+                ):
+                    continue
+                matched += 1
+                classification = item['classification']
+                if classification['category_id'] != category or classification['owner_id'] != owner:
+                    classification.update(category_id=category, owner_id=owner)
+                    item['revision'] += 1
+                    updated += 1
+            if updated:
+                self.commit(items)
+            return dict(source_id=source_id, category_id=category, owner_id=owner,
+                        matched=matched, updated=updated, unchanged=matched - updated,
+                        warning='기존 관리 복사본은 이동하지 않았습니다. 병합 정보를 갱신해 새 출력 경로를 확인하세요.')
+
+    def duplicate_sources(self):
+        config = self.config()
+        sources = {source['source_id']: source for source in config['sources']}
+        files = {source_id: {} for source_id in sources}
+        manifest = read_json(self.db / 'index.json', {'chunks': []})
+        for chunk in manifest['chunks']:
+            for item in read_json(self.db / chunk['path'])['items']:
+                if item['lifecycle']['status'] != 'active':
+                    continue
+                for location in item['locations']:
+                    source_id = location.get('source_id')
+                    if location['role'] != 'source' or source_id not in sources or location.get('status') in {'missing', 'inactive'}:
+                        continue
+                    source = sources[source_id]
+                    try:
+                        if source.get('protocol', 'file') == 'file':
+                            relative = Path(location['path']).relative_to(Path(source['root'])).as_posix()
+                        else:
+                            base = unquote(urlsplit(source['root']).path).rstrip('/') + '/'
+                            path = unquote(urlsplit(location['uri']).path)
+                            if not path.startswith(base):
+                                continue
+                            relative = path[len(base):]
+                    except (KeyError, ValueError):
+                        continue
+                    files[source_id][relative] = (item['size_bytes'], item['sha256'])
+        grouped = defaultdict(list)
+        for source_id, entries in files.items():
+            if not entries:
+                continue
+            listing = sorted((path, size) for path, (size, sha) in entries.items())
+            fingerprint = hashlib.sha256(json.dumps(listing, ensure_ascii=False).encode()).hexdigest()
+            content = hashlib.sha256(json.dumps(sorted((path, size, sha) for path, (size, sha) in entries.items()), ensure_ascii=False).encode()).hexdigest()
+            grouped[fingerprint].append({'source_id': source_id, 'root': sources[source_id]['root'],
+                                         'content_fingerprint': content})
+        groups = []
+        for fingerprint, members in grouped.items():
+            if len(members) < 2:
+                continue
+            entries = files[members[0]['source_id']]
+            groups.append({'fingerprint': fingerprint, 'sources': members, 'file_count': len(entries),
+                           'total_bytes': sum(value[0] for value in entries.values()),
+                           'same_content': len({member['content_fingerprint'] for member in members}) == 1,
+                           'files': [{'relative_path': path, 'size_bytes': value[0]} for path, value in sorted(entries.items())]})
+        return {'groups': groups, 'basis': '스캔된 활성 파일의 상대 경로·개별 크기 비교. 실제 디스크를 다시 읽지 않으며 해시는 마지막 스캔 값입니다.'}
+
+    def unregister_duplicate_source(self, source_id, keep_id, fingerprint):
+        with self.writing():
+            if source_id == keep_id:
+                raise ValueError('유지할 소스와 해제할 소스가 같을 수 없습니다.')
+            groups = self.duplicate_sources()['groups']
+            if not any(group['fingerprint'] == fingerprint and {source_id, keep_id}.issubset(
+                {source['source_id'] for source in group['sources']}) for group in groups):
+                raise ValueError('중복 비교 결과가 변경됐습니다. 다시 검색하세요.')
+            config = self.config()
+            root = self.local(config['managed_root'])
+            items = self.items()
+            selected = [item for item in items if item['lifecycle']['status'] == 'active' and any(
+                loc['role'] == 'source' and loc.get('source_id') == source_id for loc in item['locations'])]
+            exclusive = {item['media_id'] for item in selected if not any(
+                loc['role'] == 'source' and loc.get('source_id') != source_id for loc in item['locations'])}
+            protected = {str(self.local(loc['path'])) for item in items for loc in item['locations']
+                         if loc.get('path') and (loc['role'] == 'source' or item['media_id'] not in exclusive)}
+            candidates = {str(self.local(loc['path'])) for item in selected if item['media_id'] in exclusive
+                          for loc in item['locations'] if loc['role'] == 'managed'}
+            removable = candidates - protected
+            for value in removable:
+                path = Path(value)
+                if not path.is_relative_to(root) or path.is_relative_to(root / '.trash') or path == root:
+                    raise ValueError('관리 디렉토리 내부의 복사본만 삭제할 수 있습니다.')
+            cleanup_id = uid()
+            record_path = self.db / 'source_cleanup' / (cleanup_id + '.json')
+            record = {'cleanup_id': cleanup_id, 'source_id': source_id, 'keep_id': keep_id,
+                      'status': 'deleting', 'created_at': now(), 'items_before': copy.deepcopy(selected),
+                      'candidates': sorted(removable)}
+            atomic_json(record_path, record)
+            deleted, errors = set(), []
+            # Original locations and shared managed files are excluded above.
+            # Keep a durable log so interrupted cleanup can be inspected.
+            log_path = record_path.with_suffix('.jsonl')
+            with log_path.open('a', encoding='utf-8') as log:
+                for value in sorted(removable):
+                    try:
+                        Path(value).unlink(missing_ok=True)
+                        deleted.add(value)
+                        outcome = {'path': value, 'status': 'deleted'}
+                    except OSError as exc:
+                        outcome = {'path': value, 'status': 'error', 'error': str(exc)}
+                        errors.append(outcome)
+                    log.write(json.dumps(outcome, ensure_ascii=False) + '\n')
+                    log.flush()
+                    os.fsync(log.fileno())
+            for item in selected:
+                item['locations'] = [loc for loc in item['locations'] if not (
+                    loc['role'] == 'managed' and str(self.local(loc['path'])) in deleted)]
+                if not errors and item['media_id'] in exclusive:
+                    item['lifecycle']['status'] = 'source_unregistered'
+            self.commit(items)
+            if not errors:
+                config['sources'] = [source for source in config['sources'] if source['source_id'] != source_id]
+                atomic_json(self.db / 'config.json', config)
+            record.update(status='partial_failure' if errors else 'completed', deleted_files=len(deleted),
+                          retained_shared_files=len(candidates & protected), errors=errors)
+            atomic_json(record_path, record)
+            return {'removed_source_id': None if errors else source_id, 'kept_source_id': keep_id,
+                    'deleted_managed_files': len(deleted), 'retained_shared_files': len(candidates & protected),
+                    'errors': errors, 'cleanup_id': cleanup_id,
+                    'warning': ('일부 관리 파일을 삭제하지 못해 소스 등록은 유지했습니다. 결과의 오류를 확인하세요.' if errors else
+                                '소스 등록과 전용 관리 복사본을 정리했습니다. 원본 파일과 공유 관리 파일은 유지했습니다.')}
+
     def source_key(self, source):
         protocol = source.get('protocol', 'file')
         if protocol == 'file':
@@ -245,6 +391,50 @@ class Library:
             source['source_id'] = new
             atomic_json(self.db / 'config.json', config)
             return config
+
+    def item(self, media_id):
+        """Resolve one item without materializing the complete media collection.
+
+        Chunk generations are immutable. Serialize index construction so concurrent
+        image requests share one small ID-to-chunk map instead of decoding the
+        entire collection independently.
+        """
+        with self.lookup_lock:
+            manifest = read_json(self.db / 'index.json', {'chunks': []})
+            generation = tuple(entry['path'] for entry in manifest['chunks'])
+            if generation != self.lookup_generation:
+                chunks = {}
+                for relative in generation:
+                    for item in read_json(self.db / relative)['items']:
+                        chunks[item['media_id']] = relative
+                self.lookup_chunks = chunks
+                self.lookup_generation = generation
+            relative = self.lookup_chunks.get(media_id)
+            if relative is None:
+                return None
+            return next((item for item in read_json(self.db / relative)['items']
+                         if item['media_id'] == media_id), None)
+
+    def facets(self):
+        # Old databases are read one immutable chunk at a time, once per generation.
+        # New manifests contain the active-item summary directly.
+        with self.facets_lock:
+            manifest = read_json(self.db / 'index.json', {'chunks': []})
+            if 'active_facets' in manifest:
+                return manifest['active_facets']
+            generation = tuple(chunk['path'] for chunk in manifest['chunks'])
+            if generation != self.facets_generation:
+                values = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
+                for chunk in manifest['chunks']:
+                    for item in read_json(self.db / chunk['path'])['items']:
+                        if item['lifecycle']['status'] != 'active':
+                            continue
+                        for key in values:
+                            value = item['classification'][key]
+                            values[key].update(value if isinstance(value, list) else [value])
+                self.facets_cache = {key: sorted(value) for key, value in values.items()}
+                self.facets_generation = generation
+            return self.facets_cache
 
     def items(self, filters=None):
         manifest = read_json(self.db / 'index.json', {'chunks': []})
@@ -298,7 +488,15 @@ class Library:
         atomic_json(self.db / duplicate_path, {'schema_version': 1, 'exact': [{'sha256': key, 'members': ids} for key, ids in exact.items() if len(ids) > 1], 'candidates': [{'reason': 'same_capture_time_and_nearby_gps', 'members': ids} for ids in candidates.values() if len(ids) > 1]})
         if control:
             control()
-        atomic_json(self.db / 'index.json', {'schema_version': 1, 'updated_at': now(), 'chunks': chunks, 'count': len(items), 'duplicates': duplicate_path})
+        active_facets = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
+        for item in items:
+            if item['lifecycle']['status'] != 'active':
+                continue
+            for key in active_facets:
+                value = item['classification'][key]
+                active_facets[key].update(value if isinstance(value, list) else [value])
+        active_facets = {key: sorted(value) for key, value in active_facets.items()}
+        atomic_json(self.db / 'index.json', {'schema_version': 1, 'updated_at': now(), 'chunks': chunks, 'count': len(items), 'duplicates': duplicate_path, 'active_facets': active_facets})
         atomic_json(self.db / 'duplicates' / 'latest.json', {'generation_file': duplicate_path})
         # Old generations are retained for crash recovery; maintenance can remove them offline.
 
@@ -415,11 +613,59 @@ class Library:
                     item['revision'] += 1
             self.commit(items)
 
+    def merge_target(self, root, item):
+        c, date = item['classification'], item['capture']['date_key']
+        year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
+        name = item['name']
+        if not name or name in {'.', '..'} or '/' in name or '\\' in name:
+            raise ValueError('유효하지 않은 원본 파일명입니다.')
+        target = root / component(c['category_id']) / component(c['owner_id']) / year / month / name
+        if not target.resolve().is_relative_to(root):
+            raise ValueError('관리 경로 밖입니다.')
+        return target
+
+    def merge_space(self, root, items, pending, progress):
+        targets = {}
+        for index, item in enumerate(pending):
+            target = self.merge_target(root, item)
+            if not target.exists():
+                key = str(target.resolve())
+                targets[key] = max(targets.get(key, 0), item['size_bytes'])
+            if index % 100 == 0:
+                progress({'phase': 'checking_space', 'checked': index + 1, 'check_total': len(pending),
+                          'processed': 0, 'inventory_complete': False, 'current_file': str(target)})
+        # Each checkpoint retains a new immutable DB generation. Include their
+        # cumulative growth, reports and a reserve, rather than only image bytes.
+        generation_bytes = sum(len(json.dumps(item, ensure_ascii=False, indent=2).encode('utf-8')) + 4096 for item in items)
+        db_bytes = generation_bytes * ((len(pending) + 24) // 25 + 3)
+        reserve = self.config().get('scan_min_free_mb', 512) * 1048576
+        volumes = {}
+        def add(path, amount, role):
+            existing = path
+            while not existing.exists():
+                existing = existing.parent
+            device = existing.stat().st_dev
+            if device not in volumes:
+                volumes[device] = {'path': str(existing), 'free_bytes': shutil.disk_usage(existing).free,
+                                   'required_bytes': reserve, 'reserve_bytes': reserve, 'roles': []}
+            volumes[device]['required_bytes'] += amount
+            volumes[device]['roles'].append(role)
+        add(root, sum(targets.values()), '관리 복사본')
+        add(self.db, db_bytes, 'DB·체크포인트·작업 기록 예상 증가량')
+        remote_bytes = max((item['size_bytes'] for item in pending if item['locations'][0]['protocol'] != 'file'), default=0)
+        if remote_bytes:
+            add(Path(tempfile.gettempdir()), remote_bytes, '원격 파일 임시 다운로드')
+        checks = list(volumes.values())
+        return {'copy_bytes': sum(targets.values()), 'copy_files': len(targets),
+                'db_estimated_bytes': db_bytes, 'volumes': checks,
+                'ok': all(v['free_bytes'] >= v['required_bytes'] for v in checks)}
+
     def merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None):
         with self.writing():
+            progress = progress or (lambda state: None)
+            progress({'phase': 'loading', 'inventory_complete': False, 'processed': 0})
             items = self.items()
             root = self.local(self.config()['managed_root'])
-            progress = progress or (lambda state: None)
             stopped = stopped or (lambda: False)
             session_path = self.db / 'merges' / ((component(resume) if resume else uid()) + '.json')
             if resume:
@@ -435,6 +681,17 @@ class Library:
             operations = state['operations']
             completed = {op['media_id'] for op in operations}
             wanted = set(state['ids'])
+            if not preview:
+                pending = [item for item in items if item['media_id'] in wanted
+                           and item['media_id'] not in completed and item['lifecycle']['status'] == 'active']
+                space = self.merge_space(root, items, pending, progress)
+                state['disk_space'] = space
+                if not space['ok']:
+                    details = ' / '.join(f"{v['path']}: 여유 {v['free_bytes'] / 1048576:.1f} MiB, 필요 {v['required_bytes'] / 1048576:.1f} MiB"
+                                         for v in space['volumes'] if v['free_bytes'] < v['required_bytes'])
+                    return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
+                            'total': len(wanted), 'processed': len(operations), 'percent': 0,
+                            'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
             def checkpoint(status='running'):
                 state.update(status=status, processed=len(operations), total=len(wanted),
                              percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
@@ -455,16 +712,16 @@ class Library:
                     operations.append({'media_id': item['media_id'], 'status': 'skipped'})
                     continue
                 c, date = item['classification'], item['capture']['date_key']
-                year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
-                name = item['name']
-                if not name or name in {'.', '..'} or '/' in name or '\\' in name:
-                    raise ValueError('유효하지 않은 원본 파일명입니다.')
-                target = root / c['category_id'] / c['owner_id'] / year / month / name
-                if not target.resolve().is_relative_to(root):
-                    raise ValueError('관리 경로 밖입니다.')
+                target = self.merge_target(root, item)
                 op = {'media_id': item['media_id'], 'destination': str(target), 'status': 'planned'}
+                op['classification'] = {'category_id': c['category_id'], 'owner_id': c['owner_id']}
+                op['date_key'] = date
+                op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
                 operations.append(op)
                 if preview:
+                    state['current_file'] = str(target)
+                    if len(operations) % 100 == 0:
+                        checkpoint()
                     continue
                 try:
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -495,6 +752,25 @@ class Library:
             report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
                       'merge_id': state['merge_id'], 'status': state['status'],
                       'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
+            if 'disk_space' in state:
+                report['disk_space'] = state['disk_space']
+            report['settings'] = {'boundary': str(self.boundary), 'db': str(self.db),
+                                  'managed_root': str(root), 'sources': self.config()['sources'],
+                                  'layout': 'managed_root/category_id/owner_id/year/month/name'}
+            destinations = {}
+            conflicts = set()
+            by_id = {item['media_id']: item for item in items}
+            for operation in operations:
+                destination = operation.get('destination')
+                if not destination:
+                    continue
+                sha = by_id[operation['media_id']]['sha256']
+                if destination in destinations and destinations[destination] != sha:
+                    conflicts.add(destination)
+                destinations[destination] = sha
+            report['destination_conflicts'] = sorted(conflicts)
+            report['warning'] = ('같은 출력 경로에 서로 다른 내용의 파일이 예정되어 있습니다. 분류나 파일명을 조정하세요.'
+                                 if conflicts else '현재 DB 분류와 저장된 설정으로 경로를 계산했습니다. 실제 파일 내용·접근 권한·여유 공간 검증은 별도로 확인하세요.')
             atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
             return report
 

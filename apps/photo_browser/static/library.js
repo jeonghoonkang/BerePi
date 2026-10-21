@@ -4,9 +4,10 @@
   let config, page = [], offset = 0, total = 0, chosen = new Set(), undoId;
   const watchers = new Map(), jobCards = new Map();
   const jobsPage = document.body.classList.contains('jobs-page');
+  const sourcesOnly = new URLSearchParams(window.location.search).get('panel') === 'sources';
   let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
-  const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
+  const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', blocked_low_space:'공간 부족 · 실행 안 함', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
   const notify = message => { el('notice').textContent = message; };
   async function api(path, method = 'GET', data) {
     const response = await fetch(path, {method, cache: 'no-store', headers: {'Content-Type': 'application/json', 'X-Photo-Browser': '1'}, body: data === undefined ? undefined : JSON.stringify(data)});
@@ -21,7 +22,7 @@
     document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== id; });
     document.querySelectorAll('[data-tab]').forEach(button => { button.setAttribute('aria-pressed', button.dataset.tab === id); });
   }
-  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
+  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'library-panel') { await facets(); offset = null; await load(); } if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
   function selection() { el('selection-count').textContent = `${chosen.size}개 선택`; }
   async function facets() {
     const values = await api('api/facets');
@@ -44,10 +45,11 @@
   el('detail-close').onclick = () => el('library-detail').close();
   el('library-detail').onclose = () => el('detail-preview').replaceChildren();
   async function load() {
-    const params = new URLSearchParams(new FormData(el('library-filters'))); params.set('offset', offset);
+    const params = new URLSearchParams(new FormData(el('library-filters')));
+    if (offset !== null) params.set('offset', offset);
     const result = await api('api/library?' + params);
-    page = result.items; total = result.total; chosen.clear(); selection(); el('select-page').checked = false;
-    el('library-count').textContent = `${total.toLocaleString()}개 · ${offset + (total ? 1 : 0)}–${offset + page.length}`;
+    page = result.items; total = result.total; offset = result.offset; chosen.clear(); selection(); el('select-page').checked = false;
+    el('library-count').textContent = `${total.toLocaleString()}개 · ${offset + (page.length ? 1 : 0)}–${offset + page.length}` + (result.window ? ` · 기준 ${result.window.date}: 당일 ${result.window.on_date.toLocaleString()}개 · 이전 ${result.window.before.toLocaleString()}/${result.window.before_total.toLocaleString()}개 · 이후 ${result.window.after.toLocaleString()}/${result.window.after_total.toLocaleString()}개 · 전후 각각 최대 ${result.window.per_side.toLocaleString()}개 (다른 검색 조건 적용)` : '');
     el('library-prev').disabled = offset === 0; el('library-next').disabled = offset + page.length >= total;
     el('library-gallery').replaceChildren();
     for (const item of page) {
@@ -60,7 +62,8 @@
       card.append(check, button); el('library-gallery').append(card);
     }
   }
-  el('library-filters').onsubmit = safe(async event => { event.preventDefault(); offset = 0; await load(); });
+  el('library-filters').onsubmit = safe(async event => { event.preventDefault(); offset = null; await load(); });
+  el('library-date').onchange = safe(async () => { offset = null; await load(); });
   el('library-filters').onreset = () => setTimeout(safe(async () => { offset = 0; await load(); }), 0);
   el('library-prev').onclick = safe(async () => { offset = Math.max(0, offset - 100); await load(); });
   el('library-next').onclick = safe(async () => { offset += 100; await load(); });
@@ -87,17 +90,61 @@
     if (!progress.inventory_complete) return `전체 파일 목록 집계 중 · 현재 ${progress.total.toLocaleString()}개 발견 · 전체 개수 확인 중`;
     return `전체 ${progress.total.toLocaleString()}개 · 처리 ${progress.processed.toLocaleString()}개 (${progress.percent ?? 0}%) · 신규 ${progress.added} · 갱신 ${progress.updated} · 변경 없음 ${progress.unchanged} · 제외 ${progress.ignored} · 오류 ${progress.error_count ?? progress.errors?.length ?? 0}`;
   }
+  function jobSummary(status) {
+    const result = status.result;
+    if (!result) return [];
+    const count = value => Number(value || 0).toLocaleString();
+    if (status.status === 'blocked_low_space') return [result.warning, '새 사진 복사와 병합 DB 반영을 시작하지 않았습니다. 공간 확보 후 전체 병합 실행을 다시 누르세요.'];
+    if (status.kind === 'scan') {
+      const lines = [
+        `스캔 분석: 신규 ${count(result.added)}개 · 갱신 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
+        `월별 JSON: ${result.published ? '반영 완료' : '반영 완료되지 않음 · 작업 상태와 경고를 확인하세요.'}`,
+        '원본 사진·동영상은 변경하지 않았습니다. 사진 복사본 생성은 별도의 병합 실행이 필요합니다.',
+      ];
+      if (result.updated) lines.push('갱신은 스캔 분석 결과를 다시 반영한 개수이며, 사진 내용이나 태그가 변경된 개수는 아닙니다.');
+      lines.push(`제외 ${count(result.ignored)}개 · 처리 오류 ${count(result.errors?.length ?? result.error_count)}개`);
+      return lines;
+    }
+    if (['merge', 'merge_preview'].includes(status.kind)) {
+      const operations = result.operations || [];
+      const counts = {};
+      operations.forEach(operation => { counts[operation.status] = (counts[operation.status] || 0) + 1; });
+      return [
+        result.preview ? `미리보기: 복사 예정 ${count(counts.planned)}개 · 실제 복사하지 않음` : `병합 결과: 새 복사 ${count(counts.copied)}개 · 기존 파일 재사용 ${count(counts.reused)}개 · 건너뜀 ${count(counts.skipped)}개 · 오류 ${count(counts.error)}개`,
+        result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
+      ];
+    }
+    if (status.kind === 'source_cleanup') {
+      return [`관리 복사본 삭제 ${count(result.deleted_managed_files)}개 · 공유 복사본 보존 ${count(result.retained_shared_files)}개`, result.warning];
+    }
+    if (status.kind === 'source_update') {
+      return [`소스 ${result.source_id}: 대상 ${count(result.matched)}개 · 분류 변경 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
+        `적용 카테고리: ${result.category_id} · 소유자: ${result.owner_id}`, result.warning];
+    }
+    if (status.kind === 'source_rename') {
+      return ['소스 ID 변경 작업을 완료했습니다. 현재 ID는 소스 목록에서 확인하세요.',
+        '사진 JSON과 스캔 기록의 소스 연결을 변경했습니다. 사진 파일의 위치와 태그는 유지합니다.'];
+    }
+    return [];
+  }
+  function mergeProgress(progress) {
+    if (progress?.phase === 'checking_space') return `복사 용량·여유 공간 계산 중 · ${(progress.checked ?? 0).toLocaleString()}/${(progress.check_total ?? 0).toLocaleString()}개 확인`;
+    if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
+    return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%)`;
+  }
   function drawJob(status) {
     if (jobsPage && !visibleJobs.has(status.job_id)) return;
     let card = jobCards.get(status.job_id);
     if (!card) {
       const row = make('details', '', 'source-row job-card'), title = make('summary'), text = make('p'), bar = make('progress'), file = make('p'), warning = make('p', '', 'scan-warning');
+      const changes = make('section'), changesTitle = make('h4', '주요 처리 결과 · 반영 사항'), changesList = make('ul');
+      changes.append(changesTitle, changesList);
       row.open = activeStates.includes(status.status);
       bar.max = 100; bar.setAttribute('aria-label', '작업 처리 진행률');
       const stop = action('중지하고 저장', async () => { const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {}); drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.'); });
       const resume = action('병합 이어하기', () => job('api/merge', {preview: false, resume: card.mergeId}));
-      row.append(title, text, bar, file, warning, stop, resume); el('scan-jobs').prepend(row);
-      card = {row, title, text, bar, file, warning, stop, resume}; jobCards.set(status.job_id, card);
+      row.append(title, text, bar, file, warning, changes, stop, resume); el('scan-jobs').prepend(row);
+      card = {row, title, text, bar, file, warning, changes, changesList, stop, resume}; jobCards.set(status.job_id, card);
     }
     card.createdAt = status.created_at;
     if (!jobsPage) {
@@ -106,13 +153,17 @@
       for (const [, entry] of ordered.slice(0, 3)) el('scan-jobs').append(entry.row);
     }
     const p = status.result || status.progress;
-    card.title.textContent = `${status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
-    card.text.textContent = status.kind === 'merge' ? `전체 ${p?.total ?? 0}개 · 처리 ${p?.processed ?? 0}개 (${p?.percent ?? 0}%)` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
-    card.bar.hidden = !['scan', 'merge'].includes(status.kind);
-    if (p?.inventory_complete || status.kind === 'merge') card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
+    const summary = jobSummary(status);
+    card.changes.hidden = !summary.length;
+    card.changesList.replaceChildren(...summary.map(line => make('li', line)));
+    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
+    card.bar.hidden = !['scan', 'merge', 'merge_preview'].includes(status.kind);
+    if (p?.inventory_complete || (['merge', 'merge_preview'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
     card.file.textContent = p?.current_file ? `현재 파일: ${p.current_file}` : '';
     const disk = p?.disk;
-    card.warning.textContent = [p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
+    const spaceText = p?.disk_space ? `신규 복사 ${(p.disk_space.copy_bytes / 1073741824).toFixed(2)} GiB · DB 예상 증가 ${(p.disk_space.db_estimated_bytes / 1073741824).toFixed(2)} GiB\n` + p.disk_space.volumes.map(v => `${v.path}: 여유 ${(v.free_bytes / 1073741824).toFixed(2)} GiB / 필요 ${(v.required_bytes / 1073741824).toFixed(2)} GiB (여유 기준 포함)`).join('\n') : '';
+    card.warning.textContent = [spaceText, p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
     card.stop.hidden = !['scan', 'merge'].includes(status.kind) || !activeStates.includes(status.status);
     card.stop.disabled = status.status === 'stopping';
     card.mergeId = p?.merge_id;
@@ -124,12 +175,29 @@
       let status;
       do {
         status = await api('api/jobs/' + id); drawJob(status);
-        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
+        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
+        if (status.kind === 'merge_preview') {
+          const progress = status.result || status.progress;
+          el('job-status').textContent += ' · ' + mergeProgress(progress);
+          if (activeStates.includes(status.status)) el('merge-settings').textContent = mergeProgress(progress) + (progress?.current_file ? `\n현재 출력 경로: ${progress.current_file}` : '');
+        }
         if (activeStates.includes(status.status)) await new Promise(resolve => setTimeout(resolve, 1000));
       } while (activeStates.includes(status.status));
       el('job-result').textContent = JSON.stringify(status.result || status.error || status.warning, null, 2);
-      await loadConfig(); await facets(); await load();
+      if (status.result?.settings) {
+        el('merge-settings').textContent = '병합에 적용된 설정 · 경로 확인\n' + JSON.stringify({
+          created_at: status.result.created_at, total: status.result.total,
+          settings: status.result.settings,
+          destination_conflicts: status.result.destination_conflicts,
+          warning: status.result.warning,
+        }, null, 2);
+      }
       const warning = status.result?.warning || status.error || status.warning;
+      if (status.status === 'blocked_low_space') {
+        notify(warning); alert(warning); return;
+      }
+      await loadConfig();
+      if (!el('library-panel').hidden) { await facets(); await load(); }
       notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
     })();
     watchers.set(id, watching);
@@ -169,31 +237,115 @@
       if (session) row.append(make('p', `${stateNames[session.status] || session.status} · ${progressText(session)}`));
       const resume = action('중단 지점부터 이어하기', () => job('api/scan', {source_id: source.source_id, mode: 'resume'}));
       resume.disabled = !session || session.status === 'completed' || session.status === 'running';
-      row.append(action('소스 ID 변경', async () => {
-        const newId = prompt(`현재 소스 ID: ${source.source_id}\n새 소스 ID를 입력하세요.`, source.source_id);
-        if (!newId || newId === source.source_id) return;
-        await api('api/sources/rename', 'POST', {old_id: source.source_id, new_id: newId});
-        await loadConfig(); notify('소스 ID와 사진·스캔 기록의 연결을 변경했습니다.');
+      row.append(action('소스 ID 변경', () => {
+        el('rename-source-old').textContent = source.source_id;
+        el('rename-source-new').value = source.source_id;
+        el('rename-source-status').textContent = '';
+        el('rename-source-dialog').showModal();
+        el('rename-source-new').focus();
+        el('rename-source-new').select();
+      }));
+      row.append(make('p', `신규 사진 기본값: 카테고리 ${source.category || 'family'} · 소유자 ${source.owner_id || 'default'}`));
+      row.append(action('기존 사진에 카테고리·소유자 적용', async () => {
+        if (!confirm(`소스 ${source.source_id}의 기존 활성 사진을 카테고리 ${source.category || 'family'}, 소유자 ${source.owner_id || 'default'}로 변경합니까?\n개별 지정한 카테고리·소유자도 교체합니다. 태그·이벤트·사람과 파일 위치는 유지합니다.\n등록 폼의 변경 사항은 먼저 저장하세요.`)) return;
+        await job('api/sources/apply-classification', {source_id: source.source_id});
       }));
       row.append(resume, action('처음부터 전체 재스캔', async () => { if (confirm('중단 지점 대신 처음부터 파일 목록과 메타데이터를 다시 검사합니까? 이벤트·태그와 원본은 유지됩니다.')) await job('api/scan', {source_id: source.source_id, mode: 'restart'}); }));
       row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => { for (const [key, value] of Object.entries(source)) { const input = el('source-form').elements.namedItem(key); if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; } } }), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
       el('source-list').append(row);
     });
   }
-  el('managed-form').onsubmit = safe(async event => { event.preventDefault(); await api('api/config', 'PUT', {...config, managed_root: el('managed-root').value, scan_min_free_mb: Number(el('scan-min-free').value)}); await loadConfig(); notify('관리 경로와 스캔 여유 공간 기준을 저장했습니다.'); });
-  el('source-form').onsubmit = safe(async event => {
-    event.preventDefault(); const form = el('source-form'), source = Object.fromEntries(new FormData(form)); source.recursive = form.elements.recursive.checked;
-    const {existing} = await api('api/sources/check', 'POST', source);
-    if (existing && existing.source_id !== source.source_id) {
-      if (!confirm(`같은 경로의 기존 소스 ID는 ${existing.source_id}입니다.\n${source.source_id}(으)로 변경하시겠습니까? 취소하면 기존 ID를 불러옵니다.`)) {
-        form.elements.source_id.value = existing.source_id;
-        notify(`기존 소스 ID ${existing.source_id}를 사용합니다. 내용을 확인한 뒤 다시 등록하세요.`); return;
-      }
-      config = await api('api/sources/rename', 'POST', {old_id: existing.source_id, new_id: source.source_id});
+  let renaming = false;
+  el('rename-source-cancel').onclick = () => el('rename-source-dialog').close();
+  el('rename-source-dialog').addEventListener('cancel', event => { if (renaming) event.preventDefault(); });
+  el('rename-source-form').onsubmit = async event => {
+    event.preventDefault();
+    if (renaming) return;
+    const oldId = el('rename-source-old').textContent;
+    const newId = el('rename-source-new').value.trim();
+    if (!newId || newId === oldId) {
+      el('rename-source-status').textContent = '현재 ID와 다른 새 ID를 입력하세요.';
+      return;
     }
-    await api('api/config', 'PUT', {...config, sources: [...config.sources.filter(s => s.source_id !== source.source_id), source]}); await loadConfig(); notify('소스를 저장했습니다. 스캔 버튼으로 JSON을 생성하세요.');
+    renaming = true;
+    el('rename-source-submit').disabled = el('rename-source-cancel').disabled = el('rename-source-new').disabled = true;
+    el('rename-source-status').textContent = '사진 JSON과 스캔 기록을 변경하고 있습니다. 완료될 때까지 기다려 주세요…';
+    let saved = false;
+    try {
+      const started = await api('api/sources/rename', 'POST', {old_id: oldId, new_id: newId, background: true});
+      let status;
+      do {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        status = await api(`api/jobs/${encodeURIComponent(started.job_id)}`);
+        el('rename-source-status').textContent = '서버에서 사진 JSON과 스캔 기록을 변경 중입니다. 완료 여부를 확인하고 있습니다…';
+      } while (['queued', 'running', 'stopping'].includes(status.status));
+      if (status.status !== 'completed') throw new Error(status.error || status.warning || `작업 상태: ${status.status}`);
+      config = status.result;
+      saved = true;
+      el('rename-source-old').textContent = newId;
+      const sourceId = el('source-form').elements.namedItem('source_id');
+      if (sourceId.value === oldId) sourceId.value = newId;
+      await loadConfig();
+      el('rename-source-dialog').close();
+      notify(`소스 ID를 ${oldId} → ${newId}(으)로 저장했습니다. 사진·태그·스캔 기록의 연결을 유지했습니다.`);
+    } catch (error) {
+      el('rename-source-status').textContent = saved
+        ? `ID는 ${newId}(으)로 저장됐지만 화면 갱신에 실패했습니다. 페이지를 새로고침하세요. ${error.message}`
+        : `완료를 확인하지 못했습니다. ${error.message} · 연결이 끊겨도 서버 작업은 계속될 수 있습니다. 페이지를 새로고침해 현재 소스 ID와 작업 상태를 확인하세요.`;
+    } finally {
+      renaming = false;
+      el('rename-source-submit').disabled = el('rename-source-cancel').disabled = el('rename-source-new').disabled = false;
+    }
+  };
+  el('managed-form').onsubmit = safe(async event => { event.preventDefault(); await api('api/config', 'PUT', {...config, managed_root: el('managed-root').value, scan_min_free_mb: Number(el('scan-min-free').value)}); await loadConfig(); notify('관리 경로와 스캔 여유 공간 기준을 저장했습니다.'); });
+  el('source-form').addEventListener('invalid', event => {
+    el('source-save-status').textContent = `필수 입력 또는 형식을 확인하세요: ${event.target.name}`;
+  }, true);
+  el('source-form').onsubmit = async event => {
+    event.preventDefault();
+    const form = el('source-form'), source = Object.fromEntries(new FormData(form));
+    source.recursive = form.elements.namedItem('recursive').checked;
+    const status = el('source-save-status'), button = el('source-save');
+    if (button.disabled) return;
+    button.disabled = true;
+    status.textContent = '소스 설정을 저장하고 있습니다…';
+    let saved = false;
+    try {
+      const {existing} = await api('api/sources/check', 'POST', source);
+      if (existing && existing.source_id !== source.source_id) {
+        if (!confirm(`같은 경로의 기존 소스 ID는 ${existing.source_id}입니다.\n${source.source_id}(으)로 변경하시겠습니까?`)) {
+          status.textContent = '소스 ID 변경을 취소했습니다. 설정은 저장하지 않았습니다.';
+          return;
+        }
+        await api('api/sources/rename', 'POST', {old_id: existing.source_id, new_id: source.source_id});
+      }
+      // Read current settings to avoid overwriting other sources with a stale UI copy.
+      const latest = await api('api/config');
+      await api('api/config', 'PUT', {...latest, sources: [...latest.sources.filter(s => s.source_id !== source.source_id), source]});
+      const verified = await api('api/config');
+      const stored = verified.sources.find(s => s.source_id === source.source_id);
+      if (!stored || stored.category !== source.category || stored.owner_id !== source.owner_id) {
+        throw new Error('저장 후 카테고리·소유자가 입력값과 다릅니다. 다른 창에서 설정을 변경 중인지 확인하세요.');
+      }
+      saved = true;
+      await loadConfig();
+      status.textContent = `저장 확인 완료: ${stored.source_id} · 카테고리 ${stored.category} · 소유자 ${stored.owner_id}. 기존 사진에도 반영하려면 위의 ‘기존 사진에 카테고리·소유자 적용’을 누르세요.`;
+      notify(`소스 설정을 저장했습니다: ${stored.category} / ${stored.owner_id}`);
+    } catch (error) {
+      status.textContent = (saved ? '설정은 저장됐지만 화면 갱신에 실패했습니다. ' : '저장 완료를 확인하지 못했습니다. ') + error.message;
+      notify(status.textContent);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  el('merge-preview').onclick = safe(async () => {
+    if (el('managed-root').value !== config.managed_root || Number(el('scan-min-free').value) !== (config.scan_min_free_mb ?? 512)) {
+      throw new Error('관리 경로·여유 공간 기준을 먼저 저장한 뒤 갱신하세요.');
+    }
+    el('job-result').textContent = '';
+    el('merge-settings').textContent = '현재 저장된 설정과 사진 분류로 병합 경로를 다시 계산하고 있습니다…';
+    await job('api/merge', {preview: true});
   });
-  el('merge-preview').onclick = safe(() => job('api/merge', {preview: true}));
   el('merge-run').onclick = safe(async () => { if (confirm('활성 파일 전체를 월별 관리 디렉토리에 병합 복사합니까?')) await job('api/merge', {preview: false}); });
   el('verify-selected').onclick = safe(() => job('api/verify', {ids: selected(), full: true}));
   el('trash-selected').onclick = safe(async () => {
@@ -231,9 +383,50 @@
       if (!result[key].length) el('duplicates-list').append(make('p', '해당 항목이 없습니다.'));
     }
   }
+  async function loadDuplicateSources() {
+    const status = el('duplicate-sources-status'), list = el('duplicate-sources-list');
+    const button = el('find-duplicate-sources');
+    button.disabled = true; list.replaceChildren(); status.textContent = '스캔 DB의 소스별 파일 목록을 비교하고 있습니다…';
+    try {
+      const result = await api('api/duplicate-sources');
+      status.textContent = `중복 후보 ${result.groups.length}개 그룹 · ${result.basis}`;
+      for (const group of result.groups) {
+        const row = make('section', '', 'source-row');
+        row.append(make('h3', `${group.sources.length}개 소스 · ${group.file_count.toLocaleString()}개 파일 · ${group.total_bytes.toLocaleString()}바이트`));
+        row.append(make('p', group.same_content ? '스캔 당시 SHA-256도 모두 같습니다.' : '주의: 파일 목록과 크기는 같지만 SHA-256이 다른 파일이 있습니다. 내용이 동일한 소스로 판단하지 마세요.'));
+        for (const source of group.sources) {
+          const line = make('p', `${source.source_id} · ${source.root} `);
+          const keep = make('select'); keep.setAttribute('aria-label', `${source.source_id} 대신 유지할 소스`);
+          group.sources.filter(other => other.source_id !== source.source_id).forEach(other => keep.add(new Option(`유지: ${other.source_id}`, other.source_id)));
+          line.append(keep, action('소스 해제·관리 복사본 삭제', async () => {
+            if (!confirm(`${source.source_id} 등록을 해제하고 ${keep.value}를 유지합니까?\n원본 파일은 유지합니다. 이 소스 전용 관리 복사본은 영구 삭제합니다. 다른 소스가 참조하는 공유 복사본은 유지합니다.`)) return;
+            await job('api/duplicate-sources/unregister', {source_id: source.source_id, keep_id: keep.value, fingerprint: group.fingerprint, background: true});
+            await loadConfig(); await loadDuplicateSources();
+          }));
+          row.append(line);
+        }
+        const details = make('details'), title = make('summary', '비교한 파일 목록');
+        const listing = make('pre'); let shown = 0;
+        const more = action('파일 목록 100개 더 보기', () => {
+          const batch = group.files.slice(shown, shown + 100);
+          listing.append(document.createTextNode(batch.map(file => `${file.relative_path} · ${file.size_bytes.toLocaleString()}바이트`).join('\n') + '\n'));
+          shown += batch.length; more.hidden = shown >= group.files.length;
+        });
+        details.append(title, listing, more); row.append(details); list.append(row);
+        more.click();
+      }
+    } catch (error) { status.textContent = error.message; throw error; }
+    finally { button.disabled = false; }
+  }
+  el('find-duplicate-sources').onclick = safe(loadDuplicateSources);
   el('refresh-trash').onclick = safe(loadTrash); el('refresh-duplicates').onclick = safe(loadDuplicates);
   el('refresh-jobs').onclick = safe(async () => { await loadConfig(); await loadJobs(); });
   el('jobs-prev').onclick = safe(async () => { jobsOffset = Math.max(0, jobsOffset - 20); await loadJobs(); });
   el('jobs-next').onclick = safe(async () => { jobsOffset += 20; await loadJobs(); });
-  tab(jobsPage ? 'sources-panel' : 'library-panel'); safe(async () => { await loadConfig(); await facets(); await load(); await loadJobs(); })();
+  tab(jobsPage || sourcesOnly ? 'sources-panel' : 'library-panel');
+  safe(async () => {
+    await loadConfig();
+    if (!jobsPage && !sourcesOnly) { await facets(); await load(); }
+    await loadJobs();
+  })();
 })();

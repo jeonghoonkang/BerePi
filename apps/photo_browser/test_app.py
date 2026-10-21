@@ -30,6 +30,22 @@ class BrowserTests(unittest.TestCase):
         child = self.client.get('/api/browse', query_string={'path': str(self.root / '하위 폴더')}).json
         self.assertEqual(child['parent'], str(self.root))
 
+    def test_all_formats_are_browsable_and_served(self):
+        formats = {'jpg': False, 'jpeg': False, 'png': False, 'gif': False,
+                   'webp': False, 'mov': True, 'avi': True, 'mp4': True}
+        folder = self.root / 'formats'
+        folder.mkdir()
+        for extension in formats:
+            (folder / f'file.{extension.upper()}').write_bytes(b'0123456789')
+        result = self.client.get('/api/browse', query_string={'path': str(folder)}).json
+        self.assertEqual(len(result['media']), len(formats))
+        for item in result['media']:
+            with self.subTest(name=item['name']):
+                self.assertEqual(item['video'], formats[Path(item['name']).suffix[1:].lower()])
+                with self.client.get('/media', query_string={'path': item['path']}, headers={'Range': 'bytes=2-5'}) as response:
+                    self.assertEqual(response.status_code, 206)
+                    self.assertEqual(response.data, b'2345')
+
     def test_scan_limit(self):
         for index in range(110):
             (self.root / '하위 폴더' / f'{index:03}.jpg').write_bytes(b'image')
@@ -45,6 +61,32 @@ class BrowserTests(unittest.TestCase):
             with self.assertRaises(__import__('argparse').ArgumentTypeError):
                 create_app(self.root, self.root, self.root / 'db', limit=invalid)
 
+    def test_browse_batches_and_total_size(self):
+        folder = self.root / 'batches'
+        folder.mkdir()
+        for index in range(7):
+            (folder / f'{index}.jpg').write_bytes(b'x' * (index + 1))
+        (folder / 'ignored.txt').write_bytes(b'ignored')
+        client = create_app(self.root, self.root, self.root / 'db', limit=3).test_client()
+        paths = []
+        for offset, count, truncated in ((0, 3, True), (3, 3, True), (6, 1, False), (7, 0, False)):
+            page = client.get('/api/browse', query_string={'path': str(folder), 'offset': offset}).json
+            self.assertEqual(page['total'], 7)
+            self.assertEqual(page['total_bytes'], 28)
+            self.assertEqual(len(page['media']), count)
+            self.assertEqual(page['truncated'], truncated)
+            self.assertEqual(page['next_offset'], offset + count)
+            paths.extend(item['path'] for item in page['media'])
+        self.assertEqual(len(set(paths)), 7)
+        for offset in ('-1', 'abc', '1.5'):
+            self.assertEqual(client.get('/api/browse', query_string={'offset': offset}).status_code, 400)
+        exact = client.get('/api/browse', query_string={'path': str(folder), 'offset': 4}).json
+        self.assertFalse(exact['truncated'])
+        empty = self.root / 'empty'
+        empty.mkdir()
+        page = client.get('/api/browse', query_string={'path': str(empty)}).json
+        self.assertEqual((page['total'], page['total_bytes'], page['media']), (0, 0, []))
+
     def test_media_range_and_access_boundary(self):
         response = self.client.get('/media', query_string={'path': str(self.root / '하위 폴더' / 'clip.mp4')}, headers={'Range': 'bytes=2-5'})
         self.assertEqual(response.status_code, 206)
@@ -57,6 +99,25 @@ class BrowserTests(unittest.TestCase):
         except OSError:
             return  # Windows accounts without symlink privileges.
         self.assertEqual(self.client.get('/media', query_string={'path': str(self.root / 'escape.jpg')}).status_code, 403)
+
+    def test_corrupt_job_history_is_preserved_and_does_not_block_startup(self):
+        jobs = self.root / 'recovery-db' / 'jobs'
+        jobs.mkdir(parents=True)
+        broken = b'{"job_id":"broken", "result": [1,2'
+        (jobs / 'broken.json').write_bytes(broken)
+        (jobs / 'invalid.json').write_text('[]')
+        client = create_app(self.root, self.root, jobs.parent).test_client()
+        response = client.get('/api/jobs')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['total'], 2)
+        self.assertTrue(all(job['status'] == 'failed' for job in response.json['items']))
+        backups = list((jobs / 'corrupt').glob('*.bak'))
+        self.assertEqual(len(backups), 2)
+        self.assertIn(broken, [p.read_bytes() for p in backups])
+        self.assertEqual(client.get('/').status_code, 200)
+        restarted = create_app(self.root, self.root, jobs.parent).test_client()
+        self.assertEqual(restarted.get('/api/jobs').json['total'], 2)
+        self.assertEqual(len(list((jobs / 'corrupt').glob('*.bak'))), 2)
 
     def test_page_and_missing_folder(self):
         self.assertEqual(self.client.get('/').status_code, 200)
