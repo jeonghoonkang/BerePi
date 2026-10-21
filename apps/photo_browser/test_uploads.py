@@ -41,6 +41,42 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(self.app.extensions['photo_library'].items(), [])
         self.assertEqual(list(self.folder.glob('*.part')), [])
 
+    def test_create_nested_directory_then_upload_and_reuse(self):
+        folder = self.folder / '가족' / '2026' / '10'
+        response = self.client.post('/api/uploads/directory', json={'directory': str(folder)}, headers=self.headers)
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json['created'])
+        self.assertEqual(response.json['directory'], str(folder))
+        self.assertTrue(folder.is_dir())
+        self.assertEqual(self.upload(query={'directory': str(folder)}).status_code, 201)
+        response = self.client.post('/api/uploads/directory', json={'directory': str(folder)}, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json['created'])
+        self.assertEqual((folder / '사진.jpg').read_bytes(), b'photo bytes')
+
+    def test_create_directory_rejects_invalid_paths_and_preserves_files(self):
+        endpoint = '/api/uploads/directory'
+        for data in [[], {}, {'directory': None}, {'directory': 1}, {'directory': '  '}, {'directory': str(self.root.parent / ('outside-' + self.root.name))}]:
+            self.assertEqual(self.client.post(endpoint, json=data, headers=self.headers).status_code, 400)
+        self.assertFalse((self.root.parent / ('outside-' + self.root.name)).exists())
+        existing = self.folder / 'photo.jpg'
+        existing.write_bytes(b'original')
+        response = self.client.post(endpoint, json={'directory': str(existing)}, headers=self.headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('같은 경로에 파일', response.json['error'])
+        self.assertEqual(existing.read_bytes(), b'original')
+        self.assertEqual(list(self.folder.iterdir()), [existing])
+
+    def test_create_directory_auth_csrf_and_storage_failure(self):
+        endpoint, data = '/api/uploads/directory', {'directory': str(self.folder / 'new')}
+        self.assertEqual(self.client.post(endpoint, json=data).status_code, 403)
+        self.assertEqual(self.client.post(endpoint, json=data, headers={**self.headers, 'Origin': 'https://other.invalid'}).status_code, 403)
+        with patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'}):
+            self.assertEqual(self.client.post(endpoint, json=data, headers=self.headers).status_code, 401)
+        with patch('uploads.Path.mkdir', side_effect=PermissionError('not writable')):
+            self.assertEqual(self.client.post(endpoint, json=data, headers=self.headers).status_code, 409)
+        self.assertFalse((self.folder / 'new').exists())
+
     def test_collisions_preserve_existing_files_and_directories(self):
         (self.folder / '사진.jpg').write_bytes(b'original')
         self.assertEqual(self.upload(content=b'second').json['name'], '사진_중복.jpg')

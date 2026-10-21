@@ -1,7 +1,7 @@
 /* Sequential uploads keep browser and server memory independent of file size. */
 (() => {
   const el = id => document.getElementById(id);
-  let settings, running = false, stopping = false, savedDirectory;
+  let settings, running = false, creating = false, stopping = false, savedDirectory;
   const bytes = value => `${(value / 1048576).toLocaleString(undefined, {maximumFractionDigits: 2})} MiB`;
   const status = value => { el('upload-status').textContent = value; };
   const settingsReady = fetch('api/uploads/settings', {cache: 'no-store'}).then(async response => {
@@ -12,6 +12,25 @@
   }).catch(error => { el('upload-limits').textContent = error.message; });
 
   el('upload-use-current').onclick = () => { el('upload-directory').value = el('directory-path').value; };
+  el('upload-create-directory').onclick = async () => {
+    if (running || creating) return;
+    const directory = el('upload-directory').value.trim();
+    if (!directory) { status('생성할 디렉토리 경로를 입력하세요.'); return; }
+    creating = true;
+    const controls = ['upload-start', 'upload-directory', 'upload-use-current', 'upload-create-directory'];
+    controls.forEach(id => { el(id).disabled = true; });
+    status('디렉토리를 생성하고 있습니다…');
+    try {
+      const response = await fetch('api/uploads/directory', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Photo-Browser': '1'}, body: JSON.stringify({directory})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '디렉토리를 생성하지 못했습니다.');
+      savedDirectory = result.directory;
+      el('upload-directory').value = result.directory;
+      el('upload-open-folder').hidden = false;
+      status(`${result.created ? '디렉토리 생성 완료' : '이미 존재하는 디렉토리입니다'}: ${result.directory}\n이 경로에 파일을 업로드할 수 있습니다.`);
+    } catch (error) { status(error.message); }
+    finally { creating = false; controls.forEach(id => { el(id).disabled = false; }); }
+  };
   el('upload-stop').onclick = () => {
     stopping = true; el('upload-stop').disabled = true;
     status('현재 파일이 완료되면 나머지 업로드를 중지합니다.');
@@ -43,7 +62,7 @@
   }
   el('upload-form').onsubmit = async event => {
     event.preventDefault();
-    if (running) return;
+    if (running || creating) return;
     await settingsReady;
     if (!settings) { status('업로드 설정을 확인하지 못했습니다. 페이지를 새로고침하세요.'); return; }
     const files = [...el('upload-files').files], directory = el('upload-directory').value.trim();
@@ -51,7 +70,7 @@
     const invalid = files.find(file => !file.size || file.size > settings.max_file_bytes || !settings.extensions.includes('.' + file.name.split('.').pop().toLowerCase()));
     if (invalid) { status(`${invalid.name}: 지원 형식과 파일당 용량 한도를 확인하세요. 빈 파일은 업로드할 수 없습니다.`); return; }
     running = true; stopping = false;
-    for (const id of ['upload-start', 'upload-files', 'upload-directory', 'upload-use-current']) el(id).disabled = true;
+    for (const id of ['upload-start', 'upload-files', 'upload-directory', 'upload-use-current', 'upload-create-directory']) el(id).disabled = true;
     el('upload-stop').disabled = false; el('upload-open-folder').hidden = true;
     el('upload-progress').hidden = false; el('upload-results').replaceChildren();
     const rows = files.map(file => { const row = document.createElement('li'); row.textContent = `${file.name} · 대기`; el('upload-results').append(row); return row; });
@@ -77,7 +96,7 @@
       status(`업로드 ${stopping ? '중지' : '완료'} · 성공 ${success}개 · 실패 ${failed}개 · 미전송 ${files.length - processed}개. 성공한 파일은 서버에 저장되었습니다.`);
     } finally {
       running = false;
-      for (const id of ['upload-start', 'upload-files', 'upload-directory', 'upload-use-current']) el(id).disabled = false;
+      for (const id of ['upload-start', 'upload-files', 'upload-directory', 'upload-use-current', 'upload-create-directory']) el(id).disabled = false;
       el('upload-stop').disabled = true;
     }
   };

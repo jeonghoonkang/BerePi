@@ -57,6 +57,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
     @app.errorhandler(403)
     @app.errorhandler(404)
     @app.errorhandler(400)
+    @app.errorhandler(409)
     @app.errorhandler(413)
     @app.errorhandler(InsufficientUploadSpace)
     def error(exc):

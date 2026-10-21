@@ -28,6 +28,18 @@ def register_uploads(app):
     def upload_settings():
         return jsonify(max_file_bytes=maximum, extensions=sorted(EXTENSIONS))
 
+    @app.post('/api/uploads/directory')
+    def create_directory():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get('directory'), str) or not data['directory'].strip():
+            abort(400, description='생성할 디렉토리 경로를 입력하세요.')
+        folder = library.local(data['directory'].strip())
+        if folder.exists() and not folder.is_dir():
+            abort(409, description='같은 경로에 파일이 있습니다. 다른 디렉토리 경로를 입력하세요.')
+        created = not folder.is_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        return jsonify(directory=str(folder), created=created), 201 if created else 200
+
     @app.post('/api/uploads')
     def upload_file():
         # Other API bodies retain their 2 MiB limit. Flask 3.1 supports a
