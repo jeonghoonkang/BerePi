@@ -10,3 +10,4 @@ body{overflow-wrap:anywhere}.tools>*{min-width:0}.source-row{min-width:0}input,s
 .job-card>summary{cursor:pointer;font-weight:600}.job-card>summary:focus-visible{outline:2px solid #a4efc5;outline-offset:4px}.job-card[open]>summary{margin-bottom:12px}
 
 #jobs-nav{display:inline-block;margin:12px}.jobs-page .tabs,.jobs-page .path-settings,.jobs-page #sources-panel>:not(.job-history){display:none}.jobs-page .job-history{display:block}
+.server-network{display:flex;flex-wrap:wrap;gap:10px 24px;margin-bottom:24px;padding:14px 16px;border:1px solid #394555;border-radius:10px;background:#151e29;font-size:14px}.server-network strong{color:#a4efc5}.server-network span{color:#9cabbc}.server-network b{color:#e9edf4;overflow-wrap:anywhere}@media(max-width:600px){.server-network{flex-direction:column;gap:8px}}

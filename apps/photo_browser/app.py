@@ -31,6 +31,13 @@ def create_app(root=None, start=None, db=None, limit=20000):
     register_library(app, boundary, db or os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')))
     app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
     app.config['PHOTO_BROWSER_START'] = str(initial)
+    from server_network import ServerNetwork
+    server_network = ServerNetwork()
+    app.extensions['server_network'] = server_network
+
+    @app.get('/api/server-network')
+    def network_info():
+        return jsonify(server_network.get())
 
     def checked(value):
         path = Path(value).expanduser().resolve()
