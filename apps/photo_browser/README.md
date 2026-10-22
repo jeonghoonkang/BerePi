@@ -486,22 +486,79 @@ GET  /api/scans                   소스별 최신 체크포인트
 
 CLI로 **JSON DB 전체와 관리 디렉토리 전체(휴지통 포함)**를 하나의 백업 폴더에 저장하고 다른 장치의 새 경로로 복원할 수 있습니다. 사진뿐 아니라 이벤트·태그·촬영 정보·병합 보고서·스캔 체크포인트도 함께 보존합니다. 일반 파일과 기존 캐시·다운로드 ZIP도 포함하며 `.write.lock` 파일은 제외합니다. 심볼릭 링크나 일반 파일이 아닌 항목은 오류로 처리합니다. 압축하지 않는 폴더 형식이므로 외장 디스크나 마운트된 NAS에 직접 저장하거나, 완성된 폴더 전체를 다른 장치로 복사할 수 있습니다.
 
+### 1. 백업 전 준비
+
+아래 명령은 저장소 루트에서 실행합니다. 설치한 Python 가상환경을 사용하고 예시 경로는 실제 서버 설정으로 바꾸세요. 기존 장치의 DB는 `/data/photo_db`, 허용 루트는 `/data`, 백업 저장소는 `/backup`인 예입니다.
+
+1. 필요한 사진의 스캔과 병합을 완료합니다. 실행 중인 작업은 **중지하고 저장** 후 종료 상태를 확인합니다.
+2. 일관된 백업을 위해 웹서버와 외부 파일 변경 작업을 중지합니다. 서버를 켠 상태도 지원하지만 다른 쓰기 작업과 충돌하면 백업이 거부됩니다.
+3. `/backup` 상위 경로를 준비하고 쓰기 권한·여유 공간을 확인합니다. DB와 관리 파일의 복사량 외에도 여유 공간이 필요합니다.
+4. 백업 대상 `/backup/photo-library-20261022`는 미리 만들지 않습니다. 실행마다 날짜나 번호가 다른 새 경로를 사용하세요.
+
+### 2. 기존 장치에서 백업 생성
+
 ```bash
-# 1. 기존 장치: 새 백업 폴더 생성 (기존 서버와 동일한 DB·허용 루트)
 python3 apps/photo_browser/cli.py --db /data/photo_db --root /data \
   backup --destination /backup/photo-library-20261022
+```
 
-# 2. 백업 폴더 전체를 다른 장치로 옮긴 후 검증 (DB 설정 불필요)
+반환 JSON에서 `status: "completed"`와 `active_items_without_managed_copy: 0`을 확인합니다. 후자가 0보다 크면 관리 복사본이 없는 사진이 있으므로 필요한 병합을 마친 뒤 다른 새 폴더로 백업하세요. 오류가 발생했다면 다음 단계로 진행하지 않습니다.
+
+### 3. 백업 검증 후 다른 장치로 전송
+
+```bash
 python3 apps/photo_browser/cli.py backup-check --backup /backup/photo-library-20261022
+```
 
-# 3. 새 장치: 존재하지 않는 새 폴더로 복원 (DB 설정 불필요)
+`status: "verified"`와 파일 수·총 바이트를 확인합니다. `backup-check`는 기존 DB나 실행 중인 서버 없이 백업 폴더만으로 검사합니다.
+
+외장 디스크를 사용하면 `photo-library-20261022` 폴더 전체를 새 장치에 연결하거나 복사하세요. SSH가 가능한 Linux/macOS 장치 간에는 다음처럼 전송할 수 있습니다. `user@new-host`는 실제 계정·호스트로 바꾸고 새 장치의 `/backup`은 미리 준비하세요. 같은 이름의 대상 백업 폴더가 없는 상태에서 실행합니다.
+
+```bash
+scp -rp /backup/photo-library-20261022 user@new-host:/backup/
+```
+
+`manifest.json`, `db/`, `managed/`를 모두 옮겨야 합니다. `managed/.trash` 등 숨김 파일·폴더도 포함하세요. **전송 후 새 장치에서 같은 `backup-check` 명령을 다시 실행**해 전송 누락·손상이 없는지 확인합니다. 외장 디스크에 직접 백업했다면 별도 네트워크 전송 없이 그 경로를 다음 단계의 `--backup`으로 지정하면 됩니다.
+
+### 4. 새 장치에서 새 경로로 복원
+
+새 장치에 저장소 코드와 [설치 및 실행](#설치-및-실행)의 Python 의존성을 준비한 뒤 실행합니다. `/data` 상위 디렉토리의 쓰기 권한과 복원 용량을 확보하고, `/data/restored-photos` 자체는 미리 생성하지 마세요. 복원 명령에는 이전 장치의 `--db`·`--root`가 필요하지 않습니다.
+
+```bash
 python3 apps/photo_browser/cli.py restore \
   --backup /backup/photo-library-20261022 --destination /data/restored-photos
+```
 
-# 4. 복원된 라이브러리 실행
+성공하면 `status: "completed"`와 새 `db`, `managed_root`, `root`를 반환하고 `/data/restored-photos/restore.json`을 생성합니다. 복원 도중 파일별 무결성을 확인하며 DB의 관리 파일 참조도 새 경로로 갱신합니다. 실패한 경우 출력 오류를 해결하고 다른 새 경로에서 재시도하세요.
+
+### 5. 복원된 설정 확인과 서버 실행
+
+```bash
+# 반환된 새 경로로 설정 확인
+python3 apps/photo_browser/cli.py --db /data/restored-photos/db \
+  --root /data/restored-photos config
+
+# 복원 완료 후 서버 시작
 python3 apps/photo_browser/app.py --root /data/restored-photos \
   --directory /data/restored-photos/managed --db /data/restored-photos/db
 ```
+
+브라우저에서 <http://127.0.0.1:7081/>에 접속해 사진·동영상 열기, 이벤트·태그 검색, 휴지통 목록을 확인하세요. 기존 서버가 같은 장치의 7081 포트를 사용 중이면 종료하거나 새 서버에 `--port 7082`를 지정합니다. 비밀번호 인증을 사용했다면 실행 전에 `PHOTO_BROWSER_PASSWORD`도 별도로 설정하세요.
+
+원본 소스를 옮기지 않아도 관리 복사본이 있는 사진은 열 수 있습니다. `compare`는 **현재 원본과의 대조**이므로 원본이 연결되지 않은 장치에서는 누락을 보고할 수 있습니다. 백업 파일 검증은 `backup-check`, 복원 완료 여부는 `restore` 결과와 실제 라이브러리 열기로 확인하세요. 원본까지 재연결한 뒤 필요하면 `compare`를 실행합니다.
+
+### Windows PowerShell 예시
+
+설치한 가상환경의 Python을 직접 사용합니다. 아래 `E:/photo_db`, `E:/`, `F:/backups`, `E:/restored-photos`는 실제 경로로 바꾸고, 백업·복원 대상 폴더는 존재하지 않아야 합니다. 장치 간 전송과 성공 결과 확인은 위 절차와 같습니다.
+
+```powershell
+.\apps\photo_browser\.venv\Scripts\python.exe apps/photo_browser/cli.py --db E:/photo_db --root E:/ backup --destination F:/backups/photo-library-20261022
+.\apps\photo_browser\.venv\Scripts\python.exe apps/photo_browser/cli.py backup-check --backup F:/backups/photo-library-20261022
+.\apps\photo_browser\.venv\Scripts\python.exe apps/photo_browser/cli.py restore --backup F:/backups/photo-library-20261022 --destination E:/restored-photos
+.\apps\photo_browser\.venv\Scripts\python.exe apps/photo_browser/app.py --root E:/restored-photos --directory E:/restored-photos/managed --db E:/restored-photos/db
+```
+
+### 저장 구조와 보존 범위
 
 백업 결과는 다음 구조입니다. `manifest.json`은 모든 복사가 성공한 뒤 기록하며 파일별 상대 경로·크기·수정 시각·SHA-256과 이전 DB·관리 루트를 포함합니다.
 
@@ -523,7 +580,18 @@ restored-photos/
 
 원본 소스 폴더와 원격 인증 환경변수, 앱 실행 코드·Python 환경은 백업 대상이 아닙니다. 새 장치에도 앱과 의존성을 설치하고 인증 값을 별도로 설정하세요. 원본 소스 경로·URI는 유지하며 관리 복사본만으로도 사진을 열 수 있습니다. 원본을 다시 스캔·병합하려면 원본 경로를 새 장치에 연결하고 필요하면 설정의 소스 경로와 서버 허용 루트를 조정하세요. 소스 설정을 바꾸면 이전 스캔 세션 이어하기 대신 새 스캔이 필요할 수 있습니다.
 
-백업·복원 대상은 **존재하지 않는 새 디렉토리**여야 하며 기존 라이브러리를 덮어쓰지 않습니다. DB·관리 루트와 백업은 서로 포함되지 않는 별도 경로를 사용하고, 백업 폴더를 원본 스캔 경로 아래에 두지 마세요. 실패·일반 중단 시 이번에 생성한 출력 폴더만 정리합니다. 강제 종료·전원 장애로 미완성 폴더가 남으면 다른 새 경로로 다시 실행하세요. 완료된 백업에는 `manifest.json`, 완료된 복원에는 `restore.json`이 있습니다. 백업·복원 이어하기는 현재 지원하지 않습니다. 정상은 종료 코드 0, 검증·복사 오류는 1, `Ctrl+C` 중단은 130입니다.
+### 오류 처리와 재실행
+
+| 증상 | 확인·처리 방법 |
+| --- | --- |
+| 대상 디렉토리가 이미 존재함 | 기존 데이터를 보존하고 다른 새 대상 경로를 지정합니다. 빈 폴더도 대상으로 사용할 수 없습니다. |
+| 다른 작업이 실행 중임 | 웹의 스캔·병합·검증 등 작업이 끝난 후 재실행합니다. `.write.lock` 파일을 삭제해 해결하지 마세요. |
+| 파일 목록·무결성 검사 실패 | 완성된 백업 폴더 전체를 옮겼는지 확인합니다. 원본 백업에서도 실패하면 기존 라이브러리에서 새 백업을 생성합니다. |
+| 디스크 공간 부족 | 대상 디스크에 DB와 관리 파일을 함께 저장할 공간을 확보한 뒤 새 경로로 재실행합니다. |
+| 심볼릭 링크 발견 | 링크로 연결한 외부 파일은 자동 수집하지 않습니다. 백업할 실제 DB·관리 파일 구성을 확인한 뒤 다시 실행합니다. |
+| 강제 종료 후 미완성 폴더가 남음 | 이어하기는 지원하지 않으므로 다른 새 경로로 다시 실행합니다. 기존 완료 백업은 유지합니다. |
+
+백업·복원 대상은 **존재하지 않는 새 디렉토리**여야 하며 기존 라이브러리를 덮어쓰지 않습니다. DB·관리 루트와 백업은 서로 포함되지 않는 별도 경로를 사용하고, 백업 폴더를 원본 스캔 경로 아래에 두지 마세요. 실패·일반 중단 시 이번에 생성한 출력 폴더만 정리합니다. 완료된 백업에는 `manifest.json`, 완료된 복원에는 `restore.json`이 있습니다. 정상은 종료 코드 0, 검증·복사 오류는 1, `Ctrl+C` 중단은 130입니다.
 
 백업 시 기존 DB 작업 잠금을 획득하므로 웹서버의 다른 쓰기 작업과 충돌하면 거부합니다. 가장 안정적인 이전 절차는 기존 서버·외부 파일 변경을 중지한 후 백업하고 검증하는 것입니다. 새 경로 복원이므로 기존 서버는 계속 실행할 수 있지만 복원이 완료되기 전에는 복원 대상 서버를 시작하지 마세요. 백업 자체도 검사 중 수정하지 마세요. 성공한 백업과 기존 데이터는 복원 성공을 확인할 때까지 보관하세요.
 
