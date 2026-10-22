@@ -1,10 +1,14 @@
 import contextlib
 import io
 import json
+import stat
 import tempfile
 import unittest
+import warnings
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from PIL import Image
 
@@ -172,6 +176,107 @@ class BackupTests(unittest.TestCase):
         restored = Library(result['db'], self.root)
         self.assertEqual(restored.scan('photos', mode='resume')['status'], 'completed')
         self.assertTrue(Path(restored.items()[0]['locations'][-1]['path']).is_relative_to(self.target))
+
+    def test_zip_roundtrip_compresses_and_records_original_paths(self):
+        bundle = self.root / '가족사진.zip'
+        (self.library.db / 'notes.txt').write_text('event metadata\n' * 10000)
+        extra = self.root / 'managed' / '추가 사진.jpg'
+        extra.write_bytes(b'original media')
+        original = self.library.items()[0]
+        photo = Path(original['locations'][-1]['path'])
+        mtime = photo.stat().st_mtime_ns
+        result = create_backup(self.library, bundle)
+        self.assertEqual(result['container'], 'zip')
+        self.assertLess(result['archive_bytes'], result['total_bytes'])
+        self.assertEqual(verify_backup(bundle)['status'], 'verified')
+        with zipfile.ZipFile(bundle) as archive:
+            manifest = json.loads(archive.read('manifest.json'))
+            self.assertEqual(manifest['original_db'], str(self.library.db))
+            self.assertEqual(manifest['original_managed_root'], str(self.root / 'managed'))
+            self.assertEqual(manifest['original_allowed_root'], str(self.root))
+            self.assertEqual(manifest['source_roots'][0]['root'], str(self.root / 'incoming'))
+            self.assertIn('managed/추가 사진.jpg', archive.namelist())
+            self.assertTrue(all(info.compress_type == zipfile.ZIP_DEFLATED for info in archive.infolist()))
+        result = restore_backup(bundle, self.target)
+        restored = Library(result['db'], result['root'])
+        item = restored.items()[0]
+        self.assertEqual(item['classification'], original['classification'])
+        self.assertEqual(item['capture'], original['capture'])
+        path = Path(item['locations'][-1]['path'])
+        self.assertTrue(path.is_relative_to(self.target / 'managed'))
+        self.assertEqual(item['locations'][-1]['uri'], path.as_uri())
+        self.assertEqual(digest(path), original['sha256'])
+        self.assertEqual(path.stat().st_mtime_ns, mtime)
+        self.assertEqual((self.target / 'managed' / extra.name).read_bytes(), extra.read_bytes())
+        self.assertEqual(read_json(self.target / 'restore.json')['backup'], str(bundle))
+
+    def test_zip_cli_without_old_database(self):
+        bundle = self.root / 'library.archive'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(['--db', str(self.library.db), '--root', str(self.root), 'backup',
+                                   '--format', 'zip', '--destination', str(bundle)]), 0)
+            self.assertEqual(main(['backup-check', '--backup', str(bundle)]), 0)
+            self.assertEqual(main(['--db', str(self.root / 'absent'), 'restore', '--backup', str(bundle),
+                                   '--destination', str(self.target)]), 0)
+        self.assertFalse((self.root / 'absent').exists())
+
+    def test_zip_corruption_and_untrusted_entries_rejected(self):
+        bundle = self.root / 'valid.zip'
+        create_backup(self.library, bundle)
+        with zipfile.ZipFile(bundle) as archive:
+            data = [(info, archive.read(info)) for info in archive.infolist()]
+        for attack in ('content', 'traversal', 'extra', 'duplicate', 'symlink', 'invalid-size'):
+            with self.subTest(attack=attack):
+                damaged = self.root / (attack + '.zip')
+                with warnings.catch_warnings(), zipfile.ZipFile(damaged, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+                    warnings.simplefilter('ignore', UserWarning)
+                    for info, value in data:
+                        if info.filename == 'manifest.json' and attack in {'traversal', 'invalid-size'}:
+                            manifest = json.loads(value)
+                            if attack == 'traversal':
+                                manifest['files'][0]['path'] = 'db/../../escape'
+                            else:
+                                manifest['files'][0]['size_bytes'] = -1
+                            value = json.dumps(manifest).encode()
+                        if info.filename.endswith('photo.jpg') and attack == 'content':
+                            value = b'x' * len(value)
+                        archive.writestr(info, value)
+                    if attack in {'extra', 'duplicate', 'symlink'}:
+                        info = zipfile.ZipInfo('evil.jpg' if attack != 'duplicate' else 'manifest.json')
+                        if attack == 'symlink':
+                            info.create_system = 3
+                            info.external_attr = (stat.S_IFLNK | 0o777) << 16
+                        archive.writestr(info, b'outside')
+                with self.assertRaises(ValueError):
+                    verify_backup(damaged)
+                with self.assertRaises(ValueError):
+                    restore_backup(damaged, self.target)
+                self.assertFalse(self.target.exists())
+                self.assertFalse((self.root / 'escape').exists())
+        damaged.write_bytes(b'PK truncated')
+        with self.assertRaises(ValueError):
+            verify_backup(damaged)
+
+    def test_zip_no_overwrite_overlap_or_partial_output_on_failure(self):
+        bundle = self.root / 'photos.zip'
+        with self.library.writing(), self.assertRaises(ValueError):
+            create_backup(self.library, bundle)
+        with self.assertRaises(ValueError):
+            create_backup(self.library, self.library.db / 'backup.zip')
+        with patch('backup.shutil.disk_usage', return_value=SimpleNamespace(free=0)), self.assertRaises(ValueError):
+            create_backup(self.library, bundle)
+        self.assertFalse(bundle.exists())
+        with patch('backup.verify_backup', side_effect=ValueError('verification failed')), self.assertRaises(ValueError):
+            create_backup(self.library, bundle)
+        self.assertFalse(bundle.exists())
+        create_backup(self.library, bundle)
+        saved = bundle.read_bytes()
+        with self.assertRaises(ValueError):
+            create_backup(self.library, bundle)
+        self.assertEqual(bundle.read_bytes(), saved)
+        with patch('backup.shutil.disk_usage', return_value=SimpleNamespace(free=0)), self.assertRaises(ValueError):
+            restore_backup(bundle, self.target)
+        self.assertFalse(self.target.exists())
 
 
 if __name__ == '__main__':

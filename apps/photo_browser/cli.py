@@ -22,12 +22,13 @@ def main(argv=None):
     compare = commands.add_parser('compare', help='원본·병합 파일 수/용량 및 복사 무결성 비교')
     compare.add_argument('--source-id', help='특정 소스만 비교 (기본 전체)')
     compare.add_argument('--quick', action='store_true', help='SHA-256 없이 크기만 비교')
-    backup = commands.add_parser('backup', help='DB와 관리 파일을 검증된 백업 폴더로 복사')
-    backup.add_argument('--destination', required=True, help='새 백업 디렉토리')
+    backup = commands.add_parser('backup', help='DB와 관리 파일을 검증된 폴더 또는 ZIP으로 백업')
+    backup.add_argument('--destination', required=True, help='새 백업 경로 (.zip이면 기본 ZIP 형식)')
+    backup.add_argument('--format', choices=['directory', 'zip'], help='백업 형식 (생략 시 .zip 확장자로 자동 선택)')
     check = commands.add_parser('backup-check', help='백업의 파일 목록·크기·SHA-256 검증')
-    check.add_argument('--backup', required=True, help='백업 디렉토리')
+    check.add_argument('--backup', required=True, help='백업 디렉토리 또는 ZIP 파일')
     restore = commands.add_parser('restore', help='백업을 새 장치·경로에 검증 복원')
-    restore.add_argument('--backup', required=True, help='manifest.json이 있는 백업 디렉토리')
+    restore.add_argument('--backup', required=True, help='백업 디렉토리 또는 ZIP 파일')
     restore.add_argument('--destination', required=True, help='새 복원 디렉토리 (db/managed 생성)')
     merge = commands.add_parser('merge', help='병합 복사 실행 (원본 유지)')
     options = merge.add_mutually_exclusive_group()
@@ -71,7 +72,7 @@ def main(argv=None):
                 })
         elif args.command == 'backup':
             from backup import create_backup
-            result = create_backup(library, args.destination)
+            result = create_backup(library, args.destination, args.format)
         elif args.command == 'compare':
             from copy_check import compare_copies
             result = compare_copies(library, args.source_id, args.quick)
