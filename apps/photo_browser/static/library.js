@@ -99,6 +99,61 @@
       notify(`${status.result.file_count}개 파일의 ZIP 다운로드를 요청했습니다. 링크는 1시간 동안 작업 내역에서 다시 사용할 수 있습니다.`);
     } finally { button.disabled = false; }
   });
+  let analysisMediaId, analysisRequestId, analysisProfiles = [], analysisBusy = false;
+  el('edit-selected').after(action('분석 Skill · 사진/명함/견적서', async () => {
+    if (analysisBusy) throw new Error('현재 분석 요청 처리가 끝난 후 다시 여세요.');
+    const values = selected();
+    if (values.length !== 1) throw new Error('분석할 사진 또는 문서 이미지 한 개를 선택하세요.');
+    analysisMediaId = values[0]; analysisRequestId = null;
+    el('analysis-form').reset(); el('analysis-response').value = ''; el('analysis-request').textContent = '';
+    el('analysis-save').disabled = true; el('analysis-status').textContent = '';
+    const data = await api('api/analysis/skills'); analysisProfiles = data.items;
+    el('analysis-skill').replaceChildren(...analysisProfiles.map(p => new Option(`${p.label} (v${p.version})`, p.skill_id)));
+    showAnalysisPersona(); await loadAnalysisHistory(); el('analysis-dialog').showModal();
+  }));
+  function showAnalysisPersona() {
+    const profile = analysisProfiles.find(p => p.skill_id === el('analysis-skill').value);
+    el('analysis-persona').textContent = profile ? `${profile.persona}\n${profile.objectives.join('\n')}` : '';
+  }
+  async function loadAnalysisHistory() {
+    const data = await api(`api/analysis/${encodeURIComponent(analysisMediaId)}/results`);
+    el('analysis-history').textContent = data.items.length ? JSON.stringify(data.items.map(v => ({
+      skill: v.snapshot.skill.label, created_at: v.created_at, stale: v.stale, status: v.status, result: v.result,
+    })), null, 2) : '저장된 분석 결과가 없습니다.';
+  }
+  el('analysis-form').oninput = () => {
+    analysisRequestId = null; el('analysis-save').disabled = true;
+    el('analysis-request').textContent = ''; showAnalysisPersona();
+  };
+  el('analysis-close').onclick = () => el('analysis-dialog').close();
+  el('analysis-form').onsubmit = async event => {
+    analysisBusy = true;
+    event.preventDefault(); el('analysis-prepare').disabled = true; el('analysis-save').disabled = true;
+    analysisRequestId = null; el('analysis-status').textContent = '이미지 무결성 확인 및 프롬프트 준비 중…';
+    const input = {media_id: analysisMediaId, skill_id: el('analysis-skill').value,
+      model: el('analysis-model').value, instruction: el('analysis-instruction').value};
+    const controls = [...el('analysis-form').querySelectorAll('input, select, textarea')];
+    controls.forEach(control => { control.disabled = true; });
+    try {
+      const result = await api('api/analysis/prepare', 'POST', input);
+      analysisRequestId = result.request_id; el('analysis-save').disabled = false;
+      el('analysis-request').textContent = JSON.stringify(result, null, 2);
+      el('analysis-status').textContent = result.notice;
+    } catch (error) { el('analysis-status').textContent = error.message; }
+    finally { analysisBusy = false; el('analysis-prepare').disabled = false; controls.forEach(control => { control.disabled = false; }); }
+  };
+  el('analysis-save').onclick = async () => {
+    if (!analysisRequestId) return;
+    analysisBusy = true;
+    el('analysis-save').disabled = true;
+    try {
+      const result = JSON.parse(el('analysis-response').value);
+      await api('api/analysis/results', 'POST', {request_id: analysisRequestId, result});
+      el('analysis-status').textContent = '규격을 검증하고 검토 전 분석 결과로 저장했습니다.';
+      await loadAnalysisHistory();
+    } catch (error) { el('analysis-status').textContent = error.message; }
+    finally { analysisBusy = false; el('analysis-save').disabled = !analysisRequestId; }
+  };
   const fields = {events: '이벤트 이름', tags: '태그', person_ids: '사람 ID', category_id: '카테고리', owner_id: '소유자 ID'};
   for (const [key, label] of Object.entries(fields)) {
     const row = make('label', '', 'edit-row'), check = make('input'), input = make('input'); check.type = 'checkbox'; check.id = 'apply-' + key; input.id = 'edit-' + key;

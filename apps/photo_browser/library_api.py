@@ -21,6 +21,8 @@ def register_library(app, boundary, db):
     downloads = DownloadStore(library)
     app.extensions['photo_downloads'] = downloads
     app.extensions['photo_library'] = library
+    from analysis_skills import register_analysis
+    register_analysis(app, library)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='photo-library')
     jobs, guard = {}, threading.Lock()
     controls = {}

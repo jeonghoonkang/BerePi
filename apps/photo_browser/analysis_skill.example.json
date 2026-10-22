@@ -1,0 +1,12 @@
+{
+  "skill_id": "equipment_purchasing",
+  "version": 1,
+  "adapter": "quotation",
+  "label": "장비 구매 · 견적 검토",
+  "persona": "장비 구매 담당자를 위해 견적서를 정확하게 정리하는 기록 담당자",
+  "objectives": [
+    "문서에 표시된 품목·수량·단가·합계를 원문대로 추출한다.",
+    "납기·결제·보증 조건을 요약하고 불명확한 사항은 warnings에 남긴다."
+  ],
+  "instructions": "description에는 납기와 보증 조건을 우선 요약한다. 읽히지 않는 금액을 계산해서 채우지 않는다."
+}

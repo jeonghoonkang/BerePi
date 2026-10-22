@@ -27,6 +27,7 @@ IP 조회는 페이지 표시 후 백그라운드에서 실행합니다. 외부 
 | `merge_history.py` | 병합 전후 디렉토리 집계, 실행별 JSON·HTML 보고서 |
 | `scan_engine.py` | 전체 목록 집계, 진행률, 체크포인트, 중지·이어하기, 용량 검사 |
 | `backup.py` | DB·관리 파일 폴더/ZIP 백업, 해시 검증, 새 경로 복원 |
+| `analysis_skills.py` | 사진·문서 페르소나, 프롬프트 생성, 유형별 응답 검증·저장 |
 | `library_api.py` | 라이브러리 API, 백그라운드 작업, 인증·변경 요청 검사 |
 | `templates/index.html` | 화면 구성 |
 | `static/library.js` | 라이브러리·설정·진행률·휴지통 화면 동작 |
@@ -37,6 +38,7 @@ IP 조회는 페이지 표시 후 백그라운드에서 실행합니다. 외부 
 
 - [설치 및 실행](#설치-및-실행)
 - [라이브러리 사용 순서](#라이브러리-사용-순서)
+- [사진·명함·견적서 분석 Skill](#사진명함견적서-분석-skill)
 - [병합 결과 백업과 다른 장치로 이전](#병합-결과-백업과-다른-장치로-이전)
 - [백업·복원 상세 가이드](backup_restore.md)
 - [지능형 갤러리 설계: 태그 관리·Gemma 설명·검색](intelligent_photo_gallery_design.md)
@@ -483,6 +485,85 @@ GET  /api/scans                   소스별 최신 체크포인트
 `processed`에는 신규·갱신·변경 없음·삭제 상태로 제외한 항목·오류 항목이 모두 포함됩니다. 스캔 중 결과는 저널에 쌓이며, 일반 라이브러리 화면에는 월별 JSON이 발행된 시점에 반영됩니다. 공간 부족으로 `published: false`라면 처리 결과가 사라진 것이 아니라 발행이 보류된 상태일 수 있습니다.
 
 용량 예상은 남은 파일당 약 16 KiB의 JSON 여유와 최소 작업 여유를 고려합니다. 최종 발행 전에는 전체 메타데이터 직렬화 크기도 반영합니다. 이 값은 사진을 모두 병합 복사할 때 필요한 용량의 계산값이 아닙니다. 여유 공간 기준을 낮추기보다 DB·임시 디스크의 실제 사용량을 먼저 확인하세요.
+
+## 사진·명함·견적서 분석 Skill
+
+명함·견적서도 지원 이미지로 업로드·스캔·병합한 뒤 목적에 맞는 페르소나를 적용할 수 있습니다. 현재 구현은 **프로필 선택 → 프롬프트/요청 생성 → 별도로 얻은 모델 응답 검증·저장**입니다. LLM 서버 자동 호출·인증·분석 워커와 설명 검색은 후속 연결 대상입니다. 프로필 선택으로 외부에 이미지를 자동 전송하지 않으며 PDF·동영상·여러 페이지 문서 통합은 지원하지 않습니다.
+
+### 페르소나와 어댑터
+
+| Skill ID | 역할 | 유형별 추출 정보 |
+| --- | --- | --- |
+| `photo_docent` | 갤러리 도슨트 | 장면, 보이는 인물 묘사, 위치 묘사 |
+| `business_card` | 명함 기록 담당자 | 이름, 회사, 부서, 직책, 전화, 이메일, 웹사이트, 주소 |
+| `quotation` | 구매 검토 담당자 | 공급자·수신자, 견적번호, 발행일·유효기한, 품목·수량·단가, 세금·합계, 결제 조건 |
+| `document` | 일반 문서 기록 담당자 | 문서 종류, 문서에 적힌 날짜, 핵심 사항 |
+
+**Skill 프로필**은 역할·목표·추가 지침·버전을, **문서 유형 어댑터**는 추출 규칙과 JSON Schema를 담당합니다. 서로 다른 구매팀 페르소나를 같은 `quotation` 어댑터에 연결하는 방식으로 확장합니다. 모델 서버별 전송은 별도 레이어로 연결해야 합니다.
+
+공통 응답 필드는 `title`, `description`, `suggested_tags`, `ocr_text`, `warnings`, `extracted`이며 마지막 필드만 유형별 구조가 다릅니다. 알 수 없는 추출값은 규격에 따라 `null` 또는 빈 배열로 남깁니다. 금액·수량은 `₩1,234,500`, `1` 같은 문자열로 보존하고 자동 합산이나 세금 추정을 하지 않습니다. 문서 발행일과 사진 촬영일도 구분합니다. 스키마 검증이 내용의 정확성까지 보장하지 않으므로 결과는 `unreviewed`로 저장합니다.
+
+### 웹 사용 순서
+
+1. 라이브러리에서 이미지 한 개를 선택하고 **분석 Skill · 사진/명함/견적서**를 누릅니다.
+2. 프로필, 모델 이름, 추가 요청을 입력하고 **프롬프트 준비**를 누릅니다.
+3. 이미지 해시를 확인한 뒤 역할별 `system`, 입력 문맥 `prompt`, 출력 `format`을 표시합니다. 이 미리보기의 `images`는 비어 있습니다. 모델을 별도로 사용할 때는 해당 이미지도 함께 첨부하세요.
+4. 모델이 반환한 **결과 객체 JSON만** 붙여넣고 **응답 검증·저장**을 누릅니다. 서버가 `response` 안에 JSON 문자열을 반환했다면 그 문자열 안의 객체를 사용합니다.
+5. 기존 분석 결과에서 프로필·시각·검토 상태·오래된 결과(`stale`)를 확인합니다.
+
+동일 해시의 관리 복사본을 우선 사용하므로 원본이 오프라인이어도 준비할 수 있습니다. JPEG·PNG·WebP·GIF를 지원하고 이미지당 20 MiB, 응답당 256 KiB로 제한합니다. 실제 모델의 이미지 형식 지원 여부는 별도로 확인하세요.
+
+### CLI와 사용자 페르소나 등록
+
+```bash
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data skills
+
+# 예제 JSON을 복사해 역할·목표·지침을 편집한 뒤 등록
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data \
+  skill-save --file apps/photo_browser/analysis_skill.example.json
+
+# 프롬프트 미리보기 (기본 이미지 미포함)
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data \
+  analysis-prepare --media-id MEDIA_ID --skill business_card \
+  --instruction '회사와 연락처를 중심으로 정리해 주세요.'
+
+# 원본 이미지 Base64를 포함한 Ollama 호환 요청 내보내기 (호출 없음)
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data \
+  analysis-prepare --media-id MEDIA_ID --skill equipment_purchasing \
+  --model gemma4:31b --include-image > prepared-request.json
+
+# 별도로 모델을 호출해 받은 결과 객체를 검증·저장
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data \
+  analysis-save --request-id REQUEST_ID --file model-result.json
+python3 apps/photo_browser/cli.py --db /data/photo_db --root /data \
+  analysis-results --media-id MEDIA_ID
+```
+
+출력 묶음의 `request_id`를 응답 저장에 사용합니다. **모델 요청 본문은 묶음 내부의 `request` 객체**이며 `model`, `stream`, `system`, `prompt`, `format`, `images`를 포함합니다. 인증 게이트웨이가 Ollama와 같은 계약을 지원한다고 가정하지 마세요. 연동 요구사항은 [지능형 갤러리 설계](intelligent_photo_gallery_design.md)의 7장을 참고하세요.
+
+[analysis_skill.example.json](analysis_skill.example.json)을 복사해 새로운 `skill_id`, `label`, `persona`, `objectives`, `instructions`를 지정하고 `adapter`는 위 4종 중에서 선택합니다. 기존 기본 Skill은 덮어쓸 수 없으며 사용자 Skill 변경 시 `version`을 높여야 합니다. 정의는 JSON 데이터로만 처리하고 사용자 Python·셸·도구 코드를 실행하지 않습니다. 사용자 프로필 등록은 현재 CLI에서 제공합니다.
+
+### 저장 구조와 API
+
+```text
+db/ai/
+  skills/<skill_id>.json                 사용자 페르소나
+  requests/<request_id>.json             Skill·규격·모델·문맥 스냅샷
+  runs/<media_id>/<run_id>.json          분석 결과와 입력 fingerprint
+```
+
+명시적 입력 문맥에는 현재 DB의 이벤트·태그·사람 ID와 스캔 당시 촬영 시각·날짜 근거를 넣습니다. 내부 경로·인증값·정확한 GPS는 넣지 않으며 사람 ID를 이름이나 얼굴과 자동 대응하지 않습니다. 이미지 속 글자·사용자 추가 요청은 시스템 지침과 분리해 데이터로 전달합니다. `--include-image` 출력에는 원본 이미지와 EXIF 개인정보가 포함될 수 있으므로 보관·전달 범위를 확인하세요. DB 요청 기록에는 Base64를 저장하지 않습니다.
+
+분석은 사진 파일·촬영 시각·사용자 태그를 덮어쓰지 않으며 추천 태그도 자동 적용하지 않습니다. 사진 해시·태그·Skill·어댑터 계약이 바뀐 요청의 응답은 저장을 거부하고 이전 결과는 `stale: true`로 표시합니다. 한 사진에 여러 Skill의 결과를 보관할 수 있고 `db/ai`는 기존 전체 DB 백업·복원에 포함됩니다. 결과의 일반 검색·벡터 검색 연동은 아직 포함하지 않습니다.
+
+| API | 동작 |
+| --- | --- |
+| `GET /api/analysis/skills` | 프로필과 출력 Schema 조회 |
+| `POST /api/analysis/prepare` | `media_id`, `skill_id`, `instruction`, `model`로 준비. 웹 응답은 이미지 미포함 |
+| `POST /api/analysis/results` | `request_id`, `result`로 응답 검증·저장 |
+| `GET /api/analysis/<media_id>/results` | 결과 이력과 stale 상태 조회 |
+
+기존 인증·변경 요청 헤더·Origin 검사와 DB 쓰기 잠금을 적용합니다.
 
 ## 병합 결과 백업과 다른 장치로 이전
 

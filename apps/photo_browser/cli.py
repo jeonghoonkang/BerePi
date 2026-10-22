@@ -17,6 +17,20 @@ def main(argv=None):
     parser.add_argument('--root', default='/', help='서버와 동일한 허용 루트 (기본 /)')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('config', help='저장된 설정 조회')
+    commands.add_parser('skills', help='사진·명함·견적서 분석 Skill과 응답 규격 조회')
+    skill_save = commands.add_parser('skill-save', help='사용자 페르소나 JSON 등록·버전 갱신')
+    skill_save.add_argument('--file', required=True, help='Skill 정의 JSON 경로')
+    prepare = commands.add_parser('analysis-prepare', help='Skill별 프롬프트·Ollama 요청 준비 (모델 호출 없음)')
+    prepare.add_argument('--media-id', required=True)
+    prepare.add_argument('--skill', default='photo_docent')
+    prepare.add_argument('--instruction', default='', help='이번 이미지에 대한 추가 요청')
+    prepare.add_argument('--model', default='gemma4:31b')
+    prepare.add_argument('--include-image', action='store_true', help='해시 검증한 원본 이미지 Base64도 출력')
+    result_save = commands.add_parser('analysis-save', help='모델 응답 JSON 검증·별도 저장')
+    result_save.add_argument('--request-id', required=True)
+    result_save.add_argument('--file', required=True, help='모델이 반환한 결과 객체 JSON 파일')
+    results = commands.add_parser('analysis-results', help='사진에 연결된 분석 결과 조회')
+    results.add_argument('--media-id', required=True)
     status = commands.add_parser('status', help='소스별 최신 스캔 상태 조회')
     status.add_argument('--source-id', help='특정 소스만 조회')
     compare = commands.add_parser('compare', help='원본·병합 파일 수/용량 및 복사 무결성 비교')
@@ -51,7 +65,20 @@ def main(argv=None):
         if not (db / 'config.json').is_file():
             raise ValueError(f'설정 DB가 없습니다: {db}. 서버에서 설정한 DB 경로를 지정하세요.')
         library = Library(db, Path(args.root).expanduser())
-        if args.command == 'config':
+        if args.command in {'skills', 'skill-save', 'analysis-prepare', 'analysis-save', 'analysis-results'}:
+            from analysis_skills import AnalysisSkills
+            store = AnalysisSkills(library)
+            if args.command == 'skills':
+                result = {'items': store.list()}
+            elif args.command == 'skill-save':
+                result = store.save_profile(json.loads(Path(args.file).read_text(encoding='utf-8')))
+            elif args.command == 'analysis-prepare':
+                result = store.prepare(args.media_id, args.skill, args.instruction, args.model, args.include_image)
+            elif args.command == 'analysis-save':
+                result = store.save_result(args.request_id, Path(args.file).read_text(encoding='utf-8'))
+            else:
+                result = {'items': store.results(args.media_id)}
+        elif args.command == 'config':
             result = {'db': str(db), 'allowed_root': str(library.boundary), 'config': library.config()}
         elif args.command == 'status':
             sources = library.config()['sources']
