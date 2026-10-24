@@ -14,7 +14,7 @@ from PIL import Image
 
 from backup import create_backup, restore_backup, verify_backup
 from cli import main
-from library import Library, atomic_json, digest, read_json
+from library import LOCATION_FILE, Library, atomic_json, digest, read_json
 
 
 class BackupTests(unittest.TestCase):
@@ -42,6 +42,12 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(result['status'], 'completed')
         self.assertFalse((self.bundle / 'db' / '.write.lock').exists())
         report = restore_backup(self.bundle, self.target)
+        for folder in (self.target / 'db', self.target / 'managed'):
+            info = read_json(folder / LOCATION_FILE)
+            self.assertEqual(info['db'], str(self.target / 'db'))
+            self.assertEqual(info['managed_root'], str(self.target / 'managed'))
+            self.assertEqual((folder / info['db_relative']).resolve(), self.target / 'db')
+            self.assertEqual((folder / info['managed_root_relative']).resolve(), self.target / 'managed')
         restored = Library(report['db'], report['root'])
         item = restored.items()[0]
         self.assertEqual(item['classification'], original['classification'])

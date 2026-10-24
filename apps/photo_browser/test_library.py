@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 from app import create_app
-from library import metadata, read_json
+from library import LOCATION_FILE, Library, metadata, read_json
 
 
 class LibraryTests(unittest.TestCase):
@@ -40,6 +40,43 @@ class LibraryTests(unittest.TestCase):
     def post(self, path, data):
         return self.client.post(path, json=data, headers=self.headers)
 
+    def test_location_hints_survive_unreadable_db(self):
+        managed = Path(self.config['managed_root'])
+        for folder in (self.library.db, managed):
+            info = read_json(folder / LOCATION_FILE)
+            self.assertEqual(info['db'], str(self.library.db))
+            self.assertEqual(info['managed_root'], str(managed))
+            self.assertEqual((folder / info['db_relative']).resolve(), self.library.db)
+            self.assertEqual((folder / info['managed_root_relative']).resolve(), managed)
+        (self.library.db / 'config.json').write_text('broken JSON', encoding='utf-8')
+        self.assertEqual(read_json(self.library.db / LOCATION_FILE)['managed_root'], str(managed))
+        self.assertEqual(read_json(managed / LOCATION_FILE)['db'], str(self.library.db))
+
+    def test_existing_library_backfills_location_hints(self):
+        managed = Path(self.config['managed_root'])
+        for folder in (self.library.db, managed):
+            (folder / LOCATION_FILE).unlink()
+        Library(self.library.db, self.root)
+        for folder in (self.library.db, managed):
+            self.assertEqual(read_json(folder / LOCATION_FILE)['db'], str(self.library.db))
+
+    def test_location_hints_follow_config_change(self):
+        old_root = Path(self.config['managed_root'])
+        new_root = self.root / 'new-managed'
+        self.library.save_config({**self.config, 'managed_root': str(new_root)})
+        self.assertFalse((old_root / LOCATION_FILE).exists())
+        for folder in (self.library.db, new_root):
+            self.assertEqual(read_json(folder / LOCATION_FILE)['managed_root'], str(new_root))
+
+    def test_location_hints_support_separate_windows_drives(self):
+        with patch('library.os.path.relpath', side_effect=ValueError('different drives')):
+            self.library.save_config(self.config)
+        for folder in (self.library.db, Path(self.config['managed_root'])):
+            info = read_json(folder / LOCATION_FILE)
+            self.assertEqual(info['db'], str(self.library.db))
+            self.assertIsNone(info['db_relative'])
+            self.assertIsNone(info['managed_root_relative'])
+
     def test_month_chunks_and_incremental_edit_preservation(self):
         path = self.photo()
         for i in range(100):
@@ -65,7 +102,7 @@ class LibraryTests(unittest.TestCase):
         self.library.scan('local')
         ids = [i['media_id'] for i in self.library.items()]
         self.assertTrue(all(o['status'] == 'planned' for o in self.library.merge(preview=True)['operations']))
-        self.assertFalse((self.root / 'organized').exists())
+        self.assertEqual([p.name for p in (self.root / 'organized').iterdir()], [LOCATION_FILE])
         result = self.library.merge()
         self.assertEqual([o['status'] for o in result['operations']], ['copied', 'reused'])
         target = Path(result['operations'][0]['destination'])
@@ -164,7 +201,7 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(updates[-1]['percent'], 100)
         self.assertTrue(updates[-1]['current_file'].endswith('.jpg'))
         self.assertEqual(len(result['operations']), 205)
-        self.assertFalse(Path(self.config['managed_root']).exists())
+        self.assertEqual([p.name for p in Path(self.config['managed_root']).iterdir()], [LOCATION_FILE])
         response = self.post('/api/merge', {'preview': True})
         self.assertEqual(response.status_code, 202)
         for _ in range(200):
@@ -306,7 +343,7 @@ class LibraryTests(unittest.TestCase):
         self.library.scan('local')
         self.library.scan('backup')
         root = Path(config['managed_root'])
-        root.mkdir()
+        root.mkdir(exist_ok=True)
         own, shared = root / 'exclusive.jpg', root / 'shared.jpg'
         shutil.copy2(original, own)
         shutil.copy2(original, shared)
@@ -428,7 +465,7 @@ class LibraryTests(unittest.TestCase):
         self.assertGreater(result['disk_space']['copy_bytes'], 0)
         self.assertEqual(result['operations'], [])
         copy_file.assert_not_called()
-        self.assertFalse(Path(self.config['managed_root']).exists())
+        self.assertEqual([p.name for p in Path(self.config['managed_root']).iterdir()], [LOCATION_FILE])
         self.assertEqual((self.library.db / 'index.json').read_bytes(), index)
         self.assertFalse((self.library.db / 'merges').exists())
 

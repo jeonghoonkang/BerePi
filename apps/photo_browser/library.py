@@ -22,6 +22,7 @@ from xml.etree import ElementTree
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi'}
 EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+LOCATION_FILE = '.photo-browser-location.json'
 
 
 def now():
@@ -47,6 +48,28 @@ def atomic_json(path, value):
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def write_library_locations(db, managed_root, create_managed=True):
+    """Standalone recovery hints; neither copy depends on the media DB."""
+    db, managed_root = Path(db).resolve(), Path(managed_root).resolve()
+    for folder in (db, managed_root):
+        if folder == managed_root and not create_managed and not folder.is_dir():
+            continue
+        value = {'format': 'photo-browser-location', 'schema_version': 1,
+                 'db': str(db), 'managed_root': str(managed_root)}
+        for key, target in (('db', db), ('managed_root', managed_root)):
+            try:
+                value[key + '_relative'] = os.path.relpath(target, folder)
+            except ValueError:  # Windows paths on different drives have no relative path.
+                value[key + '_relative'] = None
+        path = folder / LOCATION_FILE
+        try:
+            if read_json(path) == value:
+                continue
+        except (ValueError, UnicodeError):
+            pass
+        atomic_json(path, value)
 
 
 def digest(path, control=None):
@@ -128,6 +151,13 @@ class Library:
         self.facets_cache = None
         if not (self.db / 'config.json').exists():
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(self.db.parent / 'library'), 'sources': []})
+        # Backfill existing libraries without creating a managed directory on startup.
+        config = self.config()
+        root = Path(config['managed_root']).expanduser().resolve()
+        if root.is_relative_to(self.boundary) and root != self.boundary and not (
+                root.is_relative_to(self.db) or self.db.is_relative_to(root)):
+            with self.writing():
+                write_library_locations(self.db, root, create_managed=False)
 
     @contextmanager
     def writing(self):
@@ -172,7 +202,8 @@ class Library:
             if not isinstance(config.get('managed_root'), str) or not isinstance(config.get('sources', []), list):
                 raise ValueError('managed_root 문자열과 sources 목록이 필요합니다.')
             root = self.local(config['managed_root'])
-            if str(root) != self.config()['managed_root'] and any(l['role'] == 'managed' for i in self.items() for l in i['locations']):
+            old_root = Path(self.config()['managed_root']).expanduser().resolve()
+            if root != old_root and any(l['role'] == 'managed' for i in self.items() for l in i['locations']):
                 raise ValueError('관리 복사본이 있는 경로는 변경할 수 없습니다. 별도 라이브러리 DB를 사용하세요.')
             if root == self.boundary or root == self.db or self.db.is_relative_to(root) or root.is_relative_to(self.db):
                 raise ValueError('관리 디렉토리는 루트 또는 DB와 분리된 하위 경로를 지정하세요.')
@@ -204,6 +235,15 @@ class Library:
             if isinstance(minimum, bool) or not isinstance(minimum, int) or not 32 <= minimum <= 1048576:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
             atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
+            write_library_locations(self.db, root)
+            if root != old_root and old_root.is_relative_to(self.boundary):
+                old_marker = old_root / LOCATION_FILE
+                try:
+                    previous = read_json(old_marker, {})
+                    if isinstance(previous, dict) and previous.get('format') == 'photo-browser-location' and previous.get('db') == str(self.db):
+                        old_marker.unlink()
+                except (ValueError, UnicodeError):
+                    pass
 
     def apply_source_classification(self, source_id):
         source_id = component(source_id)
@@ -715,6 +755,7 @@ class Library:
                 return self._merge(ids, True, progress, stopped, resume)
             from merge_history import MergeHistory, first_merge_start
             root = self.local(self.config()['managed_root'])
+            write_library_locations(self.db, root)
             run_started_at = now()
             merge_started_at = first_merge_start(self, resume, run_started_at) if resume else run_started_at
             original_progress = progress or (lambda state: None)

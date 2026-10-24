@@ -46,7 +46,7 @@ class MergeHistoryTests(unittest.TestCase):
         same.parent.mkdir()
         same.write_bytes(original.read_bytes())
         self.photo('different/photo.jpg', 'blue')
-        self.managed.mkdir()
+        self.managed.mkdir(exist_ok=True)
         (self.managed / 'keep.bin').write_bytes(b'keep')
         (self.managed / 'empty').mkdir()
         (self.managed / '.trash').mkdir()
@@ -170,7 +170,7 @@ class MergeHistoryTests(unittest.TestCase):
         self.assertIn('보고서 저장 실패', result['warning'])
 
     def test_snapshots_capture_non_media_files_and_partial_errors(self):
-        self.managed.mkdir()
+        self.managed.mkdir(exist_ok=True)
         (self.managed / 'notes.txt').write_bytes(b'notes')
         (self.managed / '.temporary.part').write_bytes(b'staging')
         before = directory_snapshot(self.managed)
