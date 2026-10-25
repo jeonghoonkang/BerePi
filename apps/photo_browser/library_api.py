@@ -133,6 +133,10 @@ def register_library(app, boundary, db):
     def storage_error(exc):
         return jsonify(error='파일 작업 실패: ' + str(exc)), 409
 
+    @app.get('/api/pair-history')
+    def pair_history():
+        return jsonify(library.pair_history())
+
     @app.get('/api/config')
     def get_config():
         return jsonify(library.config())

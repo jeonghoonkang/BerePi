@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 from app import create_app
-from library import LOCATION_FILE, Library, metadata, read_json, atomic_json
+from library import LOCATION_FILE, PAIR_HISTORY, Library, metadata, read_json, atomic_json
 
 
 class LibraryTests(unittest.TestCase):
@@ -76,6 +76,54 @@ class LibraryTests(unittest.TestCase):
             self.assertEqual(info['db'], str(self.library.db))
             self.assertIsNone(info['db_relative'])
             self.assertIsNone(info['managed_root_relative'])
+
+    def test_multiple_source_pair_history_is_mirrored_and_survives_restart(self):
+        previous = self.library.pair_history()['total']
+        second = self.root / 'second-source'
+        second.mkdir()
+        config = self.library.config()
+        config['sources'].append({'source_id': 'second', 'protocol': 'file', 'root': str(second)})
+        self.library.save_config(config)
+        history = self.library.pair_history()
+        self.assertEqual(history['total'], previous + 1)
+        event = history['items'][0]
+        self.assertEqual(len(event['before']['sources']), 1)
+        self.assertEqual(len(event['after']['sources']), 2)
+        self.assertEqual(event['after']['pair_id'], config['pair_id'])
+        self.assertEqual(event['after']['db'], str(self.library.db))
+        for path in (self.library.db / PAIR_HISTORY).glob('*.json'):
+            if json.loads(path.read_text())['event_id'] == event['event_id']:
+                self.assertEqual(path.read_bytes(), (Path(config['managed_root']) / PAIR_HISTORY / path.name).read_bytes())
+        restarted = Library(self.library.db, self.root)
+        self.assertEqual(restarted.pair_history(), history)
+        self.assertEqual(self.client.get('/api/pair-history').json, history)
+        config['sources'] = [config['sources'][0]]
+        self.library.save_config(config)
+        self.assertEqual(len(self.library.pair_history()['items'][0]['after']['sources']), 1)
+
+    def test_pair_history_failure_rolls_back_entire_save(self):
+        before = self.library.config()
+        history = self.library.pair_history()
+        def fail(path, value):
+            if path.parent == Path(before['managed_root']) / PAIR_HISTORY:
+                raise OSError('history disk full')
+            atomic_json(path, value)
+        with patch('library.atomic_json', side_effect=fail):
+            with self.assertRaises(OSError):
+                self.library.save_config({**before, 'scan_min_free_mb': 32})
+        self.assertEqual(self.library.config(), before)
+        self.assertEqual(self.library.pair_history(), history)
+
+    def test_pair_history_does_not_store_source_credentials(self):
+        config = self.library.config()
+        config['sources'].append({'source_id': 'remote', 'protocol': 'webdav',
+                                 'root': 'https://example.com/photos', 'password': 'secret-value',
+                                 'token': 'secret-value', 'credential_ref': 'PRIVATE_ACCOUNT'})
+        self.library.save_config(config)
+        event = self.library.pair_history()['items'][0]
+        self.assertNotIn('secret-value', json.dumps(event))
+        self.assertNotIn('PRIVATE_ACCOUNT', json.dumps(event))
+        self.assertEqual(event['after']['sources'][-1]['root'], 'https://example.com/photos')
 
     def test_pair_id_and_timestamp_are_shared_and_survive_restart(self):
         config = self.library.config()
@@ -174,7 +222,7 @@ class LibraryTests(unittest.TestCase):
         self.library.scan('local')
         ids = [i['media_id'] for i in self.library.items()]
         self.assertTrue(all(o['status'] == 'planned' for o in self.library.merge(preview=True)['operations']))
-        self.assertEqual([p.name for p in (self.root / 'organized').iterdir()], [LOCATION_FILE])
+        self.assertEqual({p.name for p in (self.root / 'organized').iterdir()}, {LOCATION_FILE, PAIR_HISTORY})
         result = self.library.merge()
         self.assertEqual([o['status'] for o in result['operations']], ['copied', 'reused'])
         target = Path(result['operations'][0]['destination'])
@@ -273,7 +321,7 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(updates[-1]['percent'], 100)
         self.assertTrue(updates[-1]['current_file'].endswith('.jpg'))
         self.assertEqual(len(result['operations']), 205)
-        self.assertEqual([p.name for p in Path(self.config['managed_root']).iterdir()], [LOCATION_FILE])
+        self.assertEqual({p.name for p in Path(self.config['managed_root']).iterdir()}, {LOCATION_FILE, PAIR_HISTORY})
         response = self.post('/api/merge', {'preview': True})
         self.assertEqual(response.status_code, 202)
         for _ in range(200):
@@ -537,7 +585,7 @@ class LibraryTests(unittest.TestCase):
         self.assertGreater(result['disk_space']['copy_bytes'], 0)
         self.assertEqual(result['operations'], [])
         copy_file.assert_not_called()
-        self.assertEqual([p.name for p in Path(self.config['managed_root']).iterdir()], [LOCATION_FILE])
+        self.assertEqual({p.name for p in Path(self.config['managed_root']).iterdir()}, {LOCATION_FILE, PAIR_HISTORY})
         self.assertEqual((self.library.db / 'index.json').read_bytes(), index)
         self.assertFalse((self.library.db / 'merges').exists())
 

@@ -50,6 +50,28 @@ def atomic_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
+PAIR_HISTORY = '.photo-browser-pair-history'
+
+
+def pair_snapshot(config, db):
+    """Only connection fields; never retain source credentials or URL tokens."""
+    sources = []
+    for source in config.get('sources', []):
+        entry = {key: source[key] for key in
+                 ('source_id', 'protocol', 'root', 'category', 'owner_id', 'recursive') if key in source}
+        if entry.get('protocol') in {'http', 'webdav'} and entry.get('root'):
+            parsed = urlsplit(entry['root'])
+            host = parsed.hostname or ''
+            if ':' in host:
+                host = '[' + host + ']'
+            if parsed.port:
+                host += ':' + str(parsed.port)
+            entry['root'] = parsed._replace(netloc=host, query='', fragment='').geturl()
+        sources.append(entry)
+    return {'pair_id': config.get('pair_id'), 'db': str(db),
+            'managed_root': config.get('managed_root'), 'sources': sources}
+
+
 @contextmanager
 def pair_lock(root):
     # One lock per managed path, shared by different DBs and processes.
@@ -71,7 +93,7 @@ def pair_lock(root):
         handle.close()
 
 
-def write_library_locations(db, managed_root, config=None, new_pair=False):
+def write_library_locations(db, managed_root, config=None, new_pair=False, reason="verify", history_before=None):
     """Commit config and both pair records together, with crash recovery journal."""
     db, managed_root = Path(db).resolve(), Path(managed_root).resolve()
     journal = db / '.photo-browser-pair-pending.json'
@@ -112,10 +134,20 @@ def write_library_locations(db, managed_root, config=None, new_pair=False):
                 except ValueError:
                     value[key + '_relative'] = None
             writes.append((folder / LOCATION_FILE, value))
-        if not pending and all(read_json(path) == value for path, value in writes):
+        history_exists = any((db / PAIR_HISTORY).glob('*.json'))
+        if not pending and history_exists and all(read_json(path) == value for path, value in writes):
             return
+        event = pending.get('history_event') if pending else None
+        if event is None:
+            event = {'schema_version': 1, 'event_id': uid(), 'recorded_at': now(),
+                     'reason': reason,
+                     'before': history_before if history_before is not None else (pair_snapshot(current, db_marker.get('db', db)) if current else None),
+                     'after': pair_snapshot(updated, db)}
+        name = event['recorded_at'].replace(':', '').replace('+', '_') + '-' + event['event_id'] + '.json'
+        for folder in (db, managed_root):
+            writes.append((folder / PAIR_HISTORY / name, event))
         # Journal first: a process interruption is completed on the next startup.
-        atomic_json(journal, {'managed_root': str(managed_root), 'config': updated, 'saved_at': saved_at})
+        atomic_json(journal, {'managed_root': str(managed_root), 'config': updated, 'saved_at': saved_at, 'history_event': event})
         originals = [(path, path.read_bytes() if path.exists() else None) for path, _ in writes]
         try:
             for path, value in writes:
@@ -222,7 +254,7 @@ class Library:
                 root.is_relative_to(self.db) or self.db.is_relative_to(root)):
             raise ValueError('관리 디렉토리는 허용 루트 안에서 DB와 분리된 경로여야 합니다.')
         with self.writing():
-            write_library_locations(self.db, root, config=config)
+            write_library_locations(self.db, root, config=config, reason="startup")
 
     @contextmanager
     def writing(self):
@@ -262,6 +294,18 @@ class Library:
     def config(self):
         return read_json(self.db / 'config.json')
 
+    def pair_history(self, limit=100):
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError('limit는 1~1000이어야 합니다.')
+        paths = sorted((self.db / PAIR_HISTORY).glob('*.json'), reverse=True)
+        entries, errors = [], []
+        for path in paths[:limit]:
+            try:
+                entries.append(read_json(path))
+            except (OSError, ValueError, UnicodeError) as exc:
+                errors.append({'file': path.name, 'error': str(exc)})
+        return {'items': entries, 'total': len(paths), 'errors': errors}
+
     def save_config(self, config):
         with self.writing():
             if not isinstance(config.get('managed_root'), str) or not isinstance(config.get('sources', []), list):
@@ -299,7 +343,7 @@ class Library:
             minimum = config.get('scan_min_free_mb', 512)
             if isinstance(minimum, bool) or not isinstance(minimum, int) or not 32 <= minimum <= 1048576:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
-            write_library_locations(self.db, root, config={'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
+            write_library_locations(self.db, root, config={'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum}, reason='settings_changed')
             if root != old_root and old_root.is_relative_to(self.boundary):
                 old_marker = old_root / LOCATION_FILE
                 try:
@@ -436,7 +480,7 @@ class Library:
             self.commit(items)
             if not errors:
                 config['sources'] = [source for source in config['sources'] if source['source_id'] != source_id]
-                atomic_json(self.db / 'config.json', config)
+                write_library_locations(self.db, config['managed_root'], config=config, reason='sources_changed')
             record.update(status='partial_failure' if errors else 'completed', deleted_files=len(deleted),
                           retained_shared_files=len(candidates & protected), errors=errors)
             atomic_json(record_path, record)
@@ -493,7 +537,7 @@ class Library:
                 os.replace(pointer, pointer.with_name(new + '.json'))
             self.commit(items)
             source['source_id'] = new
-            atomic_json(self.db / 'config.json', config)
+            write_library_locations(self.db, config['managed_root'], config=config, reason='sources_changed')
             return config
 
     def item(self, media_id):

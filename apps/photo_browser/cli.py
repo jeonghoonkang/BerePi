@@ -16,6 +16,7 @@ def main(argv=None):
     parser.add_argument('--db', default=os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')), help='서버와 동일한 JSON DB 경로')
     parser.add_argument('--root', default='/', help='서버와 동일한 허용 루트 (기본 /)')
     commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('pair-history', help='소스·DB·관리 폴더 연결 변경 이력 조회 (최근 100건)')
     commands.add_parser('config', help='저장된 설정 조회')
     commands.add_parser('skills', help='사진·명함·견적서 분석 Skill과 응답 규격 조회')
     skill_save = commands.add_parser('skill-save', help='사용자 페르소나 JSON 등록·버전 갱신')
@@ -78,6 +79,8 @@ def main(argv=None):
                 result = store.save_result(args.request_id, Path(args.file).read_text(encoding='utf-8'))
             else:
                 result = {'items': store.results(args.media_id)}
+        elif args.command == 'pair-history':
+            result = library.pair_history()
         elif args.command == 'config':
             result = {'db': str(db), 'allowed_root': str(library.boundary), 'config': library.config()}
         elif args.command == 'status':

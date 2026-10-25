@@ -10,7 +10,7 @@ import zlib
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
-from library import atomic_json, digest, now, read_json, write_library_locations
+from library import atomic_json, digest, now, read_json, write_library_locations, PAIR_HISTORY, pair_snapshot
 
 
 def separate(first, second):
@@ -328,13 +328,14 @@ def restore_payload(bundle, target, manifest, archive):
                 with path.open('xb') as output:
                     read_zip_file(archive, entry, output)
                 os.utime(path, ns=(entry['mtime_ns'], entry['mtime_ns']))
+        history_before = pair_snapshot(read_json(target / 'db' / 'config.json'), manifest['original_db'])
         mappings = [(manifest['original_managed_root'], str(target / 'managed')),
                     (manifest['original_db'], str(target / 'db')),
                     (manifest['original_managed_uri'], (target / 'managed').as_uri()),
                     (manifest['original_db_uri'], (target / 'db').as_uri())]
         # Historical HTML reports remain verbatim; structured operational records are relocated.
         for path in (target / 'db').rglob('*'):
-            if path.suffix not in {'.json', '.jsonl'} or not path.is_file():
+            if PAIR_HISTORY in path.parts or path.suffix not in {'.json', '.jsonl'} or not path.is_file():
                 continue
             if path.suffix == '.json':
                 original = read_json(path)
@@ -361,7 +362,7 @@ def restore_payload(bundle, target, manifest, archive):
         config_path = target / 'db' / 'config.json'
         config = read_json(config_path)
         config['managed_root'] = str(target / 'managed')
-        write_library_locations(target / 'db', target / 'managed', config=config, new_pair=True)
+        write_library_locations(target / 'db', target / 'managed', config=config, new_pair=True, reason="backup_restored", history_before=history_before)
         record = {'status': 'completed', 'restored_at': now(), 'backup': str(bundle),
                   'db': str(target / 'db'), 'managed_root': str(target / 'managed'), 'root': str(target),
                   'file_count': manifest['file_count'], 'total_bytes': manifest['total_bytes'],

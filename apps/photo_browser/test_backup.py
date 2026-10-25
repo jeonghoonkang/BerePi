@@ -38,6 +38,7 @@ class BackupTests(unittest.TestCase):
         original = self.library.items()[0]
         location = original['locations'][-1]
         stat = Path(location['path']).stat()
+        history_before = self.library.pair_history()
         result = create_backup(self.library, self.bundle)
         self.assertEqual(result['status'], 'completed')
         self.assertFalse((self.bundle / 'db' / '.write.lock').exists())
@@ -50,6 +51,12 @@ class BackupTests(unittest.TestCase):
             self.assertEqual((folder / info['managed_root_relative']).resolve(), self.target / 'managed')
         restored = Library(report['db'], report['root'])
         self.assertNotEqual(restored.config()['pair_id'], self.library.config()['pair_id'])
+        restored_history = restored.pair_history()
+        self.assertEqual(restored_history['total'], history_before['total'] + 1)
+        self.assertEqual(restored_history['items'][1:], history_before['items'])
+        self.assertEqual(restored_history['items'][0]['reason'], 'backup_restored')
+        self.assertEqual(restored_history['items'][0]['before']['db'], str(self.library.db))
+        self.assertEqual(restored_history['items'][0]['after']['db'], str(restored.db))
         for folder in (self.target / 'db', self.target / 'managed'):
             self.assertEqual(read_json(folder / LOCATION_FILE)['pair_id'], restored.config()['pair_id'])
         item = restored.items()[0]

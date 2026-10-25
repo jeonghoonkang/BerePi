@@ -31,6 +31,12 @@ class CliTests(unittest.TestCase):
             code = main(['--db', str(self.db), '--root', str(self.root), *args])
         return code, json.loads(output.getvalue()) if output.getvalue() else errors.getvalue()
 
+    def test_pair_history_command(self):
+        code, result = self.call('pair-history')
+        self.assertEqual(code, 0)
+        self.assertEqual(result, self.library.pair_history())
+        self.assertEqual(result['items'][0]['after']['sources'][0]['source_id'], 'photos')
+
     def test_config_and_scan_status(self):
         code, result = self.call('config')
         self.assertEqual(code, 0)

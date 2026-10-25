@@ -7,7 +7,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from library import LOCATION_FILE, atomic_json, component, now, read_json, uid
+from library import LOCATION_FILE, PAIR_HISTORY, atomic_json, component, now, read_json, uid
 
 
 def directory_snapshot(root, progress=None):
@@ -22,7 +22,7 @@ def directory_snapshot(root, progress=None):
             kept = []
             for name in sorted(children):
                 child = folder / name
-                if name == '.trash':
+                if name == '.trash' or (folder == root and name == PAIR_HISTORY):
                     continue
                 if child.is_symlink():
                     links.append(child.relative_to(root).as_posix())
@@ -74,7 +74,7 @@ def directory_snapshot(root, progress=None):
             'total_bytes': sum(value['size_bytes'] for value in files.values()),
             'directories': [{'path': key, **value} for key, value in sorted(directories.items())],
             'files': files, 'volume': volume, 'complete': not errors, 'errors': errors, 'excluded_symlinks': links,
-            'exclusions': ['.trash directories', 'symlinks', 'hidden *.part staging files', LOCATION_FILE]}
+            'exclusions': ['.trash directories', 'symlinks', 'hidden *.part staging files', LOCATION_FILE, PAIR_HISTORY]}
 
 
 def atomic_text(path, text):
