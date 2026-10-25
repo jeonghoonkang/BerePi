@@ -2,6 +2,8 @@
 
 `photo_browser`는 여러 디렉토리에 흩어진 사진·동영상을 스캔하고, 관리 디렉토리(`managed_root`)에 연도·월별로 복사하여 하나의 라이브러리로 정리하는 도구입니다. 스캔 결과와 관리 복사본의 위치는 JSON DB에 기록합니다. 원본 파일은 그대로 보존합니다.
 
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/890f468a-1c2f-4925-8017-3cf655ab5246" />
+
 ## 기본 처리 흐름
 
 ```text
