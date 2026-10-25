@@ -101,7 +101,7 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(self.client.get('/media', query_string={'path': str(self.root / 'escape.jpg')}).status_code, 403)
 
     def test_corrupt_job_history_is_preserved_and_does_not_block_startup(self):
-        jobs = self.root / 'recovery-db' / 'jobs'
+        jobs = self.root / 'recovery' / 'db' / 'jobs'
         jobs.mkdir(parents=True)
         broken = b'{"job_id":"broken", "result": [1,2'
         (jobs / 'broken.json').write_bytes(broken)

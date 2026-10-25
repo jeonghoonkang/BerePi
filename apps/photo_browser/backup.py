@@ -361,8 +361,7 @@ def restore_payload(bundle, target, manifest, archive):
         config_path = target / 'db' / 'config.json'
         config = read_json(config_path)
         config['managed_root'] = str(target / 'managed')
-        atomic_json(config_path, config)
-        write_library_locations(target / 'db', target / 'managed')
+        write_library_locations(target / 'db', target / 'managed', config=config, new_pair=True)
         record = {'status': 'completed', 'restored_at': now(), 'backup': str(bundle),
                   'db': str(target / 'db'), 'managed_root': str(target / 'managed'), 'root': str(target),
                   'file_count': manifest['file_count'], 'total_bytes': manifest['total_bytes'],

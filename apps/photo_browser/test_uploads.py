@@ -108,7 +108,7 @@ class UploadTests(unittest.TestCase):
 
     def test_per_request_size_limits_leave_json_limits_unchanged(self):
         with patch.dict(os.environ, {'PHOTO_BROWSER_UPLOAD_MAX_MB': '1'}):
-            app = create_app(self.root, self.folder, self.root / 'small-db')
+            app = create_app(self.root, self.folder, self.root / 'small' / 'db')
         client = app.test_client()
         response = client.post('/api/uploads', query_string={'directory': str(self.folder), 'name': 'large.mp4'},
                                data=b'x' * (1048576 + 1), content_type='application/octet-stream', headers=self.headers)

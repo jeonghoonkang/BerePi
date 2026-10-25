@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 from app import create_app
-from library import LOCATION_FILE, Library, metadata, read_json
+from library import LOCATION_FILE, Library, metadata, read_json, atomic_json
 
 
 class LibraryTests(unittest.TestCase):
@@ -76,6 +76,78 @@ class LibraryTests(unittest.TestCase):
             self.assertEqual(info['db'], str(self.library.db))
             self.assertIsNone(info['db_relative'])
             self.assertIsNone(info['managed_root_relative'])
+
+    def test_pair_id_and_timestamp_are_shared_and_survive_restart(self):
+        config = self.library.config()
+        for folder in (self.library.db, Path(config['managed_root'])):
+            marker = read_json(folder / LOCATION_FILE)
+            self.assertEqual(marker['pair_id'], config['pair_id'])
+            self.assertEqual(marker['saved_at'], config['pair_saved_at'])
+        restarted = Library(self.library.db, self.root)
+        self.assertEqual(restarted.config()['pair_id'], config['pair_id'])
+
+    def test_another_db_cannot_claim_managed_pair(self):
+        other = Library(self.root / 'other' / 'db', self.root)
+        before = (Path(self.config['managed_root']) / LOCATION_FILE).read_bytes()
+        with self.assertRaisesRegex(ValueError, 'pair_id'):
+            other.save_config(self.config)
+        self.assertEqual((Path(self.config['managed_root']) / LOCATION_FILE).read_bytes(), before)
+        self.assertNotEqual(other.config()['pair_id'], self.library.config()['pair_id'])
+
+    def test_startup_rejects_mismatched_managed_id(self):
+        path = Path(self.config['managed_root']) / LOCATION_FILE
+        marker = read_json(path)
+        marker['pair_id'] = 'f' * 32
+        atomic_json(path, marker)
+        with self.assertRaisesRegex(ValueError, 'pair_id'):
+            Library(self.library.db, self.root)
+        self.assertEqual(read_json(path), marker)
+
+    def test_new_pair_is_committed_on_initial_startup(self):
+        library = Library(self.root / 'fresh' / 'db', self.root)
+        config = library.config()
+        self.assertEqual(len(config['pair_id']), 32)
+        for folder in (library.db, Path(config['managed_root'])):
+            self.assertEqual(read_json(folder / LOCATION_FILE)['pair_id'], config['pair_id'])
+
+    def test_legacy_pair_migrates_together(self):
+        config = self.library.config()
+        config.pop('pair_id'); config.pop('pair_saved_at')
+        atomic_json(self.library.db / 'config.json', config)
+        for folder in (self.library.db, Path(config['managed_root'])):
+            marker = read_json(folder / LOCATION_FILE)
+            marker.pop('pair_id'); marker.pop('saved_at')
+            atomic_json(folder / LOCATION_FILE, marker)
+        library = Library(self.library.db, self.root)
+        for folder in (library.db, Path(config['managed_root'])):
+            self.assertEqual(read_json(folder / LOCATION_FILE)['pair_id'], library.config()['pair_id'])
+
+    def test_pair_save_failure_rolls_back_config_and_both_markers(self):
+        managed = Path(self.config['managed_root'])
+        paths = [self.library.db / 'config.json', self.library.db / LOCATION_FILE, managed / LOCATION_FILE]
+        before = [p.read_bytes() for p in paths]
+        def fail(path, value):
+            if path == managed / LOCATION_FILE:
+                raise OSError('disk full')
+            atomic_json(path, value)
+        with patch('library.atomic_json', side_effect=fail):
+            with self.assertRaises(OSError):
+                self.library.save_config({**self.config, 'scan_min_free_mb': 32})
+        self.assertEqual([p.read_bytes() for p in paths], before)
+        self.assertFalse((self.library.db / '.photo-browser-pair-pending.json').exists())
+
+    def test_interrupted_pair_commit_completes_on_restart(self):
+        config = self.library.config()
+        config['managed_root'] = str(self.root / 'moved')
+        atomic_json(self.library.db / '.photo-browser-pair-pending.json',
+                    {'managed_root': config['managed_root'], 'config': config, 'saved_at': '2026-10-25T00:00:00+00:00'})
+        library = Library(self.library.db, self.root)
+        self.assertEqual(library.config()['managed_root'], config['managed_root'])
+        for folder in (library.db, Path(config['managed_root'])):
+            marker = read_json(folder / LOCATION_FILE)
+            self.assertEqual(marker['pair_id'], config['pair_id'])
+            self.assertEqual(marker['saved_at'], library.config()['pair_saved_at'])
+        self.assertFalse((library.db / '.photo-browser-pair-pending.json').exists())
 
     def test_month_chunks_and_incremental_edit_preservation(self):
         path = self.photo()

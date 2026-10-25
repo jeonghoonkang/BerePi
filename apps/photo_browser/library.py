@@ -50,26 +50,90 @@ def atomic_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
-def write_library_locations(db, managed_root, create_managed=True):
-    """Standalone recovery hints; neither copy depends on the media DB."""
+@contextmanager
+def pair_lock(root):
+    # One lock per managed path, shared by different DBs and processes.
+    name = hashlib.sha256(str(root).encode()).hexdigest()
+    handle = (Path(tempfile.gettempdir()) / ('photo-pair-' + name + '.lock')).open('a+b')
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            if handle.seek(0, os.SEEK_END) == 0:
+                handle.write(b'0')
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+    finally:
+        handle.close()
+
+
+def write_library_locations(db, managed_root, config=None, new_pair=False):
+    """Commit config and both pair records together, with crash recovery journal."""
     db, managed_root = Path(db).resolve(), Path(managed_root).resolve()
-    for folder in (db, managed_root):
-        if folder == managed_root and not create_managed and not folder.is_dir():
-            continue
-        value = {'format': 'photo-browser-location', 'schema_version': 1,
-                 'db': str(db), 'managed_root': str(managed_root)}
-        for key, target in (('db', db), ('managed_root', managed_root)):
-            try:
-                value[key + '_relative'] = os.path.relpath(target, folder)
-            except ValueError:  # Windows paths on different drives have no relative path.
-                value[key + '_relative'] = None
-        path = folder / LOCATION_FILE
+    journal = db / '.photo-browser-pair-pending.json'
+    with pair_lock(managed_root):
+        current = read_json(db / 'config.json', {})
+        db_marker = read_json(db / LOCATION_FILE, {})
+        managed_marker = read_json(managed_root / LOCATION_FILE, {})
+        pending = read_json(journal)
+        pair_id = (uid() if new_pair else
+                   (pending['config']['pair_id'] if pending else None) or current.get('pair_id') or db_marker.get('pair_id') or uid())
+        if not re.fullmatch(r'[0-9a-f]{32}', pair_id):
+            raise ValueError('DB의 pair_id 형식이 올바르지 않습니다.')
+        if not new_pair:
+            for marker in (db_marker, managed_marker):
+                if marker.get('pair_id') and marker['pair_id'] != pair_id:
+                    raise ValueError('DB와 관리 폴더의 pair_id가 다릅니다. 다른 라이브러리의 폴더는 연결할 수 없습니다.')
+            if managed_marker and not managed_marker.get('pair_id') and managed_marker.get('db') != str(db):
+                raise ValueError('관리 폴더가 다른 DB에 연결되어 있습니다.')
+        if pending:
+            if pending['managed_root'] != str(managed_root):
+                raise ValueError('완료하지 못한 경로 저장이 있습니다. 기존 설정으로 다시 시작하세요.')
+            pair_id = pending['config']['pair_id']
+            updated = pending['config']
+            saved_at = pending['saved_at']
+        else:
+            updated = dict(current if config is None else config, managed_root=str(managed_root), pair_id=pair_id)
+            unchanged = {k: v for k, v in updated.items() if k != 'pair_saved_at'} == {k: v for k, v in current.items() if k != 'pair_saved_at'}
+            saved_at = current.get('pair_saved_at', now()) if unchanged else now()
+        updated['pair_saved_at'] = saved_at
+        writes = [(db / 'config.json', updated)]
+        for folder in (db, managed_root):
+            value = {'format': 'photo-browser-location', 'schema_version': 2,
+                     'pair_id': pair_id, 'saved_at': saved_at,
+                     'db': str(db), 'managed_root': str(managed_root)}
+            for key, target in (('db', db), ('managed_root', managed_root)):
+                try:
+                    value[key + '_relative'] = os.path.relpath(target, folder)
+                except ValueError:
+                    value[key + '_relative'] = None
+            writes.append((folder / LOCATION_FILE, value))
+        if not pending and all(read_json(path) == value for path, value in writes):
+            return
+        # Journal first: a process interruption is completed on the next startup.
+        atomic_json(journal, {'managed_root': str(managed_root), 'config': updated, 'saved_at': saved_at})
+        originals = [(path, path.read_bytes() if path.exists() else None) for path, _ in writes]
         try:
-            if read_json(path) == value:
-                continue
-        except (ValueError, UnicodeError):
-            pass
-        atomic_json(path, value)
+            for path, value in writes:
+                atomic_json(path, value)
+        except BaseException:
+            # Ordinary I/O failures leave the prior pair intact. Keep the journal
+            # if rollback itself fails so a restart can finish the transaction.
+            for path, content in originals:
+                if content is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    temporary = path.with_name(path.name + '.rollback-' + uid())
+                    temporary.write_bytes(content)
+                    os.replace(temporary, path)
+            journal.unlink(missing_ok=True)
+            raise
+        journal.unlink(missing_ok=True)
+
 
 
 def digest(path, control=None):
@@ -149,15 +213,16 @@ class Library:
         self.facets_lock = threading.Lock()
         self.facets_generation = None
         self.facets_cache = None
-        if not (self.db / 'config.json').exists():
-            atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(self.db.parent / 'library'), 'sources': []})
-        # Backfill existing libraries without creating a managed directory on startup.
-        config = self.config()
+        # Validate/migrate the pair and complete interrupted path commits on startup.
+        pending = read_json(self.db / '.photo-browser-pair-pending.json')
+        config = pending['config'] if pending else read_json(self.db / 'config.json',
+                    {'schema_version': 1, 'managed_root': str(self.db.parent / 'library'), 'sources': []})
         root = Path(config['managed_root']).expanduser().resolve()
-        if root.is_relative_to(self.boundary) and root != self.boundary and not (
+        if not root.is_relative_to(self.boundary) or root == self.boundary or (
                 root.is_relative_to(self.db) or self.db.is_relative_to(root)):
-            with self.writing():
-                write_library_locations(self.db, root, create_managed=False)
+            raise ValueError('관리 디렉토리는 허용 루트 안에서 DB와 분리된 경로여야 합니다.')
+        with self.writing():
+            write_library_locations(self.db, root, config=config)
 
     @contextmanager
     def writing(self):
@@ -234,8 +299,7 @@ class Library:
             minimum = config.get('scan_min_free_mb', 512)
             if isinstance(minimum, bool) or not isinstance(minimum, int) or not 32 <= minimum <= 1048576:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
-            atomic_json(self.db / 'config.json', {'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
-            write_library_locations(self.db, root)
+            write_library_locations(self.db, root, config={'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum})
             if root != old_root and old_root.is_relative_to(self.boundary):
                 old_marker = old_root / LOCATION_FILE
                 try:

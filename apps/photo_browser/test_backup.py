@@ -49,6 +49,9 @@ class BackupTests(unittest.TestCase):
             self.assertEqual((folder / info['db_relative']).resolve(), self.target / 'db')
             self.assertEqual((folder / info['managed_root_relative']).resolve(), self.target / 'managed')
         restored = Library(report['db'], report['root'])
+        self.assertNotEqual(restored.config()['pair_id'], self.library.config()['pair_id'])
+        for folder in (self.target / 'db', self.target / 'managed'):
+            self.assertEqual(read_json(folder / LOCATION_FILE)['pair_id'], restored.config()['pair_id'])
         item = restored.items()[0]
         self.assertEqual(item['classification'], original['classification'])
         self.assertEqual(item['capture'], original['capture'])
