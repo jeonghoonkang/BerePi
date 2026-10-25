@@ -16,6 +16,32 @@ MIB = 1024 * 1024
 RECORD_ESTIMATE = 16384
 
 
+def local_media_files(library, source, check=None):
+    """Share source traversal rules between scanning and startup inventory."""
+    root = library.local(source['root'])
+    managed = library.local(library.config()['managed_root'])
+    if not root.is_dir():
+        raise ValueError('스캔 경로가 디렉토리가 아닙니다.')
+    if root.is_relative_to(managed) or root.is_relative_to(library.db):
+        raise ValueError('관리 디렉토리 또는 DB를 소스로 스캔할 수 없습니다.')
+    def failed(exc):
+        raise exc
+    for base, directories, files in os.walk(root, onerror=failed, followlinks=False):
+        if check:
+            check()
+        directories[:] = sorted(d for d in directories if not (Path(base) / d).is_symlink() and not (Path(base) / d).resolve().is_relative_to(managed) and not (Path(base) / d).resolve().is_relative_to(library.db))
+        for name in sorted(files):
+            if check:
+                check()
+            path = Path(base) / name
+            if not name.startswith('._') and path.suffix.lower() in EXTENSIONS and not path.is_symlink():
+                resolved = library.local(path)
+                if not resolved.is_relative_to(managed) and not resolved.is_relative_to(library.db):
+                    yield resolved.as_uri(), {'path': str(resolved)}
+        if not source.get('recursive', True):
+            directories.clear()
+
+
 class ScanPause(Exception):
     def __init__(self, status, warning):
         self.status, self.warning = status, warning
@@ -94,27 +120,7 @@ class ScanEngine:
                 raise ScanPause('paused_low_space', f'원격 다운로드 임시 디스크 공간 부족: 여유 {free // MIB:,} MiB / 필요 {needed // MIB:,} MiB.')
 
     def local_files(self, source):
-        library = self.library
-        root = library.local(source['root'])
-        managed = library.local(library.config()['managed_root'])
-        if not root.is_dir():
-            raise ValueError('스캔 경로가 디렉토리가 아닙니다.')
-        if root.is_relative_to(managed) or root.is_relative_to(library.db):
-            raise ValueError('관리 디렉토리 또는 DB를 소스로 스캔할 수 없습니다.')
-        def failed(exc):
-            raise exc
-        for base, directories, files in os.walk(root, onerror=failed, followlinks=False):
-            self.check()
-            directories[:] = sorted(d for d in directories if not (Path(base) / d).is_symlink() and not (Path(base) / d).resolve().is_relative_to(managed) and not (Path(base) / d).resolve().is_relative_to(library.db))
-            for name in sorted(files):
-                self.check()
-                path = Path(base) / name
-                if not name.startswith('._') and path.suffix.lower() in EXTENSIONS and not path.is_symlink():
-                    resolved = library.local(path)
-                    if not resolved.is_relative_to(managed) and not resolved.is_relative_to(library.db):
-                        yield resolved.as_uri(), {'path': str(resolved)}
-            if not source.get('recursive', True):
-                directories.clear()
+        yield from local_media_files(self.library, source, self.check)
 
     def process(self, source, uri, info, old):
         if old and old['lifecycle']['status'] not in {'active', 'source_unregistered'}:

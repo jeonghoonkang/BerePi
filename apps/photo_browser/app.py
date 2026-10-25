@@ -163,18 +163,25 @@ def create_app(root=None, start=None, db=None, limit=20000):
     return app
 
 
-if __name__ == '__main__':
+def main(argv=None):
     # Preserve all Python thread stacks if the interpreter/native code crashes.
     faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=7081)
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
-    parser.add_argument('--directory', help='처음 표시할 폴더 (기본 홈)')
+    parser.add_argument('--directory', action='append', help='처음 표시할 폴더 (기본 홈). 여러 번 지정하면 각 폴더를 통합 소스로 등록하고 파일 수·용량을 출력')
     parser.add_argument('--db', help='JSON DB 디렉토리')
     parser.add_argument('--limit', type=positive_limit, default=20000, help='기존 폴더 탐색에서 요청당 스캔할 최대 미디어 수 (기본 20000)')
-    args = parser.parse_args()
-    app = create_app(args.root, args.directory, args.db, limit=args.limit)
+    args = parser.parse_args(argv)
+    try:
+        app = create_app(args.root, args.directory[0] if args.directory else None, args.db, limit=args.limit)
+        if args.directory and len(args.directory) > 1:
+            from startup_sources import register_directories, print_directory_summary
+            reports = register_directories(app.extensions['photo_library'], args.directory)
+            print_directory_summary(app.extensions['photo_library'], reports)
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
     library = app.extensions['photo_library']
     config = library.config()
     print('\n사진 브라우저 경로 설정', flush=True)
@@ -188,3 +195,7 @@ if __name__ == '__main__':
         print('소스: 등록된 소스 없음', flush=True)
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
     app.run(host=args.host, port=args.port, threaded=True)
+
+
+if __name__ == '__main__':
+    main()
