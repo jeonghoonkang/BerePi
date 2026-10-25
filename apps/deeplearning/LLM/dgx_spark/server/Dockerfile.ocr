@@ -1,0 +1,5 @@
+ARG BASE_IMAGE=vllm/vllm-openai:latest
+FROM ${BASE_IMAGE}
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*

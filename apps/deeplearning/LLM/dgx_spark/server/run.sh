@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #Author : Jeonghooon Kang (https://github.com/jeonghoonkang)
 
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.1.0"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 echo "[INFO] $(basename "$0") version ${SCRIPT_VERSION}"
 
 # 1. 스크립트의 현재 위치를 기준으로 hf_key.txt 경로 지정
@@ -55,12 +56,15 @@ sudo docker run --rm -it \
   --network host \
   --ipc=host \
   -e HF_TOKEN="${HF_TOKEN}" \
+  -e PYTHONPATH=/opt/berepi-ocr \
+  -v "${SCRIPT_DIR}/sequential_prompt.py:/opt/berepi-ocr/sequential_prompt.py:ro" \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
-  vllm/vllm-openai:latest \
+  "${IMAGE:-vllm/vllm-openai:latest}" \
   google/gemma-4-31b-it \
     --host 0.0.0.0 \
     --port "${PORT}" \
     --trust-remote-code \
+    --middleware sequential_prompt.OCRPromptMiddleware \
     --gpu-memory-utilization 0.85 \
     --max-model-len 8192 \
     --max-num-seqs 16 \

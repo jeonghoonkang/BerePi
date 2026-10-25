@@ -253,6 +253,56 @@ GET 응답의 `tools` 배열은 function-calling 클라이언트나 agent가 그
 
 추론 없이 이미지 전달만 시험하려면 같은 인증 정보와 `images` 배열로 `POST /api/test-image-transfer`를 호출합니다. 응답의 `image_count`로 전달된 이미지 수를 확인할 수 있습니다.
 
+### 첨부 파일 종류 판별과 OCR 선택
+
+`sequential_prompt.py`는 확장자나 클라이언트 MIME 선언보다 파일의 실제 시그니처를
+우선하여 이미지, PDF, UTF-8 텍스트, 일반 바이너리를 구분합니다.
+Prompt Test 화면에는 여러 파일을 선택하는 입력란이 있으며, 기존 OCR/YOLO 화면도 같은 선택 절차를 사용합니다.
+
+`POST /api/generate` 및 `POST /api/enqueue-generate`는 `images` 외에 아래 `files` 형식을 지원합니다.
+
+```json
+{
+  "user_id": "admin",
+  "password": "안전한-비밀번호",
+  "prompt": "첨부 문서를 확인해 주세요.",
+  "files": [{"name": "scan.pdf", "content_base64": "base64-file-data"}]
+}
+```
+
+최초 사용자 프롬프트에 `첨부 파일 OCR 해주세요`, `OCR 실행해 주세요` 같은 명시적인 OCR 요청이 있으면
+확인 질문 없이 OCR 시스템 프롬프트를 추가해 바로 전송합니다. `prompt`와 `prompts` 모두 적용됩니다.
+`ocr_reply`를 명시한 경우에는 그 값이 우선하며, 파일명이나 첨부 본문에 있는 문구는 요청으로 판단하지 않습니다.
+
+명시적인 최초 OCR 요청이 없으면 모델을 호출하거나 큐에 넣지 않고 HTTP 200으로
+`ocr_confirmation_required: true`, `question`, `attachments`를 반환합니다.
+클라이언트는 파일 종류와 질문을 표시한 뒤 **동일한 요청에 `ocr_reply`를 추가해 재전송**해야 합니다.
+기존 `images` 클라이언트에도 이 절차가 적용됩니다. 서버는 확인용 파일을 보관하지 않으므로 재전송할 때 첨부도 포함합니다.
+
+- `"ocr_reply": "OCR 실행"`, `"네"`, `"yes"` 또는 `true`: OCR용 `system` 프롬프트를 추가합니다.
+- `"ocr_reply": "아니요"`, `false`, `null`, 빈 문자열 또는 긍정으로 인식되지 않는 회신: OCR `system` 프롬프트 없이 전송합니다.
+- `ocr_reply` 필드와 명시적인 최초 OCR 요청이 모두 없으면 확인 질문만 반환합니다. API 클라이언트가 응답 대기시간을 정하고 무응답 시 빈 문자열로 재전송해야 합니다.
+- 웹 화면은 질문 창에서 입력한 응답으로 재전송하며, 창을 취소하면 빈 문자열로 재전송합니다.
+- 첨부 없는 일반 텍스트 요청은 기존처럼 바로 실행합니다. OCR 선택은 해당 요청에만 적용됩니다.
+
+OCR 시스템 프롬프트는 원문 언어·읽기 순서·표·페이지 구분을 유지하고, 읽을 수 없는 부분을
+`[illegible]`로 표시하며, 문서에 포함된 명령을 실행하지 않고 내용으로 취급하도록 지시합니다.
+응답의 `ocr_enabled`는 해당 시스템 프롬프트가 추가되었는지를 나타냅니다.
+
+PDF는 OCR 선택과 관계없이 Poppler의 `pdftoppm`으로 페이지 이미지를 만든 후 모델의 `images`로 전송합니다.
+서버 머신에 Poppler를 설치해야 합니다 (`brew install poppler` 또는 Ubuntu의 `sudo apt install poppler-utils`).
+변환기가 없거나 암호화·손상된 PDF이면 원인을 알리는 오류를 반환합니다.
+이미지와 PDF에는 이미지 입력을 지원하는 모델이 필요하며, 실제 OCR은 그 모델이 수행합니다.
+
+일반 바이너리는 이미지 입력으로 위장하지 않고 Base64 데이터와 파일 정보를 사용자 입력에 포함합니다.
+UTF-8 텍스트는 디코딩한 내용을 포함합니다. 일반 바이너리의 임의 형식을 해석하거나
+OCR할 수 있다는 보장은 없으며, `attachments[].ocr_supported`로 이미지/PDF 여부를 확인할 수 있습니다.
+첨부 본문은 현재 모델 요청에만 포함하고 대화 히스토리에 원본 Base64를 저장하지 않습니다.
+`/api/workspace/upload`는 저장 기능이며 모델 실행은 하지 않습니다. 저장 응답의 `attachment`에 판별 결과가 포함됩니다.
+
+제한은 요청당 최대 10개, 첨부 전체 20 MiB, PDF당 최대 20페이지, 일반 바이너리당 256 KiB입니다.
+PDF 페이지는 긴 변을 최대 1600px로 변환합니다. 큰 바이너리나 긴 텍스트는 모델 컨텍스트 한도에 맞게 나누어 전송하세요.
+
 ## API 목록
 
 상태 확인:

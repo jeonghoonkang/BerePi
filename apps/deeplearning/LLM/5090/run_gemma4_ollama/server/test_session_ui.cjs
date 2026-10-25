@@ -37,3 +37,22 @@ vm.createContext(sandbox);vm.runInContext(code,sandbox);
   assert(fields.every(f=>f.style.backgroundColor==='#e5e7eb'));
   console.log('Session UI: login, expiry, re-login, 401, network outage, all credential fields: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+const ocrCode = script.slice(script.indexOf('    async function generateWithOcrChoice'), script.indexOf('    async function sendPrompt'));
+(async()=>{
+  for (const reply of ['OCR 실행', '아니요', null]) {
+    const requests=[];
+    const context={window:{prompt:()=>reply}, authFetch:async(path,options)=>{
+      requests.push(JSON.parse(options.body));
+      const data=requests.length===1?{ocr_confirmation_required:true,question:'OCR?'}:{response:'ok'};
+      return {ok:true, clone:()=>({json:async()=>data}), json:async()=>data};
+    }};
+    vm.createContext(context);vm.runInContext(ocrCode,context);
+    const result=await vm.runInContext('generateWithOcrChoice({files:[{name:"scan.pdf",content_base64:"data"}]})',context);
+    assert.equal((await result.json()).response,'ok');
+    assert.equal(requests.length,2);
+    assert.equal(requests[1].ocr_reply,reply || '');
+    assert.deepEqual(requests[1].files,requests[0].files);
+  }
+  console.log('OCR UI: confirmation, yes, no, dismissed dialog, attachment resend: PASS');
+})().catch(error=>{console.error(error);process.exitCode=1;});

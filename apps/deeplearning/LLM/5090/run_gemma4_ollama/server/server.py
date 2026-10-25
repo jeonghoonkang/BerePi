@@ -29,6 +29,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from telegram_manager import TelegramManager
+from sequential_prompt import (
+    attachments_from_request, confirmation_response, detect_attachment,
+    model_attachment_fields, initial_ocr_requested,
+)
 
 from writing_tech_doc_tools import (
     ToolUnavailableError,
@@ -773,6 +777,8 @@ INDEX_HTML = """<!doctype html>
           <textarea id="prompt2"></textarea>
         </div>
       </div>
+      <label for="promptFiles">첨부 파일 (이미지, PDF, 텍스트, 바이너리)</label>
+      <input id="promptFiles" type="file" multiple>
       <div class="row">
         <button class="primary" id="send" type="button" onclick="window.sendPrompt(event)">Send Prompt</button>
         <button id="cancelPendingPrompts" type="button">Cancel Pending Prompts</button>
@@ -2093,15 +2099,11 @@ if __name__ == "__main__":
         }
         updateRequestTimer();
         requestTimer = window.setInterval(updateRequestTimer, 1000);
-        const res = await authFetch("/api/generate", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            prompt,
-            images: [base64Image],
-            model: modelSelect.value,
-            ...auth
-          })
+        const res = await generateWithOcrChoice({
+          prompt,
+          files: [{name: file.name, content_base64: base64Image}],
+          model: modelSelect.value,
+          ...auth
         });
         const data = await res.json();
         const elapsedSeconds = (performance.now() - (requestStartedAt || startedAt)) / 1000;
@@ -2316,6 +2318,25 @@ if __name__ == "__main__":
       }
     }
 
+    async function generateWithOcrChoice(payload) {
+      async function submit() {
+        return authFetch("/api/generate", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+      }
+      let res = await submit();
+      if (res.ok) {
+        const confirmation = await res.clone().json();
+        if (confirmation.ocr_confirmation_required) {
+          payload.ocr_reply = window.prompt(confirmation.question, "아니요") || "";
+          res = await submit();
+        }
+      }
+      return res;
+    }
+
     async function sendPrompt(event) {
       if (event && typeof event.preventDefault === "function") event.preventDefault();
       if (sendButton.disabled) return;
@@ -2332,7 +2353,8 @@ if __name__ == "__main__":
         answer.textContent = message;
       }
       const prompts = [prompt1.value, prompt2.value].map((value) => value.trim()).filter(Boolean);
-      if (!prompts.length) {
+      const selectedFiles = Array.from(document.getElementById("promptFiles").files || []);
+      if (!prompts.length && !selectedFiles.length) {
         setAnswerMarkdown("Prompt is required.");
         busy.textContent = "Prompt is required.";
         return;
@@ -2354,11 +2376,11 @@ if __name__ == "__main__":
           source: "web",
           ...auth,
         };
-        const generatePromise = authFetch("/api/generate", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(payload)
-        });
+        payload.files = await Promise.all(selectedFiles.map(async (file) => ({
+          name: file.name,
+          content_base64: (await imagePayloadFromFile(file)).base64Image
+        })));
+        const generatePromise = generateWithOcrChoice(payload);
         promptQueueSnapshot().then((snapshot) => {
           queueSnapshot = snapshot;
           updateBusy();
@@ -3421,6 +3443,7 @@ def upload_workspace_files(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "path": f"workspace/{path.name}",
                 "absolute_path": str(path),
                 "size_bytes": stat.st_size,
+                "attachment": detect_attachment(path.name, content).metadata(),
                 "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
             }
         )
@@ -3816,6 +3839,9 @@ def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
                 message.get(key, "") == identity.get(key, "") for key in HISTORY_IDENTITY_FIELDS
             )]
         execution_payload["prompt"] = conversation_prompt(messages, user_prompt)
+    attachment_text = str(payload.get("_attachment_text") or "")
+    if attachment_text:
+        execution_payload["prompt"] += "\n\n" + attachment_text
     return execution_payload
 
 
@@ -5215,6 +5241,16 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 self.send_auth_error("invalid user id or password")
                 return
             prompt, prompts = combined_prompt_from_request(incoming)
+            attachments = attachments_from_request(incoming)
+            if attachments and "ocr_reply" not in incoming and initial_ocr_requested(prompt):
+                incoming["ocr_reply"] = True
+            if attachments and "ocr_reply" not in incoming:
+                self.send_json(confirmation_response(attachments))
+                return
+            attachment_fields = model_attachment_fields(attachments, incoming.get("ocr_reply"))
+            if not prompt and attachments:
+                prompt = "첨부 파일을 확인해 주세요."
+                prompts = [prompt]
             if not prompt:
                 self.send_json({"error": "prompt is required"}, HTTPStatus.BAD_REQUEST)
                 return
@@ -5224,7 +5260,7 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             )
             remember_user_prompt(user_id, prompt, identity=identity)
             selected_model = str(incoming.get("model") or read_selected_model())
-            images = images_from_request(incoming)
+            images = attachment_fields["images"]
             remember_history = remember_history_requested(
                 incoming.get("remember_history")
             )
@@ -5246,7 +5282,10 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 "_history_user_prompt": prompt,
                 "_history_user_id": user_id,
                 "_history_identity": identity,
+                "_attachment_text": attachment_fields["attachment_text"],
             }
+            if attachment_fields.get("system"):
+                payload["system"] = attachment_fields["system"]
             if images:
                 payload["images"] = images
             if wait_for_result:
@@ -5259,6 +5298,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 result = queued_prompt_ack(job)
             if images:
                 result["image_count"] = len(images)
+            if attachments:
+                result["attachments"] = [item.metadata() for item in attachments]
+                result["ocr_enabled"] = bool(attachment_fields.get("system"))
             self.send_json(result)
         except ValueError as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)

@@ -18,6 +18,10 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 
+# The bot is also launched directly from the telegram/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from sequential_prompt import MAX_ATTACHMENT_BYTES, confirmation_response, decode_attachment, initial_ocr_requested
+
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
 from telegram.error import RetryAfter
@@ -158,8 +162,11 @@ def writing_tool_result_text(result: dict) -> str:
     return "\n\n".join(sections)
 
 
-def enqueue_llm_prompt(prompt: str, images: Optional[list[str]] = None, identity: Optional[dict] = None) -> dict:
-    return post_json(LLM_ENQUEUE_URL, prompt_payload(prompt, images, identity))
+def enqueue_llm_prompt(prompt: str, images: Optional[list[str]] = None, identity: Optional[dict] = None,
+                       attachment_request: Optional[dict] = None) -> dict:
+    payload = prompt_payload(prompt, images, identity)
+    payload.update(attachment_request or {})
+    return post_json(LLM_ENQUEUE_URL, payload)
 
 
 def prompt_result_url(job_id: int) -> str:
@@ -1198,26 +1205,93 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     prompt = prompt_from_update(update, context)
-    has_photo = message_has_photo(update)
-    if not prompt and has_photo and should_use_default_image_prompt(update, context):
-        prompt = DEFAULT_IMAGE_PROMPT
+    key = f"{update.effective_chat.id}:{update.message.message_thread_id or 0}"
+    pending_by_room = context.user_data.setdefault("ocr_pending", {})
+    # Only the same sender in the same room/topic can answer this question.
+    pending = pending_by_room.pop(key, None)
+    if pending:
+        pending["timer"].cancel()
+        if not (image_attachment_from_message(update.message) or getattr(update.message, "document", None)):
+            reply, _ = text_without_bot_mentions(message_text(update), bot_usernames(context))
+            await process_prompt(update, context, pending["prompt"],
+                                 {"files": pending["files"], "ocr_reply": reply})
+            return
+        await update.message.reply_text("이전 OCR 대기를 취소하고 새 첨부 파일로 교체합니다.")
+
+    source = update.message
+    attachment = image_attachment_from_message(source) or getattr(source, "document", None)
+    if not attachment and source.reply_to_message:
+        source = source.reply_to_message
+        attachment = image_attachment_from_message(source) or getattr(source, "document", None)
+    if attachment:
+        if not prompt and not should_use_default_image_prompt(update, context):
+            return
+        try:
+            if (getattr(attachment, "file_size", 0) or 0) > MAX_ATTACHMENT_BYTES:
+                raise ValueError("첨부 파일은 20 MiB 이하만 지원합니다.")
+            remote = await attachment.get_file()
+            content = bytes(await remote.download_as_bytearray())
+            name = getattr(attachment, "file_name", None) or Path(str(remote.file_path or "image.jpg")).name
+            files = [{"name": name, "content_base64": base64.b64encode(content).decode("ascii")}]
+            detected = decode_attachment(name, files[0]["content_base64"])
+            if initial_ocr_requested(prompt):
+                await process_prompt(update, context, prompt, {"files": files, "ocr_reply": True})
+                return
+            await update.message.reply_text(confirmation_response([detected])["question"] +
+                                            "\n60초 동안 응답이 없으면 OCR 없이 전송합니다.")
+            pending = {"files": files, "prompt": prompt or (
+                DEFAULT_IMAGE_PROMPT if detected.kind == "image" else "첨부 파일을 확인해 주세요.")}
+            pending_by_room[key] = pending
+
+            async def without_ocr_after_timeout():
+                await asyncio.sleep(60)
+                if pending_by_room.get(key) is pending:
+                    pending_by_room.pop(key)
+                    await process_prompt(update, context, pending["prompt"],
+                                         {"files": pending["files"], "ocr_reply": ""})
+
+            pending["timer"] = context.application.create_task(without_ocr_after_timeout())
+        except Exception as exc:
+            logger.exception("Failed to prepare attachment")
+            await update.message.reply_text(f"첨부 파일 처리 오류: {exc}")
+        return
     if not prompt:
         if update.effective_chat.type == ChatType.PRIVATE:
             await update.message.reply_text("프롬프트를 입력해 주세요.")
         return
+    await process_prompt(update, context, prompt)
 
+
+async def process_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str,
+                         attachment_request: Optional[dict] = None) -> None:
+    has_photo = message_has_photo(update) and not attachment_request
     thinking_message = None
     temp_image_paths: list[Path] = []
     raw_answer = ""
     try:
         images, temp_image_paths = await image_payloads_from_update(update, context) if has_photo else ([], [])
+        if attachment_request:
+            # Preserve the existing detection-box rendering for image attachments.
+            for item in attachment_request.get("files", []):
+                attachment = decode_attachment(item["name"], item["content_base64"])
+                if attachment.kind == "image":
+                    with tempfile.NamedTemporaryFile(prefix="telegram_photo_", suffix=".img", delete=False) as image_file:
+                        temp_image_paths.append(Path(image_file.name))
+                        image_file.write(attachment.content)
         if has_photo:
             logger.info("Sending prompt to LLM with image_count=%s", len(images))
-        enqueue_response = enqueue_llm_prompt(prompt, images, {
+        identity = {
             "source": "telegram",
             "room_id": f"{update.effective_chat.id}:{update.message.message_thread_id or 0}",
             "sender_id": str(update.effective_user.id) if update.effective_user else "unknown",
-        })
+        }
+        if attachment_request:
+            enqueue_response = enqueue_llm_prompt(prompt, images, identity, attachment_request)
+        else:
+            enqueue_response = enqueue_llm_prompt(prompt, images, identity)
+        if enqueue_response.get("ocr_confirmation_required"):
+            await update.message.reply_text(enqueue_response["question"])
+            return
         thinking_message = await update.message.reply_text(f"thinking...\n{queue_line_from_response(enqueue_response)}")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         job_id = int(enqueue_response.get("prompt_queue_id"))
@@ -1266,7 +1340,7 @@ def main() -> None:
     application.add_handler(CommandHandler("allom", allom_command))
     application.add_handler(CommandHandler("findm", findm_command))
     application.add_handler(CommandHandler("recall", recall_command))
-    application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND, handle_prompt))
+    application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, handle_prompt))
 
     keep_recent_pending_updates(MAX_PENDING_UPDATES_ON_STARTUP)
     logger.info(

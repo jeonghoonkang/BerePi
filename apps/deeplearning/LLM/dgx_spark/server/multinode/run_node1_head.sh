@@ -76,6 +76,8 @@ exec "${DOCKER[@]}" run --rm "${DOCKER_TTY_ARGS[@]}" \
   --ulimit stack=67108864 \
   --entrypoint /bin/bash \
   -e HF_TOKEN="$HF_TOKEN" \
+  -e PYTHONPATH=/opt/berepi-ocr \
+  -v "${SCRIPT_DIR}/../sequential_prompt.py:/opt/berepi-ocr/sequential_prompt.py:ro" \
   -e HEAD_IP="$LOCAL_IP" \
   -e LOCAL_IFACE="$LOCAL_IFACE" \
   -e RAY_PORT \
@@ -122,6 +124,7 @@ exec "${DOCKER[@]}" run --rm "${DOCKER_TTY_ARGS[@]}" \
       --host 0.0.0.0 \
       --port "$API_PORT" \
       --trust-remote-code \
+      --middleware sequential_prompt.OCRPromptMiddleware \
       --distributed-executor-backend ray \
       --pipeline-parallel-size "$PIPELINE_PARALLEL_SIZE" \
       --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" \
