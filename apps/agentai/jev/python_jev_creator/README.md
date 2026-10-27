@@ -4,6 +4,32 @@ Python 코드에서 판단 지점을 제안하고 사용자가 선택한 조건�
 Jev 호출 코드를 추가하는 Tkinter 데스크톱 프로그램입니다. Python 3.9 이상에서
 실행하며 별도 패키지는 필요하지 않습니다. Linux는 python3-tk가 필요할 수 있습니다.
 
+## 소프트웨어 구조
+
+아래는 구현된 Creator의 구조입니다. 분석과 생성은 로컬에서 수행하며,
+Jev API는 생성된 응용 코드를 실행할 때 호출합니다.
+
+```mermaid
+flowchart TD
+    USER["사용자"] --> GUI["GUI · gui.py<br/>Python 파일·폴더 경로 입력"]
+    GUI --> ANALYZE["코드 분석기 · creator.py<br/>AST 기반 조건문 탐색"]
+    SOURCE["원본 Python 프로젝트"] --> ANALYZE
+    ANALYZE --> CANDIDATES["판단 후보 표시<br/>위치 · 조건식 · 사용 변수"]
+    CANDIDATES --> SELECT["사용자 선택<br/>적용 지점 선택 · 질문 편집"]
+    SELECT --> GENERATE["코드 생성기 · creator.py"]
+    SOURCE --> COPY["프로젝트 복사<br/>원본 보존"]
+    COPY --> GENERATE
+    TEMPLATE["runtime_template.py<br/>Noul 호출 · 오류 시 기존 조건 사용"] --> GENERATE
+    GENERATE --> VALIDATE["생성 코드 구문 검증"]
+    VALIDATE --> OUTPUT["기존 폴더명 + jev<br/>변환 코드 · 리소스 · 생성 보고서"]
+    OUTPUT --> APP["생성된 응용 코드 실행"]
+    APP <--> API["TypeSafe Jev API"]
+```
+
+`main.py`가 GUI를 시작합니다. Runner와 연결하려면 생성된 프로젝트에
+서비스 명세와 실행 어댑터를 별도로 추가해야 합니다.
+[Runner 설계](../python_jev_runner/README.md)를 참고하세요.
+
 ## 실행 및 사용
 
 저장소 루트에서 실행합니다.

@@ -4,6 +4,52 @@
 
 상태: 구현을 위한 설계 문서. 이 디렉터리의 Runner 실행 프로그램은 아직 구현하지 않았다.
 
+## 소프트웨어 구조
+
+아래는 구현 예정인 Runner의 설계 구조다. Jev는 의도와 기능을 판단하고,
+Runner는 서비스 명세와 실제 실행 결과로 응답 문장을 구성한다.
+
+```mermaid
+flowchart TD
+    USER["사용자"] <--> GUI["말풍선 GUI<br/>질문 · 경로 입력 · 실행 요청"]
+    GUI --> CONVERSATION["대화 관리자<br/>현재 기능 · 입력값 · 작업 상태 유지"]
+    CONVERSATION --> ROUTER["의도·기능 판단기"]
+    ROUTER <--> JEV["TypeSafe Jev API"]
+    ROUTER --> CONVERSATION
+    SPEC["서비스 명세<br/>기능 설명 · 인자 · 실행 어댑터"] --> REGISTRY["서비스 등록기"]
+    REGISTRY --> CONVERSATION
+    CONVERSATION --> PARAMETERS["입력 수집·검증<br/>원본 경로 · 목적지 · 설정"]
+    PARAMETERS --> PLAN["실행 계획<br/>기능 · 검증된 인자"]
+    PLAN --> EXECUTOR["실행 관리자"]
+    EXECUTOR --> WORKER["별도 Worker 프로세스"]
+    WORKER --> ADAPTER["응용 어댑터"]
+    ADAPTER --> APP["Jev 응용 코드"]
+    APP --> FILES["파일 처리"]
+    APP --> DB["DB 저장"]
+    APP <--> APPJEV["응용 내부 Jev API 호출"]
+    WORKER --> EVENTS["진행·결과·오류 이벤트"]
+    EVENTS --> CONVERSATION
+    CONVERSATION --> RESPONSE["응답 문장 구성<br/>기능 설명 · 추가 질문 · 결과 안내"]
+    RESPONSE --> GUI
+    EXECUTOR --> HISTORY["작업 이력 저장"]
+    EVENTS --> HISTORY
+```
+
+### Creator와 Runner 연결
+
+```mermaid
+flowchart LR
+    SOURCE["기존 Python 코드"] --> CREATOR["Creator<br/>판단 지점 선택·변환"]
+    CREATOR --> PROJECT["Jev 응용 프로젝트"]
+    PROJECT --> REGISTER["Runner 등록<br/>서비스 명세 + 실행 어댑터 추가"]
+    REGISTER --> RUNNER["Runner<br/>대화로 기능 안내·실행"]
+    USER["사용자<br/>기능 질문 · 경로 전달 · 실행 요청"] <--> RUNNER
+```
+
+현재 [Creator](../python_jev_creator/README.md)의 결과물에는 서비스 명세와
+실행 어댑터가 포함되지 않는다. Runner 등록 단계에서 이를 추가하며, 구체적인
+연결 규약은 4절에서 정의한다.
+
 ## 1. 목적과 사용자 경험
 
 Python Jev Runner는 사용자가 응용 프로그램의 명령어나 함수 이름을 외우지 않고,
