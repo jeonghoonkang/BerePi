@@ -33,6 +33,7 @@ from sequential_prompt import (
     attachments_from_request, confirmation_response, detect_attachment,
     model_attachment_fields, initial_ocr_requested,
 )
+from model_health import ModelHealthMonitor
 
 from writing_tech_doc_tools import (
     ToolUnavailableError,
@@ -2266,6 +2267,37 @@ if __name__ == "__main__":
       target.focus();
     }
 
+    function modelHealthCard(health = {}) {
+      const labels = {waiting: "검사 대기", checking: "검사 중", complete: "검사 완료", error: "활성 모델 조회 실패"};
+      const date = value => value ? escapeHtml(new Date(value * 1000).toLocaleString()) : "-";
+      const rows = (health.results || []).map(item =>
+        `${escapeHtml(item.model)}: ${escapeHtml(item.status)}${item.error ? ` (${escapeHtml(item.error)})` : ""}`);
+      const count = health.status === "error" || health.status === "waiting"
+        ? "확인 불가" : `${health.working_count} / ${health.active_count}`;
+      return `<div id="modelHealthCard">${metric("LLM 테스트 · 정상 / 활성", [
+        count, escapeHtml(labels[health.status] || "검사 대기"),
+        "검사 시작 시 실행 중인 모델 기준 · 1시간 주기",
+        `마지막 완료: ${date(health.checked_at)}`, `다음 검사: ${date(health.next_check_at)}`,
+        escapeHtml(health.error || ""), ...rows
+      ].filter(Boolean).join("<br>"), health.status === "complete" && health.active_count > 0 && health.working_count === health.active_count ? "ok" : "warn")}</div>`;
+    }
+
+    let modelHealthBusy = false;
+    async function refreshModelHealth() {
+      if (modelHealthBusy) return;
+      modelHealthBusy = true;
+      try {
+        const res = await authFetch("/api/model-health", {signal: AbortSignal.timeout(10000)});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const health = await res.json();
+        const card = document.getElementById("modelHealthCard");
+        if (card) card.outerHTML = modelHealthCard(health);
+      } catch (err) {
+        const card = document.getElementById("modelHealthCard");
+        if (card) card.outerHTML = modelHealthCard({status: "error", error: `상태 갱신 실패: ${err}`});
+      } finally { modelHealthBusy = false; }
+    }
+
     async function refreshStatus() {
       metrics.innerHTML = metric("Status", "Loading...");
       try {
@@ -2297,6 +2329,7 @@ if __name__ == "__main__":
           metric("Web Server", `${data.host}:${data.port}<br>Public IP: ${data.public_ip || "Unknown"}<br>Ifconfig IP:<br>${ifconfigText}`, "ok"),
           metric("Ollama", data.ollama_reachable ? "Reachable" : "Unavailable", ollamaClass),
           metric("Model", `${data.model} (${data.model_available ? "available" : "missing"})`, modelClass),
+          modelHealthCard(data.model_health),
           metric("Queue", queueText, waitingJobCount > 0 ? "warn" : "ok"),
           metric("Processed", `${lifetimeProcessCount}<br>${escapeHtml(data.prompt_process_count_file || "")}`, "ok"),
           metric("Today Model Load", formatLoadMetric(modelLoad.today), "ok"),
@@ -2693,6 +2726,7 @@ if __name__ == "__main__":
     refreshStatus();
     refreshSessionStatus();
     setInterval(refreshSessionStatus, 15000);
+    setInterval(refreshModelHealth, 15000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSessionStatus(); });
   </script>
 </body>
@@ -3528,6 +3562,9 @@ def request_json(path: str, payload: dict[str, Any] | None = None, timeout: int 
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
         raise RuntimeError(f"Ollama {path} connection failed: {reason}") from exc
+
+
+MODEL_HEALTH_MONITOR = ModelHealthMonitor(request_json)
 
 
 def prompt_processing_week_start(today: dt.date | None = None) -> dt.date:
@@ -4522,6 +4559,7 @@ def status_payload() -> dict[str, Any]:
         "model_available": any(model_matches(name, selected_model) for name in models),
         "models": models,
         "model_load": model_load,
+        "model_health": MODEL_HEALTH_MONITOR.snapshot(),
         "writing_tech_doc_tools": {
             "enabled": writing_tool_status["enabled"],
             "available": writing_tool_status["available"],
@@ -4918,6 +4956,9 @@ class Gemma4Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/status":
             self.send_json(status_payload())
+            return
+        if self.path == "/api/model-health":
+            self.send_json(MODEL_HEALTH_MONITOR.snapshot())
             return
         if self.path == "/api/prompt-history":
             self.send_json({"history": read_prompt_history()})
@@ -5363,8 +5404,10 @@ def main() -> int:
                 print(f"Telegram: {state['message']}", flush=True)
             except (ValueError, OSError, subprocess.SubprocessError):
                 print("Telegram was not started. Configure it in the Telegram tab.", flush=True)
+        MODEL_HEALTH_MONITOR.start()
         httpd.serve_forever()
     finally:
+        MODEL_HEALTH_MONITOR.stop()
         TELEGRAM_MANAGER.stop()
         httpd.server_close()
     return 0
