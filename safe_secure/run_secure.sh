@@ -155,10 +155,10 @@ is_private_cidr() {
 is_approved_private_ip() {
     local ip=$1
     local approved
-    for approved in "${APPROVED_PRIVATE_IPS[@]}"; do
+    for approved in ${APPROVED_PRIVATE_IPS[@]+"${APPROVED_PRIVATE_IPS[@]}"}; do
         [[ ${ip} == "${approved}" ]] && return 0
     done
-    for approved in "${APPROVED_PRIVATE_CIDRS[@]}"; do
+    for approved in ${APPROVED_PRIVATE_CIDRS[@]+"${APPROVED_PRIVATE_CIDRS[@]}"}; do
         cidr_contains "${ip}" "${approved}" && return 0
     done
     return 1
@@ -182,13 +182,15 @@ is_protected_ip() {
     [[ -n ${PROTECTED_IPS[$1]+x} ]]
 }
 
-for approved_ip in "${APPROVED_PRIVATE_IPS[@]}"; do
+# Bash 4.3 and older treat empty arrays as unset under nounset.
+# Expand to zero arguments when empty, preserving quoted elements otherwise.
+for approved_ip in ${APPROVED_PRIVATE_IPS[@]+"${APPROVED_PRIVATE_IPS[@]}"}; do
     if ! is_valid_ipv4 "${approved_ip}" || ! is_private_ipv4 "${approved_ip}"; then
         echo "오류: 승인 IP는 유효한 RFC1918 사설 IPv4 주소여야 합니다: ${approved_ip}" >&2
         exit 1
     fi
 done
-for approved_cidr in "${APPROVED_PRIVATE_CIDRS[@]}"; do
+for approved_cidr in ${APPROVED_PRIVATE_CIDRS[@]+"${APPROVED_PRIVATE_CIDRS[@]}"}; do
     if ! is_valid_cidr "${approved_cidr}"; then
         echo "오류: 올바르지 않은 승인 CIDR입니다: ${approved_cidr}" >&2
         exit 1
@@ -302,7 +304,7 @@ is_approved_private_pattern() {
     fi
     sample=$(block_pattern_sample_ip "${pattern}")
     pattern_bits=$(block_pattern_prefix_bits "${pattern}")
-    for approved in "${APPROVED_PRIVATE_CIDRS[@]}"; do
+    for approved in ${APPROVED_PRIVATE_CIDRS[@]+"${APPROVED_PRIVATE_CIDRS[@]}"}; do
         approved_bits=${approved#*/}
         if (( approved_bits <= pattern_bits )) && cidr_contains "${sample}" "${approved}"; then
             return 0
@@ -438,7 +440,7 @@ while IFS= read -r line || [[ -n "${line}" ]]; do
     fi
 done < "${BLOCK_LIST}"
 
-if [[ ${#block_ips[@]} -eq 0 ]]; then
+if [[ -z ${block_ips[@]+x} ]]; then
     echo "적용할 수 있는 차단 IP가 없습니다."
     exit 0
 fi

@@ -153,6 +153,72 @@ sudo docker exec -u www-data nextcloud_http php occ maintenance:mode --off
 
 ---
 
+# Nextcloud 디스크 사용량 확인
+
+Nextcloud 컨테이너(`nextcloud_http`)가 사용 중인 디스크 용량을 확인하는 대표적인 방법 3가지입니다. 컨테이너의 쓰기 가능 계층과 마운트된 데이터 저장소는 구분해서 확인합니다.
+
+## 1. 컨테이너 내부 변경점 용량 확인 (`docker ps -s`)
+
+Docker 명령어로 컨테이너의 쓰기 가능 계층에 추가 작성된 데이터의 크기를 확인합니다.
+
+```bash
+sudo docker ps -s --filter "name=nextcloud_http"
+```
+
+- **SIZE** 항목은 `X GB (virtual Y GB)` 형태로 표시됩니다. 앞쪽의 `X GB`는 컨테이너의 쓰기 가능 계층 크기이며, `virtual Y GB`는 이미지의 읽기 전용 계층을 포함한 크기입니다.
+- 마운트된 볼륨이나 바인드 마운트의 사용자 파일 용량은 이 값에 포함되지 않습니다. 업로드 데이터는 아래 방법으로 확인합니다.
+- 중지된 컨테이너도 보려면 `docker ps -as`를 사용합니다.
+
+## 2. 마운트된 볼륨/호스트 디렉토리 용량 확인 (추천)
+
+Nextcloud의 사용자 업로드 파일 등은 보통 호스트 시스템의 **바인드 마운트 디렉토리**나 **Docker Volume**에 저장됩니다.
+
+### ① 볼륨/마운트 경로 확인
+
+```bash
+sudo docker inspect nextcloud_http --format '{{ json .Mounts }}' | jq
+```
+
+`jq`가 없다면 `sudo docker inspect nextcloud_http`를 실행한 뒤 `Mounts` 항목을 확인합니다. 각 항목의 `Source`는 호스트 경로, `Destination`은 컨테이너 내부 경로입니다.
+
+### ② 해당 호스트 경로의 실제 용량 확인 (`du -sh`)
+
+확인한 호스트 경로(예: `/var/lib/docker/volumes/...` 또는 `/home/<사용자명>/nextcloud/data`)의 용량을 측정합니다. 다음 명령의 예시 경로는 실제 `Source` 값으로 바꿉니다.
+
+```bash
+sudo du -sh "/확인된/호스트/경로"
+```
+
+Docker Volume 경로 예시:
+
+```bash
+sudo du -sh /var/lib/docker/volumes/nextcloud_data/_data
+```
+
+이 문서의 별도 디스크 이전 경로를 사용하는 경우:
+
+```bash
+# Nextcloud html 전체: 사용자 파일, 설정, 앱 등
+sudo du -sh /mnt/nextcloud_disk/nextcloud/html
+
+# data 디렉토리만 확인
+sudo du -sh /mnt/nextcloud_disk/nextcloud/html/data
+```
+
+`html` 전체 용량에는 그 아래 `data` 용량이 포함되므로 두 값을 더하지 않습니다. 별도 DB 컨테이너의 저장 공간은 해당 컨테이너의 마운트 경로에서 따로 확인합니다.
+
+## 3. Docker 전체 리소스 사용량 확인 (`docker system df -v`)
+
+Docker 전체 시스템의 디스크 사용량과 컨테이너 및 로컬 볼륨 크기를 함께 확인합니다.
+
+```bash
+sudo docker system df -v
+```
+
+**Containers** 및 **Local Volumes** 섹션에서 `nextcloud_http` 또는 관련 볼륨의 `SIZE`를 확인합니다. 바인드 마운트 디렉토리는 Docker 로컬 볼륨으로 집계되지 않으므로 2번의 `du -sh`로 확인합니다.
+
+---
+
 # 기존 설치 메모
 
 ## Check this during Installation
