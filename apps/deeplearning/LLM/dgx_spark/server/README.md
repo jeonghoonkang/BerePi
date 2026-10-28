@@ -21,6 +21,53 @@ vLLM의 `--middleware` 옵션에 등록합니다. 파일 하나를 컨테이너�
 
 ## 실행과 적용
 
+### Hugging Face 토큰 파일 추가
+
+현재 실행 스크립트가 기본으로 읽는 파일명은 **`hf_key.txt`**입니다.
+`hfkey.txt`가 아니라 밑줄이 있는 이름으로, `run.sh`와 같은 `server` 디렉터리에 생성하세요.
+Hugging Face 계정에서 사용할 모델을 읽을 수 있는 토큰을 준비합니다.
+접근 승인이 필요한 모델은 해당 계정으로 모델 사용 조건 동의·승인을 먼저 완료해야 합니다.
+
+아래 예시는 DGX 서버의 Bash에서 실행합니다. 저장소 위치가 다르면 첫 경로를 바꾸세요.
+토큰은 화면이나 명령어 기록에 직접 남기지 않도록 숨김 입력으로 받습니다.
+
+```bash
+cd ~/devel_opment/BerePi/apps/deeplearning/LLM/dgx_spark/server
+(
+  umask 077
+  read -r -s -p 'Hugging Face token: ' hf_token
+  printf '\n'
+  printf '%s\n' "$hf_token" > hf_key.txt
+  chmod 600 hf_key.txt
+)
+```
+
+파일 내용은 `hf_...` 형태의 **토큰 한 줄만** 있어야 합니다.
+`HF_TOKEN=`, 따옴표, 설명은 넣지 않습니다. 다음 명령으로 파일 내용 노출 없이 확인합니다.
+
+```bash
+test -s hf_key.txt && echo '토큰 파일이 존재하며 비어 있지 않습니다.'
+```
+
+토큰 파일은 Git에 커밋하지 마세요. 아래 명령으로 현재 로컬 저장소의 제외 목록에 추가할 수 있습니다.
+
+```bash
+printf '\n/apps/deeplearning/LLM/dgx_spark/server/hf_key.txt\n' >> "$(git rev-parse --git-path info/exclude)"
+git check-ignore hf_key.txt
+```
+
+`bash run.sh 26000`을 실행하면 파일을 읽어 컨테이너의 `HF_TOKEN` 환경 변수로 전달합니다.
+멀티노드도 기본적으로 같은 `server/hf_key.txt`를 사용하며, 각 노드의 로컬 저장소에 준비해야 합니다.
+멀티노드 스크립트에서만 다른 파일명·경로를 `KEY_FILE`로 지정할 수 있습니다.
+예를 들어 이미 `server/hfkey.txt`로 만든 경우 Head 실행은 다음과 같습니다.
+
+```bash
+KEY_FILE="$PWD/hfkey.txt" bash multinode/run_node1_head.sh
+```
+
+이 경우 `hfkey.txt`도 Git 제외 목록에 추가하세요. 단일 노드 `run.sh`는 `KEY_FILE`을
+외부에서 지정해도 기본 경로로 덮어쓰므로 `hf_key.txt`라는 이름을 사용해야 합니다.
+
 기존 vLLM 프로세스에는 코드를 자동으로 주입할 수 없습니다. 실행 중인 서버를 종료한 뒤
 수정된 스크립트로 한 번 재시작하세요. 기존 API 포트를 그대로 사용합니다.
 
