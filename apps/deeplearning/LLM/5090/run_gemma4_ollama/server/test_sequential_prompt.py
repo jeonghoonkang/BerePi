@@ -181,6 +181,33 @@ class AttachmentHttpTests(unittest.TestCase):
             self.post({"files": files, "ocr_reply": True}, "/api/enqueue-generate")
             self.assertIn("system", enqueue.call_args.args[0])
 
+    def test_explain_photo_uses_current_image_without_history(self):
+        from pathlib import Path
+        photo = Path(__file__).resolve().parents[5] / 'photo_browser/sample_pics/IMG_6735.JPG'
+        if not photo.exists():
+            self.skipTest('Sample photo is not available')
+        image = encoded(photo.read_bytes())
+        files = [{"name": photo.name, "content_base64": image}]
+        with (patch.object(server, "is_authorized_user", return_value=True),
+              patch.object(server, "remember_prompts"), patch.object(server, "remember_user_prompt"),
+              patch.object(server, "request_options", return_value={}),
+              patch.object(server, "run_queued_prompt", return_value={"response": "test response"}) as run,
+              patch.object(server, "read_conversation_history") as history):
+            result = self.post({"files": files, "prompt": "explain please"})
+            self.assertTrue(result['explain_enabled'])
+            self.assertFalse(result['ocr_enabled'])
+            payload = server.prompt_payload_for_execution(run.call_args.args[0])
+            self.assertEqual(payload['images'], [image])
+            self.assertEqual(payload['system'], sequential.EXPLAIN_SYSTEM_PROMPT)
+            self.assertEqual(payload['prompt'], 'explain please')
+            history.assert_not_called()
+
+    def test_explain_phrase_detection(self):
+        for text in ('explain please', 'Please explain this photo', 'EXPLAIN PLEASE'):
+            self.assertTrue(sequential.initial_explain_requested(text))
+        for text in ('do not explain please', 'ocr please', 'hello'):
+            self.assertFalse(sequential.initial_explain_requested(text))
+
     def test_initial_ocr_request_skips_confirmation_and_respects_explicit_reply(self):
         files = [{"name": "data.bin", "content_base64": encoded(b"\x00\xffdata")}]
         with (patch.object(server, "is_authorized_user", return_value=True),

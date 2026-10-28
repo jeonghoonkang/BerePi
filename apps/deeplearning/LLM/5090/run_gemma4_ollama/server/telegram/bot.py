@@ -21,6 +21,7 @@ from typing import Any, Optional
 # The bot is also launched directly from the telegram/ directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sequential_prompt import MAX_ATTACHMENT_BYTES, confirmation_response, decode_attachment, initial_ocr_requested, ocr_requested
+from sequential_prompt import initial_explain_requested
 
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
@@ -225,7 +226,8 @@ def queued_processing_message(response: dict, attachment_request: Optional[dict]
     request = attachment_request or {}
     enabled = response.get("ocr_enabled") if "ocr_enabled" in response else (
         bool(request.get("files")) and ocr_requested(request.get("ocr_reply")))
-    return f"{processing_heading('OCR' if enabled else '')}\n{queue_line_from_response(response)}"
+    operation = 'OCR' if enabled else ('image explanation' if response.get('explain_enabled') or request.get('explain_requested') else '')
+    return f"{processing_heading(operation)}\n{queue_line_from_response(response)}"
 
 
 def initial_queue_line() -> str:
@@ -1225,6 +1227,10 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         pending["timer"].cancel()
         if not (image_attachment_from_message(update.message) or getattr(update.message, "document", None)):
             reply, _ = text_without_bot_mentions(message_text(update), bot_usernames(context))
+            if initial_explain_requested(reply) and not initial_ocr_requested(reply):
+                await process_prompt(update, context, reply,
+                                     {"files": pending["files"], "ocr_reply": False, "explain_requested": True})
+                return
             await process_prompt(update, context, pending["prompt"],
                                  {"files": pending["files"], "ocr_reply": reply})
             return
@@ -1246,6 +1252,9 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             name = getattr(attachment, "file_name", None) or Path(str(remote.file_path or "image.jpg")).name
             files = [{"name": name, "content_base64": base64.b64encode(content).decode("ascii")}]
             detected = decode_attachment(name, files[0]["content_base64"])
+            if initial_explain_requested(prompt) and not initial_ocr_requested(prompt):
+                await process_prompt(update, context, prompt, {"files": files, "ocr_reply": False, "explain_requested": True})
+                return
             if initial_ocr_requested(prompt):
                 await process_prompt(update, context, prompt, {"files": files, "ocr_reply": True})
                 return

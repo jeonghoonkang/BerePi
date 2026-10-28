@@ -32,6 +32,7 @@ from telegram_manager import TelegramManager
 from sequential_prompt import (
     attachments_from_request, confirmation_response, detect_attachment,
     model_attachment_fields, initial_ocr_requested, OCR_SYSTEM_PROMPT,
+    initial_explain_requested, EXPLAIN_SYSTEM_PROMPT,
 )
 from model_health import ModelHealthMonitor
 
@@ -3884,7 +3885,7 @@ def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
 def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
     execution_payload = dict(payload)
     # OCR must transcribe the current attachment, not reinterpret earlier turns.
-    if payload.get("system") != OCR_SYSTEM_PROMPT and remember_history_requested(payload.get("_remember_history"), default=False):
+    if payload.get("system") not in (OCR_SYSTEM_PROMPT, EXPLAIN_SYSTEM_PROMPT) and remember_history_requested(payload.get("_remember_history"), default=False):
         user_prompt = str(
             payload.get("_history_user_prompt") or payload.get("prompt") or ""
         )
@@ -5302,12 +5303,17 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 return
             prompt, prompts = combined_prompt_from_request(incoming)
             attachments = attachments_from_request(incoming)
+            explain_enabled = bool(attachments and initial_explain_requested(prompt) and not initial_ocr_requested(prompt))
+            if explain_enabled:
+                incoming["ocr_reply"] = False
             if attachments and "ocr_reply" not in incoming and initial_ocr_requested(prompt):
                 incoming["ocr_reply"] = True
             if attachments and "ocr_reply" not in incoming:
                 self.send_json(confirmation_response(attachments))
                 return
             attachment_fields = model_attachment_fields(attachments, incoming.get("ocr_reply"))
+            if explain_enabled:
+                attachment_fields["system"] = EXPLAIN_SYSTEM_PROMPT
             if not prompt and attachments:
                 prompt = "첨부 파일을 확인해 주세요."
                 prompts = [prompt]
@@ -5360,7 +5366,8 @@ class Gemma4Handler(BaseHTTPRequestHandler):
                 result["image_count"] = len(images)
             if attachments:
                 result["attachments"] = [item.metadata() for item in attachments]
-                result["ocr_enabled"] = bool(attachment_fields.get("system"))
+                result["ocr_enabled"] = attachment_fields.get("system") == OCR_SYSTEM_PROMPT
+                result["explain_enabled"] = explain_enabled
             self.send_json(result)
         except ValueError as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
