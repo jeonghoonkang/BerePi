@@ -18,6 +18,51 @@ def request(content="첨부 파일 OCR 해주세요", data=PNG, name="scan.bin")
 
 
 class RequestTests(unittest.TestCase):
+    def test_korean_default_preserves_history_options_and_existing_system(self):
+        for content in ('Answer concisely.', [{'type': 'text', 'text': 'Answer concisely.'}]):
+            incoming = {'stream': True, 'temperature': 0.3, 'messages': [
+                {'role': 'system', 'content': content},
+                {'role': 'user', 'content': 'earlier'},
+                {'role': 'assistant', 'content': 'earlier answer'},
+                {'role': 'user', 'content': 'Answer in English please'}]}
+            original = copy.deepcopy(incoming)
+            result = ocr.prepare_chat_request(incoming)
+            self.assertEqual(incoming, original)
+            self.assertIn(ocr.DEFAULT_RESPONSE_SYSTEM_PROMPT, str(result['messages'][0]))
+            self.assertIn('Answer concisely.', str(result['messages'][0]))
+            self.assertEqual(result['messages'][1:], incoming['messages'][1:])
+            self.assertTrue(result['stream'])
+            self.assertEqual(result['temperature'], 0.3)
+            self.assertEqual(ocr.prepare_chat_request(result), result)
+
+    def test_explicit_modes_drop_previous_image_and_conversation(self):
+        for phrase, system in (("ocr please", ocr.OCR_SYSTEM_PROMPT),
+                               ("explain please", ocr.EXPLAIN_SYSTEM_PROMPT),
+                               ("please explain this photo", ocr.EXPLAIN_SYSTEM_PROMPT)):
+            incoming = request(content=phrase)
+            incoming['messages'][:0] = [
+                {'role': 'system', 'content': 'Be precise.'},
+                {'role': 'user', 'content': 'old image'},
+                {'role': 'assistant', 'content': 'old neural network explanation'}]
+            with self.subTest(phrase=phrase):
+                result = ocr.prepare_chat_request(incoming)
+                self.assertEqual(len(result['messages']), 2)
+                self.assertIn(system, result['messages'][0]['content'])
+                self.assertEqual(result['messages'][1]['content'][0]['text'], phrase)
+                self.assertEqual(ocr.prepare_chat_request(result), result)
+
+    def test_explain_native_image_and_negative_or_text_only(self):
+        incoming = {'messages': [{'role': 'user', 'content': [
+            {'type': 'text', 'text': 'explain please'},
+            {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(PNG).decode()}}]}]}
+        result = ocr.prepare_chat_request(incoming)
+        self.assertEqual(result['messages'][0]['content'], ocr.EXPLAIN_SYSTEM_PROMPT)
+        self.assertEqual(result['messages'][1], incoming['messages'][0])
+        for phrase in ('do not explain please', 'hello'):
+            self.assertEqual(ocr.prepare_chat_request(request(content=phrase))['messages'][0]['content'], ocr.DEFAULT_RESPONSE_SYSTEM_PROMPT)
+        plain = {'messages': [{'role': 'user', 'content': 'explain please'}]}
+        self.assertEqual(ocr.prepare_chat_request(plain)["messages"][0]["content"], ocr.DEFAULT_RESPONSE_SYSTEM_PROMPT)
+
     def test_image_bytes_and_request_enter_same_vllm_payload(self):
         incoming = request()
         original = copy.deepcopy(incoming)
@@ -43,15 +88,15 @@ class RequestTests(unittest.TestCase):
     def test_negative_and_unspecified_requests_do_not_inject_system(self):
         for text in ("파일을 설명해 주세요", "OCR 하지 마세요", "OCR 없이 요약", "do not run OCR"):
             result = ocr.prepare_chat_request(request(content=text))
-            self.assertEqual(result["messages"][0]["role"], "user")
+            self.assertEqual(result["messages"][0]["content"], ocr.DEFAULT_RESPONSE_SYSTEM_PROMPT)
 
     def test_only_latest_user_text_can_enable_ocr(self):
         incoming = request(content="설명해주세요", data="OCR 해주세요".encode(), name="OCR 해주세요.png")
         incoming["messages"].insert(0, {"role": "user", "content": "OCR 해주세요"})
         result = ocr.prepare_chat_request(incoming)
-        self.assertFalse(any(m["role"] == "system" for m in result["messages"]))
+        self.assertNotIn(ocr.OCR_SYSTEM_PROMPT, str(result["messages"]))
         plain = {"messages": [{"role": "user", "content": "OCR 해주세요"}]}
-        self.assertEqual(ocr.prepare_chat_request(plain), plain)
+        self.assertEqual(ocr.prepare_chat_request(plain)["messages"][0]["content"], ocr.DEFAULT_RESPONSE_SYSTEM_PROMPT)
 
     def test_native_image_content_and_system_text_parts(self):
         incoming = {"messages": [
