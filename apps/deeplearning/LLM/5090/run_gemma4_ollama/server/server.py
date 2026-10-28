@@ -2709,6 +2709,13 @@ if __name__ == "__main__":
       refreshConversationHistorySummary();
     });
     loginSessionButton.addEventListener("click", loginSession);
+    for (const field of [...authFields.userId, ...authFields.password]) {
+      field.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.isComposing || event.keyCode === 229 || event.repeat) return;
+        event.preventDefault();
+        loginSessionButton.click();
+      });
+    }
     logoutSessionButton.addEventListener("click", logoutSession);
     saveUserButton.addEventListener("click", saveUser);
     bindAuthSync();
