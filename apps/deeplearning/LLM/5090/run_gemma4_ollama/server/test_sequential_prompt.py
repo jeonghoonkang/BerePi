@@ -104,19 +104,30 @@ class AttachmentTests(unittest.TestCase):
                 "system": sequential.OCR_SYSTEM_PROMPT, "_attachment_text": "file data",
             }))
         payload = request.call_args.kwargs["payload"]
-        self.assertEqual(payload["system"], sequential.OCR_SYSTEM_PROMPT)
+        self.assertEqual(payload["system"], server.DEFAULT_RESPONSE_SYSTEM_PROMPT + "\n\n" + sequential.OCR_SYSTEM_PROMPT)
         self.assertEqual(payload["images"], ["encoded-image"])
         self.assertEqual(payload["prompt"], "read\n\nfile data")
         self.assertNotIn("_attachment_text", payload)
 
-    def test_attachment_data_survives_history_composition_without_persisting_it(self):
+    def test_default_korean_system_reaches_ollama_without_mutating_request(self):
+        original = {"model": "model", "prompt": "hello"}
+        with (patch.object(server, "request_json", return_value={"response": "안녕하세요"}) as request,
+              patch.object(server, "read_selected_gpu", return_value="auto"),
+              patch.object(server, "list_gpus", return_value=([], "")),
+              patch.object(server, "server_ip", return_value="127.0.0.1")):
+            server.run_ollama_generate(original)
+        self.assertEqual(request.call_args.kwargs["payload"]["system"], server.DEFAULT_RESPONSE_SYSTEM_PROMPT)
+        self.assertNotIn("system", original)
+
+    def test_ocr_excludes_history_and_preserves_current_attachment(self):
         payload = {"prompt": "question", "_history_user_prompt": "question",
                    "_remember_history": True, "_attachment_text": "binary payload",
-                   "system": sequential.OCR_SYSTEM_PROMPT}
+                   "system": sequential.OCR_SYSTEM_PROMPT, "images": ["current-image"]}
         with patch.object(server, "read_conversation_history", return_value=[
                 {"role": "assistant", "content": "previous answer"}]):
             execution = server.prompt_payload_for_execution(payload)
-        self.assertEqual(execution["prompt"], "assistant: previous answer\nuser: question\n\nbinary payload")
+        self.assertEqual(execution["prompt"], "question\n\nbinary payload")
+        self.assertEqual(execution["images"], ["current-image"])
         self.assertEqual(payload["_history_user_prompt"], "question")
         self.assertEqual(execution["system"], sequential.OCR_SYSTEM_PROMPT)
 

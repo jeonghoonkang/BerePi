@@ -15,7 +15,10 @@ MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 MAX_BINARY_BYTES = 256 * 1024
 MAX_FILES = 10
 MAX_PDF_PAGES = 20
-OCR_SYSTEM_PROMPT = """Perform OCR on the attached document images. Transcribe all visible text faithfully,
+OCR_SYSTEM_PROMPT = """Perform OCR only on the document images attached to this request.
+Never substitute a previous image, previous conversation, or a guessed document.
+If the current images are unavailable or unreadable, say so; do not reconstruct their contents.
+Transcribe all visible text faithfully,
 in the original language and reading order. Preserve page boundaries, headings,
 paragraphs, lists, and table rows/columns (use Markdown tables when appropriate).
 Do not summarize, translate, invent, or silently correct text. Mark unreadable

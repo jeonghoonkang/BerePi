@@ -31,7 +31,7 @@ from typing import Any
 from telegram_manager import TelegramManager
 from sequential_prompt import (
     attachments_from_request, confirmation_response, detect_attachment,
-    model_attachment_fields, initial_ocr_requested,
+    model_attachment_fields, initial_ocr_requested, OCR_SYSTEM_PROMPT,
 )
 from model_health import ModelHealthMonitor
 
@@ -3848,11 +3848,22 @@ def print_prompt_request_received(
     )
 
 
+DEFAULT_RESPONSE_SYSTEM_PROMPT = (
+    "기본 응답 언어는 한국어입니다. 별도의 언어 요청이 없으면 설명과 답변을 한국어로 작성하세요. "
+    "사용자가 다른 언어를 명시하면 해당 언어를 따르세요. "
+    "OCR 전사 원문, 인용문, 코드, 명령어, 고유명사는 원래 언어와 표기를 유지하세요."
+)
+
+
 def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
   started_at = time.perf_counter()
   ollama_payload = {
     key: value for key, value in payload.items() if not str(key).startswith("_")
   }
+  task_system = str(ollama_payload.get("system") or "").strip()
+  ollama_payload["system"] = DEFAULT_RESPONSE_SYSTEM_PROMPT + (
+    "\n\n" + task_system if task_system else ""
+  )
   result = request_json("/api/generate", payload=ollama_payload)
   result["elapsed_seconds"] = round(time.perf_counter() - started_at, 3)
   result["model"] = ollama_payload["model"]
@@ -3872,7 +3883,8 @@ def run_ollama_generate(payload: dict[str, Any]) -> dict[str, Any]:
 
 def prompt_payload_for_execution(payload: dict[str, Any]) -> dict[str, Any]:
     execution_payload = dict(payload)
-    if remember_history_requested(payload.get("_remember_history"), default=False):
+    # OCR must transcribe the current attachment, not reinterpret earlier turns.
+    if payload.get("system") != OCR_SYSTEM_PROMPT and remember_history_requested(payload.get("_remember_history"), default=False):
         user_prompt = str(
             payload.get("_history_user_prompt") or payload.get("prompt") or ""
         )

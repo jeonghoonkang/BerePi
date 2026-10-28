@@ -20,7 +20,7 @@ from typing import Any, Optional
 
 # The bot is also launched directly from the telegram/ directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from sequential_prompt import MAX_ATTACHMENT_BYTES, confirmation_response, decode_attachment, initial_ocr_requested
+from sequential_prompt import MAX_ATTACHMENT_BYTES, confirmation_response, decode_attachment, initial_ocr_requested, ocr_requested
 
 from telegram import Update
 from telegram.constants import ChatAction, ChatType
@@ -214,6 +214,18 @@ def call_llm_api(prompt: str, images: Optional[list[str]] = None) -> str:
 
 def initial_thinking_message() -> str:
     return f"thinking...\n{initial_queue_line()}"
+
+
+def processing_heading(operation: str = "") -> str:
+    return f"thinking... and run {operation}..." if operation else "thinking..."
+
+
+def queued_processing_message(response: dict, attachment_request: Optional[dict] = None) -> str:
+    # Prefer the server's decision; older servers may omit ocr_enabled.
+    request = attachment_request or {}
+    enabled = response.get("ocr_enabled") if "ocr_enabled" in response else (
+        bool(request.get("files")) and ocr_requested(request.get("ocr_reply")))
+    return f"{processing_heading('OCR' if enabled else '')}\n{queue_line_from_response(response)}"
 
 
 def initial_queue_line() -> str:
@@ -1071,7 +1083,7 @@ async def execute_writing_tool(
             getattr(user, "username", None),
         )
         return
-    progress = await update.message.reply_text(f"{tool} 실행 중...")
+    progress = await update.message.reply_text(processing_heading(tool))
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     try:
         result = await asyncio.to_thread(call_writing_tool, tool, **arguments)
@@ -1292,7 +1304,7 @@ async def process_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         if enqueue_response.get("ocr_confirmation_required"):
             await update.message.reply_text(enqueue_response["question"])
             return
-        thinking_message = await update.message.reply_text(f"thinking...\n{queue_line_from_response(enqueue_response)}")
+        thinking_message = await update.message.reply_text(queued_processing_message(enqueue_response, attachment_request))
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         job_id = int(enqueue_response.get("prompt_queue_id"))
         result = await wait_for_prompt_result(job_id)
