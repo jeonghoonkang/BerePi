@@ -574,3 +574,21 @@ python3 check_tinyGW_all.py --config this.setting.json --limit 5 --send
 시스템의 wtmp 기록에 남아 있는 이력만 표시하므로 기록이 적으면 3개 미만입니다.
 `last` 명령이 없거나 조회에 실패하면 현재 부팅 시각을 uptime 기반 추정값으로
 표시하고 과거 기록을 확인할 수 없음을 안내합니다. 종료·다운 시각은 포함하지 않습니다.
+
+## IP와 Docker 상태만 Telegram으로 전송
+
+`telegram_ip_docker.py`는 WebDAV 설정 없이 호스트명, 내부 IP, 공인 IP,
+게이트웨이, Docker 서버 정보 및 실행 중인 컨테이너의 상태/포트를 전송합니다.
+`telegram-send` 설치와 봇 설정을 먼저 완료한 뒤 실행하세요.
+이 스크립트는 `settings.json`의 `telegram.enabled`와 관계없이 전송합니다.
+
+```bash
+cd ~/devel/BerePi/apps/tinyGW/pulsedav
+python3 telegram_ip_docker.py --dry-run
+python3 telegram_ip_docker.py
+# 별도 봇 설정이나 실행 파일 사용
+python3 telegram_ip_docker.py --telegram-config /home/tinyos/bot.conf --executable /home/tinyos/.local/bin/telegram-send
+```
+
+Docker 조회 권한이나 실행 환경에 문제가 있으면 그 안내를 함께 보냅니다.
+긴 보고서는 여러 메시지로 나누고, 전송 실패 시 종료 코드 1을 반환합니다.
