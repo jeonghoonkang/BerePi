@@ -1267,6 +1267,20 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
     model = str(request_payload.get("model") or target.model or "")
     if target.api_type in OPENAI_COMPATIBLE_API_TYPES:
         messages = request_payload.get("messages")
+        images = request_payload.get("images")
+        if isinstance(messages, list) and isinstance(images, list) and images:
+            import copy
+            messages = copy.deepcopy(messages)
+            user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
+            if user is None:
+                user = {"role": "user", "content": prompt}
+                messages.append(user)
+            content = user.get("content", "")
+            parts = list(content) if isinstance(content, list) else [{"type": "text", "text": str(content)}]
+            parts.extend({"type": "image_url", "image_url": {
+                "url": str(image) if str(image).startswith("data:image/") else f"data:image/png;base64,{image}"
+            }} for image in images if str(image or "").strip())
+            user["content"] = parts
         if not isinstance(messages, list):
             images = request_payload.get("images")
             if isinstance(images, list) and images:
@@ -1274,7 +1288,7 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
                 content.extend(
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image}"},
+                        "image_url": {"url": str(image) if str(image).startswith("data:image/") else f"data:image/png;base64,{image}"},
                     }
                     for image in images
                     if str(image or "").strip()
@@ -1293,6 +1307,8 @@ def build_backend_payload(target: LLMTarget, request_payload: dict[str, Any]) ->
         return f"{target.base_url}/v1/chat/completions", payload
 
     payload = dict(request_payload)
+    if isinstance(payload.get("images"), list):
+        payload["images"] = [str(image).split(",", 1)[1] if str(image).startswith("data:image/") and "," in str(image) else image for image in payload["images"]]
     payload["prompt"] = prompt
     # Ollama's /api/generate endpoint does not consume chat messages.  When a
     # caller supplies messages (for example, the prompt-test history UI),
@@ -1653,6 +1669,8 @@ def execute_prompt(target: LLMTarget, payload: dict[str, Any], client: str) -> d
     dispatched_model = target.model
     supported_models: list[str] = []
     try:
+        if payload.get("images") and target.api_type in {"bedrock", "google_ai_studio"}:
+            raise ValueError("이 클라우드 연결은 이미지 첨부 전달을 지원하지 않습니다. Ollama/OpenAI/vLLM의 비전 모델을 선택하세요.")
         if target.api_type == "bedrock":
             bedrock_payload = dict(payload)
             # The selected route owns the Bedrock model. Ignore a model name
@@ -3220,6 +3238,13 @@ INDEX_HTML = """<!doctype html>
     <div class="panel">
       <select id="test_target"></select>
       <textarea id="test_prompt" placeholder="전송할 prompt">다른 내용 없이 ok 만 회신</textarea>
+      <div id="test_paste_zone" class="clipboard-image-drop" tabindex="0">클릭 후 Ctrl+V / Cmd+V로 캡처 이미지를 붙여넣으세요. 프롬프트 입력란에서도 붙여넣을 수 있습니다.</div>
+      <label for="test_files">이미지·텍스트 파일 첨부 (최대 10개, 합계 20 MiB / UTF-8 텍스트)</label>
+      <input id="test_files" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,text/*,.txt,.md,.csv,.json,.log,.py,.js,.yaml,.yml">
+      <button type="button" onclick="readPromptClipboard()">클립보드 이미지 가져오기</button>
+      <button type="button" onclick="clearPromptAttachments()">첨부 모두 지우기</button>
+      <div id="test_attachments" aria-live="polite"></div>
+      <small>이미지는 비전 지원 모델을 선택하세요. 첨부 원본은 대화 히스토리에 저장하지 않습니다.</small>
       <div class="test-toolbar">
         <button class="primary" onclick="sendPrompt()">전송</button>
         <button onclick="compareAllPrompts()">전체 모델 비교</button>
@@ -3600,9 +3625,85 @@ async function clearPromptHistory() {
     updatePromptHistoryStatus();
   }
 }
-function promptTestPayload(clientId) {
-  const prompt = document.getElementById('test_prompt').value;
+let promptAttachments = [];
+function addPromptAttachments(files) {
+  const incoming = Array.from(files);
+  const all = [...promptAttachments.map(item => item.file), ...incoming];
+  if (all.length > 10 || all.reduce((sum, file) => sum + file.size, 0) > 20 * 1024 * 1024) throw new Error('첨부는 최대 10개, 합계 20 MiB까지 가능합니다.');
+  for (const file of incoming) {
+    if (!(file.type.startsWith('text/') || /^image\\/(png|jpeg|webp|gif)$/.test(file.type) || /\\.(txt|md|csv|json|log|py|js|yaml|yml)$/i.test(file.name))) throw new Error(`지원하지 않는 파일: ${file.name}`);
+  }
+  for (const file of incoming) promptAttachments.push({file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : ''});
+  renderPromptAttachments();
+}
+function renderPromptAttachments() {
+  const container = document.getElementById('test_attachments');
+  container.replaceChildren();
+  promptAttachments.forEach((item, index) => {
+    const row = document.createElement('div');
+    if (item.url) {
+      const image = document.createElement('img');
+      image.src = item.url;
+      image.alt = item.file.name;
+      image.style.cssText = 'max-width:160px;max-height:100px;display:block';
+      row.append(image);
+    }
+    row.append(document.createTextNode(`${item.file.name} (${Math.ceil(item.file.size / 1024)} KiB) `));
+    const remove = document.createElement('button');
+    remove.textContent = '삭제';
+    remove.onclick = () => {
+      if (item.url) URL.revokeObjectURL(item.url);
+      promptAttachments.splice(index, 1);
+      renderPromptAttachments();
+    };
+    row.append(remove);
+    container.append(row);
+  });
+}
+function clearPromptAttachments() {
+  for (const item of promptAttachments) if (item.url) URL.revokeObjectURL(item.url);
+  promptAttachments = [];
+  document.getElementById('test_files').value = '';
+  renderPromptAttachments();
+}
+document.getElementById('test_files').addEventListener('change', event => {
+  try { addPromptAttachments(event.target.files); } catch (err) { alert(err.message); }
+  event.target.value = '';
+});
+for (const id of ['test_prompt', 'test_paste_zone']) document.getElementById(id).addEventListener('paste', event => {
+  const files = Array.from(event.clipboardData?.items || []).filter(item => item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  event.preventDefault();
+  try { addPromptAttachments(files); } catch (err) { alert(err.message); }
+});
+async function readPromptClipboard() {
+  try {
+    if (!navigator.clipboard?.read) throw new Error('HTTPS/localhost에서 사용하거나 Ctrl+V / Cmd+V로 붙여넣으세요.');
+    const files = [];
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find(type => /^image\\/(png|jpeg|webp|gif)$/.test(type));
+      if (type) files.push(new File([await item.getType(type)], `clipboard_${Date.now()}`, {type}));
+    }
+    if (!files.length) throw new Error('클립보드에 이미지가 없습니다.');
+    addPromptAttachments(files);
+  } catch (err) { alert(`클립보드 읽기 실패: ${err.message}. Ctrl+V / Cmd+V도 사용할 수 있습니다.`); }
+}
+async function promptTestPayload(clientId) {
+  let prompt = document.getElementById('test_prompt').value;
+  const images = [];
+  for (const {file} of [...promptAttachments]) {
+    if (file.type.startsWith('image/')) images.push((await imageData(file)).dataUrl);
+    else {
+      let text;
+      try { text = new TextDecoder('utf-8', {fatal:true}).decode(await file.arrayBuffer()); }
+      catch (_err) { throw new Error(`${file.name}: UTF-8 텍스트 파일로 저장해 주세요.`); }
+      if (text.includes(String.fromCharCode(0))) throw new Error(`${file.name}: 바이너리 파일은 지원하지 않습니다.`);
+      prompt += `\\n\\n[첨부 텍스트: ${file.name}]\\n${text}\\n[첨부 끝]`;
+    }
+  }
+  if (!prompt.trim() && images.length) prompt = '첨부 이미지를 설명해 주세요.';
   const payload = {client_id: clientId};
+  if (images.length) payload.images = images;
   if (!promptHistoryEnabled() || !prompt.trim()) {
     payload.prompt = prompt;
     return payload;
@@ -4097,7 +4198,9 @@ async function sendPrompt() {
   }
   if (promptHistoryEnabled()) await loadPromptTestHistory();
   const prompt = document.getElementById('test_prompt').value;
-  const payload = {...promptTestPayload('web-ui'), target_id: selectedTestTargetId};
+  let payload;
+  try { payload = {...await promptTestPayload('web-ui'), target_id: selectedTestTargetId}; }
+  catch (err) { document.getElementById('test_status').textContent = err.message; return; }
   const startedAt = performance.now();
   let elapsedTimer = window.setInterval(() => {
     document.getElementById('test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
@@ -4173,7 +4276,9 @@ function promptResponseDetails(data) {
 }
 async function compareAllPrompts() {
   if (promptHistoryEnabled()) await loadPromptTestHistory();
-  const payload = promptTestPayload('web-ui-compare');
+  let payload;
+  try { payload = await promptTestPayload('web-ui-compare'); }
+  catch (err) { document.getElementById('test_status').textContent = err.message; return; }
   const startedAt = performance.now();
   let elapsedTimer = window.setInterval(() => {
     document.getElementById('test_elapsed').textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;

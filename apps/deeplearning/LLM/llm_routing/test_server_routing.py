@@ -9,6 +9,27 @@ import server_routing
 
 
 class DispatchInfoTests(unittest.TestCase):
+    def test_uploaded_images_survive_history_for_vllm_and_ollama(self):
+        import copy
+        incoming = {'messages': [
+            {'role': 'user', 'content': 'earlier'},
+            {'role': 'assistant', 'content': 'earlier reply'},
+            {'role': 'user', 'content': '사진과 파일을 정리해 주세요.\n[첨부 텍스트: memo.txt]\n내용'}],
+            'images': ['data:image/jpeg;base64,aW1hZ2U=']}
+        original = copy.deepcopy(incoming)
+        for kind in ('openai', 'vllm', 'ollama'):
+            target = server_routing.LLMTarget(id='test', name='test', host='localhost', port=8000, api_type=kind)
+            with self.subTest(kind=kind):
+                _, payload = server_routing.build_backend_payload(target, incoming)
+                if kind == 'ollama':
+                    self.assertEqual(payload['images'], ['aW1hZ2U='])
+                    self.assertIn('[첨부 텍스트: memo.txt]', payload['prompt'])
+                else:
+                    self.assertEqual(payload['messages'][:2], incoming['messages'][:2])
+                    self.assertIn('[첨부 텍스트: memo.txt]', payload['messages'][-1]['content'][0]['text'])
+                    self.assertEqual(payload['messages'][-1]['content'][1]['image_url']['url'], incoming['images'][0])
+                self.assertEqual(incoming, original)
+
     def setUp(self) -> None:
         server_routing.TARGET_RUNTIME.clear()
         server_routing.TARGET_QUEUES.clear()
