@@ -620,6 +620,29 @@ def first_after_boot(state: dict[str, Any]) -> bool:
     return state.get("last_boot_marker") != boot_marker()
 
 
+def recent_boot_times() -> list[str]:
+    """Read up to three boot records from wtmp, normalized to Seoul time."""
+    try:
+        result = subprocess.run(
+            ["last", "-x", "--time-format", "iso", "-n", "3", "reboot"],
+            capture_output=True, text=True, timeout=10,
+            env={**os.environ, "LC_ALL": "C", "TZ": "Asia/Seoul"},
+        )
+        boots = []
+        for line in result.stdout.splitlines() if result.returncode == 0 else []:
+            if not line.startswith("reboot "):
+                continue
+            match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:?\d{2}", line)
+            if match:
+                value = datetime.fromisoformat(match.group()).astimezone(SEOUL)
+                formatted = value.strftime("%Y-%m-%d %H:%M:%S KST")
+                if formatted not in boots:
+                    boots.append(formatted)
+        return boots[:3]
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return []
+
+
 def parse_public_ip(text: str) -> str:
     text = text.strip()
     match = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", text)
@@ -1233,6 +1256,13 @@ def format_markdown(settings: dict[str, Any], snapshot: dict[str, Any], is_first
         f"- 상태 메세지: {prefix}up 이후 {minutes}분 "
         f"({booted_at:%Y-%m-%d %H:%M} KST부터, {days}일 {hours}시간 동작중)"
     )
+    boots = snapshot.get("recent_boot_times", [])
+    lines.append("- 최근 부팅 시각 (최대 3개, 최신순):")
+    if boots:
+        lines.extend(f"  - {value}" for value in boots[:3])
+    else:
+        lines.append(f"  - {booted_at:%Y-%m-%d %H:%M} KST (uptime 기반 추정)")
+        lines.append("  - 과거 부팅 기록 확인 불가 (last/wtmp 기록 없음 또는 조회 실패)")
 
     lines.extend(
         [
@@ -1323,6 +1353,7 @@ def collect_snapshot(settings: dict[str, Any]) -> dict[str, Any]:
         "os": f"{platform.system()} {platform.release()}",
         "collected_at": datetime.now(SEOUL).strftime("%Y-%m-%d %H:%M:%S %Z"),
         "uptime_minutes": uptime_minutes(),
+        "recent_boot_times": recent_boot_times(),
         "cpu": get_cpu_info(),
         "network": {
             "internal_ip": internal_ip,

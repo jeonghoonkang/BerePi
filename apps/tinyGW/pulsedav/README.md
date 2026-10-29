@@ -566,3 +566,11 @@ N은 양의 정수이며, 최신 순서를 판단하기 위한 집계는 전체 
 ```bash
 python3 check_tinyGW_all.py --config this.setting.json --limit 5 --send
 ```
+## 최근 부팅 이력
+
+보고서의 uptime 아래에 `last -x --time-format iso -n 3 reboot`로 조회한
+최근 부팅 시각을 최대 3개까지 최신순으로 기록합니다. 시각은 한국 시간(KST)으로
+표시하며 WebDAV 및 Telegram 보고서에 함께 포함됩니다.
+시스템의 wtmp 기록에 남아 있는 이력만 표시하므로 기록이 적으면 3개 미만입니다.
+`last` 명령이 없거나 조회에 실패하면 현재 부팅 시각을 uptime 기반 추정값으로
+표시하고 과거 기록을 확인할 수 없음을 안내합니다. 종료·다운 시각은 포함하지 않습니다.
