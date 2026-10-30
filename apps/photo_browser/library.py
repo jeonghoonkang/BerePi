@@ -772,7 +772,7 @@ class Library:
             raise ValueError('관리 경로 밖입니다.')
         return target
 
-    def resolve_merge_target(self, root, item, reserved, hashes):
+    def resolve_merge_target(self, root, item, reserved, hashes, on_compare=None):
         """Choose the same non-destructive path for preview, capacity check and copy."""
         original = self.merge_target(root, item)
         number = 0
@@ -787,6 +787,8 @@ class Library:
                 number += 1
                 continue
             if candidate.exists():
+                if on_compare:
+                    on_compare(candidate)
                 stat = candidate.stat()
                 signature = (key, stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
                 if signature not in hashes:
@@ -824,13 +826,21 @@ class Library:
         targets = {}
         reserved, hashes = {}, {}
         for index, item in enumerate(pending):
-            target = self.resolve_merge_target(root, item, reserved, hashes)
+            source = item['locations'][0]
+            def checking(path, role='comparison_target', action='comparing_existing'):
+                progress({'phase': 'checking_space', 'checked': index, 'check_total': len(pending),
+                          'processed': 0, 'inventory_complete': False, 'current_file': str(path),
+                          'current_file_role': role, 'current_action': action,
+                          'source_file': source.get('path') or source.get('uri'), 'target_file': str(path)})
+            target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=checking)
             if not target.exists():
                 key = str(target.resolve())
                 targets[key] = max(targets.get(key, 0), item['size_bytes'])
             if index % 100 == 0:
                 progress({'phase': 'checking_space', 'checked': index + 1, 'check_total': len(pending),
-                          'processed': 0, 'inventory_complete': False, 'current_file': str(target)})
+                          'processed': 0, 'inventory_complete': False, 'current_file': str(target),
+                          'current_file_role': 'merge_destination', 'current_action': 'checking_space',
+                          'source_file': source.get('path') or source.get('uri'), 'target_file': str(target)})
         # Each checkpoint retains a new immutable DB generation. Include their
         # cumulative growth, reports and a reserve, rather than only image bytes.
         generation_bytes = sum(len(json.dumps(item, ensure_ascii=False, indent=2).encode('utf-8')) + 4096 for item in items)
@@ -907,6 +917,8 @@ class Library:
                      'ids': [i['media_id'] for i in items if i['lifecycle']['status'] == 'active' and (not ids or i['media_id'] in ids)],
                      'operations': [], 'status': 'running'}
         operations = state['operations']
+        for key in ('current_file', 'current_file_role', 'current_action', 'source_file', 'target_file'):
+            state.pop(key, None)
         completed = {op['media_id'] for op in operations}
         wanted = set(state['ids'])
         if history:
@@ -952,16 +964,29 @@ class Library:
             op['date_key'] = date
             op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
             operations.append(op)
+            source_location = item['locations'][0]
+            state['source_file'] = source_location.get('path') or source_location.get('uri')
+            def file_progress(path, role, action, emit=True):
+                state.update(current_file=str(path), current_file_role=role, current_action=action,
+                             target_file=str(path) if role == 'comparison_target' else str(target),
+                             phase='planning' if preview else 'merging')
+                if not emit:
+                    return
+                count = len(operations) - 1
+                progress({**{key: value for key, value in state.items() if key not in {'ids', 'operations'}},
+                          'processed': count, 'percent': round(count * 100 / len(wanted), 1) if wanted else 100})
+            def comparing(path):
+                file_progress(path, 'comparison_target', 'comparing_existing')
             try:
                 original = target
-                target = self.resolve_merge_target(root, item, reserved, hashes)
+                target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=comparing)
                 def record_target():
                     op.update(destination=str(target), original_destination=str(original), renamed=target != original)
                     if target != original:
                         op['rename_reason'] = 'name_collision'
                 record_target()
                 if preview:
-                    state['current_file'] = str(target)
+                    file_progress(target, 'merge_destination', 'preview_target', emit=False)
                     if len(operations) % 100 == 0:
                         checkpoint()
                     continue
@@ -971,19 +996,23 @@ class Library:
                 else:
                     temporary = target.with_name('.' + uid() + '.part')
                     try:
+                        file_progress(state['source_file'], 'source', 'reading_source')
                         with self.materialize(item['locations'][0]) as source:
+                            file_progress(target, 'merge_destination', 'copying')
                             shutil.copy2(source, temporary)
+                        file_progress(temporary, 'temporary_copy', 'verifying_copy')
                         if digest(temporary) != item['sha256']:
                             raise ValueError('복사 검증 실패: 원본이 변경되었을 수 있습니다.')
                         while True:
                             try:
+                                file_progress(target, 'merge_destination', 'publishing_copy')
                                 self.publish_merge_copy(temporary, target)
                                 op['status'] = 'copied'
                                 break
                             except FileExistsError:
                                 # A file appeared after planning; compare it and choose again.
                                 hashes.clear()
-                                target = self.resolve_merge_target(root, item, reserved, hashes)
+                                target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=comparing)
                                 record_target()
                                 if target.exists():
                                     op['status'] = 'reused'
@@ -994,14 +1023,22 @@ class Library:
                 item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now()})
             except Exception as exc:
                 op.update(status='error', error=str(exc))
+            # Keep the last completed target in checkpoints, including every
+            # 25th file and the final job state; it is not an in-flight source.
+            state.update(current_file=str(target), current_file_role='merge_destination',
+                         current_action=op['status'], target_file=str(target))
             if len(operations) % 25 == 0:
                 checkpoint()
             else:
-                progress({'merge_id': state['merge_id'], 'total': len(wanted), 'processed': len(operations), 'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target)})
+                progress({'merge_id': state['merge_id'], 'total': len(wanted), 'processed': len(operations),
+                          'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target),
+                          'current_file_role': state['current_file_role'], 'current_action': state['current_action'],
+                          'source_file': state['source_file'], 'target_file': str(target), 'phase': 'merging'})
         checkpoint('stopped' if interrupted else 'completed')
         report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
                   'merge_id': state['merge_id'], 'status': state['status'],
                   'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
+        report.update({key: state[key] for key in ('current_file', 'current_file_role', 'current_action', 'source_file', 'target_file') if key in state})
         if 'disk_space' in state:
             report['disk_space'] = state['disk_space']
         report['settings'] = {'boundary': str(self.boundary), 'db': str(self.db),

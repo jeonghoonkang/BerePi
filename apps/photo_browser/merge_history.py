@@ -52,7 +52,8 @@ def directory_snapshot(root, progress=None):
                     errors.append(f'{relative}: {exc}')
             if progress:
                 progress({'phase': 'report_inventory', 'inventory_complete': False, 'processed': 0,
-                          'report_files': len(files), 'current_file': str(folder)})
+                          'report_files': len(files), 'current_file': str(folder),
+                          'current_file_role': 'managed_directory', 'current_action': 'report_inventory'})
     for entry in directories.values():
         entry.update(file_count=entry['direct_files'], total_bytes=entry['direct_bytes'])
     for key in sorted(directories, key=lambda value: len(Path(value).parts), reverse=True):

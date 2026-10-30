@@ -40,6 +40,51 @@ class LibraryTests(unittest.TestCase):
     def post(self, path, data):
         return self.client.post(path, json=data, headers=self.headers)
 
+    def test_merge_progress_distinguishes_source_comparison_copy_and_verification(self):
+        source = self.photo()
+        self.library.scan('local')
+        updates = []
+        result = self.library.merge(progress=updates.append)
+        target = result['operations'][0]['destination']
+        reading = next(p for p in updates if p.get('current_action') == 'reading_source')
+        self.assertEqual(reading['current_file'], str(source))
+        self.assertEqual(reading['current_file_role'], 'source')
+        self.assertEqual(reading['target_file'], target)
+        copying = next(p for p in updates if p.get('current_action') == 'copying')
+        self.assertEqual(copying['current_file'], target)
+        self.assertEqual(copying['source_file'], str(source))
+        self.assertEqual(copying['processed'], 0)
+        verifying = next(p for p in updates if p.get('current_action') == 'verifying_copy')
+        self.assertEqual(verifying['current_file_role'], 'temporary_copy')
+        self.assertTrue(verifying['current_file'].endswith('.part'))
+        self.assertEqual(verifying['target_file'], target)
+        checkpoint = read_json(self.library.db / 'merges' / (result['merge_id'] + '.json'))
+        self.assertEqual(checkpoint['current_file'], target)
+        self.assertEqual(checkpoint['current_action'], 'copied')
+        updates.clear()
+        result = self.library.merge(progress=updates.append)
+        comparisons = [p for p in updates if p.get('current_action') == 'comparing_existing']
+        self.assertTrue(comparisons)
+        self.assertTrue(all(p['current_file_role'] == 'comparison_target' and p['current_file'] == target for p in comparisons))
+        self.assertEqual(result['operations'][0]['status'], 'reused')
+        self.assertFalse(any(p.get('current_action') == 'copying' for p in updates))
+        self.assertTrue(any(p.get('current_action') == 'reused' for p in updates))
+
+    def test_scan_preview_and_report_inventory_report_path_roles(self):
+        source = self.photo()
+        updates = []
+        self.library.scan('local', progress=updates.append)
+        self.assertTrue(any(p.get('current_file_role') == 'source' and p['current_file'] == str(source) for p in updates))
+        updates.clear()
+        result = self.library.merge(preview=True, progress=updates.append)
+        self.assertEqual(updates[-1]['current_action'], 'preview_target')
+        self.assertEqual(updates[-1]['current_file_role'], 'merge_destination')
+        self.assertFalse(Path(result['operations'][0]['destination']).exists())
+        self.library.merge()
+        updates.clear()
+        self.library.merge(progress=updates.append)
+        self.assertTrue(any(p.get('current_file_role') == 'managed_directory' and p['phase'] == 'report_inventory' for p in updates))
+
     def test_location_hints_survive_unreadable_db(self):
         managed = Path(self.config['managed_root'])
         for folder in (self.library.db, managed):

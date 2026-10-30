@@ -279,6 +279,8 @@ class ScanEngine:
                             entry = self.entries[ordinal]
                             uri, info = entry['uri'], entry['info']
                             self.state['current_file'] = info.get('path', uri)
+                            self.state['current_file_role'] = 'source'
+                            self.state['current_action'] = 'analyzing_source'
                             self.emit()
                             self.check(force=True)
                             try:

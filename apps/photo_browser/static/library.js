@@ -220,6 +220,41 @@
     if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
     return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%)`;
   }
+  function jobFileText(status, progress) {
+    if (!progress?.current_file) return '';
+    const roles = {source: '원본 소스 파일', comparison_target: '내용 비교 대상 · 기존 관리 파일',
+      merge_destination: '복사 대상 · 관리 저장 경로', temporary_copy: '복사 검증 대상 · 임시 파일',
+      managed_directory: '보고서 집계 대상 · 관리 디렉토리', archive_entry: 'ZIP에 담는 미디어 이름'};
+    const actions = {comparing_existing: '기존 파일의 SHA-256과 스캔 정보를 비교합니다. 캐시된 해시를 사용할 수 있습니다.',
+      checking_space: '복사 예정 경로의 신규 용량을 계산합니다. 아직 복사 중인 파일이라는 뜻은 아닙니다.',
+      reading_source: '복사할 원본을 읽거나 원격 원본을 임시 수신합니다.',
+      copying: '원본을 임시 파일로 복사 중입니다. 표시한 관리 경로는 최종 저장 위치입니다.',
+      verifying_copy: '임시 복사본의 SHA-256을 확인합니다. 검증 후 관리 경로에 저장합니다.',
+      publishing_copy: '검증된 복사본을 최종 관리 경로에 저장합니다.',
+      copied: '이 파일의 복사를 완료했습니다. 현재 복사 중이라는 뜻은 아닙니다.',
+      reused: '동일한 내용의 기존 관리 파일을 재사용했습니다. 새로 복사하지 않았습니다.',
+      error: '이 복사 대상의 처리에 오류가 발생했습니다.',
+      preview_target: '병합 미리보기의 저장 예정 경로입니다. 실제 복사는 하지 않습니다.',
+      report_inventory: '보고서 작성을 위해 디렉토리의 파일 수와 용량을 집계합니다.',
+      analyzing_source: '원본의 메타데이터·해시 또는 변경 여부를 분석합니다. 병합 복사는 하지 않습니다.',
+      archiving: '선택한 미디어를 다운로드 ZIP에 넣고 있습니다.'};
+    let role = roles[progress.current_file_role], explanation = actions[progress.current_action];
+    if (!role) {
+      if (progress.phase === 'report_inventory') role = roles.managed_directory;
+      else if (['merge', 'merge_preview'].includes(status.kind)) {
+        role = '최근 보고된 관리 대상 경로';
+        explanation = '이전 버전 작업 기록입니다. 원본 경로가 아니며 비교·복사·완료 중 어느 단계였는지는 기록되어 있지 않습니다.';
+      } else if (status.kind === 'scan') role = roles.source;
+      else if (status.kind === 'download') role = roles.archive_entry;
+      else role = '처리 대상 경로';
+    }
+    const prefix = activeStates.includes(status.status) ? '현재/최근 처리 정보' : '마지막 처리 정보';
+    const lines = [`${prefix} · ${role}: ${progress.current_file}`];
+    if (explanation) lines.push(explanation);
+    if (progress.source_file && progress.source_file !== progress.current_file) lines.push(`원본 소스: ${progress.source_file}`);
+    if (progress.target_file && progress.target_file !== progress.current_file) lines.push(`최종 관리 경로: ${progress.target_file}`);
+    return lines.join('\n');
+  }
   function updateJobClock(card) {
     const status = card.clockStatus;
     card.timing.hidden = status?.kind !== 'merge';
@@ -277,7 +312,8 @@
     card.bar.hidden = !['scan', 'merge', 'merge_preview', 'download'].includes(status.kind);
     if (status.kind === 'download' && status.result?.download_id) card.bar.value = 100;
     else if (p?.inventory_complete || (['merge', 'merge_preview', 'download'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
-    card.file.textContent = p?.current_file ? `현재 파일: ${p.current_file}` : '';
+    card.file.textContent = jobFileText(status, p);
+    card.file.style.whiteSpace = 'pre-wrap';
     const disk = p?.disk;
     const spaceText = p?.disk_space ? `신규 복사 ${(p.disk_space.copy_bytes / 1073741824).toFixed(2)} GiB · DB 예상 증가 ${(p.disk_space.db_estimated_bytes / 1073741824).toFixed(2)} GiB\n` + p.disk_space.volumes.map(v => `${v.path}: 여유 ${(v.free_bytes / 1073741824).toFixed(2)} GiB / 필요 ${(v.required_bytes / 1073741824).toFixed(2)} GiB (여유 기준 포함)`).join('\n') : '';
     card.warning.textContent = [spaceText, p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
@@ -296,7 +332,7 @@
         if (status.kind === 'merge_preview') {
           const progress = status.result || status.progress;
           el('job-status').textContent += ' · ' + mergeProgress(progress);
-          if (activeStates.includes(status.status)) el('merge-settings').textContent = mergeProgress(progress) + (progress?.current_file ? `\n현재 출력 경로: ${progress.current_file}` : '');
+          if (activeStates.includes(status.status)) el('merge-settings').textContent = [mergeProgress(progress), jobFileText(status, progress)].filter(Boolean).join('\n');
         }
         if (activeStates.includes(status.status)) await new Promise(resolve => setTimeout(resolve, 1000));
       } while (activeStates.includes(status.status));

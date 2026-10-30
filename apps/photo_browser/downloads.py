@@ -110,7 +110,9 @@ class DownloadStore:
                         name = f"{Path(original).stem}_중복{'' if number == 1 else '_' + str(number)}{Path(original).suffix}"
                         number += 1
                     names.add(name.casefold())
-                    progress({'phase': 'download', 'total': len(items), 'processed': index, 'percent': round(index * 100 / len(items), 1), 'inventory_complete': True, 'current_file': item['name']})
+                    progress({'phase': 'download', 'total': len(items), 'processed': index, 'percent': round(index * 100 / len(items), 1),
+                              'inventory_complete': True, 'current_file': item['name'],
+                              'current_file_role': 'archive_entry', 'current_action': 'archiving'})
                     location = media_location(item)
                     def transfer(total, downloaded):
                         needed = max(1048576, (total - downloaded) if total is not None else 8 * 1048576)
