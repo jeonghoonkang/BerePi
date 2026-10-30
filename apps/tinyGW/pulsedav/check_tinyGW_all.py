@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -172,10 +173,24 @@ def select_reports(reports: list[dict], limit: int | None = None) -> list[dict]:
     return ordered if limit is None else ordered[:limit]
 
 
-def render(reports: list[dict], errors: list[str]) -> str:
+def sender_ip() -> str:
+    """Return this machine's outbound local IP (a UDP connect sends no packets)."""
+    for family, target in ((socket.AF_INET, '8.8.8.8'), (socket.AF_INET6, '2001:4860:4860::8888')):
+        try:
+            with socket.socket(family, socket.SOCK_DGRAM) as probe:
+                probe.connect((target, 80))
+                return probe.getsockname()[0]
+        except OSError:
+            continue
+    return '확인 불가'
+
+
+def render(reports: list[dict], errors: list[str], sender: str | None = None) -> str:
     reports = select_reports(reports)
-    lines = ['🖥️ tinyGW 전체 용량 현황', f'집계 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST',
-             f'호스트 수: {len(reports)}', '']
+    lines = ['🖥️ tinyGW 전체 용량 현황', f'집계 시각: {datetime.now(SEOUL):%Y-%m-%d %H:%M:%S} KST']
+    if sender:
+        lines.append(f'📤 발신 호스트: {socket.gethostname()} ({sender})')
+    lines.extend([f'호스트 수: {len(reports)}', ''])
     for report in reports:
         lines.extend([f"🖥️ Host: {report['host']}", f"🏠 Local IP: {report['ip']}",
                       '최근 전송 시각: ' + (report['at'].strftime('%Y-%m-%d %H:%M:%S KST') if report.get('at') else '정보 없음'),
@@ -252,7 +267,7 @@ def main() -> int:
         total_hosts = len(reports)
         reports = select_reports(reports, args.limit)
         progress(f'최근 전송 시각순 정렬 완료: 전체 {total_hosts}개 중 {len(reports)}개 출력')
-        message = render(reports, errors)
+        message = render(reports, errors, sender_ip())
         logs_directory = args.logs_dir.expanduser().resolve()
         progress(f'집계 로그 저장 시작: {logs_directory}')
         saved = save_summary(message, logs_directory)
