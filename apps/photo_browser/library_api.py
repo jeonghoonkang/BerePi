@@ -26,6 +26,9 @@ def register_library(app, boundary, db):
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='photo-library')
     jobs, guard = {}, threading.Lock()
     controls = {}
+    from workflow import WorkflowStatus
+    workflow = WorkflowStatus(library)
+    app.extensions['photo_workflow'] = workflow
     for path in (library.db / 'jobs').glob('*.json'):
         try:
             previous = read_json(path)
@@ -209,6 +212,19 @@ def register_library(app, boundary, db):
                 controls[job_id].set()
                 job['status'] = 'stopping'
             return jsonify(job_with_clock(job))
+
+    @app.get('/api/workflow')
+    def workflow_status():
+        with guard:
+            latest = {}
+            for job in jobs.values():
+                if job.get('kind') not in {'scan', 'merge'}:
+                    continue
+                key = (job['kind'], job.get('source_id') if job['kind'] == 'scan' else None)
+                if key not in latest or latest[key]['created_at'] < job['created_at']:
+                    latest[key] = job
+            snapshot = [dict(job) for job in latest.values()]
+        return jsonify(workflow.snapshot(snapshot))
 
     @app.get('/api/scans')
     def scan_states():

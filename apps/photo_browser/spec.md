@@ -35,6 +35,8 @@ CLI는 HTTP 서버를 거치지 않고 같은 DB와 처리 코드를 사용한�
 
 웹서버 실행 중에도 CLI를 사용할 수 있다. 다만 서버와 같은 `--db`, `--root`를 지정해야 하며, 병합·비교 등 잠금을 요구하는 작업은 다른 DB 쓰기 작업과 동시에 실행할 수 없다.
 
+화면 상단은 `ID·소스 설정 → 스캔·JSON 생성 → DB 구성·반영 → 관리 디렉토리 병합`의 가로 단계 표시를 제공한다. [workflow.py](workflow.py)의 읽기 전용 집계와 `GET /api/workflow`, [static/workflow.js](static/workflow.js)가 저장된 설정·체크포인트·현재 카탈로그·웹/CLI 병합 기록을 약 2초마다 반영한다. 완료·진행·확인 필요·실패를 색과 문구로 구분하고, 전체 수 미확정·DB 발행은 미확정 막대로 표시한다. 전체 비율은 동일 단계 가중치이며 실제 파일 해시 검사나 남은 시간 예측은 아니다.
+
 ## 2. 경로 설정과 다중 소스 수집
 
 **관련 코드:** `Library.config()`, `save_config()`, `local()`, `remote_files()`, `materialize()` — [library.py](library.py)
