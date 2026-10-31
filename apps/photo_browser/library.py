@@ -876,18 +876,30 @@ class Library:
             write_library_locations(self.db, root)
             run_started_at = now()
             merge_started_at = first_merge_start(self, resume, run_started_at) if resume else run_started_at
+            from merge_status import MergeProgress
+            live = MergeProgress(self.db, resume, run_started_at)
             original_progress = progress or (lambda state: None)
             def timed_progress(state):
-                original_progress({**state, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at})
-            history = MergeHistory(self, root, resume, timed_progress)
-            history.merge_started_at = merge_started_at
+                value = {**state, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at}
+                live.update({**value, 'status': 'running'})
+                original_progress(value)
+            history = None
             try:
+                history = MergeHistory(self, root, resume, timed_progress)
+                history.merge_started_at = merge_started_at
+                live.update({'merge_id': history.merge_id}, force=True)
                 result = self._merge(ids, False, timed_progress, stopped, resume, history)
             except BaseException as exc:
                 try:
-                    history.finish({'status': 'interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', 'warning': str(exc)})
+                    if history is not None:
+                        history.finish({'status': 'interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', 'warning': str(exc)})
                 except Exception:
                     pass  # Preserve the original failure; the initial report may remain running.
+                try:
+                    live.update({'status': 'interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed',
+                                 'error': str(exc)}, force=True)
+                except OSError:
+                    pass  # Preserve the original failure when progress storage is unavailable.
                 raise
             try:
                 result['history_report'] = history.finish(result)
@@ -895,6 +907,7 @@ class Library:
                 result['history_report_error'] = str(exc)
                 result['warning'] = (result.get('warning', '') + '\n병합 보고서 저장 실패: ' + str(exc)).strip()
             result.update(merge_started_at=merge_started_at, run_started_at=run_started_at)
+            live.update({**result, 'phase': 'finished'}, force=True)
             if result.get('plan_id'):
                 atomic_json(self.db / 'plans' / (result['plan_id'] + '.json'), result)
             return result

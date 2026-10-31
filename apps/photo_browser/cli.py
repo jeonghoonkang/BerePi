@@ -1,14 +1,26 @@
 """저장된 설정·스캔 상태 조회 및 병합 복사 CLI."""
 import argparse
 import json
+import math
 import os
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 
 from library import Library
 from scan_engine import scan_sessions
+
+
+def refresh_interval(value):
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError('갱신 간격은 0보다 큰 초 단위 숫자여야 합니다.')
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError('갱신 간격은 0보다 큰 초 단위 숫자여야 합니다.')
+    return seconds
 
 
 def main(argv=None):
@@ -34,6 +46,10 @@ def main(argv=None):
     results.add_argument('--media-id', required=True)
     status = commands.add_parser('status', help='소스별 최신 스캔 상태 조회')
     status.add_argument('--source-id', help='특정 소스만 조회')
+    merge_status_parser = commands.add_parser('merge-status', help='최신 병합 상태·진행률·현재 파일 조회 (서버 없이 가능)')
+    merge_status_parser.add_argument('--merge-id', help='특정 병합 ID 조회 (기본 최신 기록)')
+    merge_status_parser.add_argument('--watch', action='store_true', help='Ctrl+C까지 주기적으로 갱신')
+    merge_status_parser.add_argument('--interval', type=refresh_interval, default=2, help='갱신 간격, 초 단위 (기본 2)')
     compare = commands.add_parser('compare', help='원본·병합 파일 수/용량 및 복사 무결성 비교')
     compare.add_argument('--source-id', help='특정 소스만 비교 (기본 전체)')
     compare.add_argument('--quick', action='store_true', help='SHA-256 없이 크기만 비교')
@@ -63,6 +79,13 @@ def main(argv=None):
             print(json.dumps(restore_backup(args.backup, args.destination), ensure_ascii=False, indent=2))
             return 0
         db = Path(args.db).expanduser().resolve()
+        if args.command == 'merge-status':
+            from merge_status import merge_status
+            while True:
+                print(json.dumps(merge_status(db, args.merge_id), ensure_ascii=False, indent=2), flush=True)
+                if not args.watch:
+                    return 0
+                time.sleep(args.interval)
         if not (db / 'config.json').is_file():
             raise ValueError(f'설정 DB가 없습니다: {db}. 서버에서 설정한 DB 경로를 지정하세요.')
         library = Library(db, Path(args.root).expanduser())

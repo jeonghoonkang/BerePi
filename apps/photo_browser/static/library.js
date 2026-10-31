@@ -430,10 +430,23 @@
         await job('api/sources/apply-classification', {source_id: source.source_id});
       }));
       row.append(resume, action('처음부터 전체 재스캔', async () => { if (confirm('중단 지점 대신 처음부터 파일 목록과 메타데이터를 다시 검사합니까? 이벤트·태그와 원본은 유지됩니다.')) await job('api/scan', {source_id: source.source_id, mode: 'restart'}); }));
-      row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => { for (const [key, value] of Object.entries(source)) { const input = el('source-form').elements.namedItem(key); if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; } } }), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
+      row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => fillSourceForm(source)), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
       el('source-list').append(row);
     });
   }
+  function fillSourceForm(source) {
+    for (const [key, value] of Object.entries(source)) {
+      const input = el('source-form').elements.namedItem(key);
+      if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; }
+    }
+  }
+  window.photoBrowserSourceUpdated = async source => {
+    await loadConfig();
+    el('source-form').reset();
+    fillSourceForm(source);
+    tab('sources-panel');
+    notify(`현재 소스: ${source.source_id} · ${source.root}. 스캔 / JSON 생성 후 병합하면 기존 관리 폴더에 누적됩니다.`);
+  };
   let renaming = false;
   el('rename-source-cancel').onclick = () => el('rename-source-dialog').close();
   el('rename-source-dialog').addEventListener('cancel', event => { if (renaming) event.preventDefault(); });

@@ -156,6 +156,18 @@ def register_library(app, boundary, db):
         existing = next((s for s in library.config()['sources'] if library.source_key(s) == key), None)
         return jsonify(existing=existing)
 
+    @app.post('/api/sources/register-directory')
+    def register_directory():
+        path = body().get('path')
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError('소스로 추가할 디렉토리 경로를 입력하세요.')
+        from startup_sources import register_directories
+        with guard:
+            if any(job['status'] in {'queued', 'running', 'stopping'} for job in jobs.values()):
+                raise ValueError('실행 중인 작업을 완료하거나 중지한 뒤 새 소스 디렉토리를 적용하세요.')
+            report = register_directories(library, [path.strip()])[0]
+        return jsonify(source=report['source'], added=report['added']), 201 if report['added'] else 200
+
     @app.post('/api/sources/apply-classification')
     def apply_source_classification():
         source_id = component(body()['source_id'])

@@ -55,6 +55,7 @@ async function browse(path, append = false) {
         await loadDirectoryHistory(history.item.id);
       } catch (error) { $('directory-history-status').textContent = `사진 조회는 완료했지만 히스토리 저장·갱신에 실패했습니다: ${error.message}`; }
     }
+    return data;
   } catch (error) { if (error.name !== 'AbortError' && controller === activeController) { if (!append) { data = null; $('up').disabled = true; } $('status').textContent = error.message; $('directory-update-status').textContent = error.message; } }
   finally { if (controller === activeController) { loading = false; $('load-more').disabled = false; } }
 }
@@ -106,15 +107,6 @@ function openViewer(index) {
   if (!$('viewer').open) $('viewer').showModal();
 }
 $('location').onsubmit = event => { event.preventDefault(); browse($('path').value); };
-$('directory-update').onsubmit = event => {
-  event.preventDefault();
-  const path = $('directory-path').value.trim();
-  if (!path) { $('directory-update-status').textContent = '디렉토리 경로를 입력하세요.'; return; }
-  $('path').value = path;
-  $('date').value = ''; $('type').value = 'all';
-  document.querySelector('[data-tab="folder-panel"]').click();
-  browse(path);
-};
 let directoryHistory = [];
 async function loadDirectoryHistory(selectedId = '') {
   try {
