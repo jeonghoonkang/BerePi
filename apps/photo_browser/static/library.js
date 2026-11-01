@@ -403,9 +403,17 @@
       if (activeStates.includes(status.status)) safe(() => watchJob(status.job_id))();
     }
   }
+  function managedSourcePath(source) {
+    const separator = config.managed_root.includes('\\') ? '\\' : '/';
+    return [config.managed_root.replace(/[\\/]+$/, ''), source.category || 'family', source.owner_id || 'default'].join(separator);
+  }
   async function loadConfig() {
     config = await api('api/config'); el('managed-root').value = config.managed_root; el('scan-min-free').value = config.scan_min_free_mb ?? 512; el('source-list').replaceChildren();
-    el('current-managed-path').textContent = config.managed_root;
+    el('current-managed-path').replaceChildren(make('div', `관리 루트: ${config.managed_root}`));
+    for (const source of config.sources) {
+      el('current-managed-path').append(make('div', `${source.source_id}: ${managedSourcePath(source)}`));
+    }
+    if (!config.sources.length) el('current-managed-path').append(make('div', '등록된 소스 없음'));
     el('current-source-paths').textContent = config.sources.length
       ? config.sources.map(source => `${source.source_id}: ${source.root}`).join('\n')
       : '등록된 소스 없음';
@@ -425,6 +433,7 @@
         el('rename-source-new').select();
       }));
       row.append(make('p', `신규 사진 기본값: 카테고리 ${source.category || 'family'} · 소유자 ${source.owner_id || 'default'}`));
+      row.append(make('p', `관리 출력 경로: ${managedSourcePath(source)}`));
       row.append(action('기존 사진에 카테고리·소유자 적용', async () => {
         if (!confirm(`소스 ${source.source_id}의 기존 활성 사진을 카테고리 ${source.category || 'family'}, 소유자 ${source.owner_id || 'default'}로 변경합니까?\n개별 지정한 카테고리·소유자도 교체합니다. 태그·이벤트·사람과 파일 위치는 유지합니다.\n등록 폼의 변경 사항은 먼저 저장하세요.`)) return;
         await job('api/sources/apply-classification', {source_id: source.source_id});

@@ -191,6 +191,8 @@ def main(argv=None):
     print(f"관리 디렉토리: {config['managed_root']}", flush=True)
     for source in config.get('sources', []):
         print(f"소스 [{source['source_id']}]: {source['root']}", flush=True)
+        destination = Path(config['managed_root']) / source.get('category', 'family') / source.get('owner_id', 'default')
+        print(f"관리 출력 [{source['source_id']}]: {destination}", flush=True)
     if not config.get('sources'):
         print('소스: 등록된 소스 없음', flush=True)
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
