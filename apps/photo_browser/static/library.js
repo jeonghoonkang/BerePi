@@ -257,20 +257,9 @@
   }
   function updateJobClock(card) {
     const status = card.clockStatus;
-    card.timing.hidden = status?.kind !== 'merge';
-    if (card.timing.hidden) return;
-    if (status.status === 'queued') { card.timing.textContent = '대기 중 · 병합 시작 전'; return; }
-    const p = status.result || status.progress || {};
-    const started = Date.parse(p.merge_started_at || status.merge_started_at || status.started_at || status.created_at);
-    const end = activeStates.includes(status.status) ? card.serverClock + performance.now() - card.observedAt : Date.parse(status.finished_at || p.updated_at || status.created_at);
-    if (!Number.isFinite(started) || !Number.isFinite(end)) { card.timing.textContent = '시작 시각 정보 없음'; return; }
-    let seconds = Math.max(0, Math.floor((end - started) / 1000));
-    const days = Math.floor(seconds / 86400); seconds %= 86400;
-    const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
-    const duration = `${days ? days + '일 ' : ''}${String(hours).padStart(2, '0')}시간 ${String(minutes).padStart(2, '0')}분 ${String(seconds % 60).padStart(2, '0')}초`;
-    const date = new Intl.DateTimeFormat('ko-KR', {timeZone:'Asia/Seoul', dateStyle:'medium', timeStyle:'medium'}).format(new Date(started));
-    card.timing.textContent = `최초 병합 시작: ${date} (KST) · 경과 시간: ${duration}`;
-    card.timing.title = '최초 병합 시작부터 현재 또는 작업 종료까지의 시간입니다. 이어하기의 경우 중지·대기 시간도 포함합니다.';
+    if (!status) return;
+    card.timing.textContent = window.photoBrowserJobRecords.timingText(status, card.serverClock + performance.now() - card.observedAt);
+    card.timing.title = status.kind === 'merge' ? '이번 실행의 시작·종료 시각입니다. 경과 시간은 최초 병합 시작부터 계산하며 이어하기의 중지·대기 시간도 포함합니다.' : '작업의 시작·종료 시각과 경과 시간입니다.';
   }
   setInterval(() => { for (const card of jobCards.values()) updateJobClock(card); }, 1000);
   function drawJob(status) {
@@ -286,8 +275,9 @@
       const resume = action('병합 이어하기', () => job('api/merge', {preview: false, resume: card.mergeId}));
       const reports = make('p');
       const timing = make('p', '', 'job-timing');
-      row.append(title, timing, text, bar, file, warning, changes, reports, stop, resume); el('scan-jobs').prepend(row);
-      card = {row, title, timing, text, bar, file, warning, changes, changesList, reports, stop, resume}; jobCards.set(status.job_id, card);
+      const archive = window.photoBrowserJobRecords.createArchiveControls(api);
+      row.append(title, timing, text, bar, file, warning, changes, reports, stop, resume, archive.root); el('scan-jobs').prepend(row);
+      card = {row, title, timing, text, bar, file, warning, changes, changesList, reports, stop, resume, archive}; jobCards.set(status.job_id, card);
     }
     card.createdAt = status.created_at;
     if (!jobsPage) {
@@ -298,6 +288,7 @@
     const p = status.result || status.progress;
     card.clockStatus = status; card.observedAt = performance.now(); card.serverClock = Date.parse(status.server_time) || Date.now();
     updateJobClock(card);
+    card.archive.update(status);
     card.reports.replaceChildren();
     if (status.result?.history_report) reportLinks(card.reports, status.result.history_report.report_id);
     if (status.kind === 'download' && status.result?.download_id) {
@@ -308,6 +299,9 @@
     card.changes.hidden = !summary.length;
     card.changesList.replaceChildren(...summary.map(line => make('li', line)));
     card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : status.kind === 'download' ? '선택 파일 ZIP 다운로드' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    if (!activeStates.includes(status.status)) {
+      card.title.textContent += ` · ${status.status === 'completed' ? '완료' : '종료'}: ${window.photoBrowserJobRecords.formatTime(status.finished_at)}`;
+    }
     card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'download' ? `ZIP 준비: ${p?.processed ?? p?.file_count ?? 0}/${p?.total ?? p?.file_count ?? 0}개` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
     card.bar.hidden = !['scan', 'merge', 'merge_preview', 'download'].includes(status.kind);
     if (status.kind === 'download' && status.result?.download_id) card.bar.value = 100;

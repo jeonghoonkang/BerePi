@@ -206,6 +206,19 @@ def register_library(app, boundary, db):
                 abort(404, description='작업이 없습니다.')
             return jsonify(job_with_clock(job))
 
+    @app.post('/api/jobs/<job_id>/archive')
+    def save_job_archive(job_id):
+        from job_archive import archive_job
+        with guard:
+            job = jobs.get(job_id)
+            if not job:
+                abort(404, description='작업이 없습니다.')
+            archive = archive_job(library.db, job_with_clock(job))
+            updated = {**job, 'archive': archive}
+            atomic_json(library.db / 'jobs' / (component(job_id) + '.json'), updated)
+            jobs[job_id] = updated
+        return jsonify(archive)
+
     @app.get('/api/jobs')
     def job_list():
         with guard:
