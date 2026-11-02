@@ -21,6 +21,9 @@ def register_library(app, boundary, db):
     downloads = DownloadStore(library)
     app.extensions['photo_downloads'] = downloads
     app.extensions['photo_library'] = library
+    from category_merge import CategoryMerger
+    categories = CategoryMerger(library)
+    app.extensions['category_merger'] = categories
     from analysis_skills import register_analysis
     register_analysis(app, library)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='photo-library')
@@ -90,7 +93,8 @@ def register_library(app, boundary, db):
         stop = threading.Event()
         with guard:
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
-            if (kind in {'source_rename', 'source_update', 'source_cleanup'} and active) or any(j.get('kind') in {'source_rename', 'source_update', 'source_cleanup'} for j in active):
+            exclusive = {'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo'}
+            if (kind in exclusive and active) or any(j.get('kind') in exclusive for j in active):
                 raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
                 raise ValueError('이미 병합 작업이 실행 중입니다.')
@@ -115,8 +119,8 @@ def register_library(app, boundary, db):
                 jobs[job_id]['started_at'] = now()
                 atomic_json(library.db / 'jobs' / (job_id + '.json'), jobs[job_id])
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download'} else function()
-                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview'} else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -125,6 +129,37 @@ def register_library(app, boundary, db):
                 controls.pop(job_id, None)
         executor.submit(run)
         return jsonify(job_id=job_id), 202
+
+    @app.get('/api/category-merges/categories')
+    def category_choices():
+        from collections import Counter
+        counts = Counter(item['classification']['category_id'] for item in library.items() if item['lifecycle']['status'] == 'active')
+        return jsonify(items=[{'category': key, 'count': value} for key, value in sorted(counts.items())])
+
+    @app.get('/api/category-merges')
+    def category_records():
+        return jsonify(items=[{**{k: v for k, v in record.items() if k not in {'rows', 'moves', 'created_files'}},
+                               'file_count': len(record['rows']), 'archived_files': sum(m.get('moved', False) for m in record['moves'])}
+                              for record in categories.records()])
+
+    @app.get('/api/category-merges/<operation_id>')
+    def category_record(operation_id):
+        return jsonify(categories.load(operation_id))
+
+    @app.post('/api/category-merges/preview')
+    def category_preview():
+        data = body()
+        return launch(lambda progress, stopped: categories.preview(data.get('categories'), data.get('target_category'), progress), 'category_merge_preview')
+
+    @app.post('/api/category-merges/<operation_id>/run')
+    def category_run(operation_id):
+        categories.load(operation_id)
+        return launch(lambda progress, stopped: categories.execute(operation_id, progress, stopped), 'category_merge')
+
+    @app.post('/api/category-merges/<operation_id>/undo')
+    def category_undo(operation_id):
+        categories.load(operation_id)
+        return launch(lambda progress, stopped: categories.undo(operation_id, progress), 'category_merge_undo')
 
     @app.errorhandler(ValueError)
     @app.errorhandler(KeyError)
@@ -231,7 +266,7 @@ def register_library(app, boundary, db):
     def stop_scan(job_id):
         with guard:
             job = jobs.get(job_id)
-            if not job or job.get('kind') not in {'scan', 'merge'}:
+            if not job or job.get('kind') not in {'scan', 'merge', 'category_merge'}:
                 raise ValueError('중지할 스캔 또는 병합 작업이 없습니다.')
             if job['status'] in {'queued', 'running', 'stopping'}:
                 controls[job_id].set()
