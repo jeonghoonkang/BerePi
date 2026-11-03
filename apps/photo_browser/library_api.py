@@ -32,6 +32,9 @@ def register_library(app, boundary, db):
     from workflow import WorkflowStatus
     workflow = WorkflowStatus(library)
     app.extensions['photo_workflow'] = workflow
+    from library_summary import LibrarySummary
+    summary = LibrarySummary(library)
+    app.extensions['photo_library_summary'] = summary
     for path in (library.db / 'jobs').glob('*.json'):
         try:
             previous = read_json(path)
@@ -272,6 +275,10 @@ def register_library(app, boundary, db):
                 controls[job_id].set()
                 job['status'] = 'stopping'
             return jsonify(job_with_clock(job))
+
+    @app.get('/api/library-summary')
+    def library_summary():
+        return jsonify(summary.snapshot(refresh=request.args.get('refresh') == '1'))
 
     @app.get('/api/workflow')
     def workflow_status():

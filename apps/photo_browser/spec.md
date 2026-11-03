@@ -37,6 +37,8 @@ CLI는 HTTP 서버를 거치지 않고 같은 DB와 처리 코드를 사용한�
 
 화면 상단은 `ID·소스 설정 → 스캔·JSON 생성 → DB 구성·반영 → 관리 디렉토리 병합`의 가로 단계 표시를 제공한다. [workflow.py](workflow.py)의 읽기 전용 집계와 `GET /api/workflow`, [static/workflow.js](static/workflow.js)가 저장된 설정·체크포인트·현재 카탈로그·웹/CLI 병합 기록을 약 2초마다 반영한다. 완료·진행·확인 필요·실패를 색과 문구로 구분하고, 전체 수 미확정·DB 발행은 미확정 막대로 표시한다. 전체 비율은 동일 단계 가중치이며 실제 파일 해시 검사나 남은 시간 예측은 아니다.
 
+상단의 접이식 소스·분류·사용자 현황은 [library_summary.py](library_summary.py)와 `GET /api/library-summary`로 현재 DB 청크 전체를 읽어 소스 수, 분류·소유자 목록, 조합별 파일·직계 부모 디렉토리 수·항목 용량을 제공한다. 설정값과 실제 DB 값을 구분하며 미등록·비활성·소스 미연결 항목도 구분한다. 여러 분류·사용자를 표현할 수 있도록 소스별 목록은 배열, 상세는 `(source_id, category_id, owner_id)` 조합 행으로 제공한다. 다중 설정 입력 자체는 후속 범위이며, 공유 파일의 전체 고유 합계와 행별 합계를 구분한다.
+
 ## 2. 경로 설정과 다중 소스 수집
 
 **관련 코드:** `Library.config()`, `save_config()`, `local()`, `remote_files()`, `materialize()` — [library.py](library.py)
