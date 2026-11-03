@@ -134,18 +134,18 @@ class LibrarySummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '청크'):
             self.summary.snapshot(refresh=True)
 
+    @patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'test-password'})
     def test_api_is_authenticated_no_store_and_does_not_modify_database(self):
         self.library.scan('photos')
         client = create_app(self.root, self.root, self.library.db).test_client()
         before = {p: p.read_bytes() for p in self.library.db.rglob('*.json')}
-        with patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'test-password'}):
-            self.assertEqual(client.get('/api/library-summary').status_code, 401)
-            response = client.get('/api/library-summary?refresh=1', headers={'Authorization': 'Basic dXNlcjp0ZXN0LXBhc3N3b3Jk'})
+        self.assertEqual(client.get('/api/library-summary').status_code, 401)
+        response = client.get('/api/library-summary?refresh=1', headers={'Authorization': 'Basic dXNlcjp0ZXN0LXBhc3N3b3Jk'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Cache-Control'], 'no-store')
         self.assertEqual(response.json['totals']['media_count'], 2)
         self.assertEqual(before, {p: p.read_bytes() for p in self.library.db.rglob('*.json')})
-        page = client.get('/').get_data(as_text=True)
+        page = client.get('/', auth=('user', 'test-password')).get_data(as_text=True)
         self.assertIn('<details id="library-summary"', page)
         self.assertIn('library_summary.js', page)
 

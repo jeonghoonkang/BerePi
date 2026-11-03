@@ -67,12 +67,13 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(existing.read_bytes(), b'original')
         self.assertEqual(list(self.folder.iterdir()), [existing])
 
+    @patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'})
     def test_create_directory_auth_csrf_and_storage_failure(self):
         endpoint, data = '/api/uploads/directory', {'directory': str(self.folder / 'new')}
+        self.assertEqual(self.client.post(endpoint, json=data, headers=self.headers).status_code, 401)
+        self.assertEqual(self.client.post('/api/auth/login', json={'password': 'secret'}, headers=self.headers).status_code, 200)
         self.assertEqual(self.client.post(endpoint, json=data).status_code, 403)
         self.assertEqual(self.client.post(endpoint, json=data, headers={**self.headers, 'Origin': 'https://other.invalid'}).status_code, 403)
-        with patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'}):
-            self.assertEqual(self.client.post(endpoint, json=data, headers=self.headers).status_code, 401)
         with patch('uploads.Path.mkdir', side_effect=PermissionError('not writable')):
             self.assertEqual(self.client.post(endpoint, json=data, headers=self.headers).status_code, 409)
         self.assertFalse((self.folder / 'new').exists())

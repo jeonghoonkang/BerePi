@@ -198,12 +198,13 @@ class CategoryMergeTests(unittest.TestCase):
         self.assertEqual({i['classification']['category_id'] for i in restored.items()}, {'family_a', 'family_b'})
         self.assertTrue(all(Path(i['locations'][-1]['path']).is_relative_to(Path(result['managed_root'])) for i in restored.items()))
 
+    @patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'})
     def test_api_auth_validation_and_background_execution(self):
         url = '/api/category-merges/preview'
         body = {'categories': ['family_a', 'family_b'], 'target_category': 'family'}
+        self.assertEqual(self.client.get('/api/category-merges').status_code, 401)
+        self.assertEqual(self.client.post('/api/auth/login', json={'password': 'secret'}, headers=self.headers).status_code, 200)
         self.assertEqual(self.client.post(url, json=body).status_code, 403)
-        with patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'}):
-            self.assertEqual(self.client.get('/api/category-merges').status_code, 401)
         def wait(response):
             self.assertEqual(response.status_code, 202)
             for _ in range(500):

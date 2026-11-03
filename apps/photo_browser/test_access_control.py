@@ -140,6 +140,42 @@ class AccessControlTests(unittest.TestCase):
             self.post('login', {'password': 'legacy-secret'})
             self.assertEqual(self.client.get('/api/config').status_code, 200)
 
+    def test_copied_cookie_cannot_be_replayed_after_logout(self):
+        self.setup_password()
+        cookie = self.client.get_cookie('photo_browser_session').value
+        self.post('logout', {})
+        replay = self.app.test_client()
+        replay.set_cookie('photo_browser_session', cookie)
+        self.assertEqual(replay.get('/api/config').status_code, 401)
+        self.assertFalse(replay.get('/api/auth/status').json['authenticated'])
+
+    def test_missing_auth_file_fails_closed_including_after_restart(self):
+        self.setup_password()
+        self.assertTrue((self.root / 'db' / 'auth.required').is_file())
+        self.path.unlink()
+        self.assertEqual(self.app.test_client().get('/api/config').status_code, 400)
+        self.assertFalse(self.path.exists())
+        with self.assertRaisesRegex(ValueError, '필수 인증 설정'):
+            create_app(self.root, self.root, self.root / 'db')
+
+    def test_clearing_password_or_expired_server_session_does_not_allow_access(self):
+        import time
+        self.setup_password()
+        config = read_json(self.path)
+        config['sessions'] = {key: time.time() - 1 for key in config['sessions']}
+        self.app.extensions['photo_access'].write(config)
+        self.assertEqual(self.client.get('/api/config').status_code, 401)
+        config['password_hash'] = None
+        self.path.write_text(json.dumps(config))
+        self.assertEqual(self.app.test_client().get('/api/config').status_code, 400)
+
+    def test_logging_out_one_session_does_not_logout_other_client(self):
+        self.setup_password()
+        other = self.app.test_client()
+        self.post('login', {'password': 'my-password-123'}, other)
+        self.post('logout', {})
+        self.assertEqual(other.get('/api/config').status_code, 200)
+
 
 if __name__ == '__main__':
     unittest.main()
