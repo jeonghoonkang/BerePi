@@ -17,7 +17,7 @@ INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_PORT = int(os.getenv("INFLUX_PORT", "8086"))
 INFLUX_USER = os.getenv("INFLUX_USER", "")
 INFLUX_PASSWORD = os.getenv("INFLUX_PASSWORD", "")
-INFLUX_DB = os.getenv("INFLUX_DB", "")
+INFLUX_DB = os.getenv("INFLUX_DB", "sht20")
 INFLUX_MEASUREMENT = os.getenv("INFLUX_MEASUREMENT", "temperature")
 INFLUX_FIELD = os.getenv("INFLUX_FIELD", "value")
 
@@ -109,7 +109,7 @@ def main():
 
         tz = ZoneInfo("Asia/Seoul")
         now = datetime.datetime.now(tz)
-        for i in range(4):
+        for i in range(1,4):
             end = now - datetime.timedelta(weeks=i)
             start = now - datetime.timedelta(weeks=i + 1)
             img_path = Path(f"week_{i + 1}.png").resolve()
