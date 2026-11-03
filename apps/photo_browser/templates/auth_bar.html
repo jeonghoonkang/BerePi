@@ -1,0 +1,8 @@
+<section id="auth-bar" class="auth-bar" aria-labelledby="auth-heading">
+<div class="auth-heading"><strong id="auth-heading">Photo Browser 로그인</strong><span id="auth-state">로그인 상태 확인 중…</span></div>
+<form id="auth-login" hidden><label>비밀번호 <input id="auth-password" type="password" autocomplete="current-password" required maxlength="1024"></label><button type="submit">로그인</button></form>
+<div id="auth-account" hidden><button id="auth-change-toggle" type="button" aria-expanded="false" aria-controls="auth-change">비밀번호 변경</button><button id="auth-logout" type="button">로그아웃</button></div>
+<form id="auth-change" hidden><p id="auth-setup-help" hidden>최초 설정: 서버 DB의 auth.json에 있는 setup_token을 입력하세요. 또는 설정 파일에 password를 지정한 뒤 서버를 다시 시작할 수 있습니다.</p><label id="auth-token-label" hidden>초기 설정 키 <input id="auth-setup-token" type="password" autocomplete="off"></label><label>새 비밀번호 <input id="auth-new-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><label>새 비밀번호 확인 <input id="auth-confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button id="auth-save" type="submit">저장</button><small>8~128자. 저장하면 다른 로그인 세션은 종료됩니다.</small></form>
+<p id="auth-message" role="status" aria-live="polite"></p>
+</section>
+<script src="{{ url_for('static', filename='auth.js') }}" defer></script>

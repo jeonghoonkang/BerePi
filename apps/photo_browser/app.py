@@ -188,6 +188,7 @@ def main(argv=None):
     print(f'허용된 루트 디렉토리: {library.boundary}', flush=True)
     print(f"시작 디렉토리: {app.config['PHOTO_BROWSER_START']}", flush=True)
     print(f'JSON DB 디렉토리: {library.db}', flush=True)
+    print(f'로그인 암호 설정 파일: {library.db / "auth.json"}', flush=True)
     print(f"관리 디렉토리: {config['managed_root']}", flush=True)
     for source in config.get('sources', []):
         print(f"소스 [{source['source_id']}]: {source['root']}", flush=True)

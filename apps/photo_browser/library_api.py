@@ -1,5 +1,4 @@
 """Library HTTP API and single-worker background jobs."""
-import hmac
 import json
 import os
 import shutil
@@ -8,7 +7,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from flask import abort, jsonify, request, send_file
 
@@ -21,6 +19,8 @@ def register_library(app, boundary, db):
     downloads = DownloadStore(library)
     app.extensions['photo_downloads'] = downloads
     app.extensions['photo_library'] = library
+    from access_control import register_access
+    register_access(app, library.db)
     from category_merge import CategoryMerger
     categories = CategoryMerger(library)
     app.extensions['category_merger'] = categories
@@ -66,18 +66,6 @@ def register_library(app, boundary, db):
         if request.path.startswith('/api/') and not request.path.endswith('/file'):
             response.headers['Cache-Control'] = 'no-store'
         return response
-
-    @app.before_request
-    def protect():
-        password = os.environ.get('PHOTO_BROWSER_PASSWORD')
-        if password:
-            auth = request.authorization
-            if not auth or auth.type != 'basic' or not hmac.compare_digest(auth.password or '', password):
-                return ('Authentication required', 401, {'WWW-Authenticate': 'Basic realm="Photo Browser"'})
-        if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
-            origin = request.headers.get('Origin')
-            if request.headers.get('X-Photo-Browser') != '1' or (origin and urlsplit(origin).netloc != request.host):
-                abort(403, description='허용되지 않은 변경 요청입니다.')
 
     def body():
         data = request.get_json(silent=True)
