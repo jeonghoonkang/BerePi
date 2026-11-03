@@ -2,7 +2,7 @@
 
 BerePi / Raspberry Pi / Linux / Windows / macOS에서 실행하여 Windows·macOS 등의
 LocalSend 앱으로 파일과 폴더를 전송하는 GUI / CLI입니다. Python 3.9 이상만 필요하며
-텍스트·파일 전송은 추가 패키지가 필요 없으며, 이미지 클립보드는 Pillow가 필요합니다.
+HTTPS 전송은 `cryptography`, 이미지 클립보드는 `Pillow`가 필요합니다.
 수신 기능은 제공하지 않습니다.
 
 ## 네트워크 준비
@@ -55,6 +55,9 @@ Linux에서는 데스크톱 환경에 따라 `wl-paste` (Wayland, `wl-clipboard`
 
 ## CLI 실행
 
+CLI에서도 먼저 `python3 -m pip install -r apps/tools/localsend/requirements.txt`로
+의존성을 설치하세요. HTTP 전송만 사용하는 경우에는 추가 패키지가 필요 없습니다.
+
 저장소 루트에서 실행합니다. Windows는 `python3` 대신 `py -3`을 사용할 수 있습니다.
 
 ```sh
@@ -81,7 +84,12 @@ python3 apps/tools/localsend/localsend.py send --host 192.168.0.25 --port 53318 
 ```
 
 기본 직접 전송은 HTTPS입니다. 검색 전송은 수신 앱이 알린 포트와 프로토콜을
-사용합니다. LocalSend 자체 서명 인증서를 허용하므로 인증서의 신뢰성과 수신 기기의
+사용합니다. HTTPS 연결 시 프로세스별 자체 서명 클라이언트 인증서를 생성하고
+준비·업로드·취소 요청에서 같은 인증서를 사용합니다. 인증서 SHA-256 값을 송신
+fingerprint에 반영하여 클라이언트 인증서를 요구하는 LocalSend 수신기와 통신합니다.
+`TLSV13_ALERT_CERTIFICATE_REQUIRED`가 발생하던 버전은 업데이트하고 의존성을 설치한 후
+프로그램을 다시 실행하세요.
+LocalSend 자체 서명 인증서를 허용하므로 인증서의 신뢰성과 수신 기기의
 신원을 검증하지 않습니다. 신뢰할 수 있는 LAN에서 수신 IP를 확인하고 사용하세요.
 `--protocol http`는 수신 앱에서 암호화를 껐을 때만 사용하며 평문 전송입니다.
 

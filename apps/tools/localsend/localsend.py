@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Send files to LocalSend v2 peers using only the Python standard library."""
+"""Send files to LocalSend v2 peers (cryptography required for HTTPS)."""
 
 import argparse
 import contextlib
+import datetime
+import functools
+import hashlib
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -11,6 +14,7 @@ from pathlib import Path
 import socket
 import ssl
 import sys
+import tempfile
 import threading
 import time
 from urllib.parse import urlencode
@@ -25,11 +29,52 @@ class LocalSendError(Exception):
     pass
 
 
+@functools.lru_cache(maxsize=1)
+def tls_identity():
+    """One client identity per process, shared by preparation/upload/cancel."""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+    except ImportError as exc:
+        raise LocalSendError(
+            'HTTPS requires cryptography. Install with: python -m pip install -r '
+            'apps/tools/localsend/requirements.txt') from exc
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'BerePi LocalSend')])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+            .public_key(key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=30))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]), critical=False)
+            .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=False,
+                                        key_encipherment=True, data_encipherment=False,
+                                        key_agreement=False, key_cert_sign=False,
+                                        crl_sign=False, encipher_only=None, decipher_only=None), critical=True)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH,
+                                                 ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .sign(key, hashes.SHA256()))
+    context = ssl._create_unverified_context()
+    # Private key files exist only while SSLContext loads them.
+    with tempfile.TemporaryDirectory(prefix='berepi-tls-') as folder:
+        cert_path, key_path = Path(folder) / 'cert.pem', Path(folder) / 'key.pem'
+        cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM,
+                                              serialization.PrivateFormat.PKCS8,
+                                              serialization.NoEncryption()))
+        context.load_cert_chain(str(cert_path), str(key_path))
+    fingerprint = hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest().upper()
+    return context, fingerprint
+
+
 def connection(host, port, protocol, timeout):
     if protocol == 'https':
         # LocalSend peers use self-signed certificates on the local network.
         return http.client.HTTPSConnection(
-            host, port, timeout=timeout, context=ssl._create_unverified_context())
+            host, port, timeout=timeout, context=tls_identity()[0])
     return http.client.HTTPConnection(host, port, timeout=timeout)
 
 
@@ -161,6 +206,8 @@ def collect_files(paths):
 
 
 def send(host, port, protocol, info, files, pin=None, timeout=120, log=print):
+    if protocol == 'https':
+        info = dict(info, fingerprint=tls_identity()[1])
     route = 'prepare-upload' + ('?' + urlencode({'pin': pin}) if pin else '')
     result = request(host, port, protocol, route,
                      dict(info=info, files={k: v[1] for k, v in files.items()}), timeout)

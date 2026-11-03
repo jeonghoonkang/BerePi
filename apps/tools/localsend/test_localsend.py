@@ -1,6 +1,10 @@
 import contextlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import datetime
+import hashlib
+import http.client
+import ssl
 from pathlib import Path
 import tempfile
 import threading
@@ -81,6 +85,63 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(self.send(), 2)
         for file_id, (path, _) in self.files.items():
             self.assertEqual(self.uploads[file_id], path.read_bytes())
+
+    def test_https_requires_client_certificate(self):
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+
+        self.server.shutdown()
+        self.thread.join()
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')])
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+                .public_key(key.public_key()).serial_number(x509.random_serial_number())
+                .not_valid_before(now - datetime.timedelta(days=1))
+                .not_valid_after(now + datetime.timedelta(days=1)).sign(key, hashes.SHA256()))
+        cert_path, key_path = self.root / 'server.pem', self.root / 'server.key'
+        cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM,
+                                              serialization.PrivateFormat.PKCS8,
+                                              serialization.NoEncryption()))
+        trusted = []
+        load = ssl.SSLContext.load_cert_chain
+
+        def capture(context, certfile, keyfile):
+            trusted.append(Path(certfile).read_text())
+            return load(context, certfile, keyfile)
+
+        localsend.tls_identity.cache_clear()
+        with patch.object(ssl.SSLContext, 'load_cert_chain', capture):
+            _, fingerprint = localsend.tls_identity()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(str(cert_path), str(key_path))
+        context.load_verify_locations(cadata=trusted[0])
+        context.verify_mode = ssl.CERT_REQUIRED
+        self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+        original_handler = self.server.RequestHandlerClass
+        observed = []
+
+        class TLSHandler(original_handler):
+            def do_POST(handler):
+                peer = handler.connection.getpeercert(binary_form=True)
+                observed.append(hashlib.sha256(peer).hexdigest().upper())
+                return super().do_POST()
+
+        self.server.RequestHandlerClass = TLSHandler
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        # Anonymous TLS must fail against this receiver.
+        with contextlib.closing(http.client.HTTPSConnection(
+                '127.0.0.1', self.server.server_port, context=ssl._create_unverified_context(), timeout=3)) as conn:
+            with self.assertRaises((ssl.SSLError, OSError)):
+                conn.request('POST', '/api/localsend/v2/prepare-upload', b'')
+                conn.getresponse()
+        self.assertEqual(localsend.send('127.0.0.1', self.server.server_port, 'https',
+                                       localsend.sender_info('TLS test'), self.files, '123456', 3), 2)
+        self.assertEqual(observed, [fingerprint] * 3)
 
     def test_partial_acceptance(self):
         self.partial = True

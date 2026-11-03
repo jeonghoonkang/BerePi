@@ -1,4 +1,5 @@
 import queue
+import gc
 from pathlib import Path
 import tempfile
 import time
@@ -17,8 +18,15 @@ class GuiTests(unittest.TestCase):
             self.skipTest(f'Graphical display unavailable: {exc}')
         self.root.withdraw()
         self.app = LocalSendApp(self.root)
-        self.addCleanup(self.root.destroy)
+        self.addCleanup(self.cleanup_gui)
         self.app.host.set('192.168.0.25')
+
+    def cleanup_gui(self):
+        self.root.destroy()
+        del self.app
+        del self.root
+        # Tk objects must be finalized on the main thread, before later workers run.
+        gc.collect()
 
     def wait_worker(self):
         deadline = time.monotonic() + 3

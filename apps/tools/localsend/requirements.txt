@@ -1,2 +1,4 @@
 # Optional: required only for GUI clipboard images and previews.
 Pillow>=9.2
+# Required for HTTPS client certificates (LocalSend mutual TLS).
+cryptography>=41
