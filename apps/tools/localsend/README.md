@@ -2,7 +2,8 @@
 
 BerePi / Raspberry Pi / Linux / Windows / macOS에서 실행하여 Windows·macOS 등의
 LocalSend 앱으로 파일과 폴더를 전송하는 GUI / CLI입니다. Python 3.9 이상만 필요하며
-추가 패키지 설치는 없습니다. 수신 기능은 제공하지 않습니다.
+텍스트·파일 전송은 추가 패키지가 필요 없으며, 이미지 클립보드는 Pillow가 필요합니다.
+수신 기능은 제공하지 않습니다.
 
 ## 네트워크 준비
 
@@ -18,11 +19,13 @@ LocalSend 앱으로 파일과 폴더를 전송하는 GUI / CLI입니다. Python 
 
 ```powershell
 # Windows: 저장소 루트에서
+py -3 -m pip install -r apps/tools/localsend/requirements.txt
 py -3 apps/tools/localsend/localsend_gui.py
 ```
 
 ```sh
 # Linux / Raspberry Pi / macOS
+python3 -m pip install -r apps/tools/localsend/requirements.txt
 python3 apps/tools/localsend/localsend_gui.py
 ```
 
@@ -34,12 +37,21 @@ Python 설치본을 사용하세요.
 2. 필요하면 포트, HTTPS/HTTP, PIN, 승인 대기 시간을 설정합니다.
 3. **파일 / 폴더** 탭에서 파일 여러 개 또는 폴더를 추가합니다.
    **클립보드 텍스트** 탭에서는 **클립보드 가져오기**를 누르고 내용을 확인·수정합니다.
+   **클립보드 이미지** 탭에서는 **이미지 가져오기**를 누르고 미리보기를 확인합니다.
 4. **전송**을 누르고 수신 LocalSend 앱에서 승인합니다.
 
 현재 선택한 탭의 내용만 전송됩니다. 클립보드는 텍스트를 UTF-8 `clipboard.txt`
-파일로 전송합니다. 이미지나 탐색기에서 복사한 파일은 클립보드에서 가져오지 않으므로
-**파일 선택**으로 추가하세요. 전송 결과와 오류는 창 아래에 표시됩니다.
+파일로 전송합니다. 이미지는 `clipboard.png`로 전송하며 원본 해상도와 투명도를 유지합니다.
+이미지 미리보기만 축소됩니다. 클립보드가 바뀌어도 가져온 이미지를 전송하므로 새로운
+이미지를 보내려면 다시 **이미지 가져오기**를 누르세요. **이미지 지우기**로 제거할 수 있습니다.
+탐색기에서 복사한 파일 목록은 **파일 선택**으로 추가하세요. 전송 결과와 오류는 창 아래에 표시됩니다.
 검색과 전송은 백그라운드에서 실행되며 중복 실행은 차단합니다.
+
+이미지 클립보드는 Windows / macOS / Linux를 지원하는
+[Pillow ImageGrab](https://pillow.readthedocs.io/en/stable/reference/ImageGrab.html)을 사용합니다.
+Linux에서는 데스크톱 환경에 따라 `wl-paste` (Wayland, `wl-clipboard` 패키지) 또는
+`xclip` (X11)도 필요합니다. 이미지가 아닌 클립보드나 가져오기 실패 시 기존 미리보기를
+지워 이전 이미지가 잘못 전송되지 않게 합니다. Pillow가 없어도 텍스트·파일 전송은 동작합니다.
 
 ## CLI 실행
 

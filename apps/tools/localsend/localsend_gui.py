@@ -11,6 +11,11 @@ from tkinter import filedialog, messagebox, ttk
 
 import localsend
 
+try:
+    from PIL import Image, ImageGrab, ImageTk
+except ImportError:
+    Image = ImageGrab = ImageTk = None
+
 
 class LocalSendApp:
     def __init__(self, root):
@@ -19,6 +24,8 @@ class LocalSendApp:
         self.events = queue.Queue()
         self.paths = []
         self.peers = []
+        self.clipboard_image = None
+        self.image_preview = None
         self.controls = []
         root.title('BerePi LocalSend')
         root.geometry('820x720')
@@ -64,8 +71,10 @@ class LocalSendApp:
         frame.rowconfigure(5, weight=1)
         files_tab = ttk.Frame(self.tabs, padding=10)
         text_tab = ttk.Frame(self.tabs, padding=10)
+        image_tab = ttk.Frame(self.tabs, padding=10)
         self.tabs.add(files_tab, text='파일 / 폴더')
         self.tabs.add(text_tab, text='클립보드 텍스트')
+        self.tabs.add(image_tab, text='클립보드 이미지')
         toolbar = ttk.Frame(files_tab)
         toolbar.pack(fill='x')
         for label, callback in [('파일 선택', self.pick_files), ('폴더 선택', self.pick_folder),
@@ -81,6 +90,14 @@ class LocalSendApp:
             anchor='w', pady=6)
         self.text = tk.Text(text_tab, wrap='word', height=8, undo=True)
         self.text.pack(fill='both', expand=True)
+        image_toolbar = ttk.Frame(image_tab)
+        image_toolbar.pack(fill='x')
+        self.button(image_toolbar, '이미지 가져오기', self.paste_image).pack(side='left')
+        self.button(image_toolbar, '이미지 지우기', self.clear_image).pack(side='left', padx=8)
+        self.image_info = ttk.Label(image_tab, text='화면 캡처 또는 이미지를 복사한 뒤 가져오세요. clipboard.png로 전송됩니다.')
+        self.image_info.pack(anchor='w', pady=6)
+        self.image_label = ttk.Label(image_tab, anchor='center')
+        self.image_label.pack(fill='both', expand=True)
         ttk.Label(frame, text='현재 선택된 탭의 내용만 전송합니다. 수신 LocalSend 앱에서 승인해 주세요.').grid(
             row=6, column=0, columnspan=3, sticky='w')
         self.button(frame, '전송', self.start_send).grid(row=7, column=2, sticky='e', pady=8)
@@ -130,10 +147,42 @@ class LocalSendApp:
         try:
             value = self.root.clipboard_get()
         except tk.TclError:
-            messagebox.showinfo('클립보드', '클립보드에 텍스트가 없습니다. 이미지와 파일 복사는 지원하지 않습니다.')
+            messagebox.showinfo('클립보드', '클립보드에 텍스트가 없습니다. 이미지는 클립보드 이미지 탭에서 가져오세요.')
             return
         self.text.delete('1.0', 'end')
         self.text.insert('1.0', value)
+
+    def clear_image(self):
+        self.clipboard_image = None
+        self.image_preview = None
+        self.image_label.configure(image='')
+        self.image_info.configure(text='이미지를 복사한 뒤 가져오세요. clipboard.png로 전송됩니다.')
+
+    def paste_image(self):
+        # Clear the previous snapshot so a failed paste cannot send an older image.
+        self.clear_image()
+        if ImageGrab is None:
+            messagebox.showerror('이미지 클립보드',
+                                 'Pillow가 필요합니다. 실행 중인 Python으로 다음 명령을 실행하세요:\n'
+                                 'python -m pip install -r apps/tools/localsend/requirements.txt')
+            return
+        try:
+            image = ImageGrab.grabclipboard()
+            if not isinstance(image, Image.Image):
+                messagebox.showinfo('이미지 클립보드',
+                                    '클립보드에 이미지가 없습니다. 캡처나 이미지 복사를 사용하세요.\n'
+                                    '복사한 파일은 파일 / 폴더 탭에서 선택하세요.')
+                return
+            snapshot = image.copy()
+            preview = snapshot.copy()
+            preview.thumbnail((600, 180))
+            self.image_preview = ImageTk.PhotoImage(preview, master=self.root)
+            self.image_label.configure(image=self.image_preview)
+            self.clipboard_image = snapshot
+            self.image_info.configure(text=f'{snapshot.width} × {snapshot.height} px — clipboard.png (원본 크기 전송)')
+        except Exception as exc:
+            self.clear_image()
+            messagebox.showerror('이미지 클립보드', f'이미지를 가져오지 못했습니다: {exc}')
 
     def select_peer(self, _event=None):
         index = self.devices.current()
@@ -179,12 +228,17 @@ class LocalSendApp:
                 raise ValueError('대상 IP 또는 호스트 이름을 입력하세요. URL은 입력하지 마세요.')
             if not 1 <= port <= 65535 or not 0 < timeout < float('inf'):
                 raise ValueError('포트는 1~65535, 대기 시간은 양수로 입력하세요.')
-            text_mode = self.tabs.index(self.tabs.select()) == 1
+            mode = self.tabs.index(self.tabs.select())
+            text_mode = mode == 1
+            image_mode = mode == 2
             text = self.text.get('1.0', 'end-1c') if text_mode else None
+            image = self.clipboard_image.copy() if image_mode and self.clipboard_image is not None else None
             paths = list(self.paths)
             if text_mode and not text:
                 raise ValueError('클립보드 텍스트를 가져오거나 입력하세요.')
-            if not text_mode and not paths:
+            if image_mode and image is None:
+                raise ValueError('클립보드 이미지를 먼저 가져오세요.')
+            if mode == 0 and not paths:
                 raise ValueError('전송할 파일이나 폴더를 선택하세요.')
         except ValueError as exc:
             messagebox.showerror('입력 확인', str(exc))
@@ -197,6 +251,10 @@ class LocalSendApp:
                 if text_mode:
                     path = Path(folder) / 'clipboard.txt'
                     path.write_bytes(text.encode('utf-8'))
+                    selected = [str(path)]
+                elif image_mode:
+                    path = Path(folder) / 'clipboard.png'
+                    image.save(path, format='PNG')
                     selected = [str(path)]
                 else:
                     selected = paths

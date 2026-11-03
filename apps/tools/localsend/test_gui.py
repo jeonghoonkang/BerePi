@@ -6,7 +6,7 @@ import tkinter as tk
 import unittest
 from unittest.mock import patch
 
-from localsend_gui import LocalSendApp
+from localsend_gui import LocalSendApp, Image
 
 
 class GuiTests(unittest.TestCase):
@@ -84,6 +84,62 @@ class GuiTests(unittest.TestCase):
             self.app.start_send()
         error.assert_called_once()
         self.assertFalse(self.app.busy)
+
+    @unittest.skipIf(Image is None, 'Pillow is not installed')
+    def test_clipboard_image_png_snapshot_and_cleanup(self):
+        original = Image.new('RGBA', (900, 400), (20, 40, 60, 128))
+        with patch('localsend_gui.ImageGrab.grabclipboard', return_value=original):
+            self.app.paste_image()
+        self.assertEqual(self.app.clipboard_image.size, (900, 400))
+        self.assertLessEqual(self.app.image_preview.width(), 600)
+        self.assertLessEqual(self.app.image_preview.height(), 180)
+        original.paste((255, 0, 0, 255), (0, 0, 900, 400))
+        self.app.tabs.select(2)
+        captured = []
+
+        def send(host, port, protocol, info, files, pin, timeout, log):
+            path, metadata = next(iter(files.values()))
+            captured.append(path)
+            self.assertEqual(metadata['fileName'], 'clipboard.png')
+            self.assertEqual(metadata['fileType'], 'image/png')
+            with Image.open(path) as png:
+                self.assertEqual(png.size, (900, 400))
+                self.assertEqual(png.getpixel((0, 0)), (20, 40, 60, 128))
+            return 1
+
+        with patch('localsend_gui.localsend.send', side_effect=send):
+            self.app.start_send()
+            self.wait_worker()
+        self.assertFalse(captured[0].exists())
+
+    @unittest.skipIf(Image is None, 'Pillow is not installed')
+    def test_non_image_clipboard_clears_old_image(self):
+        self.app.clipboard_image = Image.new('RGB', (2, 2))
+        for value in (None, ['copied-file.png']):
+            with patch('localsend_gui.ImageGrab.grabclipboard', return_value=value), \
+                    patch('localsend_gui.messagebox.showinfo') as info:
+                self.app.paste_image()
+            info.assert_called_once()
+            self.assertIsNone(self.app.clipboard_image)
+        self.app.tabs.select(2)
+        with patch('localsend_gui.messagebox.showerror') as error:
+            self.app.start_send()
+        error.assert_called_once()
+        self.assertFalse(self.app.busy)
+
+    def test_missing_pillow_explains_installation(self):
+        with patch('localsend_gui.ImageGrab', None), \
+                patch('localsend_gui.messagebox.showerror') as error:
+            self.app.paste_image()
+        self.assertIn('pip install', error.call_args[0][1])
+
+    @unittest.skipIf(Image is None, 'Pillow is not installed')
+    def test_clipboard_backend_error(self):
+        with patch('localsend_gui.ImageGrab.grabclipboard', side_effect=OSError('clipboard busy')), \
+                patch('localsend_gui.messagebox.showerror') as error:
+            self.app.paste_image()
+        self.assertIn('clipboard busy', error.call_args[0][1])
+        self.assertIsNone(self.app.clipboard_image)
 
 
 if __name__ == '__main__':
