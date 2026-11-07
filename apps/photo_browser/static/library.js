@@ -26,23 +26,43 @@
   function selection() { el('selection-count').textContent = `${chosen.size}개 선택`; }
   async function facets() {
     const values = await api('api/facets');
-    for (const [id, key] of Object.entries({'filter-event':'events', 'filter-tag':'tags', 'filter-person':'person_ids', 'filter-category':'category_id', 'filter-owner':'owner_id'})) {
+    for (const [id, key] of Object.entries({'filter-event':'events', 'filter-tag':'tags', 'filter-location':'location_tags', 'filter-person':'person_ids', 'filter-category':'category_id', 'filter-owner':'owner_id'})) {
       const select = el(id), current = select.value;
       select.replaceChildren(new Option('전체', ''));
-      values[key].forEach(value => select.add(new Option(value, value)));
-      select.value = current;
+      const options = values[key] || [];
+      options.forEach(value => select.add(new Option(value, value)));
+      select.value = options.includes(current) ? current : '';
     }
   }
-  function detail(item) {
+  function showDetailInfo(visible) {
+    el('detail-metadata').hidden = !visible;
+    el('detail-metadata-toggle').setAttribute('aria-expanded', String(visible));
+  }
+  function detail(item, showInfo = false) {
     el('detail-download').href = `api/library/${encodeURIComponent(item.media_id)}/file?download=1`;
     const container = el('detail-preview'); container.replaceChildren();
     const media = make(item.media_type === 'video' ? 'video' : 'img');
     media.src = `api/library/${encodeURIComponent(item.media_id)}/file`;
     if (item.media_type === 'video') media.controls = true; else media.alt = item.name;
     container.append(media);
+    const classification = item.classification;
+    const gps = item.capture.location;
+    const fields = [
+      ['파일명', item.name], ['미디어 ID', item.media_id], ['촬영일', item.capture.date_key],
+      ['태그', classification.tags.join(', ')], ['위치 태그', (classification.location_tags || []).join(' / ')],
+      ['원본 GPS', gps ? `${gps.latitude}, ${gps.longitude}` : ''],
+      ['국가 코드', item.capture.place?.country_code], ['조회 언어', item.capture.place?.language],
+      ['이벤트', classification.events.join(', ')], ['사람', classification.person_ids.join(', ')],
+      ['카테고리', classification.category_id], ['소유자', classification.owner_id],
+    ];
+    el('detail-tag-summary').replaceChildren(...fields.flatMap(([label, value]) => [make('dt', label), make('dd', value || '없음')]));
     el('detail-info').textContent = JSON.stringify(item, null, 2);
+    el('detail-raw-record').open = false;
+    showDetailInfo(showInfo);
     el('library-detail').showModal();
+    if (showInfo) el('detail-metadata-toggle').focus();
   }
+  el('detail-metadata-toggle').onclick = () => showDetailInfo(el('detail-metadata').hidden);
   el('detail-close').onclick = () => el('library-detail').close();
   el('library-detail').onclose = () => el('detail-preview').replaceChildren();
   async function load() {
@@ -60,11 +80,15 @@
       if (item.media_type === 'video') button.append(make('div', '▶ 동영상', 'video-placeholder'));
       else { const image = make('img'); image.src = `api/library/${encodeURIComponent(item.media_id)}/file`; image.loading = 'lazy'; image.alt = item.name; button.append(image); }
       button.append(make('span', item.name), make('span', item.capture.date_key + ' · ' + item.classification.events.join(', ')));
-      card.append(check, button); el('library-gallery').append(card);
+      const info = action('태그·DB 정보', () => detail(item, true));
+      info.className = 'library-info-button';
+      info.setAttribute('aria-label', item.name + ' 태그·DB 정보');
+      card.append(check, button, info); el('library-gallery').append(card);
     }
   }
   el('library-filters').onsubmit = safe(async event => { event.preventDefault(); offset = null; await load(); });
   el('library-date').onchange = safe(async () => { offset = null; await load(); });
+  el('filter-location').onchange = safe(async () => { offset = null; await load(); });
   el('library-filters').onreset = () => setTimeout(safe(async () => { offset = 0; await load(); }), 0);
   el('library-prev').onclick = safe(async () => { offset = Math.max(0, offset - 100); await load(); });
   el('library-next').onclick = safe(async () => { offset += 100; await load(); });
@@ -229,6 +253,7 @@
       checking_space: '복사 예정 경로의 신규 용량을 계산합니다. 아직 복사 중인 파일이라는 뜻은 아닙니다.',
       reading_source: '복사할 원본을 읽거나 원격 원본을 임시 수신합니다.',
       copying: '원본을 임시 파일로 복사 중입니다. 표시한 관리 경로는 최종 저장 위치입니다.',
+      looking_up_place: '저장된 GPS 좌표로 행정구역 이름을 조회합니다.',
       verifying_copy: '임시 복사본의 SHA-256을 확인합니다. 검증 후 관리 경로에 저장합니다.',
       publishing_copy: '검증된 복사본을 최종 관리 경로에 저장합니다.',
       copied: '이 파일의 복사를 완료했습니다. 현재 복사 중이라는 뜻은 아닙니다.',

@@ -172,6 +172,8 @@ def main(argv=None):
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
     parser.add_argument('--directory', action='append', help='처음 표시할 폴더 (기본 홈). 여러 번 지정하면 각 폴더를 통합 소스로 등록하고 파일 수·용량을 출력')
     parser.add_argument('--db', help='JSON DB 디렉토리')
+    parser.add_argument('--nominatim-command', default=os.environ.get('PHOTO_BROWSER_NOMINATIM_COMMAND'),
+                        help='Photo Browser와 함께 실행할 로컬 Nominatim 명령 (포그라운드)')
     parser.add_argument('--limit', type=positive_limit, default=20000, help='기존 폴더 탐색에서 요청당 스캔할 최대 미디어 수 (기본 20000)')
     args = parser.parse_args(argv)
     try:
@@ -197,7 +199,13 @@ def main(argv=None):
     if not config.get('sources'):
         print('소스: 등록된 소스 없음', flush=True)
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
-    app.run(host=args.host, port=args.port, threaded=True)
+    from nominatim_service import managed_nominatim
+    try:
+        with managed_nominatim(args.nominatim_command):
+            options = {'use_reloader': False} if args.nominatim_command else {}
+            app.run(host=args.host, port=args.port, threaded=True, **options)
+    except (ValueError, OSError, RuntimeError) as exc:
+        parser.error(str(exc))
 
 
 if __name__ == '__main__':

@@ -646,6 +646,48 @@ JSON은 임시 파일 작성 후 교체하고, 모든 청크가 완성된 후 `i
 
 로컬 날짜는 촬영일 → 실제 생성일(운영체제가 제공할 때) → 수정일 순서입니다. Linux ctime은 생성일로 사용하지 않습니다. EXIF 시간대가 없으면 시각을 추정하지 않고 `timezone_status: unknown`으로 기록하며 원래 촬영일로 분류합니다. 원격 파일은 촬영일이 없으면 서버의 수정일을 사용하고, 그것도 없으면 `unknown/unknown`에 분류합니다. GPS가 없는 사진은 촬영 위치가 `null`입니다.
 
+스캔은 GPS 좌표를 소수점 3자리로 반올림해 위치 태그(예: `37.567, 126.978`)를 만들고, 미디어 JSON의 `classification.location_tags`에 저장합니다. 원본 좌표(`capture.location`)와 사용자가 입력한 일반 태그는 유지합니다. GPS가 없는 항목은 위치 태그를 만들지 않습니다. 아래의 위치 조회 서버를 설정하지 않으면 좌표는 서버 밖으로 전송하지 않습니다. 이전 DB에 GPS가 이미 있으면 바로 위치로 검색할 수 있고, 다음 스캔에서 위치 태그가 저장됩니다.
+
+라이브러리 탭의 **위치**에서 태그를 선택하면 해당 위치의 사진·동영상만 표시합니다. 각 항목의 **태그·DB 정보** 버튼으로 태그, GPS, 미디어 ID 등을 확인하고, **DB 원본 JSON 보기**를 펼쳐 전체 기록을 확인할 수 있습니다.
+
+#### 국가·도시·구·동 이름으로 검색
+
+Linux/macOS에서는 설치와 지도 데이터 가져오기를 마친 자체 Nominatim을 Photo Browser와 함께 실행할 수 있습니다. 저장소 루트에서 실제 Nominatim 프로젝트 경로를 지정하세요. [Nominatim 실행 명령](https://github.com/osm-search/Nominatim/blob/master/man/nominatim.1)의 `serve`는 포그라운드에서 서버를 실행합니다.
+
+```bash
+python3 apps/photo_browser/app.py \
+  --nominatim-command 'nominatim serve --project-dir /srv/nominatim-project --server 127.0.0.1:8080'
+```
+
+저장소에 포함된 [로컬 Nominatim 실행기](nominatim/README.md)를 사용할 수 있습니다. 시스템에서 `nominatim` 명령을 찾지 못하면 Photo Browser가 `nominatim/server.py`를 선택합니다. 해당 Python 환경에 `nominatim/requirements.txt`의 패키지를 먼저 설치하세요.
+
+평소에 사용하는 `--root`, `--db`, `--directory`, `--port` 등은 그대로 함께 지정할 수 있습니다. 명령은 `PHOTO_BROWSER_NOMINATIM_COMMAND` 환경변수로도 지정할 수 있습니다. 기본 조회 주소는 `http://127.0.0.1:8080/reverse`이며, 다른 로컬 포트를 사용한다면 `PHOTO_BROWSER_REVERSE_GEOCODER_URL`도 실행 명령과 일치시킵니다. 앱 시작 시 설치·지도 가져오기를 자동 수행하지는 않습니다. 최초 한 번 [로컬 자동 구축 스크립트](nominatim/README.md#ubuntu에서-자동-구축)를 Ubuntu 서버에서 실행하면 패키지 설치부터 한국 지도 DB 가져오기까지 처리할 수 있습니다.
+
+`--nominatim-command`가 있으면 시작 전에 다음을 점검하고 실행 여부를 결정합니다.
+
+- 지정한 로컬 포트에 서버가 있고 `/status?format=json`의 `status`가 `0`이면 기존 서버를 재사용합니다. 새 프로세스를 실행하지 않으며, 기존 서버는 Photo Browser 종료 시에도 종료하지 않습니다.
+- 포트가 비어 있으면 실행 파일의 존재·실행 권한과 명령에 포함된 `--project-dir` 경로를 확인한 뒤 서버를 실행합니다.
+- 포트를 다른 프로세스가 사용하거나 상태 API가 비정상이면 시작을 중단하고 원인을 표시합니다. 기존 프로세스를 강제로 종료하지 않습니다.
+- 실행 파일·프로젝트가 없거나 새 서버가 30초 안에 정상 상태가 되지 않으면 오류로 종료합니다. 설치·지도 DB 가져오기를 자동으로 수행하지 않습니다.
+
+Photo Browser는 Nominatim의 [상태 API](https://nominatim.org/release-docs/latest/api/Status/)가 준비됐는지 확인한 뒤 웹서버를 엽니다. 종료할 때는 시작한 조회 서버와 같은 프로세스 그룹의 작업자를 정리합니다. Photo Browser가 `SIGKILL`로 종료되어도 별도 감시 프로세스가 서버에 종료 신호를 보내고, 응답하지 않으면 강제 종료합니다. 명령은 포그라운드로 실행되어야 하며 `systemctl start`나 `docker run -d`처럼 별도로 분리되는 서비스에는 이 관리 기능을 사용하지 않습니다.
+
+이미 운영 중인 자체 서버를 사용하려면 동시 실행 옵션을 생략하고 [역지오코딩 API](https://nominatim.org/release-docs/latest/api/Reverse/) 주소만 설정하세요. 이 경우 Photo Browser는 해당 서버를 종료하지 않습니다.
+
+```bash
+export PHOTO_BROWSER_REVERSE_GEOCODER_URL='http://127.0.0.1:8080/reverse'
+# 같은 셸에서 기존 명령으로 Photo Browser 실행
+```
+
+소스의 **스캔 / JSON 생성**과 실제 **병합**에서는 이름 태그가 아직 없는 GPS 좌표만 조회 서버로 전송합니다. 병합 미리보기는 조회하지 않습니다. 기존 GPS가 있으면 일반 스캔으로 이름을 채울 수 있습니다. 국가·도시·구·동 등 서버가 반환한 이름을 `capture.place`와 `classification.location_tags`에 저장합니다. 예를 들어 지도 데이터가 해당 이름을 반환하면 `한국`, `서울특별시`, `송파구`, `잠실동`을 위치 필터에서 선택하거나 검색창에 입력할 수 있습니다. 도로명과 번지는 태그에 넣지 않습니다. 동 이름의 표기와 상세 수준은 조회 서버의 지도 데이터에 따릅니다.
+
+언어는 **영어 기본, 한국(KR)만 한국어** 정책을 사용합니다. 먼저 영어로 조회해 국가를 확인하고, 국가 코드가 `KR`이면 같은 좌표를 한국어로 조회합니다. 예를 들어 한국은 `한국 · 서울특별시 · 송파구 · 잠실동`, 미국은 `United States · New York · Manhattan`과 같은 이름을 저장합니다. 국가 코드는 대문자 ISO 2자리 형식으로 `capture.place.country_code`에, 요청 언어는 `capture.place.language`에 `ko` 또는 `en`으로 저장합니다. 국가 코드를 반환하지 않으면 추측하지 않고 `null`로 저장하며 영어를 요청합니다. 영어 번역이 없는 이름은 지도 서버의 원래 이름으로 반환될 수 있습니다.
+
+이전 언어 정책의 캐시는 새 캐시와 구분합니다. 이미 저장된 이름은 다음 일반 스캔이나 실제 병합에서 새 정책으로 갱신하며, 조회 서버가 없거나 오류가 나면 기존 이름과 GPS를 보존합니다. 사진별 **태그·DB 정보**에도 국가 코드와 조회 언어를 표시합니다.
+
+같은 좌표의 조회 결과는 `DB/location-cache/`에 저장하여 재사용합니다. 조회가 실패하면 작업 내역에 안내하고 남은 스캔을 계속합니다. 서버 설정을 해제해도 이미 저장된 이름과 GPS는 유지됩니다. 대량 스캔을 위해 [공개 Nominatim 서버](https://operations.osmfoundation.org/policies/nominatim/)는 사용하지 않습니다. 지도 데이터: [© OpenStreetMap 기여자](https://www.openstreetmap.org/copyright).
+
+
 확정 중복은 SHA-256이 같은 항목입니다. 촬영 시각 문자열이 같고 GPS 좌표를 소수점 4자리로 반올림한 값이 같은 항목은 **후보**로 따로 저장합니다. 사이즈가 다른 사진도 후보가 될 수 있지만 연속 촬영을 동일 사진으로 확정하지 않습니다. 현재 시각적 해시 비교나 얼굴 인식은 포함하지 않습니다.
 
 ### 휴지통·복구·영구 삭제
@@ -1078,7 +1120,7 @@ curl --fail-with-body -X POST http://127.0.0.1:7081/api/scan \
 | `POST /api/trash/<trash_id>/prepare` | 영구 삭제용 토큰·확인 문구 발급 |
 | `POST /api/trash/<trash_id>/purge` | `token`, `phrase` 검증 후 영구 삭제 |
 
-`GET /api/library`는 `event`, `tag`, `person`, `category`, `owner`, `from`, `to`, `type`, `q`, `offset`, `limit`를 지원합니다. `type`은 `image` 또는 `video`, `limit`은 최대 100입니다. 날짜 범위는 양 끝 날짜를 포함합니다. 영구 삭제 확인 토큰은 5분 동안 유효하며 한 번 사용하면 소모됩니다. 프론트엔드에서는 대상 목록 확인·문구 입력·최종 확인 절차를 추가로 제공합니다.
+`GET /api/library`는 `event`, `tag`, `location`, `person`, `category`, `owner`, `from`, `to`, `type`, `q`, `offset`, `limit`를 지원합니다. `type`은 `image` 또는 `video`, `limit`은 최대 100입니다. 날짜 범위는 양 끝 날짜를 포함합니다. 영구 삭제 확인 토큰은 5분 동안 유효하며 한 번 사용하면 소모됩니다. 프론트엔드에서는 대상 목록 확인·문구 입력·최종 확인 절차를 추가로 제공합니다.
 
 ## 기존 폴더 탐색
 

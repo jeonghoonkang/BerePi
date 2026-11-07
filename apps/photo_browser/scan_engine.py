@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from library import EXTENSIONS, VIDEO_EXTENSIONS, atomic_json, component, digest, metadata, now, read_json, uid
+from place_lookup import PlaceLookup
 
 MIB = 1024 * 1024
 RECORD_ESTIMATE = 16384
@@ -82,6 +83,7 @@ class ScanEngine:
         self.last_flush = 0
         self.last_disk = 0
         self.state = {}
+        self.places = PlaceLookup(library.db, os.environ.get('PHOTO_BROWSER_REVERSE_GEOCODER_URL', ''))
 
     def emit(self):
         self.state['updated_at'] = now()
@@ -141,8 +143,12 @@ class ScanEngine:
                 for loc in item['locations']:
                     if loc.get('source_id') == self.source_id and loc['uri'] == uri:
                         loc['status'] = 'available'
+                if self.places.enrich(item['capture']):
+                    item['revision'] += 1
+                    return item, 'updated'
                 return item, 'unchanged'
             capture = metadata(path)
+            self.places.enrich(capture, old['capture'] if old else None)
             self.check()
             if 'path' not in info:
                 capture['filesystem_created_at'] = None
@@ -330,6 +336,8 @@ class ScanEngine:
                 self.state.update(status='paused_low_space' if exc.errno in {errno.ENOSPC, getattr(errno, 'EDQUOT', errno.ENOSPC)} else 'failed', warning=str(exc))
             except Exception as exc:
                 self.state.update(status='failed', warning=str(exc))
+            if self.places.warning:
+                self.state['warning'] = ' '.join(filter(None, (self.state.get('warning'), self.places.warning)))
             self.state['seen'] = len(self.entries)
             self.state['completed_at'] = now()
             self.save()

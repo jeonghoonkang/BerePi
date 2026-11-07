@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import abort, jsonify, request, send_file
 
-from library import Library, atomic_json, component, now, read_json, uid
+from library import Library, atomic_json, component, item_location_tags, now, read_json, uid
 
 
 def register_library(app, boundary, db):
@@ -306,6 +306,8 @@ def register_library(app, boundary, db):
         items = library.items(request.args)
         state = request.args.get('state', 'active')
         items = [i for i in items if i['lifecycle']['status'] == state]
+        if request.args.get('location'):
+            items = [i for i in items if request.args['location'] in item_location_tags(i)]
         for argument, key in [('event', 'events'), ('tag', 'tags'), ('person', 'person_ids')]:
             value = request.args.get(argument)
             if value:
@@ -322,7 +324,9 @@ def register_library(app, boundary, db):
             items = [i for i in items if i['media_type'] == request.args['type']]
         query = request.args.get('q', '').casefold()
         if query:
-            items = [i for i in items if query in (i['name'] + ' ' + ' '.join(i['classification']['events'] + i['classification']['tags'] + i['classification']['person_ids'])).casefold()]
+            items = [i for i in items if query in (i['name'] + ' ' + ' '.join(
+                i['classification']['events'] + i['classification']['tags'] +
+                i['classification']['person_ids'] + item_location_tags(i))).casefold()]
         def chronology(item):
             capture = item['capture']
             value = capture.get('captured_at') or capture.get('filesystem_modified_at')

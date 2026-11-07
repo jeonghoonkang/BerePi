@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import tempfile
@@ -7,8 +8,10 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
-from PIL import Image
+from PIL import ExifTags, Image
+from PIL.TiffImagePlugin import IFDRational
 from app import create_app
 from library import LOCATION_FILE, PAIR_HISTORY, Library, metadata, read_json, atomic_json
 
@@ -39,6 +42,118 @@ class LibraryTests(unittest.TestCase):
 
     def post(self, path, data):
         return self.client.post(path, json=data, headers=self.headers)
+
+    def test_scan_persists_gps_tags_and_filters_library(self):
+        exif = Image.Exif()
+        exif[ExifTags.IFD.GPSInfo] = {1: 'N', 2: (IFDRational(37), IFDRational(34), IFDRational(0)),
+                       3: 'W', 4: (IFDRational(126), IFDRational(58), IFDRational(41))}
+        path = self.source / 'gps.jpg'
+        Image.new('RGB', (8, 8), 'blue').save(path, exif=exif)
+        self.photo('no-gps.jpg')
+        self.assertEqual(self.library.scan('local')['status'], 'completed')
+        tag = '37.567, -126.978'
+        result = self.client.get('/api/library', query_string={'location': tag, 'type': 'image'}).json
+        self.assertEqual(result['total'], 1)
+        item = result['items'][0]
+        self.assertEqual(item['name'], path.name)
+        self.assertEqual(self.library.item(item['media_id'])['classification']['location_tags'], [tag])
+        self.assertEqual(self.client.get('/api/facets').json['location_tags'], [tag])
+        self.assertEqual(self.client.get('/api/library', query_string={'location': '0.000, 0.000'}).json['total'], 0)
+
+        self.library.edit([item['media_id']], {'tags': ['기존 태그']})
+        Image.new('RGB', (8, 8), 'blue').save(path)
+        self.library.scan('local', full=True)
+        classification = self.library.item(item['media_id'])['classification']
+        self.assertEqual(classification['location_tags'], [])
+        self.assertEqual(classification['tags'], ['기존 태그'])
+        self.assertEqual(self.client.get('/api/facets').json['location_tags'], [])
+
+    def test_legacy_gps_is_filterable_without_rewriting_db(self):
+        self.photo()
+        self.library.scan('local')
+        index_path = self.library.db / 'index.json'
+        index = read_json(index_path)
+        index['active_facets'].pop('location_tags')
+        chunk = index['chunks'][0]
+        chunk['facets'].pop('location_tags')
+        chunk_path = self.library.db / chunk['path']
+        record = read_json(chunk_path)
+        item = record['items'][0]
+        item['classification'].pop('location_tags')
+        item['capture']['location'] = {'latitude': -0.00001, 'longitude': 127.0002}
+        atomic_json(chunk_path, record)
+        atomic_json(index_path, index)
+        tag = '0.000, 127.000'
+        self.assertEqual(self.client.get('/api/facets').json['location_tags'], [tag])
+        self.assertEqual(self.client.get('/api/library', query_string={'location': tag}).json['total'], 1)
+        self.assertNotIn('location_tags', read_json(chunk_path)['items'][0]['classification'])
+        self.assertEqual(self.library.scan('local')['unchanged'], 1)
+        self.assertEqual(self.library.item(item['media_id'])['classification']['location_tags'], [tag])
+
+    def test_incremental_scan_adds_administrative_names_and_reuses_cached_result(self):
+        original = self.photo()
+        capture = metadata(original)
+        capture['location'] = {'latitude': 37.511, 'longitude': 127.094, 'source': 'exif.GPS'}
+        with patch('scan_engine.metadata', return_value=capture), patch.dict(os.environ, {'PHOTO_BROWSER_REVERSE_GEOCODER_URL': ''}), patch('place_lookup.urlopen') as lookup:
+            self.library.scan('local')
+            lookup.assert_not_called()
+        # Add a second file with the same GPS and rescan without re-reading the first file.
+        self.photo('second.jpg')
+        address = {'country': '대한민국', 'country_code': 'kr', 'city': '서울특별시',
+                   'borough': '송파구', 'quarter': '잠실동', 'road': '도로명'}
+        endpoint = 'http://127.0.0.1:8080/reverse'
+        with patch('scan_engine.metadata', side_effect=lambda path: dict(capture)), patch.dict(os.environ, {'PHOTO_BROWSER_REVERSE_GEOCODER_URL': endpoint}), patch('place_lookup.urlopen', side_effect=lambda *args, **kwargs: io.BytesIO(json.dumps({'address': address}).encode())) as lookup:
+            result = self.library.scan('local')
+            self.assertEqual((result['status'], result['added'], result['updated']), ('completed', 1, 1))
+            self.assertEqual(lookup.call_count, 2)  # English country detection, then Korean names.
+            params = parse_qs(urlsplit(lookup.call_args.args[0].full_url).query)
+            self.assertEqual(params['lat'], ['37.511'])
+            self.assertEqual(params['lon'], ['127.094'])
+        for name in ('한국', '서울특별시', '송파구', '잠실동'):
+            self.assertIn(name, self.client.get('/api/facets').json['location_tags'])
+            self.assertEqual(self.client.get('/api/library', query_string={'location': name}).json['total'], 2)
+        self.assertEqual(self.client.get('/api/library', query_string={'q': '잠실'}).json['total'], 2)
+        item = self.library.items()[0]
+        self.assertEqual(item['capture']['place']['address']['quarter'], '잠실동')
+        self.assertEqual(item['capture']['place']['country_code'], 'KR')
+        self.assertEqual(item['capture']['place']['language'], 'ko')
+        self.assertNotIn('도로명', item['classification']['location_tags'])
+        self.assertEqual(item['capture']['location'], capture['location'])
+        self.assertIn('37.511, 127.094', item['classification']['location_tags'])
+        with patch('scan_engine.metadata', side_effect=lambda path: dict(capture)), patch.dict(os.environ, {'PHOTO_BROWSER_REVERSE_GEOCODER_URL': ''}):
+            self.library.scan('local', full=True)
+        self.assertEqual(self.client.get('/api/library', query_string={'location': '잠실동'}).json['total'], 2)
+
+    def test_reverse_geocoder_failure_keeps_scan_and_coordinates(self):
+        photo = self.photo()
+        capture = metadata(photo)
+        capture['location'] = {'latitude': 37.511, 'longitude': 127.094}
+        self.photo('second.jpg')
+        with patch('scan_engine.metadata', side_effect=lambda path: dict(capture)), patch.dict(os.environ, {'PHOTO_BROWSER_REVERSE_GEOCODER_URL': 'http://127.0.0.1:8080/reverse'}), patch('place_lookup.urlopen', side_effect=TimeoutError) as lookup:
+            report = self.library.scan('local')
+        self.assertEqual(report['status'], 'completed')
+        self.assertIn('위치 이름 조회에 실패', report['warning'])
+        self.assertEqual(report['errors'], [])
+        lookup.assert_called_once()
+        self.assertEqual(self.client.get('/api/library', query_string={'location': '37.511, 127.094'}).json['total'], 2)
+
+    def test_only_real_merge_fills_missing_administrative_tags(self):
+        original = self.photo()
+        capture = metadata(original)
+        capture['location'] = {'latitude': 37.511, 'longitude': 127.094}
+        with patch('scan_engine.metadata', return_value=capture), patch.dict(os.environ, {'PHOTO_BROWSER_REVERSE_GEOCODER_URL': ''}):
+            self.library.scan('local')
+        with patch.dict(os.environ, {'PHOTO_BROWSER_REVERSE_GEOCODER_URL': 'http://127.0.0.1:8080/reverse'}), patch(
+                'place_lookup.urlopen', return_value=io.BytesIO(json.dumps({'address': {'suburb': '잠실동'}}).encode())) as lookup:
+            self.library.merge(preview=True)
+            lookup.assert_not_called()
+            self.assertEqual(self.client.get('/api/library', query_string={'location': '잠실동'}).json['total'], 0)
+            result = self.library.merge()
+            self.assertEqual(result['operations'][0]['status'], 'copied')
+            lookup.assert_called_once()
+            self.library.merge()
+            lookup.assert_called_once()
+        self.assertEqual(self.client.get('/api/library', query_string={'location': '잠실동'}).json['total'], 1)
 
     def test_merge_progress_distinguishes_source_comparison_copy_and_verification(self):
         source = self.photo()

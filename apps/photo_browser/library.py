@@ -23,6 +23,40 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi'}
 EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 LOCATION_FILE = '.photo-browser-location.json'
+FACET_FIELDS = ('events', 'tags', 'person_ids', 'category_id', 'owner_id', 'location_tags')
+
+
+def gps_coordinates(capture):
+    gps = capture.get('location')
+    if not isinstance(gps, dict):
+        return None
+    lat, lon = gps.get('latitude'), gps.get('longitude')
+    if type(lat) not in (int, float) or type(lon) not in (int, float) or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return lat, lon
+
+
+def gps_location_tags(capture):
+    coordinates = gps_coordinates(capture)
+    if coordinates is None:
+        return []
+    lat, lon = coordinates
+    return [f'{round(lat, 3) or 0:.3f}, {round(lon, 3) or 0:.3f}']
+
+
+def capture_location_tags(capture):
+    place = capture.get('place') or {}
+    return list(dict.fromkeys([*place.get('names', []), *gps_location_tags(capture)]))
+
+
+def item_location_tags(item):
+    tags = item['classification'].get('location_tags')
+    return capture_location_tags(item['capture']) if tags is None else tags
+
+
+def facet_values(item, key):
+    value = item_location_tags(item) if key == 'location_tags' else item['classification'][key]
+    return value if isinstance(value, list) else [value]
 
 
 def now():
@@ -568,18 +602,17 @@ class Library:
         # New manifests contain the active-item summary directly.
         with self.facets_lock:
             manifest = read_json(self.db / 'index.json', {'chunks': []})
-            if 'active_facets' in manifest:
+            if 'location_tags' in manifest.get('active_facets', {}):
                 return manifest['active_facets']
             generation = tuple(chunk['path'] for chunk in manifest['chunks'])
             if generation != self.facets_generation:
-                values = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
+                values = {key: set() for key in FACET_FIELDS}
                 for chunk in manifest['chunks']:
                     for item in read_json(self.db / chunk['path'])['items']:
                         if item['lifecycle']['status'] != 'active':
                             continue
                         for key in values:
-                            value = item['classification'][key]
-                            values[key].update(value if isinstance(value, list) else [value])
+                            values[key].update(facet_values(item, key))
                 self.facets_cache = {key: sorted(value) for key, value in values.items()}
                 self.facets_generation = generation
             return self.facets_cache
@@ -588,7 +621,7 @@ class Library:
         manifest = read_json(self.db / 'index.json', {'chunks': []})
         chunks = manifest['chunks']
         if filters:
-            for argument, key in [('event', 'events'), ('tag', 'tags'), ('person', 'person_ids'), ('category', 'category_id'), ('owner', 'owner_id')]:
+            for argument, key in [('event', 'events'), ('tag', 'tags'), ('person', 'person_ids'), ('category', 'category_id'), ('owner', 'owner_id'), ('location', 'location_tags')]:
                 if filters.get(argument):
                     chunks = [c for c in chunks if filters[argument] in c.get('facets', {}).get(key, [filters[argument]])]
             if filters.get('from'):
@@ -603,6 +636,7 @@ class Library:
         groups = defaultdict(list)
         for item in items:
             c = item['classification']
+            c['location_tags'] = capture_location_tags(item['capture'])
             date = item['capture']['date_key']
             year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
             groups[f"{component(c['category_id'])}/{component(c['owner_id'])}/{year}/{month}"].append(item)
@@ -618,8 +652,8 @@ class Library:
                 page = values[offset:offset + 100]
                 atomic_json(self.db / relative, {'schema_version': 1, 'items': page, 'item_count': len(page)})
                 facets = {}
-                for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id'):
-                    facets[key] = sorted({value for item in page for value in (item['classification'][key] if isinstance(item['classification'][key], list) else [item['classification'][key]])})
+                for key in FACET_FIELDS:
+                    facets[key] = sorted({value for item in page for value in facet_values(item, key)})
                 chunks.append({'path': relative, 'count': len(page), 'first_date': page[0]['capture']['date_key'], 'last_date': page[-1]['capture']['date_key'], 'facets': facets})
         exact, candidates = defaultdict(list), defaultdict(list)
         for item in items:
@@ -627,22 +661,22 @@ class Library:
                 continue
             exact[item['sha256']].append(item['media_id'])
             capture = item['capture']
-            if capture.get('captured_at') and capture.get('location'):
-                gps = capture['location']
-                candidates[(capture['captured_at'], round(gps['latitude'], 4), round(gps['longitude'], 4))].append(item['media_id'])
+            coordinates = gps_coordinates(capture) if capture.get('captured_at') else None
+            if coordinates is not None:
+                lat, lon = coordinates
+                candidates[(capture['captured_at'], round(lat, 4), round(lon, 4))].append(item['media_id'])
         duplicate_path = f'duplicates/{generation}.json'
         if control:
             control()
         atomic_json(self.db / duplicate_path, {'schema_version': 1, 'exact': [{'sha256': key, 'members': ids} for key, ids in exact.items() if len(ids) > 1], 'candidates': [{'reason': 'same_capture_time_and_nearby_gps', 'members': ids} for ids in candidates.values() if len(ids) > 1]})
         if control:
             control()
-        active_facets = {key: set() for key in ('events', 'tags', 'person_ids', 'category_id', 'owner_id')}
+        active_facets = {key: set() for key in FACET_FIELDS}
         for item in items:
             if item['lifecycle']['status'] != 'active':
                 continue
             for key in active_facets:
-                value = item['classification'][key]
-                active_facets[key].update(value if isinstance(value, list) else [value])
+                active_facets[key].update(facet_values(item, key))
         active_facets = {key: sorted(value) for key, value in active_facets.items()}
         atomic_json(self.db / 'index.json', {'schema_version': 1, 'updated_at': now(), 'chunks': chunks, 'count': len(items), 'duplicates': duplicate_path, 'active_facets': active_facets})
         atomic_json(self.db / 'duplicates' / 'latest.json', {'generation_file': duplicate_path})
@@ -913,6 +947,8 @@ class Library:
             return result
 
     def _merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None, history=None):
+        from place_lookup import PlaceLookup, current_policy
+        places = None if preview else PlaceLookup(self.db, os.environ.get('PHOTO_BROWSER_REVERSE_GEOCODER_URL', ''))
         progress = progress or (lambda state: None)
         progress({'phase': 'loading', 'inventory_complete': False, 'processed': 0})
         items = self.items()
@@ -991,6 +1027,10 @@ class Library:
             def comparing(path):
                 file_progress(path, 'comparison_target', 'comparing_existing')
             try:
+                if places and places.endpoint and not current_policy(item['capture'].get('place')) and gps_coordinates(item['capture']):
+                    file_progress(state['source_file'], 'source', 'looking_up_place')
+                    if places.enrich(item['capture']):
+                        item['revision'] += 1
                 original = target
                 target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=comparing)
                 def record_target():
@@ -1072,6 +1112,8 @@ class Library:
         report['renamed_count'] = sum(bool(op.get('renamed')) for op in operations)
         report['warning'] = ('같은 출력 경로에 서로 다른 내용의 파일이 예정되어 있습니다. 분류나 파일명을 조정하세요.'
                              if conflicts else '동일 이름·동일 내용은 재사용하며, 내용이 다르면 _중복, _중복_2 등의 이름으로 보존합니다. 미리보기 이후 파일이 바뀌면 실행 경로도 달라질 수 있습니다.')
+        if places and places.warning:
+            report['warning'] += '\n' + places.warning
         atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
         return report
 
