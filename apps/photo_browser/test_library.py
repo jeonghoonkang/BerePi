@@ -179,11 +179,10 @@ class LibraryTests(unittest.TestCase):
         updates.clear()
         result = self.library.merge(progress=updates.append)
         comparisons = [p for p in updates if p.get('current_action') == 'comparing_existing']
-        self.assertTrue(comparisons)
-        self.assertTrue(all(p['current_file_role'] == 'comparison_target' and p['current_file'] == target for p in comparisons))
+        self.assertFalse(comparisons)
         self.assertEqual(result['operations'][0]['status'], 'reused')
         self.assertFalse(any(p.get('current_action') == 'copying' for p in updates))
-        self.assertTrue(any(p.get('current_action') == 'reused' for p in updates))
+        self.assertTrue(any(p.get('current_action') == 'fast_skipped' for p in updates))
 
     def test_scan_preview_and_report_inventory_report_path_roles(self):
         source = self.photo()

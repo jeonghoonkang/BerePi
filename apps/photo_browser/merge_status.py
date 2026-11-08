@@ -29,6 +29,7 @@ class MergeProgress:
 
 
 FIELDS = ('merge_id', 'status', 'phase', 'processed', 'total', 'percent', 'current_file',
+          'fast_skipped_count',
           'current_file_role', 'current_action', 'source_file', 'target_file',
           'merge_started_at', 'run_started_at', 'updated_at', 'warning', 'error')
 

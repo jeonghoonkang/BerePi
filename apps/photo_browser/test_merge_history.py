@@ -155,7 +155,7 @@ class MergeHistoryTests(unittest.TestCase):
                 self.library.merge()
         summary = list_reports(self.library)[0]
         self.assertEqual(summary['status'], 'failed')
-        self.assertEqual(summary['summary']['copied_count'], 0)
+        self.assertEqual(summary['summary']['copied_count'], 1)
         report = read_json(Path(summary['files']['json']))
         self.assertIn('DB write failed', report['warning'])
 

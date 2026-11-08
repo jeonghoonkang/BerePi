@@ -809,8 +809,43 @@ class Library:
             raise ValueError('관리 경로 밖입니다.')
         return target
 
-    def resolve_merge_target(self, root, item, reserved, hashes, on_compare=None):
+    def fast_merge_target(self, root, item, reserved):
+        """Trust a previous content verification only while size/mtime agree."""
+        original = self.merge_target(root, item)
+        for location in item['locations']:
+            verification = location.get('merge_verification') or {}
+            if (location['role'] != 'managed' or location.get('status') != 'available'
+                    or verification.get('sha256') != item['sha256']
+                    or verification.get('base_path') != str(original)
+                    or not location.get('path')):
+                continue
+            target = Path(location['path'])
+            try:
+                if (target.is_symlink() or not target.is_file()
+                        or target.parent.resolve() != original.parent.resolve()
+                        or not target.resolve().is_relative_to(root)):
+                    continue
+                stat = target.stat()
+            except OSError:
+                continue
+            key = os.path.normcase(str(target.absolute()))
+            if (stat.st_size == item['size_bytes'] == verification.get('size_bytes')
+                    and stat.st_mtime_ns == verification.get('mtime_ns')
+                    and reserved.get(key, item['sha256']) == item['sha256']):
+                return target
+        return None
+
+    @staticmethod
+    def merge_stat_signature(path, stat):
+        return (os.path.normcase(str(path.absolute())), stat.st_dev, stat.st_ino,
+                stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+    def resolve_merge_target(self, root, item, reserved, hashes, on_compare=None, allow_fast=True):
         """Choose the same non-destructive path for preview, capacity check and copy."""
+        fast = self.fast_merge_target(root, item, reserved) if allow_fast else None
+        if fast is not None:
+            reserved[os.path.normcase(str(fast.absolute()))] = item['sha256']
+            return fast
         original = self.merge_target(root, item)
         number = 0
         while True:
@@ -827,7 +862,7 @@ class Library:
                 if on_compare:
                     on_compare(candidate)
                 stat = candidate.stat()
-                signature = (key, stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+                signature = self.merge_stat_signature(candidate, stat)
                 if signature not in hashes:
                     hashes[signature] = digest(candidate)
                 if hashes[signature] != item['sha256']:
@@ -859,9 +894,10 @@ class Library:
                     raise
             shutil.copystat(temporary, target)
 
-    def merge_space(self, root, items, pending, progress):
+    def merge_space(self, root, items, pending, progress, hashes=None):
         targets = {}
-        reserved, hashes = {}, {}
+        reserved, hashes = {}, {} if hashes is None else hashes
+        fast_count = 0
         for index, item in enumerate(pending):
             source = item['locations'][0]
             def checking(path, role='comparison_target', action='comparing_existing'):
@@ -869,6 +905,8 @@ class Library:
                           'processed': 0, 'inventory_complete': False, 'current_file': str(path),
                           'current_file_role': role, 'current_action': action,
                           'source_file': source.get('path') or source.get('uri'), 'target_file': str(path)})
+            fast = self.fast_merge_target(root, item, reserved)
+            fast_count += int(fast is not None)
             target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=checking)
             if not target.exists():
                 key = str(target.resolve())
@@ -881,7 +919,7 @@ class Library:
         # Each checkpoint retains a new immutable DB generation. Include their
         # cumulative growth, reports and a reserve, rather than only image bytes.
         generation_bytes = sum(len(json.dumps(item, ensure_ascii=False, indent=2).encode('utf-8')) + 4096 for item in items)
-        db_bytes = generation_bytes * ((len(pending) + 24) // 25 + 3)
+        db_bytes = generation_bytes * ((len(pending) - fast_count + 24) // 25 + 3) + len(pending) * 4096
         reserve = self.config().get('scan_min_free_mb', 512) * 1048576
         volumes = {}
         def add(path, amount, role):
@@ -901,6 +939,7 @@ class Library:
             add(Path(tempfile.gettempdir()), remote_bytes, '원격 파일 임시 다운로드')
         checks = list(volumes.values())
         return {'copy_bytes': sum(targets.values()), 'copy_files': len(targets),
+                'fast_skip_files': fast_count,
                 'db_estimated_bytes': db_bytes, 'volumes': checks,
                 'ok': all(v['free_bytes'] >= v['required_bytes'] for v in checks)}
 
@@ -978,10 +1017,11 @@ class Library:
             state['run_started_at'] = history.data['started_at']
             history.bind(state, items)
             state.setdefault('history_report_ids', []).append(history.report_id)
+        reserved, hashes = {}, {}
         if not preview:
             pending = [item for item in items if item['media_id'] in wanted
                        and item['media_id'] not in completed and item['lifecycle']['status'] == 'active']
-            space = self.merge_space(root, items, pending, progress)
+            space = self.merge_space(root, items, pending, progress, hashes=hashes)
             state['disk_space'] = space
             if not space['ok']:
                 details = ' / '.join(f"{v['path']}: 여유 {v['free_bytes'] / 1048576:.1f} MiB, 필요 {v['required_bytes'] / 1048576:.1f} MiB"
@@ -989,17 +1029,21 @@ class Library:
                 return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
                         'total': len(wanted), 'processed': len(operations), 'percent': 0,
                         'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
+        db_dirty = False
+        state['fast_skipped_count'] = sum(bool(op.get('fast_skipped')) for op in operations)
         def checkpoint(status='running'):
+            nonlocal db_dirty
             state.update(status=status, processed=len(operations), total=len(wanted),
                          percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
                          inventory_complete=True, updated_at=now())
             if not preview:
-                self.commit(items)
+                if db_dirty:
+                    self.commit(items)
+                    db_dirty = False
                 atomic_json(session_path, state)
             progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
         checkpoint()
         interrupted = False
-        reserved, hashes = {}, {}
         for item in items:
             if item['media_id'] not in wanted or item['media_id'] in completed:
                 continue
@@ -1034,8 +1078,14 @@ class Library:
                     file_progress(state['source_file'], 'source', 'looking_up_place')
                     if places.enrich(item['capture']):
                         item['revision'] += 1
+                        db_dirty = True
                 original = target
-                target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=comparing)
+                fast = self.fast_merge_target(root, item, reserved)
+                if fast is not None:
+                    target = fast
+                    reserved[os.path.normcase(str(target.absolute()))] = item['sha256']
+                else:
+                    target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=comparing, allow_fast=False)
                 def record_target():
                     op.update(destination=str(target), original_destination=str(original), renamed=target != original)
                     if target != original:
@@ -1047,8 +1097,12 @@ class Library:
                         checkpoint()
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
+                verified_copy_stat = None
                 if target.exists():
                     op['status'] = 'reused'
+                    if fast is not None:
+                        op['fast_skipped'] = True
+                        state['fast_skipped_count'] += 1
                 else:
                     temporary = target.with_name('.' + uid() + '.part')
                     try:
@@ -1059,6 +1113,7 @@ class Library:
                         file_progress(temporary, 'temporary_copy', 'verifying_copy')
                         if digest(temporary) != item['sha256']:
                             raise ValueError('복사 검증 실패: 원본이 변경되었을 수 있습니다.')
+                        verified_copy_stat = temporary.stat()
                         while True:
                             try:
                                 file_progress(target, 'merge_destination', 'publishing_copy')
@@ -1075,25 +1130,36 @@ class Library:
                                     break
                     finally:
                         temporary.unlink(missing_ok=True)
-                item['locations'] = [l for l in item['locations'] if not (l['role'] == 'managed' and l.get('path') == str(target))]
-                item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now()})
+                if fast is None or op['status'] != 'reused':
+                    stat = target.stat()
+                    if op['status'] == 'reused' and hashes.get(self.merge_stat_signature(target, stat)) != item['sha256']:
+                        raise ValueError('검증 후 관리 파일이 변경되었습니다. 병합을 다시 실행하세요.')
+                    if op['status'] == 'copied' and (stat.st_size, stat.st_mtime_ns) != (verified_copy_stat.st_size, verified_copy_stat.st_mtime_ns):
+                        raise ValueError('저장 후 관리 파일이 변경되었습니다. 병합을 다시 실행하세요.')
+                    item['locations'] = [l for l in item['locations'] if not (l['role'] == 'managed' and l.get('path') == str(target))]
+                    item['locations'].append({'role': 'managed', 'protocol': 'file', 'path': str(target), 'uri': target.as_uri(), 'status': 'available', 'verified_at': now(),
+                                              'merge_verification': {'sha256': item['sha256'], 'size_bytes': stat.st_size,
+                                                                     'mtime_ns': stat.st_mtime_ns, 'base_path': str(original)}})
+                    db_dirty = True
             except Exception as exc:
                 op.update(status='error', error=str(exc))
             # Keep the last completed target in checkpoints, including every
             # 25th file and the final job state; it is not an in-flight source.
             state.update(current_file=str(target), current_file_role='merge_destination',
-                         current_action=op['status'], target_file=str(target))
-            if len(operations) % 25 == 0:
+                         current_action='fast_skipped' if op.get('fast_skipped') else op['status'], target_file=str(target))
+            if (db_dirty and len(operations) % 25 == 0) or len(operations) % 1000 == 0:
                 checkpoint()
             else:
                 progress({'merge_id': state['merge_id'], 'total': len(wanted), 'processed': len(operations),
                           'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target),
                           'current_file_role': state['current_file_role'], 'current_action': state['current_action'],
-                          'source_file': state['source_file'], 'target_file': str(target), 'phase': 'merging'})
+                          'source_file': state['source_file'], 'target_file': str(target), 'phase': 'merging',
+                          'fast_skipped_count': state['fast_skipped_count']})
         checkpoint('stopped' if interrupted else 'completed')
         report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
                   'merge_id': state['merge_id'], 'status': state['status'],
                   'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
+        report['fast_skipped_count'] = state['fast_skipped_count']
         report.update({key: state[key] for key in ('current_file', 'current_file_role', 'current_action', 'source_file', 'target_file') if key in state})
         if 'disk_space' in state:
             report['disk_space'] = state['disk_space']

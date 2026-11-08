@@ -220,7 +220,7 @@
       const counts = {};
       operations.forEach(operation => { counts[operation.status] = (counts[operation.status] || 0) + 1; });
       return [
-        result.preview ? `미리보기: 복사 예정 ${count(counts.planned)}개 · 실제 복사하지 않음` : `병합 결과: 새 복사 ${count(counts.copied)}개 · 기존 파일 재사용 ${count(counts.reused)}개 · 건너뜀 ${count(counts.skipped)}개 · 오류 ${count(counts.error)}개`,
+        result.preview ? `미리보기: 복사 예정 ${count(counts.planned)}개 · 실제 복사하지 않음` : `병합 결과: 새 복사 ${count(counts.copied)}개 · 기존 파일 재사용 ${count(counts.reused)}개 (빠른 건너뛰기 ${count(result.fast_skipped_count)}개) · 건너뜀 ${count(counts.skipped)}개 · 오류 ${count(counts.error)}개`,
         `파일명 충돌로 이름을 구분한 항목: ${count(result.renamed_count)}개 (_중복, _중복_2 등)`,
         result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
       ];
@@ -243,7 +243,7 @@
     if (progress?.phase === 'report_inventory') return `보고서용 관리 디렉토리 집계 중 · ${(progress.report_files ?? 0).toLocaleString()}개 확인`;
     if (progress?.phase === 'checking_space') return `복사 용량·여유 공간 계산 중 · ${(progress.checked ?? 0).toLocaleString()}/${(progress.check_total ?? 0).toLocaleString()}개 확인`;
     if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
-    return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%)`;
+    return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%) · 빠른 건너뛰기 ${(progress?.fast_skipped_count ?? 0).toLocaleString()}개`;
   }
   function jobFileText(status, progress) {
     if (!progress?.current_file) return '';
@@ -259,6 +259,7 @@
       publishing_copy: '검증된 복사본을 최종 관리 경로에 저장합니다.',
       copied: '이 파일의 복사를 완료했습니다. 현재 복사 중이라는 뜻은 아닙니다.',
       reused: '동일한 내용의 기존 관리 파일을 재사용했습니다. 새로 복사하지 않았습니다.',
+      fast_skipped: '이전 검증 기록과 파일 크기·수정 시각이 같아 해시 검사와 복사를 건너뛰었습니다.',
       error: '이 복사 대상의 처리에 오류가 발생했습니다.',
       preview_target: '병합 미리보기의 저장 예정 경로입니다. 실제 복사는 하지 않습니다.',
       report_inventory: '보고서 작성을 위해 디렉토리의 파일 수와 용량을 집계합니다.',
