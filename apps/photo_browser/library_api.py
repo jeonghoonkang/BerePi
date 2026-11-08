@@ -84,7 +84,7 @@ def register_library(app, boundary, db):
         stop = threading.Event()
         with guard:
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
-            exclusive = {'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo'}
+            exclusive = {'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan'}
             if (kind in exclusive and active) or any(j.get('kind') in exclusive for j in active):
                 raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
@@ -110,8 +110,8 @@ def register_library(app, boundary, db):
                 jobs[job_id]['started_at'] = now()
                 atomic_json(library.db / 'jobs' / (job_id + '.json'), jobs[job_id])
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo'} else function()
-                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo'} else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -120,6 +120,16 @@ def register_library(app, boundary, db):
                 controls.pop(job_id, None)
         executor.submit(run)
         return jsonify(job_id=job_id), 202
+
+    @app.post('/api/nominatim/scan-missing')
+    def scan_missing_location_tags():
+        from location_rescan import scan_missing_places
+        from nominatim_docker import _healthy
+        from place_lookup import PlaceLookup
+        endpoint = PlaceLookup(library.db, os.environ.get('PHOTO_BROWSER_REVERSE_GEOCODER_URL', '')).endpoint
+        if not endpoint or not _healthy(endpoint.replace('/reverse', '/status?format=json')):
+            return jsonify(error='Nominatim이 준비되지 않았습니다. 준비 완료 후 다시 시도하세요.'), 409
+        return launch(lambda progress, stopped: scan_missing_places(library, progress, stopped), 'location_scan')
 
     @app.get('/api/category-merges/categories')
     def category_choices():
@@ -257,7 +267,7 @@ def register_library(app, boundary, db):
     def stop_scan(job_id):
         with guard:
             job = jobs.get(job_id)
-            if not job or job.get('kind') not in {'scan', 'merge', 'category_merge'}:
+            if not job or job.get('kind') not in {'scan', 'merge', 'category_merge', 'location_scan'}:
                 raise ValueError('중지할 스캔 또는 병합 작업이 없습니다.')
             if job['status'] in {'queued', 'running', 'stopping'}:
                 controls[job_id].set()

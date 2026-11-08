@@ -110,12 +110,39 @@ class NominatimMonitor:
 
 
 def register_nominatim_monitor(app):
+    from nominatim_statistics import PhotoTagStatistics
     monitor = NominatimMonitor()
+    statistics = PhotoTagStatistics(app.extensions['photo_library'])
     app.extensions['nominatim_monitor'] = monitor
 
     @app.get('/api/nominatim/status')
     def nominatim_status():
         from flask import jsonify
         response = jsonify(monitor.snapshot())
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @app.get('/api/nominatim/statistics')
+    def nominatim_statistics():
+        from flask import jsonify, request
+        kind = request.args.get('kind', 'location_tags')
+        try:
+            offset = int(request.args.get('offset', '0'))
+            if offset < 0 or kind not in {'location_tags', 'tags'}:
+                raise ValueError
+        except ValueError:
+            return jsonify(error='태그 종류 또는 페이지 위치가 올바르지 않습니다.'), 400
+        try:
+            data = statistics.snapshot(refresh=request.args.get('refresh') == '1')
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            return jsonify(error=f'태그 통계를 읽지 못했습니다: {exc}'), 500
+        query = request.args.get('q', '').strip().casefold()
+        rows = data['groups'][kind]['items']
+        if query:
+            rows = [row for row in rows if query in row['tag'].casefold()]
+        response = jsonify({**data, 'groups': {key: {k: v for k, v in group.items() if k != 'items'}
+                                              for key, group in data['groups'].items()},
+                            'items': rows[offset:offset + 100], 'matched_tags': len(rows),
+                            'offset': offset, 'limit': 100, 'kind': kind})
         response.headers['Cache-Control'] = 'no-store'
         return response
