@@ -276,6 +276,9 @@ class Library:
         self.lookup_lock = threading.Lock()
         self.lookup_generation = None
         self.lookup_chunks = {}
+        self.lookup_entries = {}
+        self.lookup_manifest_signature = None
+        self.lookup_manifest = {'chunks': []}
         self.facets_lock = threading.Lock()
         self.facets_generation = None
         self.facets_cache = None
@@ -574,6 +577,21 @@ class Library:
             write_library_locations(self.db, config['managed_root'], config=config, reason='sources_changed')
             return config
 
+    def _ensure_lookup(self, manifest):
+        """Caller holds lookup_lock; legacy catalogs are indexed once in memory."""
+        from metadata_store import chunk_entry
+        generation = tuple(entry['path'] for entry in manifest['chunks'])
+        if generation != self.lookup_generation:
+            lookup, entries = {}, {}
+            for entry in manifest['chunks']:
+                path = entry['path']
+                if 'media_ids' not in entry or 'active_facets' not in entry:
+                    entry = {**entry, **chunk_entry(path, read_json(self.db / path)['items'])}
+                entries[path] = entry
+                lookup.update((mid, path) for mid in entry['media_ids'])
+            self.lookup_chunks, self.lookup_entries = lookup, entries
+            self.lookup_generation = generation
+
     def item(self, media_id):
         """Resolve one item without materializing the complete media collection.
 
@@ -582,15 +600,15 @@ class Library:
         entire collection independently.
         """
         with self.lookup_lock:
-            manifest = read_json(self.db / 'index.json', {'chunks': []})
-            generation = tuple(entry['path'] for entry in manifest['chunks'])
-            if generation != self.lookup_generation:
-                chunks = {}
-                for relative in generation:
-                    for item in read_json(self.db / relative)['items']:
-                        chunks[item['media_id']] = relative
-                self.lookup_chunks = chunks
-                self.lookup_generation = generation
+            try:
+                stat = (self.db / 'index.json').stat()
+                signature = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+            except FileNotFoundError:
+                signature = None
+            if signature != self.lookup_manifest_signature:
+                self.lookup_manifest = read_json(self.db / 'index.json', {'chunks': []})
+                self.lookup_manifest_signature = signature
+            self._ensure_lookup(self.lookup_manifest)
             relative = self.lookup_chunks.get(media_id)
             if relative is None:
                 return None
@@ -633,6 +651,7 @@ class Library:
     def commit(self, items, control=None):
         # Immutable generations + atomic manifest: readers never see half-written chunks.
         generation = uid()
+        from metadata_store import chunk_entry
         groups = defaultdict(list)
         for item in items:
             c = item['classification']
@@ -654,10 +673,7 @@ class Library:
                 relative = f'media/{group}/media_{generation}_{offset // 100 + 1:06d}.json'
                 page = values[offset:offset + 100]
                 atomic_json(self.db / relative, {'schema_version': 1, 'items': page, 'item_count': len(page)})
-                facets = {}
-                for key in FACET_FIELDS:
-                    facets[key] = sorted({value for item in page for value in facet_values(item, key)})
-                chunks.append({'path': relative, 'count': len(page), 'first_date': page[0]['capture']['date_key'], 'last_date': page[-1]['capture']['date_key'], 'facets': facets})
+                chunks.append(chunk_entry(relative, page))
         exact, candidates = defaultdict(list), defaultdict(list)
         for item in items:
             if item['lifecycle']['status'] != 'active':
@@ -783,6 +799,13 @@ class Library:
 
     def edit(self, ids, changes):
         with self.writing():
+            if set(changes) <= {'tags', 'events', 'person_ids'}:
+                patch = {}
+                for key, values in changes.items():
+                    if not isinstance(values, list) or len(values) > 100 or any(not isinstance(v, str) or not v.strip() or len(v) > 200 for v in values):
+                        raise ValueError('분류 값은 200자 이하 문자열 목록이어야 합니다.')
+                    patch[key] = list(dict.fromkeys(v.strip() for v in values))
+                return self._patch_metadata({mid: patch for mid in ids})
             items = self.items()
             for item in items:
                 if item['media_id'] in ids:
@@ -797,6 +820,10 @@ class Library:
                             item['classification'][key] = component(changes[key])
                     item['revision'] += 1
             self.commit(items)
+
+    def _patch_metadata(self, changes, minimum_free_bytes=0):
+        from metadata_store import patch_metadata
+        return patch_metadata(self, changes, minimum_free_bytes)
 
     def merge_target(self, root, item):
         c, date = item['classification'], item['capture']['date_key']
@@ -1029,17 +1056,23 @@ class Library:
                 return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
                         'total': len(wanted), 'processed': len(operations), 'percent': 0,
                         'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
-        db_dirty = False
+        db_dirty = full_commit_needed = False
+        metadata_updates = {}
         state['fast_skipped_count'] = sum(bool(op.get('fast_skipped')) for op in operations)
         def checkpoint(status='running'):
-            nonlocal db_dirty
+            nonlocal db_dirty, full_commit_needed
             state.update(status=status, processed=len(operations), total=len(wanted),
                          percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
                          inventory_complete=True, updated_at=now())
             if not preview:
                 if db_dirty:
-                    self.commit(items)
+                    if full_commit_needed:
+                        self.commit(items)
+                    else:
+                        self._patch_metadata(metadata_updates)
                     db_dirty = False
+                    full_commit_needed = False
+                    metadata_updates.clear()
                 atomic_json(session_path, state)
             progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
         checkpoint()
@@ -1079,6 +1112,7 @@ class Library:
                     if places.enrich(item['capture']):
                         item['revision'] += 1
                         db_dirty = True
+                        metadata_updates[item['media_id']] = {'place': item['capture']['place']}
                 original = target
                 fast = self.fast_merge_target(root, item, reserved)
                 if fast is not None:
@@ -1141,6 +1175,7 @@ class Library:
                                               'merge_verification': {'sha256': item['sha256'], 'size_bytes': stat.st_size,
                                                                      'mtime_ns': stat.st_mtime_ns, 'base_path': str(original)}})
                     db_dirty = True
+                    full_commit_needed = True
             except Exception as exc:
                 op.update(status='error', error=str(exc))
             # Keep the last completed target in checkpoints, including every

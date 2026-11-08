@@ -1,6 +1,5 @@
 """Fill missing place names for catalog photos without walking whole sources."""
 import os
-import shutil
 
 from library import gps_coordinates
 from place_lookup import PlaceLookup
@@ -20,10 +19,12 @@ def scan_missing_places(library, progress, stopped):
         items = library.items()
         # Classify from the catalog once; never reopen GPS-less originals here.
         no_gps = no_gps_tagged = dirty_tags = 0
+        changes = {}
         for item in items:
             if item['lifecycle']['status'] != 'active' or item['media_type'] != 'image':
                 continue
             tags = item['classification'].setdefault('tags', [])
+            previous_tags = list(tags)
             absent = gps_coordinates(item['capture']) is None
             no_gps += int(absent)
             if absent and 'no_gps' not in tags:
@@ -35,12 +36,13 @@ def scan_missing_places(library, progress, stopped):
                 item['classification']['tags'] = [tag for tag in tags if tag != 'no_gps']
                 dirty_tags += 1
                 item['revision'] += 1
+            if previous_tags != item['classification']['tags']:
+                changes[item['media_id']] = {'tags': item['classification']['tags']}
 
         def publish():
             minimum = int(library.config().get('scan_min_free_mb', 512)) * 1024 * 1024
-            if shutil.disk_usage(library.db).free < minimum + len(items) * 16384:
-                raise ValueError('DB 저장 공간이 부족합니다. 공간 확보 후 다시 실행하세요. 조회 캐시는 유지됩니다.')
-            library.commit(items)
+            library._patch_metadata(changes, minimum_free_bytes=minimum)
+            changes.clear()
 
         if dirty_tags:
             publish()
@@ -69,6 +71,7 @@ def scan_missing_places(library, progress, stopped):
                 place = places.lookup(gps_coordinates(capture))
                 if place and place.get('names'):
                     capture['place'] = place
+                    changes[item['media_id']] = {'place': place}
                     changed = True
                     state['updated'] += 1
                 else:

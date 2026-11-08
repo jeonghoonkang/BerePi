@@ -438,7 +438,7 @@ class LibraryTests(unittest.TestCase):
         with patch('library.read_json', wraps=read_json) as reads, patch.object(self.library, 'items', side_effect=AssertionError('full collection loaded')):
             with self.client.get(f'/api/library/{media_id}/file') as response:
                 self.assertEqual(response.status_code, 200)
-            self.assertEqual(reads.call_count, 2)  # manifest + one media chunk
+            self.assertEqual(reads.call_count, 1)  # unchanged manifest is cached; read only target chunk
             self.assertEqual(self.client.get(f'/api/library/{media_id}').json['media_id'], media_id)
             self.assertEqual(self.client.get('/api/library/missing/file').status_code, 404)
         item['classification']['tags'] = ['updated']
@@ -459,7 +459,7 @@ class LibraryTests(unittest.TestCase):
             with ThreadPoolExecutor(max_workers=4) as pool:
                 results = list(pool.map(self.library.item, [item['media_id']] * 8))
             self.assertTrue(all(result == item for result in results))
-            self.assertEqual(reads.call_count, 17)  # 8 manifests + 8 target chunks + one index build
+            self.assertEqual(reads.call_count, 9)  # one manifest + 8 target chunks, no catalog scan
 
     def test_merge_preview_reports_intermediate_progress_without_copying(self):
         import copy
