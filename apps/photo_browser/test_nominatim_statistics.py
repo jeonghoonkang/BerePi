@@ -46,12 +46,27 @@ class PhotoTagStatisticsTests(unittest.TestCase):
     def test_empty_db_and_old_location_tags_fallback(self):
         result = self.stats.snapshot()
         self.assertEqual(result['total_photos'], 0)
+        self.assertEqual(result['missing_gps_photo_count'], 0)
+        self.assertEqual(result['missing_gps_percent'], 0)
         self.assertEqual(result['groups']['location_tags']['empty_percent'], 0)
         item = photo('legacy')
         del item['classification']['location_tags']
         item['capture'] = {'place': {'names': ['한국', '서울']}}
         self.publish([item])
         self.assertEqual(self.stats.snapshot()['groups']['location_tags']['tag_count'], 2)
+
+    def test_gps_missing_count_uses_valid_coordinates_not_tag_names(self):
+        valid = photo('valid')
+        valid['capture']['location'] = {'latitude': 0, 'longitude': 0}
+        invalid = photo('invalid', locations=['서울'])
+        invalid['capture']['location'] = {'latitude': 91, 'longitude': 127}
+        self.publish([valid, invalid, photo('absent'), photo('valid'),
+                      photo('video', media_type='video'),
+                      photo('inactive', lifecycle={'status': 'trashed'})])
+        result = self.stats.snapshot()
+        self.assertEqual(result['total_photos'], 3)
+        self.assertEqual(result['missing_gps_photo_count'], 2)
+        self.assertEqual(result['missing_gps_percent'], 66.67)
 
     def test_cache_changes_with_catalog_generation_and_force_refresh(self):
         self.publish([photo('1')])

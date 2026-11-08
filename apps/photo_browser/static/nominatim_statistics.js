@@ -25,6 +25,7 @@
       for (const [label, value] of [
         ['모든 사진 수', `${number(data.total_photos)}개`],
         ['행정구역 이름이 없는 사진 · 추가 스캔 대상', `${number(data.missing_place_photo_count)}개`],
+        ['GPS 정보가 없는 사진', `${number(data.missing_gps_photo_count)}개 (${percent(data.missing_gps_percent)})`],
         ['사용 중인 고유 태그 수', `${number(data.tag_count)}개 (위치·일반 태그 이름 중복 제거)`],
         ['위치 태그 종류', `${number(location.tag_count)}개`],
         ['위치 태그가 전혀 없는 사진', `${number(location.empty_photo_count)}개 (${percent(location.empty_percent)})`],
