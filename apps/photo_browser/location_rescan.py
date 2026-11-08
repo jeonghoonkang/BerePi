@@ -2,7 +2,7 @@
 import os
 import shutil
 
-from library import gps_coordinates, metadata
+from library import gps_coordinates
 from place_lookup import PlaceLookup
 
 
@@ -18,9 +18,35 @@ def scan_missing_places(library, progress, stopped):
         raise ValueError('사용 가능한 Nominatim 조회 주소가 없습니다.')
     with library.writing():
         items = library.items()
-        pending = [item for item in items if missing_place(item)]
+        # Classify from the catalog once; never reopen GPS-less originals here.
+        no_gps = no_gps_tagged = dirty_tags = 0
+        for item in items:
+            if item['lifecycle']['status'] != 'active' or item['media_type'] != 'image':
+                continue
+            tags = item['classification'].setdefault('tags', [])
+            absent = gps_coordinates(item['capture']) is None
+            no_gps += int(absent)
+            if absent and 'no_gps' not in tags:
+                tags.append('no_gps')
+                no_gps_tagged += 1
+                dirty_tags += 1
+                item['revision'] += 1
+            elif not absent and 'no_gps' in tags:
+                item['classification']['tags'] = [tag for tag in tags if tag != 'no_gps']
+                dirty_tags += 1
+                item['revision'] += 1
+
+        def publish():
+            minimum = int(library.config().get('scan_min_free_mb', 512)) * 1024 * 1024
+            if shutil.disk_usage(library.db).free < minimum + len(items) * 16384:
+                raise ValueError('DB 저장 공간이 부족합니다. 공간 확보 후 다시 실행하세요. 조회 캐시는 유지됩니다.')
+            library.commit(items)
+
+        if dirty_tags:
+            publish()
+        pending = [item for item in items if missing_place(item) and gps_coordinates(item['capture']) is not None]
         state = {'status': 'running', 'total': len(pending), 'processed': 0, 'updated': 0,
-                 'no_gps': 0, 'unresolved': 0, 'errors': [], 'current_file': None}
+                 'no_gps': no_gps, 'no_gps_tagged': no_gps_tagged, 'unresolved': 0, 'errors': [], 'current_file': None}
         dirty = 0
 
         def emit():
@@ -37,36 +63,16 @@ def scan_missing_places(library, progress, stopped):
             try:
                 capture = item['capture']
                 changed = False
-                if gps_coordinates(capture) is None:
-                    failures = []
-                    for location in sorted(item['locations'], key=lambda loc: loc.get('role') != 'source'):
-                        if location.get('status') in {'missing', 'inactive'}:
-                            continue
-                        state['current_file'] = location.get('path') or location.get('uri') or item['name']
-                        emit()
-                        try:
-                            with library.materialize(location) as path:
-                                fresh = metadata(path)
-                            if gps_coordinates(fresh) is not None:
-                                capture['location'] = fresh['location']
-                                changed = True
-                            break
-                        except (OSError, ValueError, KeyError) as exc:
-                            failures.append(str(exc))
-                    else:
-                        raise ValueError('사진 파일을 읽지 못했습니다: ' + '; '.join(failures))
-                if gps_coordinates(capture) is None:
-                    state['no_gps'] += 1
+                # The candidate list only contains photos with valid GPS.
+                # Empty place objects can carry the language policy, so look up
+                # explicitly rather than letting enrich() skip them.
+                place = places.lookup(gps_coordinates(capture))
+                if place and place.get('names'):
+                    capture['place'] = place
+                    changed = True
+                    state['updated'] += 1
                 else:
-                    # An empty place object may already carry the language policy;
-                    # query it explicitly instead of enrich() skipping it.
-                    place = places.lookup(gps_coordinates(capture))
-                    if place and place.get('names'):
-                        capture['place'] = place
-                        changed = True
-                        state['updated'] += 1
-                    else:
-                        state['unresolved'] += 1
+                    state['unresolved'] += 1
                 if changed:
                     item['revision'] += 1
                     dirty += 1
@@ -75,10 +81,7 @@ def scan_missing_places(library, progress, stopped):
             state['processed'] += 1
             emit()
         if dirty:
-            minimum = int(library.config().get('scan_min_free_mb', 512)) * 1024 * 1024
-            if shutil.disk_usage(library.db).free < minimum + len(items) * 16384:
-                raise ValueError('DB 저장 공간이 부족합니다. 공간 확보 후 다시 실행하세요. 조회 캐시는 유지됩니다.')
-            library.commit(items)
+            publish()
         if state['status'] == 'running':
             state['status'] = 'completed'
         state['warning'] = places.warning

@@ -6,7 +6,7 @@
     completed: '완료', failed: '오류', interrupted: '서버 재시작으로 중단됨 · 다시 실행하세요'};
   let jobId, active = false, busy = false, lastFinished, missingCount;
   function controls() {
-    el('start').disabled = active || missingCount === 0;
+    el('start').disabled = active;
     el('stop').hidden = !active;
   }
   async function api(path, method = 'GET') {
@@ -38,7 +38,8 @@
       el('progress').hidden = false;
       el('progress').value = result.percent || 0;
       const details = [
-        `GPS 없음: ${result.no_gps || 0}개 · 위치 이름 미확인: ${result.unresolved || 0}개 · 파일 처리 오류: ${result.error_count ?? result.errors?.length ?? 0}개`,
+        `GPS 없음 · 조회 제외: ${result.no_gps || 0}개 · no_gps 태그 신규 저장: ${result.no_gps_tagged || 0}개`,
+        `위치 이름 미확인: ${result.unresolved || 0}개 · 처리 오류: ${result.error_count ?? result.errors?.length ?? 0}개`,
         `현재 파일: ${result.current_file || '—'}`,
         `시작: ${job.started_at || '—'} · 종료: ${job.finished_at || '—'}`,
       ];
@@ -68,7 +69,8 @@
     catch (err) { error(err.message); }
   });
   panel.addEventListener('nominatim-statistics-updated', event => {
-    missingCount = event.detail.missing_place_photo_count;
+    missingCount = event.detail.location_scan_candidate_count;
+    el('start').title = `위치 조회 대상 ${missingCount ?? '확인 중'}개. GPS 없는 사진은 no_gps 태그로 저장합니다.`;
     controls();
   });
   new MutationObserver(() => { if (!panel.hidden) refresh(); }).observe(panel, {attributes: true, attributeFilter: ['hidden']});

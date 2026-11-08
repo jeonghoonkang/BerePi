@@ -48,8 +48,9 @@ async function main() {
   assert.match(ids['nominatim-scan-state'].textContent, /완료/);
   assert.equal(completedEvents, 2);
   interval(); await settle(); assert.equal(completedEvents, 2);
-  panel.dispatchEvent({type: 'nominatim-statistics-updated', detail: {missing_place_photo_count: 0}});
-  assert.equal(ids['nominatim-scan-start'].disabled, true);
+  panel.dispatchEvent({type: 'nominatim-statistics-updated', detail: {location_scan_candidate_count: 0}});
+  assert.equal(ids['nominatim-scan-start'].disabled, false); // Still allow no_gps classification.
+  assert.match(ids['nominatim-scan-start'].title, /위치 조회 대상 0개/);
   console.log('Nominatim missing-tag UI: readiness, progress, stop, completion and empty selection passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

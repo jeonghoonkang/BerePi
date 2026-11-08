@@ -46,7 +46,7 @@ class MissingPlaceScanTests(unittest.TestCase):
     def test_only_missing_names_are_looked_up_and_existing_data_is_preserved(self):
         files = {path: path.read_bytes() for path in self.source.glob('*.jpg')}
         place = place_from_address({'country': '대한민국', 'city': '서울', 'country_code': 'kr'}, 'ko')
-        with patch('location_rescan.PlaceLookup.lookup', return_value=place) as lookup, patch('location_rescan.metadata') as metadata:
+        with patch('location_rescan.PlaceLookup.lookup', return_value=place) as lookup, patch.object(self.library, 'materialize') as metadata:
             report = scan_missing_places(self.library, lambda _: None, lambda: False)
         self.assertEqual((report['total'], report['processed'], report['updated']), (2, 2, 2))
         self.assertEqual(lookup.call_count, 2)
@@ -83,25 +83,41 @@ class MissingPlaceScanTests(unittest.TestCase):
         inactive = copy.deepcopy(items[-1])
         inactive.update(media_id='inactive-id', lifecycle={'status': 'trashed'})
         self.library.commit([*items, video, inactive])
-        with patch('location_rescan.PlaceLookup.lookup') as lookup:
+        with patch('location_rescan.PlaceLookup.lookup') as lookup, patch.object(self.library, 'materialize') as read:
             report = scan_missing_places(self.library, lambda _: None, lambda: False)
         lookup.assert_not_called()
-        self.assertEqual((report['total'], report['no_gps'], report['updated']), (2, 2, 0))
+        read.assert_not_called()
+        self.assertEqual((report['total'], report['no_gps'], report['updated']), (0, 3, 0))
+        self.assertEqual(report['no_gps_tagged'], 3)
+        for item in self.library.items():
+            marked = item['lifecycle']['status'] == 'active' and item['media_type'] == 'image'
+            self.assertEqual('no_gps' in item['classification']['tags'], marked)
+        with patch.object(self.library, 'materialize') as read:
+            again = scan_missing_places(self.library, lambda _: None, lambda: False)
+        read.assert_not_called()
+        self.assertEqual(again['no_gps_tagged'], 0)
 
-    def test_missing_gps_is_recovered_from_photo_without_replacing_other_metadata(self):
+    def test_later_gps_update_removes_no_gps_and_allows_location_lookup(self):
         items = self.library.items()
         target = next(item for item in items if item['name'] == '1.jpg')
         target['capture']['location'] = None
         self.library.commit(items)
-        gps = {'latitude': 35.0, 'longitude': 129.0}
         place = place_from_address({'city': 'Busan'})
-        with patch('location_rescan.metadata', return_value={'location': gps}) as read, patch('location_rescan.PlaceLookup.lookup', return_value=place):
+        with patch('location_rescan.PlaceLookup.lookup', return_value=place) as lookup:
             result = scan_missing_places(self.library, lambda _: None, lambda: False)
-        self.assertEqual(read.call_count, 1)
-        self.assertEqual(result['no_gps'], 0)
-        updated = next(item for item in self.library.items() if item['name'] == '1.jpg')
-        self.assertEqual(updated['capture']['location'], gps)
-        self.assertEqual(updated['capture']['date_key'], target['capture']['date_key'])
+        self.assertEqual((result['total'], result['no_gps'], result['no_gps_tagged']), (1, 1, 1))
+        self.assertEqual(lookup.call_count, 1)
+        items = self.library.items()
+        target = next(item for item in items if item['name'] == '1.jpg')
+        self.assertIn('no_gps', target['classification']['tags'])
+        target['capture']['location'] = {'latitude': 35.0, 'longitude': 129.0}
+        self.library.commit(items)
+        target = next(item for item in self.library.items() if item['name'] == '1.jpg')
+        self.assertNotIn('no_gps', target['classification']['tags'])
+        with patch('location_rescan.PlaceLookup.lookup', return_value=place) as lookup:
+            result = scan_missing_places(self.library, lambda _: None, lambda: False)
+        self.assertEqual((result['total'], result['updated']), (1, 1))
+        self.assertEqual(lookup.call_count, 1)
 
     def test_api_requires_ready_server_and_exposes_job_progress(self):
         app = create_app(self.root, self.root, self.library.db)

@@ -636,6 +636,9 @@ class Library:
         groups = defaultdict(list)
         for item in items:
             c = item['classification']
+            # A later normal scan may discover GPS for a previously marked photo.
+            if 'no_gps' in c.get('tags', []) and gps_coordinates(item['capture']) is not None:
+                c['tags'] = [tag for tag in c['tags'] if tag != 'no_gps']
             c['location_tags'] = capture_location_tags(item['capture'])
             date = item['capture']['date_key']
             year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')

@@ -19,6 +19,7 @@ async function main() {
   const group = {tag_count: 101, empty_photo_count: 1, empty_percent: 33.33};
   const row = {tag: '<script>unsafe</script>', photo_count: 2, percent: 66.67, missing_photo_count: 1, missing_percent: 33.33};
   const data = {total_photos: 3, missing_gps_photo_count: 2, missing_gps_percent: 66.67,
+    missing_place_photo_count: 3, location_scan_candidate_count: 1,
     tag_count: 101, groups: {location_tags: group, tags: group},
     observed_at: '2026-11-08', items: [row], matched_tags: 101};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'static/nominatim_statistics.js'), 'utf8'), {
@@ -36,6 +37,8 @@ async function main() {
   const tagIndex = summary.findIndex(item => item.textContent === '사용 중인 고유 태그 수');
   assert.ok(gpsIndex >= 0 && gpsIndex < tagIndex);
   assert.equal(summary[gpsIndex + 1].textContent, '2개 (66.67%)');
+  const candidateIndex = summary.findIndex(item => item.textContent === 'GPS 있음 · 행정구역 이름 없음 · 위치 조회 대상');
+  assert.equal(summary[candidateIndex + 1].textContent, '1개');
   const cells = ids['nominatim-statistics-rows'].children[0].children;
   assert.equal(cells[0].textContent, row.tag); // Tag names are inert text.
   assert.equal(cells[2].textContent, '66.67%');

@@ -67,6 +67,8 @@ class PhotoTagStatisticsTests(unittest.TestCase):
         self.assertEqual(result['total_photos'], 3)
         self.assertEqual(result['missing_gps_photo_count'], 2)
         self.assertEqual(result['missing_gps_percent'], 66.67)
+        self.assertEqual(result['missing_place_photo_count'], 3)
+        self.assertEqual(result['location_scan_candidate_count'], 1)
 
     def test_cache_changes_with_catalog_generation_and_force_refresh(self):
         self.publish([photo('1')])
