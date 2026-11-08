@@ -172,10 +172,17 @@ def main(argv=None):
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
     parser.add_argument('--directory', action='append', help='처음 표시할 폴더 (기본 홈). 여러 번 지정하면 각 폴더를 통합 소스로 등록하고 파일 수·용량을 출력')
     parser.add_argument('--db', help='JSON DB 디렉토리')
-    parser.add_argument('--nominatim-command', default=os.environ.get('PHOTO_BROWSER_NOMINATIM_COMMAND'),
-                        help='Photo Browser와 함께 실행할 로컬 Nominatim 명령 (포그라운드)')
+    from nominatim_docker import DEFAULT_IMAGE, DEFAULT_PBF, DEFAULT_VOLUME, positive_int, managed_nominatim_docker
+    parser.add_argument('--nominatim-docker', action='store_true', help='Nominatim을 Docker로 시작하고 종료 관리')
+    parser.add_argument('--nominatim-image', default=DEFAULT_IMAGE, help='Nominatim Docker 이미지')
+    parser.add_argument('--nominatim-volume', default=DEFAULT_VOLUME, help='지도 DB를 보존할 Docker named volume')
+    parser.add_argument('--nominatim-pbf-url', default=DEFAULT_PBF, help='최초 가져올 지도 HTTPS URL (기본 한국)')
+    parser.add_argument('--nominatim-port', type=positive_int, default=8080, help='로컬 조회 포트 (기본 8080)')
+    parser.add_argument('--nominatim-ready-timeout', type=positive_int, default=7200, help='최초 지도 가져오기 포함 대기 시간, 초 (기본 7200)')
     parser.add_argument('--limit', type=positive_limit, default=20000, help='기존 폴더 탐색에서 요청당 스캔할 최대 미디어 수 (기본 20000)')
     args = parser.parse_args(argv)
+    if args.nominatim_docker and args.port == args.nominatim_port:
+        parser.error('Photo Browser 포트와 Nominatim 포트는 서로 다르게 지정하세요.')
     try:
         app = create_app(args.root, args.directory[0] if args.directory else None, args.db, limit=args.limit)
         if args.directory and len(args.directory) > 1:
@@ -199,10 +206,11 @@ def main(argv=None):
     if not config.get('sources'):
         print('소스: 등록된 소스 없음', flush=True)
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
-    from nominatim_service import managed_nominatim
     try:
-        with managed_nominatim(args.nominatim_command):
-            options = {'use_reloader': False} if args.nominatim_command else {}
+        with managed_nominatim_docker(args.nominatim_docker, image=args.nominatim_image,
+                                     pbf_url=args.nominatim_pbf_url, volume=args.nominatim_volume,
+                                     port=args.nominatim_port, timeout=args.nominatim_ready_timeout):
+            options = {'use_reloader': False} if args.nominatim_docker else {}
             app.run(host=args.host, port=args.port, threaded=True, **options)
     except (ValueError, OSError, RuntimeError) as exc:
         parser.error(str(exc))

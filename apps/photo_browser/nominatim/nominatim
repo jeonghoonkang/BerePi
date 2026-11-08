@@ -1,6 +1,0 @@
-#!/usr/bin/env python3
-"""Local nominatim serve entry point; add this directory to PATH to use it."""
-from server import main
-
-if __name__ == '__main__':
-    raise SystemExit(main())

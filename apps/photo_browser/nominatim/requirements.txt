@@ -1,3 +1,0 @@
-nominatim-api>=5.3,<6
-falcon>=3.1,<5
-uvicorn>=0.30,<1

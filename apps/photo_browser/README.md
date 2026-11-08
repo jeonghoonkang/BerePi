@@ -652,32 +652,25 @@ JSON은 임시 파일 작성 후 교체하고, 모든 청크가 완성된 후 `i
 
 #### 국가·도시·구·동 이름으로 검색
 
-Linux/macOS에서는 설치와 지도 데이터 가져오기를 마친 자체 Nominatim을 Photo Browser와 함께 실행할 수 있습니다. 저장소 루트에서 실제 Nominatim 프로젝트 경로를 지정하세요. [Nominatim 실행 명령](https://github.com/osm-search/Nominatim/blob/master/man/nominatim.1)의 `serve`는 포그라운드에서 서버를 실행합니다.
+Nominatim은 **Docker로 실행**합니다. 호스트에 PostgreSQL·PostGIS·Nominatim Python 패키지를 직접 설치하는 스크립트와 비도커 서버 실행 옵션은 제거했습니다. 로컬 Docker Engine 또는 Docker Desktop을 먼저 실행하고, 현재 사용자로 `docker info`가 정상 동작하는지 확인하세요.
 
 ```bash
-python3 apps/photo_browser/app.py \
-  --nominatim-command 'nominatim serve --project-dir /srv/nominatim-project --server 127.0.0.1:8080'
+python3 apps/photo_browser/app.py --nominatim-docker
 ```
 
-저장소에 포함된 [로컬 Nominatim 실행기](nominatim/README.md)를 사용할 수 있습니다. 시스템에서 `nominatim` 명령을 찾지 못하면 Photo Browser가 `nominatim/server.py`를 선택합니다. 해당 Python 환경에 `nominatim/requirements.txt`의 패키지를 먼저 설치하세요.
+기존 `--host`, `--port`, `--root`, `--db`, `--directory` 옵션과 함께 사용할 수 있습니다. 기본 [Docker 이미지](https://github.com/mediagis/nominatim-docker)는 `mediagis/nominatim:5.3`입니다. 최초 실행 시 한국 지도를 내려받아 가져오며, 지도 DB는 Docker 영구 볼륨에 보존합니다. 다음 실행은 같은 볼륨의 DB를 재사용합니다. 호스트에는 PostgreSQL 포트를 공개하지 않고 조회 API만 `127.0.0.1:8080`에 연결합니다.
 
-평소에 사용하는 `--root`, `--db`, `--directory`, `--port` 등은 그대로 함께 지정할 수 있습니다. 명령은 `PHOTO_BROWSER_NOMINATIM_COMMAND` 환경변수로도 지정할 수 있습니다. 기본 조회 주소는 `http://127.0.0.1:8080/reverse`이며, 다른 로컬 포트를 사용한다면 `PHOTO_BROWSER_REVERSE_GEOCODER_URL`도 실행 명령과 일치시킵니다. 앱 시작 시 설치·지도 가져오기를 자동 수행하지는 않습니다. 최초 한 번 [로컬 자동 구축 스크립트](nominatim/README.md#ubuntu에서-자동-구축)를 Ubuntu 서버에서 실행하면 패키지 설치부터 한국 지도 DB 가져오기까지 처리할 수 있습니다.
+- `--nominatim-image`: Docker 이미지 (기본 `mediagis/nominatim:5.3`)
+- `--nominatim-volume`: 지도 DB named volume (기본 `photo-browser-nominatim-5-3`)
+- `--nominatim-pbf-url`: 최초 가져올 지도 HTTPS URL (기본 한국 Geofabrik 추출본)
+- `--nominatim-port`: 로컬 조회 포트 (기본 8080)
+- `--nominatim-ready-timeout`: 준비 대기 시간, 초 단위 (기본 7200)
 
-`--nominatim-command`가 있으면 시작 전에 다음을 점검하고 실행 여부를 결정합니다.
+첫 지도 가져오기는 시간이 걸리며, `/status?format=json`이 정상 상태가 된 뒤 Photo Browser 웹서버를 엽니다. 시작한 컨테이너는 정상 종료나 Photo Browser 강제 종료 시 별도 감시 프로세스가 Docker API로 중지·제거합니다. 지도 볼륨은 삭제하지 않습니다. 같은 설정의 이미 실행 중인 관리 컨테이너는 재사용하고 종료 관리에서 제외합니다. Docker 데몬이 응답하지 않는 동안에는 컨테이너 정리가 지연될 수 있습니다.
 
-- 지정한 로컬 포트에 서버가 있고 `/status?format=json`의 `status`가 `0`이면 기존 서버를 재사용합니다. 새 프로세스를 실행하지 않으며, 기존 서버는 Photo Browser 종료 시에도 종료하지 않습니다.
-- 포트가 비어 있으면 실행 파일의 존재·실행 권한과 명령에 포함된 `--project-dir` 경로를 확인한 뒤 서버를 실행합니다.
-- 포트를 다른 프로세스가 사용하거나 상태 API가 비정상이면 시작을 중단하고 원인을 표시합니다. 기존 프로세스를 강제로 종료하지 않습니다.
-- 실행 파일·프로젝트가 없거나 새 서버가 30초 안에 정상 상태가 되지 않으면 오류로 종료합니다. 설치·지도 DB 가져오기를 자동으로 수행하지 않습니다.
+이미지나 지도 범위가 달라지면 새 `--nominatim-volume`을 지정하세요. 다른 설정·관리되지 않은 볼륨, 다른 프로세스의 포트는 덮어쓰지 않고 오류를 표시합니다. [자세한 Docker 사용법](nominatim/README.md)을 참고하세요. 이 기능의 종료 감시는 Linux/macOS에서 지원합니다.
 
-Photo Browser는 Nominatim의 [상태 API](https://nominatim.org/release-docs/latest/api/Status/)가 준비됐는지 확인한 뒤 웹서버를 엽니다. 종료할 때는 시작한 조회 서버와 같은 프로세스 그룹의 작업자를 정리합니다. Photo Browser가 `SIGKILL`로 종료되어도 별도 감시 프로세스가 서버에 종료 신호를 보내고, 응답하지 않으면 강제 종료합니다. 명령은 포그라운드로 실행되어야 하며 `systemctl start`나 `docker run -d`처럼 별도로 분리되는 서비스에는 이 관리 기능을 사용하지 않습니다.
-
-이미 운영 중인 자체 서버를 사용하려면 동시 실행 옵션을 생략하고 [역지오코딩 API](https://nominatim.org/release-docs/latest/api/Reverse/) 주소만 설정하세요. 이 경우 Photo Browser는 해당 서버를 종료하지 않습니다.
-
-```bash
-export PHOTO_BROWSER_REVERSE_GEOCODER_URL='http://127.0.0.1:8080/reverse'
-# 같은 셸에서 기존 명령으로 Photo Browser 실행
-```
+Docker 동시 실행 옵션 없이 이미 운영 중인 조회 API에 연결하려면 `PHOTO_BROWSER_REVERSE_GEOCODER_URL`을 설정할 수 있습니다. 이는 API 연결만 수행하며 서버를 설치·실행·종료하지 않습니다. `--nominatim-docker`와 함께 이 변수를 사용한다면 Docker가 사용하는 로컬 주소와 일치시켜야 합니다.
 
 소스의 **스캔 / JSON 생성**과 실제 **병합**에서는 이름 태그가 아직 없는 GPS 좌표만 조회 서버로 전송합니다. 병합 미리보기는 조회하지 않습니다. 기존 GPS가 있으면 일반 스캔으로 이름을 채울 수 있습니다. 국가·도시·구·동 등 서버가 반환한 이름을 `capture.place`와 `classification.location_tags`에 저장합니다. 예를 들어 지도 데이터가 해당 이름을 반환하면 `한국`, `서울특별시`, `송파구`, `잠실동`을 위치 필터에서 선택하거나 검색창에 입력할 수 있습니다. 도로명과 번지는 태그에 넣지 않습니다. 동 이름의 표기와 상세 수준은 조회 서버의 지도 데이터에 따릅니다.
 
