@@ -29,7 +29,8 @@
     for (const [id, key] of Object.entries({'filter-event':'events', 'filter-tag':'tags', 'filter-location':'location_tags', 'filter-person':'person_ids', 'filter-category':'category_id', 'filter-owner':'owner_id'})) {
       const select = el(id), current = select.value;
       select.replaceChildren(new Option('전체', ''));
-      const options = values[key] || [];
+      // Keep GPS in the DB/details, but offer place names in the location menu.
+      const options = (values[key] || []).filter(value => key !== 'location_tags' || !/^[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?$/.test(value.trim()));
       options.forEach(value => select.add(new Option(value, value)));
       select.value = options.includes(current) ? current : '';
     }
