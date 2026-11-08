@@ -41,6 +41,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
     from server_network import ServerNetwork
     server_network = ServerNetwork()
     app.extensions['server_network'] = server_network
+    from nominatim_monitor import register_nominatim_monitor
+    register_nominatim_monitor(app)
 
     @app.get('/api/server-network')
     def network_info():
@@ -172,7 +174,8 @@ def main(argv=None):
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
     parser.add_argument('--directory', action='append', help='처음 표시할 폴더 (기본 홈). 여러 번 지정하면 각 폴더를 통합 소스로 등록하고 파일 수·용량을 출력')
     parser.add_argument('--db', help='JSON DB 디렉토리')
-    from nominatim_docker import DEFAULT_IMAGE, DEFAULT_PBF, DEFAULT_VOLUME, positive_int, managed_nominatim_docker
+    from nominatim_docker import (DEFAULT_IMAGE, DEFAULT_PBF, DEFAULT_VOLUME, positive_int,
+                                 nominatim_shutdown_signals)
     parser.add_argument('--nominatim-docker', action='store_true', help='Nominatim을 Docker로 시작하고 종료 관리')
     parser.add_argument('--nominatim-image', default=DEFAULT_IMAGE, help='Nominatim Docker 이미지')
     parser.add_argument('--nominatim-volume', default=DEFAULT_VOLUME, help='지도 DB를 보존할 Docker named volume')
@@ -207,7 +210,8 @@ def main(argv=None):
         print('소스: 등록된 소스 없음', flush=True)
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
     try:
-        with managed_nominatim_docker(args.nominatim_docker, image=args.nominatim_image,
+        with nominatim_shutdown_signals(args.nominatim_docker), \
+                app.extensions['nominatim_monitor'].running(args.nominatim_docker, image=args.nominatim_image,
                                      pbf_url=args.nominatim_pbf_url, volume=args.nominatim_volume,
                                      port=args.nominatim_port, timeout=args.nominatim_ready_timeout):
             options = {'use_reloader': False} if args.nominatim_docker else {}

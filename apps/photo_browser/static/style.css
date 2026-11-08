@@ -24,3 +24,6 @@ body{overflow-wrap:anywhere}.tools>*{min-width:0}.source-row{min-width:0}input,s
 .library-info-button{width:100%;margin-top:6px}
 #detail-tag-summary{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px}
 #detail-tag-summary dd{margin:0;overflow-wrap:anywhere}
+.nominatim-logs { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+#nominatim-error, #nominatim-fetch-error { color: #ffb5ac; white-space: pre-wrap; overflow-wrap: anywhere; }
+#nominatim-info dd { overflow-wrap: anywhere; }
