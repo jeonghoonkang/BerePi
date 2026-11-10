@@ -27,3 +27,5 @@ body{overflow-wrap:anywhere}.tools>*{min-width:0}.source-row{min-width:0}input,s
 .nominatim-logs { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 #nominatim-error, #nominatim-fetch-error { color: #ffb5ac; white-space: pre-wrap; overflow-wrap: anywhere; }
 #nominatim-info dd { overflow-wrap: anywhere; }
+
+.workflow-detail{white-space:pre-line}

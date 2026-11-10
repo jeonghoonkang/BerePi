@@ -289,7 +289,7 @@ def register_library(app, boundary, db):
                 if key not in latest or latest[key]['created_at'] < job['created_at']:
                     latest[key] = job
             snapshot = [dict(job) for job in latest.values()]
-        return jsonify(workflow.snapshot(snapshot))
+        return jsonify(workflow.snapshot(snapshot, refresh_usage=request.args.get('refresh_usage') == '1'))
 
     @app.get('/api/scans')
     def scan_states():

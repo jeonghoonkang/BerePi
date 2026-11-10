@@ -4,6 +4,7 @@ from pathlib import Path
 
 from library import component, read_json
 from scan_engine import scan_sessions
+from db_usage import DirectoryUsage
 
 ACTIVE = {'queued', 'running', 'stopping'}
 ATTENTION = {'stopped', 'interrupted', 'paused_low_space', 'blocked_low_space', 'failed'}
@@ -25,6 +26,7 @@ class WorkflowStatus:
         self.catalog_cache = None
         self.merge_cache = {}
         self.job_error_cache = (None, 0)
+        self.db_usage = DirectoryUsage(library.db)
 
     def merge_state(self):
         with self.lock:
@@ -88,7 +90,7 @@ class WorkflowStatus:
             return {'status': 'settings_changed'}
         return state
 
-    def snapshot(self, jobs=()):
+    def snapshot(self, jobs=(), refresh_usage=False):
         library = self.library
         config = library.config()
         sources = config.get('sources', [])
@@ -168,6 +170,8 @@ class WorkflowStatus:
                             percent=percent(published, len(sources)), detail=db_detail + ' · 현재 스캔의 전체 반영 대기')
         elif sources and scanned == len(sources):
             steps[2].update(status='warning', detail='스캔은 끝났지만 DB 발행이 완료되지 않았습니다. 공간·오류를 확인하세요.')
+
+        steps[2]['storage'] = self.db_usage.snapshot(force=refresh_usage)
 
         # CLI merge sessions are persisted even when no web job exists.
         merge = self.merge_state()

@@ -63,6 +63,19 @@ async function main() {
     assert.equal(node.querySelector('progress').value, 100);
     assert.equal(node.querySelector('button').attributes['aria-current'], undefined);
   }
+  data.steps = data.steps.map(s => s.id === 'database' ? {...s, storage: {
+    state: 'ready', size_bytes: 1610612736, file_count: 1234, skipped: 0,
+    running: false, refresh_seconds: 30, checked_at: '2026-11-10T00:00:00Z',
+  }} : s);
+  await ids['workflow-refresh'].onclick();
+  assert.match(nodes.database.querySelector('.workflow-detail').textContent, /DB 전체 용량: 1\.5 GiB · 1,234개 파일/);
+  assert.match(nodes.database.querySelector('.workflow-detail').title, /이전 JSON 세대/);
+  data.steps.find(s => s.id === 'database').storage = {state: 'pending', size_bytes: null};
+  await ids['workflow-refresh'].onclick();
+  assert.match(nodes.database.querySelector('.workflow-detail').textContent, /DB 전체 용량: 집계 중/);
+  data.steps.find(s => s.id === 'database').storage = {state: 'error', size_bytes: null};
+  await ids['workflow-refresh'].onclick();
+  assert.match(nodes.database.querySelector('.workflow-detail').textContent, /DB 전체 용량: 조회 실패/);
   console.log('Workflow UI: completion, live progress, failure and recovery passed.');
 }
 
