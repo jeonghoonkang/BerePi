@@ -70,6 +70,7 @@ async function main() {
   assert.equal(app.reloads(), 2);
 
   const setup = await environment(false);
+  assert.match(setup.el('auth-state').textContent, /라이브러리 잠김/);
   assert.equal(setup.el('auth-login').hidden, true);
   assert.equal(setup.el('auth-change').hidden, false);
   assert.equal(setup.el('auth-token-label').hidden, false);
@@ -81,6 +82,7 @@ async function main() {
   assert.equal(JSON.parse(call.options.body).setup_token, 'fixture-owner-token');
   assert.equal(setup.el('auth-setup-token').value, '');
   assert.equal(setup.el('auth-account').hidden, false);
+  assert.equal(setup.reloads(), 1);
   console.log('Auth UI: login, password save/confirmation, logout and initial setup passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

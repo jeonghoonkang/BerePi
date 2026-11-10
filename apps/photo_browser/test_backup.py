@@ -142,7 +142,7 @@ class BackupTests(unittest.TestCase):
         self.assertFalse((self.root / 'absent').exists())
 
     def test_managed_file_can_be_served_without_original_source(self):
-        from app import create_app
+        from test_support import create_app
         item = self.library.items()[0]
         create_backup(self.library, self.bundle)
         result = restore_backup(self.bundle, self.target)

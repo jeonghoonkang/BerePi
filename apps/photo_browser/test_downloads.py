@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from app import create_app
+from test_support import create_app
 from downloads import download_name
 
 

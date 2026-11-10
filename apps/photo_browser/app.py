@@ -23,6 +23,13 @@ def positive_limit(value):
 def create_app(root=None, start=None, db=None, limit=20000):
     limit = positive_limit(limit)
     app = Flask(__name__)
+    from version_info import version_info
+    app.config['PHOTO_BROWSER_VERSION'] = version_info()
+
+    @app.context_processor
+    def software_version():
+        return {'software_version': app.config['PHOTO_BROWSER_VERSION']}
+
     boundary = Path(root or os.environ.get('PHOTO_BROWSER_ROOT', '/')).expanduser().resolve()
     initial = Path(start or os.environ.get('PHOTO_BROWSER_START', str(Path.home()))).expanduser().resolve()
     if not initial.is_relative_to(boundary):
@@ -169,8 +176,16 @@ def main(argv=None):
     # Preserve all Python thread stacks if the interpreter/native code crashes.
     faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
+    from version_info import version_info, version_label, version_logging, log_interval, DEFAULT_LOG_INTERVAL
+    info = version_info()
+    parser.add_argument('--version', action='version', version=version_label(info))
+    parser.add_argument('--version-log-interval', type=log_interval, default=DEFAULT_LOG_INTERVAL,
+                        help='터미널 버전 재출력 간격, 초 (기본 1800, 0이면 시작 시에만 출력)')
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=7081)
+    parser.add_argument('--https', action='store_true', help='내장 HTTPS 사용 (인증서·키 필수)')
+    parser.add_argument('--certfile', help='HTTPS PEM 인증서/인증서 체인 파일')
+    parser.add_argument('--keyfile', help='HTTPS PEM 개인 키 파일')
     parser.add_argument('--root', help='접근 가능한 최상위 폴더 (기본 /)')
     parser.add_argument('--directory', action='append', help='처음 표시할 폴더 (기본 홈). 여러 번 지정하면 각 폴더를 통합 소스로 등록하고 파일 수·용량을 출력')
     parser.add_argument('--db', help='JSON DB 디렉토리')
@@ -187,7 +202,11 @@ def main(argv=None):
     if args.nominatim_docker and args.port == args.nominatim_port:
         parser.error('Photo Browser 포트와 Nominatim 포트는 서로 다르게 지정하세요.')
     try:
+        from server_tls import tls_context
+        context = tls_context(args.certfile, args.keyfile, args.https)
         app = create_app(args.root, args.directory[0] if args.directory else None, args.db, limit=args.limit)
+        if context is not None:
+            app.config['SESSION_COOKIE_SECURE'] = True
         if args.directory and len(args.directory) > 1:
             from startup_sources import register_directories, print_directory_summary
             reports = register_directories(app.extensions['photo_library'], args.directory)
@@ -209,13 +228,15 @@ def main(argv=None):
     if not config.get('sources'):
         print('소스: 등록된 소스 없음', flush=True)
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
+    print(f'웹 연결 방식: {"HTTPS (TLS 1.2 이상)" if context is not None else "HTTP"}', flush=True)
     try:
-        with nominatim_shutdown_signals(args.nominatim_docker), \
+        with version_logging(app.config['PHOTO_BROWSER_VERSION'], args.version_log_interval), \
+                nominatim_shutdown_signals(args.nominatim_docker), \
                 app.extensions['nominatim_monitor'].running(args.nominatim_docker, image=args.nominatim_image,
                                      pbf_url=args.nominatim_pbf_url, volume=args.nominatim_volume,
                                      port=args.nominatim_port, timeout=args.nominatim_ready_timeout):
-            options = {'use_reloader': False} if args.nominatim_docker else {}
-            app.run(host=args.host, port=args.port, threaded=True, **options)
+            app.run(host=args.host, port=args.port, threaded=True, ssl_context=context,
+                    debug=False, use_reloader=False)
     except (ValueError, OSError, RuntimeError) as exc:
         parser.error(str(exc))
 

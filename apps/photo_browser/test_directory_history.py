@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from app import create_app
+from test_support import create_app
 from directory_history import DirectoryHistory
 
 

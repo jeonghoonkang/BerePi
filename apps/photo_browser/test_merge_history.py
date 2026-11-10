@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from app import create_app
+from test_support import create_app
 from library import atomic_json, read_json
 from merge_history import directory_snapshot, list_reports, render_html
 

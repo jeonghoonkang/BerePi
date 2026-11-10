@@ -1,0 +1,6 @@
+<div class="version-banner" aria-label="실행 코드 버전">
+<strong>Photo Browser v{{ software_version.version }}</strong>
+<span>버전 기준일 {{ software_version.release_date }}</span>
+{% if software_version.revision %}<span>커밋 {{ software_version.revision }} · {{ software_version.committed_at }}</span>{% endif %}
+{% if software_version.modified %}<span>미커밋 변경 포함</span>{% endif %}
+</div>

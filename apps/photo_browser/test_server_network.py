@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app import create_app
+from test_support import create_app
 from server_network import ServerNetwork, local_addresses, public_address
 
 

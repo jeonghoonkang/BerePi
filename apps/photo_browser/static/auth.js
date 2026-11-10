@@ -19,7 +19,7 @@
     if (initialized && enabled && !authenticated && (previous.authenticated || !previous.enabled)) {
       window.location.reload(); return;
     }
-    el('auth-state').textContent = authenticated ? '로그인됨' : enabled ? '로그인 필요' : '암호 미설정 · 현재 인증 없이 접근 가능';
+    el('auth-state').textContent = authenticated ? '로그인됨' : enabled ? '로그인 필요' : '초기 암호 설정 필요 · 라이브러리 잠김';
     el('auth-login').hidden = !enabled || authenticated;
     el('auth-account').hidden = !authenticated;
     if (!initialized || previous.enabled !== enabled || previous.authenticated !== authenticated) el('auth-change').hidden = enabled;
@@ -42,6 +42,7 @@
     window.location.reload();
   });
   bind('auth-change', async () => {
+    const initialSetup = !enabled;
     if (el('auth-new-password').value !== el('auth-confirm-password').value) throw new Error('새 비밀번호 확인 값이 다릅니다.');
     await api(enabled ? 'api/auth/password' : 'api/auth/setup', {
       password: el('auth-new-password').value, confirm_password: el('auth-confirm-password').value,
@@ -50,6 +51,7 @@
     await status(); message('비밀번호를 저장했습니다. 현재 로그인은 유지되고 다른 세션은 종료됩니다.');
     el('auth-change').hidden = true;
     el('auth-change-toggle').setAttribute('aria-expanded', 'false');
+    if (initialSetup) window.location.reload();
   });
   el('auth-change-toggle').onclick = () => {
     el('auth-change').hidden = !el('auth-change').hidden;

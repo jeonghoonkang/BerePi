@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from app import create_app
+from test_support import create_app
 from library import atomic_json
 from nominatim_statistics import PhotoTagStatistics
 

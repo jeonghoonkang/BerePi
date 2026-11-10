@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from werkzeug.exceptions import ClientDisconnected
 
-from app import create_app
+from test_support import create_app
 
 
 class UploadTests(unittest.TestCase):

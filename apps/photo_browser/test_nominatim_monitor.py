@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
-from app import create_app
+from test_support import create_app
 from nominatim_docker import DEFAULT_IMAGE, DEFAULT_PBF, DEFAULT_VOLUME
 from nominatim_monitor import NominatimMonitor
 

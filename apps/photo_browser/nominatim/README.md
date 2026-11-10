@@ -94,3 +94,64 @@ curl --fail 'http://127.0.0.1:8080/status?format=json'
 현재 개발 환경에 Docker 실행 파일이 없어 실제 이미지 다운로드·지도 가져오기는 실행하지 않았습니다. Docker CLI 대체 실행기와 별도 서버 프로세스를 사용해 생성 옵션, 정상·강제 종료, 볼륨 보존, 기존 자원 보호를 검증합니다.
 
 스캔·병합의 위치 태그 정책은 동일합니다. 국가 코드 `KR`은 한국어, 그 외는 영어를 요청하며 원본 GPS와 국가 코드를 DB에 저장합니다. 지도 데이터: [© OpenStreetMap 기여자](https://www.openstreetmap.org/copyright).
+
+## Docker 독립 서비스
+
+Photo Browser 없이 지도 다운로드·DB 가져오기·조회 API까지 실행할 수 있습니다. Docker Engine/Desktop과 **Docker Compose v2**, Python 3가 필요합니다. 호스트에 PostgreSQL이나 Nominatim Python 패키지를 설치할 필요는 없습니다. [mediagis 커뮤니티 이미지](https://github.com/mediagis/nominatim-docker)를 사용하며, 기본 지도는 한국, 가져오기 범위는 행정구역·지명 중심, API는 역지오코딩 전용입니다.
+
+저장소 루트에서 실행하세요. 실행기는 다른 작업 디렉토리에서도 자신의 설정 파일을 찾아 사용합니다.
+
+```bash
+# .env 생성: 임의의 DB 암호를 생성하고 파일 권한을 0600으로 설정
+python3 apps/photo_browser/nominatim/docker_service.py init
+
+# 필요한 경우 nominatim/.env에서 포트·지도 URL·자원 설정을 편집한 뒤 실행
+python3 apps/photo_browser/nominatim/docker_service.py up
+python3 apps/photo_browser/nominatim/docker_service.py logs
+# 로그 보기 종료는 Ctrl+C; 컨테이너는 계속 실행됨
+python3 apps/photo_browser/nominatim/docker_service.py check
+```
+
+`up`은 백그라운드 실행 요청입니다. 최초 실행은 이미지와 지도 다운로드 및 DB 가져오기에 시간이 걸립니다. `check`가 **지도 DB 준비 완료**를 출력하고 종료 코드 0을 반환해야 조회할 수 있습니다. 가져오기 중에는 준비 검사가 실패하며, 오래 걸리면 Docker health 상태가 `unhealthy`로 표시될 수 있습니다. `logs`로 실제 진행·오류를 확인하세요. Docker health 검사는 HTTP 응답뿐 아니라 Nominatim의 `status: 0`도 확인합니다.
+
+```bash
+python3 apps/photo_browser/nominatim/docker_service.py status
+python3 apps/photo_browser/nominatim/docker_service.py stop
+python3 apps/photo_browser/nominatim/docker_service.py up
+python3 apps/photo_browser/nominatim/docker_service.py restart
+# 컨테이너·네트워크 제거, 지도 DB 볼륨은 보존
+python3 apps/photo_browser/nominatim/docker_service.py down
+```
+
+DB는 Compose 프로젝트 `photo-browser-nominatim`의 `map-data` 영구 볼륨에 저장됩니다. `down` 후 `up`, 컨테이너 재생성 시에도 완료된 DB를 재사용합니다. `docker compose down -v`나 볼륨 삭제는 데이터를 지우므로 사용하지 마세요. `.env`만 복사해서는 DB가 옮겨지지 않습니다. Photo Browser의 사진 백업에도 이 Docker 볼륨은 포함되지 않습니다. 가져오기를 중간에 중단한 DB는 정상 완료 DB와 다르므로 로그를 확인하고 복구 여부를 판단해야 합니다.
+
+`.env`는 Git에서 제외되며, `init`을 다시 실행해도 기존 파일을 덮어쓰지 않습니다. 수동 설정은 `.env.example`을 `.env`로 복사한 뒤 `NOMINATIM_PASSWORD`를 충분히 긴 임의 값으로 채우세요. 이 암호는 내부 DB 연결용이며 API 로그인 암호가 아닙니다. 기본 API는 `127.0.0.1:8080`에만 공개하고 PostgreSQL 포트는 공개하지 않습니다. 다른 장치에 공개하려면 별도의 HTTPS·접근 제어를 구성하세요. 이미지 시작 로그와 Docker 관리 권한에도 내부 설정이 노출될 수 있으므로 접근을 제한하세요.
+
+| 설정 | 용도 |
+| --- | --- |
+| `HTTP_PORT` / `BIND_ADDRESS` | 호스트 API 포트 / 접속 허용 인터페이스 |
+| `PBF_URL` | 최초 가져올 HTTPS `.osm.pbf` 주소 |
+| `IMPORT_STYLE` | 기본 `admin`, 도로·주소가 필요하면 최초 가져오기 전에 `street` 또는 `address` 선택 |
+| `THREADS` / `GUNICORN_WORKERS` | 가져오기 스레드 / API 작업자 수 |
+| `SHM_SIZE`, `POSTGRES_*` | 공유 메모리 및 PostgreSQL 메모리 설정 |
+| `NOMINATIM_IMAGE` | 기본 `mediagis/nominatim:5.3`; 배포 환경에서는 검증한 이미지 digest로 고정 가능 |
+
+메모리 기본값은 이미지 기본값보다 낮게 잡았습니다. 실제 RAM·SSD 여유 공간은 지도 크기에 따라 달라지며, 이 값이 실행 가능 최소 사양을 보장하지는 않습니다. Docker Desktop의 메모리·디스크 할당도 확인하세요. 호스트 CPU에 대응하는 이미지가 필요합니다. 기존 볼륨에 대해 지도 URL·가져오기 스타일을 바꾸어도 재가져오기는 하지 않으며, 지도 자동 업데이트는 설정하지 않습니다. 별도 지역 DB가 필요하면 다른 Compose 프로젝트 이름(`COMPOSE_PROJECT_NAME`)과 API 포트를 사용하세요. 생성 이후 같은 프로젝트 이름을 유지해야 같은 볼륨을 사용합니다.
+
+직접 Compose로 실행할 수도 있습니다.
+
+```bash
+cd apps/photo_browser/nominatim
+docker compose --env-file .env -f compose.yaml up -d
+docker compose --env-file .env -f compose.yaml ps --all
+docker compose --env-file .env -f compose.yaml down
+```
+
+Docker 서비스가 준비된 뒤 Photo Browser를 실행하세요. 별도 서비스이므로 `--nominatim-docker`는 지정하지 않습니다. Photo Browser가 종료되어도 Docker 서비스는 계속 실행되며, Docker 재시작 시 `unless-stopped` 정책으로 다시 시작합니다.
+
+```bash
+PHOTO_BROWSER_REVERSE_GEOCODER_URL=http://127.0.0.1:8080/reverse \
+  python3 apps/photo_browser/app.py
+```
+
+다른 서비스가 8080 포트를 사용 중이면 `.env`의 `HTTP_PORT`를 변경하고 위 조회 주소도 같은 포트로 맞추세요. 독립 Compose 서비스의 DB 볼륨은 Photo Browser의 `--nominatim-docker` 볼륨과 별개입니다.

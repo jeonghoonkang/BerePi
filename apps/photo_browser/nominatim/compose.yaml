@@ -1,0 +1,39 @@
+name: photo-browser-nominatim
+
+services:
+  nominatim:
+    image: ${NOMINATIM_IMAGE:-mediagis/nominatim:5.3}
+    restart: unless-stopped
+    stop_grace_period: 2m
+    shm_size: ${SHM_SIZE:-1gb}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8080}:8080"
+    environment:
+      PBF_URL: ${PBF_URL:-https://download.geofabrik.de/asia/south-korea-latest.osm.pbf}
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:?Run python3 docker_service.py init first}
+      IMPORT_STYLE: ${IMPORT_STYLE:-admin}
+      REVERSE_ONLY: "true"
+      UPDATE_MODE: none
+      NOMINATIM_SERVE_DEBUG_OUTPUT: "no"
+      THREADS: ${THREADS:-2}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-256MB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-512MB}
+      POSTGRES_AUTOVACUUM_WORK_MEM: ${POSTGRES_AUTOVACUUM_WORK_MEM:-256MB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-16MB}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-1GB}
+    volumes:
+      - map-data:/var/lib/postgresql/16/main
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import json, urllib.request; r=json.load(urllib.request.urlopen('http://127.0.0.1:8080/status?format=json', timeout=5)); raise SystemExit(0 if r.get('status') == 0 else 1)"
+      interval: 30s
+      timeout: 10s
+      start_period: 30m
+      retries: 5
+
+volumes:
+  map-data:

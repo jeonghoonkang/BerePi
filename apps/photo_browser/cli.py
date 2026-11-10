@@ -25,6 +25,11 @@ def refresh_interval(value):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    from version_info import version_info, version_label, version_logging, log_interval, DEFAULT_LOG_INTERVAL
+    info = version_info()
+    parser.add_argument('--version', action='version', version=version_label(info))
+    parser.add_argument('--version-log-interval', type=log_interval, default=DEFAULT_LOG_INTERVAL,
+                        help='버전 재출력 간격, 초 (기본 1800, 0이면 시작 시에만 출력)')
     parser.add_argument('--db', default=os.environ.get('PHOTO_BROWSER_DB', str(Path(__file__).parent / 'db')), help='서버와 동일한 JSON DB 경로')
     parser.add_argument('--root', default='/', help='서버와 동일한 허용 루트 (기본 /)')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -67,6 +72,11 @@ def main(argv=None):
     options.add_argument('--resume', metavar='MERGE_ID', help='중지한 병합 이어하기')
     merge.add_argument('--media-id', action='append', help='대상 미디어 ID (여러 번 지정 가능, 기본 전체)')
     args = parser.parse_args(argv)
+    with version_logging(info, args.version_log_interval):
+        return run_command(args, parser)
+
+
+def run_command(args, parser):
     if args.command == 'merge' and args.resume and args.media_id:
         parser.error('--resume과 --media-id는 함께 사용할 수 없습니다.')
     try:

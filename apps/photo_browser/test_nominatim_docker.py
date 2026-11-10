@@ -1,4 +1,5 @@
 import contextlib
+import base64
 import io
 import http.client
 import json
@@ -14,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app import main
+from test_support import TEST_PASSWORD
 from nominatim_docker import (CONFIG, DEFAULT_IMAGE, DEFAULT_PBF, MANAGED, PORT,
                               DownloadProgress, _follow_logs, _healthy, _report_database,
                               managed_nominatim_docker, settings)
@@ -101,7 +103,8 @@ def serving(port):
 def monitor_status(port):
     connection = http.client.HTTPConnection('127.0.0.1', port, timeout=.5)
     try:
-        connection.request('GET', '/api/nominatim/status')
+        credential = base64.b64encode(('feature-test:' + TEST_PASSWORD).encode()).decode()
+        connection.request('GET', '/api/nominatim/status', headers={'Authorization': 'Basic ' + credential})
         return json.loads(connection.getresponse().read())
     finally:
         connection.close()
@@ -119,7 +122,7 @@ class DockerLifecycleTests(unittest.TestCase):
             while app_port == service_port:
                 service_port = free_port()
             env = {**os.environ, 'PATH': str(root) + os.pathsep + os.environ.get('PATH', ''),
-                   'PHOTO_DOCKER_TEST_DIR': str(root)}
+                   'PHOTO_DOCKER_TEST_DIR': str(root), 'PHOTO_BROWSER_PASSWORD': TEST_PASSWORD}
             env.pop('PHOTO_BROWSER_REVERSE_GEOCODER_URL', None)
             if stop_signal is None or preparing:
                 env['PHOTO_DOCKER_TEST_UNHEALTHY'] = '1'

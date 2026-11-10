@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from app import create_app, main
+from app import main
+from test_support import create_app, TEST_PASSWORD
 from startup_sources import print_directory_summary, register_directories
 
 
@@ -80,6 +81,7 @@ class StartupSourcesTests(unittest.TestCase):
         self.assertIn('불완전한 집계', stream.getvalue())
         self.assertIn('집계 오류 2건', stream.getvalue())
 
+    @patch.dict('os.environ', {'PHOTO_BROWSER_PASSWORD': TEST_PASSWORD})
     def test_cli_multiple_directories_persist_and_second_run_reports_existing(self):
         args = ['--root', str(self.root), '--db', str(self.library.db),
                 '--directory', str(self.first), '--directory', str(self.second)]
@@ -93,6 +95,7 @@ class StartupSourcesTests(unittest.TestCase):
             self.assertIn(f'시작 디렉토리: {self.first}', stream.getvalue())
         self.assertEqual(len(self.library.config()['sources']), 2)
 
+    @patch.dict('os.environ', {'PHOTO_BROWSER_PASSWORD': TEST_PASSWORD})
     def test_cli_single_directory_keeps_browse_only_behavior(self):
         with patch('app.Flask.run'), contextlib.redirect_stdout(io.StringIO()) as stream:
             main(['--root', str(self.root), '--db', str(self.library.db), '--directory', str(self.second)])

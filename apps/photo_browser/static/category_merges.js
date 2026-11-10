@@ -61,7 +61,7 @@
         status = await api(`api/jobs/${encodeURIComponent(jobId)}`);
         const p = status.progress || {};
         el('category-progress').value = p.percent || 0;
-        const phases = {category_planning: '관리 파일 검증·미리보기', category_copying: '새 카테고리로 복사·검증', category_archiving: '이전 파일 복구용 보관', category_restoring: '이전 위치 복원'};
+        const phases = {category_planning: '관리 파일 검증·미리보기', category_copying: '새 카테고리로 경로 전환·검증 (필요 시 복사)', category_archiving: '이전 파일 복구용 보관', category_restoring: '이전 위치 복원'};
         message(`${phases[p.phase] || status.status} · ${p.processed || 0}/${p.total || 0}개${p.current_file ? '\n처리 대상: ' + p.current_file : ''}${p.source_file ? '\n입력 managed: ' + p.source_file : ''}${p.target_file ? '\n출력/보관 위치: ' + p.target_file : ''}`);
         if (active.includes(status.status)) await new Promise(resolve => setTimeout(resolve, 1000));
       } while (active.includes(status.status));
@@ -70,7 +70,7 @@
       if (preview && result?.operation_id) {
         plan = result.operation_id;
         const samples = result.rows.slice(0, 100).map(row => `${row.source}\n  → ${row.destination}${row.renamed ? ' (충돌 이름 구분)' : ''}`).join('\n');
-        el('category-preview-result').textContent = `${result.rows.length.toLocaleString()}개 · 신규 복사 파일 ${result.copy_files.toLocaleString()}개 · 예상 복사 ${(result.copy_bytes / 1073741824).toFixed(2)} GiB\n${result.warning}\n\n처음 최대 100개 경로:\n${samples}`;
+        el('category-preview-result').textContent = `${result.rows.length.toLocaleString()}개 · 복사 없는 경로 전환 예상 ${(result.link_files || 0).toLocaleString()}개 · 신규 복사 파일 ${result.copy_files.toLocaleString()}개 · 예상 복사 ${(result.copy_bytes / 1073741824).toFixed(2)} GiB\n${result.warning}\n\n처음 최대 100개 경로:\n${samples}`;
         message('미리보기가 완료되었습니다. 경로와 공간 사용을 확인한 뒤 실행하세요.');
       } else {
         invalidate();

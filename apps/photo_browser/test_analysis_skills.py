@@ -11,7 +11,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from analysis_skills import ADAPTERS, AnalysisSkills
-from app import create_app
+from test_support import create_app
 from backup import create_backup, restore_backup
 from cli import main
 from library import Library

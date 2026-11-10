@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from app import create_app
+from test_support import create_app
 from library import Library
 from location_rescan import scan_missing_places
 from place_lookup import LANGUAGE_POLICY, place_from_address

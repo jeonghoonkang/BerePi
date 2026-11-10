@@ -174,10 +174,10 @@ class AccessControl:
     def protect(self):
         config = self.config()
         public = request.endpoint in {'static', 'auth_status', 'auth_login', 'auth_setup', 'auth_logout'}
-        if not public and self.enabled(config) and not self.authenticated(config):
+        if not public and (not self.enabled(config) or not self.authenticated(config)):
             if request.endpoint == 'index':
                 return render_template('login.html')
-            return jsonify(error='로그인이 필요합니다.', login_required=True), 401
+            return jsonify(error='로그인 또는 초기 암호 설정이 필요합니다.', login_required=True), 401
         if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
             from urllib.parse import urlsplit
             origin = request.headers.get('Origin')

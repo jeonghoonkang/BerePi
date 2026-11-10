@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from app import create_app
+from test_support import create_app
 
 
 class BrowserTests(unittest.TestCase):

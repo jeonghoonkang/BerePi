@@ -1,4 +1,5 @@
 import copy
+import errno
 import os
 import shutil
 import tempfile
@@ -10,7 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from app import create_app
+from test_support import create_app
 from backup import create_backup, restore_backup
 from library import digest, read_json
 
@@ -51,7 +52,9 @@ class CategoryMergeTests(unittest.TestCase):
             Path(item['locations'][0]['path']).unlink()
         times = {key: path.stat().st_mtime_ns for key, path in self.originals.items()}
         plan = self.preview()
-        self.assertEqual(plan['copy_files'], 2)
+        self.assertEqual(plan['copy_files'], 0)
+        self.assertEqual(plan['copy_bytes'], 0)
+        self.assertEqual(plan['link_files'], 2)
         result = self.store.execute(plan['operation_id'])
         self.assertEqual(result['status'], 'completed')
         self.assertEqual({i['classification']['category_id'] for i in self.library.items()}, {'family'})
@@ -81,7 +84,8 @@ class CategoryMergeTests(unittest.TestCase):
         target.parent.mkdir(parents=True)
         shutil.copy2(self.originals[item['media_id']], target)
         plan = self.preview()
-        self.assertEqual(plan['copy_files'], 1)
+        self.assertEqual(plan['copy_files'], 0)
+        self.assertEqual(plan['link_files'], 1)
         self.store.execute(plan['operation_id'])
         self.store.undo(plan['operation_id'])
         self.assertTrue(target.is_file())
@@ -165,12 +169,115 @@ class CategoryMergeTests(unittest.TestCase):
         item = self.library.items()[0]
         target = Path(item['locations'][-1]['path'])
         original = self.originals[item['media_id']]
+        # Replace the path as an external editor might; preserve the original
+        # inode so the interrupted operation can recover after replacement.
+        target.unlink()
         target.write_bytes(b'changed after crash')
         with self.assertRaisesRegex(ValueError, '변경'):
             self.store.execute(plan['operation_id'])
         self.assertTrue(all(p.exists() for p in self.originals.values()))
         shutil.copy2(original, target)
         self.assertEqual(self.store.execute(plan['operation_id'])['status'], 'completed')
+
+    def test_same_filesystem_switch_preserves_inode_without_copying_bytes(self):
+        inodes = {mid: path.stat().st_ino for mid, path in self.originals.items()}
+        plan = self.preview()
+        with patch.object(self.store, 'copy_checked', side_effect=AssertionError('Unexpected byte copy')):
+            result = self.store.execute(plan['operation_id'])
+            self.assertEqual({row['transfer_mode'] for row in result['rows']}, {'linked'})
+            for row in result['rows']:
+                self.assertEqual(Path(row['destination']).stat().st_ino,
+                                 inodes[row['before']['media_id']])
+            for move in result['moves']:
+                row = next(row for row in result['rows'] if row['source'] == move['original'])
+                self.assertTrue(os.path.samefile(move['saved'], row['destination']))
+            self.store.undo(plan['operation_id'])
+        self.assertEqual(self.library.items(), self.before)
+        for mid, path in self.originals.items():
+            self.assertEqual(path.stat().st_ino, inodes[mid])
+
+    def test_cross_filesystem_uses_copy_and_accounts_for_space(self):
+        with patch.object(self.store, 'same_filesystem', return_value=False):
+            plan = self.preview()
+            self.assertEqual(plan['copy_files'], 2)
+            self.assertEqual(plan['link_files'], 0)
+            self.assertEqual(plan['copy_bytes'], sum(item['size_bytes'] for item in self.before))
+            result = self.store.execute(plan['operation_id'])
+        self.assertEqual({row['transfer_mode'] for row in result['rows']}, {'copied'})
+        self.store.undo(plan['operation_id'])
+        self.assertEqual(self.library.items(), self.before)
+
+    def test_link_switch_does_not_require_full_media_copy_space(self):
+        for item in self.before:
+            path = self.originals[item['media_id']]
+            with path.open('ab') as stream:
+                stream.write(b'additional media content' * 100000)
+            item['size_bytes'] = path.stat().st_size
+            item['sha256'] = digest(path)
+        self.library.commit(self.before)
+        plan = self.preview()
+        reserve = self.library.config()['scan_min_free_mb'] * 1048576
+        # Enough for DB/journal, far below the combined media size.
+        with patch('category_merge.shutil.disk_usage', return_value=SimpleNamespace(free=reserve + 524288)), \
+                patch.object(self.store, 'copy_checked', side_effect=AssertionError('Unexpected copy')):
+            self.assertEqual(self.store.execute(plan['operation_id'])['status'], 'completed')
+
+    def test_in_place_content_change_of_linked_file_is_detected_on_undo(self):
+        result = self.store.execute(self.preview()['operation_id'])
+        Path(result['rows'][0]['destination']).write_bytes(b'externally changed content')
+        with self.assertRaisesRegex(ValueError, '변경'):
+            self.store.undo(result['operation_id'])
+        self.assertEqual({item['classification']['category_id'] for item in self.library.items()}, {'family'})
+
+    def test_unsupported_links_fall_back_to_verified_copy(self):
+        plan = self.preview()
+        link = os.link
+        def no_link_for_new_target(source, target, *args, **kwargs):
+            if Path(source) in self.originals.values() and Path(target).is_relative_to(self.managed / 'family'):
+                raise OSError(errno.ENOTSUP, 'links unsupported')
+            return link(source, target, *args, **kwargs)
+        with patch('category_merge.os.link', side_effect=no_link_for_new_target):
+            result = self.store.execute(plan['operation_id'])
+        self.assertEqual({row['transfer_mode'] for row in result['rows']}, {'copied'})
+        for row in result['rows']:
+            saved = next(move['saved'] for move in result['moves'] if move['original'] == row['source'])
+            self.assertFalse(os.path.samefile(saved, row['destination']))
+        self.store.undo(plan['operation_id'])
+
+    def test_shared_paths_are_copied_without_aliasing_other_items(self):
+        shared = copy.deepcopy(self.before[0])
+        shared['media_id'] = 'shared'
+        shared['classification']['category_id'] = 'other'
+        self.library.commit(self.before + [shared])
+        plan = self.preview()
+        self.assertEqual(plan['copy_files'], 1)
+        self.assertEqual(plan['link_files'], 1)
+        result = self.store.execute(plan['operation_id'])
+        row = next(row for row in result['rows'] if row['before']['media_id'] == self.before[0]['media_id'])
+        self.assertEqual(row['transfer_mode'], 'copied')
+        self.assertFalse(os.path.samefile(row['source'], row['destination']))
+
+    def test_link_publication_before_journal_can_resume_without_losing_source(self):
+        plan = self.preview()
+        with patch.object(self.store, 'journal', side_effect=OSError('journal interrupted')):
+            with self.assertRaises(OSError):
+                self.store.execute(plan['operation_id'])
+        self.assertEqual(self.library.items(), self.before)
+        self.assertTrue(all(path.exists() for path in self.originals.values()))
+        self.store.execute(plan['operation_id'])
+        self.store.undo(plan['operation_id'])
+        self.assertEqual(self.library.items(), self.before)
+
+    def test_fallback_copy_low_space_keeps_originals_and_database(self):
+        plan = self.preview()
+        with patch('category_merge.os.link', side_effect=OSError(errno.ENOTSUP, 'unsupported')), \
+                patch.object(self.store, 'ensure_space'), \
+                patch('category_merge.shutil.disk_usage', return_value=SimpleNamespace(free=0)):
+            with self.assertRaisesRegex(ValueError, '공간'):
+                self.store.execute(plan['operation_id'])
+        self.assertEqual(self.library.items(), self.before)
+        self.assertTrue(all(path.exists() for path in self.originals.values()))
+        self.assertEqual(list(self.managed.rglob('*.part')), [])
 
     def test_torn_journal_is_repaired_on_resume(self):
         plan = self.preview()

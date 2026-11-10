@@ -1,5 +1,6 @@
-"""Reclassify managed media with verified copies and a recoverable journal."""
+"""Reclassify managed media without copying bytes when safe, with a recovery journal."""
 import copy
+import errno
 import hashlib
 import json
 import os
@@ -95,6 +96,37 @@ class CategoryMerger:
                   'inventory_complete': True, 'operation_id': record['operation_id'],
                   'current_file': str(path), 'current_file_role': role, 'current_action': phase, **extra})
 
+    @staticmethod
+    def same_filesystem(source, target):
+        parent = target.parent
+        while not parent.exists():
+            parent = parent.parent
+        return source.stat().st_dev == parent.stat().st_dev
+
+    def protected_source_paths(self, items, selected_ids):
+        # A physical original or a managed file used by another item must keep
+        # independent bytes. Selected managed-only aliases may share the move.
+        protected = {str(Path(loc['path']).expanduser().resolve())
+                     for item in items for loc in item['locations'] if loc.get('path')
+                     and (item['media_id'] not in selected_ids or loc['role'] != 'managed')}
+        return protected
+
+    def transfer_plan(self, record, items):
+        protected = self.protected_source_paths(items, {row['before']['media_id'] for row in record['rows']})
+        copies, links = {}, set()
+        for row in record['rows']:
+            source, target = Path(row['source']), Path(row['destination'])
+            row['link_allowed'] = str(source) not in protected and self.same_filesystem(source, target)
+            if not target.exists():
+                if row['link_allowed']:
+                    links.add(str(target))
+                else:
+                    copies[str(target)] = row['before']['size_bytes']
+        record['link_files'] = len(links - copies.keys())
+        record['copy_files'] = len(copies)
+        record['copy_bytes'] = sum(copies.values())
+        return copies
+
     def preview(self, categories, target_category, progress=None):
         progress = progress or (lambda state: None)
         if not isinstance(categories, list) or not categories or len(categories) > 100 or any(not isinstance(c, str) for c in categories):
@@ -137,17 +169,15 @@ class CategoryMerger:
                 record['rows'].append({'before': copy.deepcopy(item), 'source': str(source),
                                        'destination': str(target), 'renamed': target.name != item['name']})
             record['processed'] = 0
-            targets = {row['destination']: row['before']['size_bytes'] for row in record['rows'] if not Path(row['destination']).exists()}
-            record['copy_files'] = len(targets)
-            record['copy_bytes'] = sum(targets.values())
-            record['warning'] = '검증 후 이전 관리 파일은 .trash/category-merges에 보관합니다. 원본·소스 설정은 변경하지 않으며 보관 파일도 공간을 사용합니다.'
+            self.transfer_plan(record, items)
+            record['warning'] = '같은 파일시스템에서는 하드 링크로 경로를 전환합니다. 링크 미지원·다른 파일시스템·공유 원본은 복사하며 추가 공간이 필요합니다. 이전 경로는 복구용으로 보관합니다.'
             self.save(record)
             self.emit(record, progress, 'category_planning', processed=len(selected), percent=100)
             return record
 
     def ensure_space(self, record):
         root = self.root(record)
-        pending = {row['destination']: row['before']['size_bytes'] for row in record['rows'] if not Path(row['destination']).exists()}
+        pending = self.transfer_plan(record, self.library.items())
         reserve = self.library.config().get('scan_min_free_mb', 512) * 1048576
         # Include a conservative allowance for a new DB generation and journal.
         metadata = sum(len(json.dumps(item, ensure_ascii=False).encode()) + 4096 for item in self.library.items()) * 3
@@ -158,6 +188,30 @@ class CategoryMerger:
                       and shutil.disk_usage(self.library.db).free >= reserve + metadata)
         if not enough:
             raise ValueError('카테고리 통합을 위한 복사·DB 저장 디스크 공간이 부족합니다.')
+
+    def transfer_checked(self, source, target, sha, size, reserve, allow_link):
+        """Stage a path switch; do not retire the old name before DB publication.
+
+        Hard links preserve the inode, bytes and timestamps and never overwrite
+        an occupied destination. Keeping the old name until commit also makes
+        stop/resume, journal gaps and the existing undo protocol safe.
+        """
+        if allow_link and self.same_filesystem(source, target):
+            self.verify(source, sha, size)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.link(source, target)
+                return True, 'linked'
+            except FileExistsError:
+                self.verify(target, sha, size)
+                return False, 'reused'
+            except OSError as exc:
+                if exc.errno not in {errno.EXDEV, errno.EPERM, errno.EACCES,
+                                     errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EMLINK}:
+                    raise
+                # Actual copying checks available space per block as before.
+        copied = self.copy_checked(source, target, sha, size, reserve)
+        return copied, 'copied' if copied else 'reused'
 
     def copy_checked(self, source, target, sha, size, reserve):
         self.verify(source, sha, size)
@@ -250,7 +304,9 @@ class CategoryMerger:
                         row['destination'] = str(target)
                         row['renamed'] = target.name != item['name']
                         self.emit(record, progress, 'category_copying', target, source_file=str(source), target_file=str(target))
-                        row['copied'] = self.copy_checked(source, target, item['sha256'], item['size_bytes'], reserve)
+                        row['copied'], row['transfer_mode'] = self.transfer_checked(
+                            source, target, item['sha256'], item['size_bytes'], reserve,
+                            row.get('link_allowed', False))
                         if row['copied'] and str(target) not in record['created_files']:
                             record['created_files'].append(str(target))
                         item['locations'] = [loc for loc in item['locations'] if loc['role'] != 'managed']

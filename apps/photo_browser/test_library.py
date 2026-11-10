@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from PIL import ExifTags, Image
 from PIL.TiffImagePlugin import IFDRational
-from app import create_app
+from test_support import create_app
 from library import LOCATION_FILE, PAIR_HISTORY, Library, metadata, read_json, atomic_json
 
 
