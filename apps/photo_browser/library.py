@@ -10,6 +10,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 from collections import defaultdict
 from contextlib import contextmanager
@@ -975,6 +976,7 @@ class Library:
             if preview:
                 return self._merge(ids, True, progress, stopped, resume)
             from merge_history import MergeHistory, first_merge_start
+            run_clock = time.monotonic()
             root = self.local(self.config()['managed_root'])
             write_library_locations(self.db, root)
             run_started_at = now()
@@ -982,8 +984,14 @@ class Library:
             from merge_status import MergeProgress
             live = MergeProgress(self.db, resume, run_started_at)
             original_progress = progress or (lambda state: None)
+            from merge_estimate import ETA_FIELDS
+            latest_estimate = {}
             def timed_progress(state):
-                value = {**state, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at}
+                latest_estimate.update({key: state[key] for key in ETA_FIELDS if key in state})
+                value = {**latest_estimate, **state, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at}
+                value['merge_elapsed_seconds'] = round(time.monotonic() - run_clock, 2)
+                if value.get('estimated_remaining_seconds') is not None:
+                    value['estimated_total_seconds'] = round(value['merge_elapsed_seconds'] + value['estimated_remaining_seconds'], 2)
                 live.update({**value, 'status': 'running'})
                 original_progress(value)
             history = None
@@ -1010,6 +1018,9 @@ class Library:
                 result['history_report_error'] = str(exc)
                 result['warning'] = (result.get('warning', '') + '\n병합 보고서 저장 실패: ' + str(exc)).strip()
             result.update(merge_started_at=merge_started_at, run_started_at=run_started_at)
+            result['merge_elapsed_seconds'] = round(time.monotonic() - run_clock, 2)
+            if result.get('estimated_remaining_seconds') is not None:
+                result['estimated_total_seconds'] = round(result['merge_elapsed_seconds'] + result['estimated_remaining_seconds'], 2)
             live.update({**result, 'phase': 'finished'}, force=True)
             if result.get('plan_id'):
                 atomic_json(self.db / 'plans' / (result['plan_id'] + '.json'), result)
@@ -1056,6 +1067,8 @@ class Library:
                 return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
                         'total': len(wanted), 'processed': len(operations), 'percent': 0,
                         'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
+        from merge_estimate import MergeEstimate
+        estimate = None if preview else MergeEstimate(len(wanted) - len(completed), state['disk_space']['fast_skip_files'])
         db_dirty = full_commit_needed = False
         metadata_updates = {}
         state['fast_skipped_count'] = sum(bool(op.get('fast_skipped')) for op in operations)
@@ -1073,7 +1086,10 @@ class Library:
                     db_dirty = False
                     full_commit_needed = False
                     metadata_updates.clear()
+                state.update(estimate.snapshot())
                 atomic_json(session_path, state)
+                estimate.checkpoint_finished()
+                state.update(estimate.snapshot())
             progress({key: value for key, value in state.items() if key not in {'ids', 'operations'}})
         checkpoint()
         interrupted = False
@@ -1085,6 +1101,8 @@ class Library:
                 break
             if item['lifecycle']['status'] != 'active':
                 operations.append({'media_id': item['media_id'], 'status': 'skipped'})
+                if estimate:
+                    estimate.completed(fast=True)
                 continue
             c, date = item['classification'], item['capture']['date_key']
             target = self.merge_target(root, item)
@@ -1096,6 +1114,8 @@ class Library:
             source_location = item['locations'][0]
             state['source_file'] = source_location.get('path') or source_location.get('uri')
             def file_progress(path, role, action, emit=True):
+                if estimate:
+                    state.update(estimate.snapshot())
                 state.update(current_file=str(path), current_file_role=role, current_action=action,
                              target_file=str(path) if role == 'comparison_target' else str(target),
                              phase='planning' if preview else 'merging')
@@ -1182,6 +1202,9 @@ class Library:
             # 25th file and the final job state; it is not an in-flight source.
             state.update(current_file=str(target), current_file_role='merge_destination',
                          current_action='fast_skipped' if op.get('fast_skipped') else op['status'], target_file=str(target))
+            if estimate:
+                estimate.completed(fast=bool(op.get('fast_skipped')))
+                state.update(estimate.snapshot())
             if (db_dirty and len(operations) % 25 == 0) or len(operations) % 1000 == 0:
                 checkpoint()
             else:
@@ -1189,12 +1212,15 @@ class Library:
                           'percent': round(len(operations) * 100 / len(wanted), 1), 'current_file': str(target),
                           'current_file_role': state['current_file_role'], 'current_action': state['current_action'],
                           'source_file': state['source_file'], 'target_file': str(target), 'phase': 'merging',
-                          'fast_skipped_count': state['fast_skipped_count']})
+                          'fast_skipped_count': state['fast_skipped_count'],
+                          **(estimate.snapshot() if estimate else {})})
         checkpoint('stopped' if interrupted else 'completed')
         report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
                   'merge_id': state['merge_id'], 'status': state['status'],
                   'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
         report['fast_skipped_count'] = state['fast_skipped_count']
+        if estimate:
+            report.update(estimate.snapshot())
         report.update({key: state[key] for key in ('current_file', 'current_file_role', 'current_action', 'source_file', 'target_file') if key in state})
         if 'disk_space' in state:
             report['disk_space'] = state['disk_space']

@@ -240,10 +240,12 @@
     return [];
   }
   function mergeProgress(progress) {
-    if (progress?.phase === 'report_inventory') return `보고서용 관리 디렉토리 집계 중 · ${(progress.report_files ?? 0).toLocaleString()}개 확인`;
-    if (progress?.phase === 'checking_space') return `복사 용량·여유 공간 계산 중 · ${(progress.checked ?? 0).toLocaleString()}/${(progress.check_total ?? 0).toLocaleString()}개 확인`;
+    const timing = window.photoBrowserJobRecords?.mergeEstimateText(progress);
+    const withTiming = text => timing ? `${text}\n${timing}` : text;
+    if (progress?.phase === 'report_inventory') return withTiming(`보고서용 관리 디렉토리 집계 중 · ${(progress.report_files ?? 0).toLocaleString()}개 확인`);
+    if (progress?.phase === 'checking_space') return withTiming(`복사 용량·여유 공간 계산 중 · ${(progress.checked ?? 0).toLocaleString()}/${(progress.check_total ?? 0).toLocaleString()}개 확인`);
     if (!progress?.inventory_complete && progress?.total === undefined) return 'DB와 현재 설정을 읽고 있습니다…';
-    return `전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%) · 빠른 건너뛰기 ${(progress?.fast_skipped_count ?? 0).toLocaleString()}개`;
+    return withTiming(`전체 ${(progress?.total ?? 0).toLocaleString()}개 · 처리 ${(progress?.processed ?? 0).toLocaleString()}개 (${progress?.percent ?? 0}%) · 빠른 건너뛰기 ${(progress?.fast_skipped_count ?? 0).toLocaleString()}개`);
   }
   function jobFileText(status, progress) {
     if (!progress?.current_file) return '';

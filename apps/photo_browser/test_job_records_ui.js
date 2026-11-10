@@ -8,7 +8,16 @@ async function main() {
     return {tag, children: [], style: {}, textContent: '', append(...nodes) { this.children.push(...nodes); }, setAttribute() {}};
   }}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'static/job_records.js'), 'utf8'), scope);
-  const {formatTime, timingText, createArchiveControls} = scope.window.photoBrowserJobRecords;
+  const {formatTime, timingText, createArchiveControls, mergeEstimateText} = scope.window.photoBrowserJobRecords;
+  assert.match(mergeEstimateText({merge_elapsed_seconds: 123, eta_ready: false, eta_sample_files: 50,
+    eta_sample_target: 100}), /50\/100개 측정/);
+  const estimated = mergeEstimateText({merge_elapsed_seconds: 123, eta_ready: true, eta_sample_files: 100,
+    eta_sample_target: 100, eta_sample_seconds: 120, estimated_remaining_seconds: 600,
+    estimated_total_seconds: 723, estimated_finish_at: '2026-11-10T00:10:00Z'});
+  assert.match(estimated, /2분 3초 \(2.05분\)/);
+  assert.match(estimated, /예상 남은 시간: 10분 0초/);
+  assert.match(estimated, /최근 100개 복사·검증/);
+  assert.match(estimated, /KST/);
   const job = {job_id: 'scanjob', kind: 'scan', status: 'completed',
     started_at: '2026-11-02T00:00:00Z', finished_at: '2026-11-02T01:02:03Z'};
   const text = timingText(job, Date.now());

@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 from library import atomic_json, component, now, read_json, uid
+from merge_estimate import ETA_FIELDS
 
 
 class MergeProgress:
@@ -31,7 +32,8 @@ class MergeProgress:
 FIELDS = ('merge_id', 'status', 'phase', 'processed', 'total', 'percent', 'current_file',
           'fast_skipped_count',
           'current_file_role', 'current_action', 'source_file', 'target_file',
-          'merge_started_at', 'run_started_at', 'updated_at', 'warning', 'error')
+          'merge_started_at', 'run_started_at', 'updated_at', 'warning', 'error',
+          'merge_elapsed_seconds', 'estimated_total_seconds') + ETA_FIELDS
 
 
 def merge_status(db, merge_id=None):

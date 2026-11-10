@@ -54,5 +54,29 @@
       }
     }};
   }
-  window.photoBrowserJobRecords = {formatTime, timingText, createArchiveControls};
+  function mergeEstimateText(progress) {
+    if (progress?.merge_elapsed_seconds == null) return '';
+    const duration = value => {
+      const seconds = Math.max(0, Math.round(Number(value)));
+      return `${Math.floor(seconds / 60).toLocaleString()}분 ${seconds % 60}초 (${(seconds / 60).toFixed(2)}분)`;
+    };
+    const parts = [`이번 실행 소요: ${duration(progress.merge_elapsed_seconds)}`];
+    const kind = progress.eta_sample_kind === 'fast_skip' ? '빠른 건너뛰기' : '복사·검증';
+    if (progress.eta_sample_target == null) {
+      parts.push('예상 시간: 파일 처리 표본 수집 전');
+    } else if (!progress.eta_ready) {
+      parts.push(`예상 시간 계산 중: ${kind} ${progress.eta_sample_files || 0}/${progress.eta_sample_target}개 측정`);
+    } else {
+      parts.push(`최근 ${progress.eta_sample_files}개 ${kind}: ${duration(progress.eta_sample_seconds)}`);
+      if (progress.estimated_remaining_seconds === 0) {
+        parts.push('파일 처리 완료 · DB·보고서 마무리 시간은 별도');
+      } else {
+        parts.push(`예상 남은 시간: ${duration(progress.estimated_remaining_seconds)}`);
+        parts.push(`예상 총소요: ${duration(progress.estimated_total_seconds)}`);
+        parts.push(`파일 처리 종료 예상: ${formatTime(progress.estimated_finish_at)}`);
+      }
+    }
+    return parts.join(' · ');
+  }
+  window.photoBrowserJobRecords = {formatTime, timingText, createArchiveControls, mergeEstimateText};
 })();
