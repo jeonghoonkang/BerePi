@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BerePi · Photo Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PinFL_Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
 <body{% if jobs_page %} class="jobs-page"{% endif %}><header>{% include 'version_banner.html' %}{% include 'auth_bar.html' %}<div class="server-network" aria-label="웹서버 IP 주소" role="status"><strong>웹서버 IP</strong><span>내부 IP: <b id="server-internal-ip">조회 중…</b></span><span>외부 IP: <b id="server-external-ip">조회 중…</b></span></div><span class="brand">BerePi <b> / PHOTO BROWSER</b></span><h1>기억을 저장하는 파일 시스템</h1><p>사진과 동영상을 날짜별로 둘러보세요.</p></header>
 <main><nav class="tabs" aria-label="탐색 메뉴">
 <div class="tab-menu-item"><button data-tab="library-panel" aria-describedby="library-menu-help">라이브러리</button><p id="library-menu-help" class="tab-menu-help">사진을 검색하고 태그·분류를 편집합니다.</p></div>
