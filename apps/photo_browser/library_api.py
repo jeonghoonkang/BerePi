@@ -394,16 +394,26 @@ def register_library(app, boundary, db):
     @app.post('/api/merge')
     def merge():
         data = body()
-        values = ids(data)
+        values = ids(data) if 'ids' in data else None
         preview = data.get('preview', True)
         if not isinstance(preview, bool):
             raise ValueError('preview는 boolean이어야 합니다.')
+        source_id = data.get('source_id')
+        if source_id is not None:
+            source_id = component(source_id)
         if preview:
-            return launch(lambda progress, stopped: library.merge(values or None, True, progress=progress), 'merge_preview')
+            return launch(lambda progress, stopped: library.merge(values, True, progress=progress, source_id=source_id), 'merge_preview', source_id)
         resume = data.get('resume')
         if resume is not None:
             component(resume)
-        return launch(lambda progress, stopped: library.merge(values or None, False, progress, stopped, resume), 'merge')
+            previous = read_json(library.db / 'merges' / (resume + '.json'))
+            if not previous:
+                raise ValueError('이어갈 병합 작업이 없습니다.')
+            saved_source = previous.get('scope_source_id')
+            if source_id is not None and source_id != saved_source:
+                raise ValueError('이어하기는 기존 병합의 소스 범위를 변경할 수 없습니다.')
+            source_id = saved_source
+        return launch(lambda progress, stopped: library.merge(values, False, progress, stopped, resume, source_id=source_id), 'merge', source_id)
 
     @app.get('/api/merge-reports')
     def merge_reports():

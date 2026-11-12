@@ -72,9 +72,11 @@ class MergeStatusTests(unittest.TestCase):
         config['sources'] = [{'source_id': 'photos', 'root': str(source)}]
         self.library.save_config(config)
         self.library.scan('photos')
-        original_copy = shutil.copy2
+        original_check = self.library.check_merge_space
         seen = []
-        def copying(first, second):
+        def copying(root, db_bytes, copy_bytes=0, temporary_bytes=0):
+            if not copy_bytes:
+                return original_check(root, db_bytes, copy_bytes, temporary_bytes)
             code, output, _ = self.call()
             self.assertEqual(code, 0)
             state = json.loads(output)['items'][0]
@@ -82,8 +84,8 @@ class MergeStatusTests(unittest.TestCase):
             self.assertEqual(state['status'], 'running')
             self.assertEqual(state['current_action'], 'copying')
             self.assertTrue(state['current_file'].endswith('photo.jpg'))
-            return original_copy(first, second)
-        with patch('library.shutil.copy2', side_effect=copying):
+            return original_check(root, db_bytes, copy_bytes, temporary_bytes)
+        with patch.object(self.library, 'check_merge_space', side_effect=copying):
             result = self.library.merge()
         self.assertTrue(seen)
         latest = merge_status(self.db, result['merge_id'])['items'][0]

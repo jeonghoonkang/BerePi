@@ -7,6 +7,27 @@
   const sourcesOnly = new URLSearchParams(window.location.search).get('panel') === 'sources';
   let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
+  let mergeScopeInitialized = false;
+  function mergeScopeData() {
+    const sourceId = el('merge-source').value;
+    return sourceId ? {source_id: sourceId} : {};
+  }
+  function selectMergeSource(sourceId) {
+    el('merge-source').value = sourceId;
+    el('merge-scope-info').textContent = sourceId
+      ? `병합 대상: ${sourceId} 소스의 스캔된 활성 미디어만 · 스캔 / JSON 생성을 먼저 완료하세요.`
+      : '병합 대상: 전체 소스의 활성 미디어 · 기존 소스도 확인 대상에 포함됩니다.';
+    el('merge-settings').textContent = '';
+    el('job-result').textContent = '';
+  }
+  el('merge-source').onchange = () => selectMergeSource(el('merge-source').value);
+  function jobLabel(status) {
+    if (['merge', 'merge_preview'].includes(status.kind)) {
+      const source = status.source_id || status.result?.scope_source_id || status.progress?.scope_source_id;
+      return `${source ? '소스 병합 · ' + source : '전체 소스 병합'}${status.kind === 'merge_preview' ? ' 미리보기' : ''}`;
+    }
+    return status.source_id || (status.kind === 'download' ? '선택 파일 ZIP 다운로드' : '파일 작업');
+  }
   const stateNames = {queued:'대기', running:'실행 중', stopping:'중지 요청 · 저장 대기', stopped:'중지됨', blocked_low_space:'공간 부족 · 실행 안 함', paused_low_space:'공간 부족 · 일시 정지', completed:'완료', failed:'오류 · 중단', interrupted:'서버 재시작 · 중단'};
   const notify = message => { el('notice').textContent = message; };
   async function api(path, method = 'GET', data) {
@@ -327,7 +348,7 @@
     const summary = jobSummary(status);
     card.changes.hidden = !summary.length;
     card.changesList.replaceChildren(...summary.map(line => make('li', line)));
-    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : status.kind === 'download' ? '선택 파일 ZIP 다운로드' : '파일 작업')} · ${stateNames[status.status] || status.status}`;
+    card.title.textContent = `${status.kind === 'source_rename' ? '소스 ID 변경 · ' + status.source_id : jobLabel(status)} · ${stateNames[status.status] || status.status}`;
     if (!activeStates.includes(status.status)) {
       card.title.textContent += ` · ${status.status === 'completed' ? '완료' : '종료'}: ${window.photoBrowserJobRecords.formatTime(status.finished_at)}`;
     }
@@ -339,7 +360,7 @@
     card.file.style.whiteSpace = 'pre-wrap';
     const disk = p?.disk;
     const spaceText = p?.disk_space ? `신규 복사 ${(p.disk_space.copy_bytes / 1073741824).toFixed(2)} GiB · DB 예상 증가 ${(p.disk_space.db_estimated_bytes / 1073741824).toFixed(2)} GiB\n` + p.disk_space.volumes.map(v => `${v.path}: 여유 ${(v.free_bytes / 1073741824).toFixed(2)} GiB / 필요 ${(v.required_bytes / 1073741824).toFixed(2)} GiB (여유 기준 포함)`).join('\n') : '';
-    card.warning.textContent = [spaceText, p?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
+    card.warning.textContent = [spaceText, p?.warning || status.result?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
     card.stop.hidden = !['scan', 'merge'].includes(status.kind) || !activeStates.includes(status.status);
     card.stop.disabled = status.status === 'stopping';
     card.mergeId = p?.merge_id;
@@ -351,7 +372,7 @@
       let status;
       do {
         status = await api('api/jobs/' + id); drawJob(status);
-        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${status.source_id || (status.kind === 'merge_preview' ? '전체 병합 미리보기' : status.kind === 'merge' ? '전체 병합' : '파일 작업')}`;
+        el('job-status').textContent = `${stateNames[status.status] || status.status} · ${jobLabel(status)}`;
         if (status.kind === 'merge_preview') {
           const progress = status.result || status.progress;
           el('job-status').textContent += ' · ' + mergeProgress(progress);
@@ -432,6 +453,14 @@
   }
   async function loadConfig() {
     config = await api('api/config'); el('managed-root').value = config.managed_root; el('scan-min-free').value = config.scan_min_free_mb ?? 512; el('source-list').replaceChildren();
+    const previousScope = el('merge-source').value;
+    el('merge-source').replaceChildren(new Option('전체 소스 (기존 소스 포함)', ''));
+    for (const source of config.sources) el('merge-source').add(new Option(`${source.source_id} · ${source.root}`, source.source_id));
+    const chosenScope = mergeScopeInitialized && (previousScope === '' || config.sources.some(s => s.source_id === previousScope))
+      ? previousScope : (config.sources.at(-1)?.source_id || '');
+    mergeScopeInitialized = true;
+    el('merge-source').value = chosenScope;
+    el('merge-scope-info').textContent = chosenScope ? `병합 대상: ${chosenScope} 소스만 · 스캔 / JSON 생성 후 병합하세요.` : '병합 대상: 전체 소스의 활성 미디어 (기존 소스 포함)';
     el('current-managed-path').replaceChildren(make('div', `관리 루트: ${config.managed_root}`));
     for (const source of config.sources) {
       el('current-managed-path').append(make('div', `${source.source_id}: ${managedSourcePath(source)}`));
@@ -462,11 +491,14 @@
         await job('api/sources/apply-classification', {source_id: source.source_id});
       }));
       row.append(resume, action('처음부터 전체 재스캔', async () => { if (confirm('중단 지점 대신 처음부터 파일 목록과 메타데이터를 다시 검사합니까? 이벤트·태그와 원본은 유지됩니다.')) await job('api/scan', {source_id: source.source_id, mode: 'restart'}); }));
-      row.append(action('스캔 / JSON 생성', () => job('api/scan', {source_id: source.source_id})), action('설정 불러오기', () => fillSourceForm(source)), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
+      row.append(action('스캔 / JSON 생성', () => { selectMergeSource(source.source_id); return job('api/scan', {source_id: source.source_id}); }), action('설정 불러오기', () => fillSourceForm(source)), action('등록 해제', async () => { if (!confirm('스캔 소스 등록을 해제합니까? 기존 JSON과 원본 파일은 유지됩니다.')) return; await api('api/config', 'PUT', {...config, sources: config.sources.filter(s => s.source_id !== source.source_id)}); await loadConfig(); }));
+      row.append(action('이 소스 병합 미리보기', async () => { selectMergeSource(source.source_id); await el('merge-preview').onclick(); }),
+        action('이 소스 병합 실행', async () => { selectMergeSource(source.source_id); await el('merge-run').onclick(); }));
       el('source-list').append(row);
     });
   }
   function fillSourceForm(source) {
+    selectMergeSource(source.source_id);
     for (const [key, value] of Object.entries(source)) {
       const input = el('source-form').elements.namedItem(key);
       if (input) { if (input.type === 'checkbox') input.checked = value; else input.value = value; }
@@ -568,9 +600,13 @@
     }
     el('job-result').textContent = '';
     el('merge-settings').textContent = '현재 저장된 설정과 사진 분류로 병합 경로를 다시 계산하고 있습니다…';
-    await job('api/merge', {preview: true});
+    await job('api/merge', {preview: true, ...mergeScopeData()});
   });
-  el('merge-run').onclick = safe(async () => { if (confirm('활성 파일 전체를 월별 관리 디렉토리에 병합 복사합니까?')) await job('api/merge', {preview: false}); });
+  el('merge-run').onclick = safe(async () => {
+    const scope = mergeScopeData();
+    if (confirm(`${scope.source_id ? '소스 ' + scope.source_id + '의 스캔된 활성 파일만' : '전체 소스의 활성 파일 (기존 소스 포함)을'} 월별 관리 디렉토리에 병합 복사합니까?`))
+      await job('api/merge', {preview: false, ...scope});
+  });
   el('verify-selected').onclick = safe(() => job('api/verify', {ids: selected(), full: true}));
   el('trash-selected').onclick = safe(async () => {
     const ids = selected(); if (!confirm(`${ids.length}개 항목을 휴지통으로 이동합니까? 소스 원본은 유지됩니다.`)) return;

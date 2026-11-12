@@ -1,6 +1,7 @@
 """JSON backed media library. Originals are never moved or deleted."""
 import base64
 import copy
+import errno
 import hashlib
 import json
 import os
@@ -25,6 +26,10 @@ VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi'}
 EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 LOCATION_FILE = '.photo-browser-location.json'
 FACET_FIELDS = ('events', 'tags', 'person_ids', 'category_id', 'owner_id', 'location_tags')
+
+
+class MergeLowSpaceError(Exception):
+    pass
 
 
 def gps_coordinates(capture):
@@ -903,7 +908,7 @@ class Library:
             return candidate
 
     @staticmethod
-    def publish_merge_copy(temporary, target):
+    def publish_merge_copy(temporary, target, check_space=None):
         """Publish verified bytes without ever replacing an existing filename."""
         try:
             os.link(temporary, target)
@@ -915,19 +920,22 @@ class Library:
             with target.open('xb') as output:
                 try:
                     with temporary.open('rb') as source:
-                        shutil.copyfileobj(source, output)
+                        for block in iter(lambda: source.read(1048576), b''):
+                            if check_space:
+                                check_space(len(block))
+                            output.write(block)
                 except BaseException:
                     output.close()
                     target.unlink(missing_ok=True)
                     raise
             shutil.copystat(temporary, target)
 
-    def merge_space(self, root, items, pending, progress, hashes=None):
+    def merge_space(self, root, items, pending, progress, hashes=None, source_id=None):
         targets = {}
         reserved, hashes = {}, {} if hashes is None else hashes
         fast_count = 0
         for index, item in enumerate(pending):
-            source = item['locations'][0]
+            source = self.merge_source(item, source_id)
             def checking(path, role='comparison_target', action='comparing_existing'):
                 progress({'phase': 'checking_space', 'checked': index, 'check_total': len(pending),
                           'processed': 0, 'inventory_complete': False, 'current_file': str(path),
@@ -962,7 +970,7 @@ class Library:
             volumes[device]['roles'].append(role)
         add(root, sum(targets.values()), '관리 복사본')
         add(self.db, db_bytes, 'DB·체크포인트·작업 기록 예상 증가량')
-        remote_bytes = max((item['size_bytes'] for item in pending if item['locations'][0]['protocol'] != 'file'), default=0)
+        remote_bytes = max((item['size_bytes'] for item in pending if self.merge_source(item, source_id)['protocol'] != 'file'), default=0)
         if remote_bytes:
             add(Path(tempfile.gettempdir()), remote_bytes, '원격 파일 임시 다운로드')
         checks = list(volumes.values())
@@ -971,10 +979,57 @@ class Library:
                 'db_estimated_bytes': db_bytes, 'volumes': checks,
                 'ok': all(v['free_bytes'] >= v['required_bytes'] for v in checks)}
 
-    def merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None):
+    def check_merge_space(self, root, db_bytes, copy_bytes=0, temporary_bytes=0):
+        """Recheck all write volumes; combine requirements on shared devices."""
+        reserve = self.config().get('scan_min_free_mb', 512) * 1048576
+        volumes = {}
+        writes = [(root, copy_bytes), (self.db, db_bytes)]
+        if temporary_bytes:
+            writes.append((Path(tempfile.gettempdir()), temporary_bytes))
+        for path, amount in writes:
+            while not path.exists():
+                path = path.parent
+            device = path.stat().st_dev
+            volume = volumes.setdefault(device, {'path': path, 'required': reserve})
+            volume['required'] += amount
+        for volume in volumes.values():
+            free = shutil.disk_usage(volume['path']).free
+            if free < volume['required']:
+                raise MergeLowSpaceError(
+                    f"디스크 공간 부족으로 병합을 중단했습니다. {volume['path']}: "
+                    f"여유 {free / 1048576:.1f} MiB / 필요 {volume['required'] / 1048576:.1f} MiB. "
+                    '공간 확보 후 이어하기로 재개하세요.')
+
+    @staticmethod
+    def merge_source(item, source_id=None):
+        if source_id is None:
+            return item['locations'][0]
+        location = next((loc for loc in item['locations'] if loc['role'] == 'source' and loc.get('source_id') == source_id), None)
+        if location is None:
+            raise ValueError('병합 항목의 소스 연결이 변경되었습니다. 새 미리보기를 실행하세요.')
+        return location
+
+    def merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None, source_id=None):
         with self.writing():
+            if resume:
+                previous = read_json(self.db / 'merges' / (component(resume) + '.json'))
+                if not previous:
+                    raise ValueError('이어갈 병합 작업이 없습니다.')
+                saved_source = previous.get('scope_source_id')
+                if source_id is not None and source_id != saved_source:
+                    raise ValueError('이어하기는 기존 병합의 소스 범위를 변경할 수 없습니다.')
+                source_id = saved_source
+            if source_id is not None:
+                source_id = component(source_id)
+                if not any(s['source_id'] == source_id for s in self.config()['sources']):
+                    raise ValueError('등록된 병합 대상 소스가 없습니다.')
+            callback = progress or (lambda state: None)
+            scope = {'scope': 'source' if source_id is not None else 'all', 'scope_source_id': source_id}
+            def scoped_progress(value):
+                callback({**value, **scope})
+            progress = scoped_progress
             if preview:
-                return self._merge(ids, True, progress, stopped, resume)
+                return self._merge(ids, True, progress, stopped, resume, source_id=source_id)
             from merge_history import MergeHistory, first_merge_start
             run_clock = time.monotonic()
             root = self.local(self.config()['managed_root'])
@@ -988,7 +1043,7 @@ class Library:
             latest_estimate = {}
             def timed_progress(state):
                 latest_estimate.update({key: state[key] for key in ETA_FIELDS if key in state})
-                value = {**latest_estimate, **state, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at}
+                value = {**latest_estimate, **state, **scope, 'merge_started_at': merge_started_at, 'run_started_at': run_started_at}
                 value['merge_elapsed_seconds'] = round(time.monotonic() - run_clock, 2)
                 if value.get('estimated_remaining_seconds') is not None:
                     value['estimated_total_seconds'] = round(value['merge_elapsed_seconds'] + value['estimated_remaining_seconds'], 2)
@@ -997,9 +1052,10 @@ class Library:
             history = None
             try:
                 history = MergeHistory(self, root, resume, timed_progress)
+                history.data.update(scope)
                 history.merge_started_at = merge_started_at
                 live.update({'merge_id': history.merge_id}, force=True)
-                result = self._merge(ids, False, timed_progress, stopped, resume, history)
+                result = self._merge(ids, False, timed_progress, stopped, resume, history, source_id=source_id)
             except BaseException as exc:
                 try:
                     if history is not None:
@@ -1026,7 +1082,7 @@ class Library:
                 atomic_json(self.db / 'plans' / (result['plan_id'] + '.json'), result)
             return result
 
-    def _merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None, history=None):
+    def _merge(self, ids=None, preview=False, progress=None, stopped=None, resume=None, history=None, source_id=None):
         from place_lookup import PlaceLookup, current_policy
         places = None if preview else PlaceLookup(self.db, os.environ.get('PHOTO_BROWSER_REVERSE_GEOCODER_URL', ''))
         progress = progress or (lambda state: None)
@@ -1043,9 +1099,15 @@ class Library:
                 raise ValueError('관리 경로가 변경되어 이어갈 수 없습니다.')
         else:
             state = {'merge_id': session_path.stem, 'managed_root': str(root),
-                     'ids': [i['media_id'] for i in items if i['lifecycle']['status'] == 'active' and (not ids or i['media_id'] in ids)],
+                     'scope': 'source' if source_id is not None else 'all', 'scope_source_id': source_id,
+                     'ids': [i['media_id'] for i in items if i['lifecycle']['status'] == 'active'
+                             and (ids is None or i['media_id'] in ids)
+                             and (source_id is None or any(loc['role'] == 'source' and loc.get('source_id') == source_id for loc in i['locations']))],
                      'operations': [], 'status': 'running'}
+            if source_id is not None and not state['ids']:
+                raise ValueError(f'소스 {source_id}에 스캔된 활성 미디어가 없습니다. 먼저 해당 소스의 스캔 / JSON 생성을 실행하세요. 전체 소스로 전환하지 않습니다.')
         operations = state['operations']
+        state.pop('warning', None)
         for key in ('current_file', 'current_file_role', 'current_action', 'source_file', 'target_file'):
             state.pop(key, None)
         completed = {op['media_id'] for op in operations}
@@ -1059,12 +1121,13 @@ class Library:
         if not preview:
             pending = [item for item in items if item['media_id'] in wanted
                        and item['media_id'] not in completed and item['lifecycle']['status'] == 'active']
-            space = self.merge_space(root, items, pending, progress, hashes=hashes)
+            space = self.merge_space(root, items, pending, progress, hashes=hashes, source_id=source_id)
             state['disk_space'] = space
             if not space['ok']:
                 details = ' / '.join(f"{v['path']}: 여유 {v['free_bytes'] / 1048576:.1f} MiB, 필요 {v['required_bytes'] / 1048576:.1f} MiB"
                                      for v in space['volumes'] if v['free_bytes'] < v['required_bytes'])
                 return {'status': 'blocked_low_space', 'preview': False, 'operations': [],
+                        'scope': state.get('scope', 'all'), 'scope_source_id': source_id,
                         'total': len(wanted), 'processed': len(operations), 'percent': 0,
                         'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
         from merge_estimate import MergeEstimate
@@ -1111,7 +1174,7 @@ class Library:
             op['date_key'] = date
             op['source_locations'] = [dict(loc) for loc in item['locations'] if loc['role'] == 'source']
             operations.append(op)
-            source_location = item['locations'][0]
+            source_location = self.merge_source(item, source_id)
             state['source_file'] = source_location.get('path') or source_location.get('uri')
             def file_progress(path, role, action, emit=True):
                 if estimate:
@@ -1127,6 +1190,8 @@ class Library:
             def comparing(path):
                 file_progress(path, 'comparison_target', 'comparing_existing')
             try:
+                if not preview:
+                    self.check_merge_space(root, space['db_estimated_bytes'])
                 if places and places.endpoint and not current_policy(item['capture'].get('place')) and gps_coordinates(item['capture']):
                     file_progress(state['source_file'], 'source', 'looking_up_place')
                     if places.enrich(item['capture']):
@@ -1161,9 +1226,16 @@ class Library:
                     temporary = target.with_name('.' + uid() + '.part')
                     try:
                         file_progress(state['source_file'], 'source', 'reading_source')
-                        with self.materialize(item['locations'][0]) as source:
+                        def download_space(total, downloaded):
+                            remaining = max(0, (total if total is not None else item['size_bytes']) - downloaded)
+                            self.check_merge_space(root, space['db_estimated_bytes'], temporary_bytes=min(1048576, remaining))
+                        with self.materialize(source_location, transfer=download_space) as source:
                             file_progress(target, 'merge_destination', 'copying')
-                            shutil.copy2(source, temporary)
+                            with source.open('rb') as incoming, temporary.open('xb') as output:
+                                for block in iter(lambda: incoming.read(1048576), b''):
+                                    self.check_merge_space(root, space['db_estimated_bytes'], len(block))
+                                    output.write(block)
+                            shutil.copystat(source, temporary)
                         file_progress(temporary, 'temporary_copy', 'verifying_copy')
                         if digest(temporary) != item['sha256']:
                             raise ValueError('복사 검증 실패: 원본이 변경되었을 수 있습니다.')
@@ -1171,7 +1243,7 @@ class Library:
                         while True:
                             try:
                                 file_progress(target, 'merge_destination', 'publishing_copy')
-                                self.publish_merge_copy(temporary, target)
+                                self.publish_merge_copy(temporary, target, check_space=lambda size: self.check_merge_space(root, space['db_estimated_bytes'], size))
                                 op['status'] = 'copied'
                                 break
                             except FileExistsError:
@@ -1196,6 +1268,14 @@ class Library:
                                                                      'mtime_ns': stat.st_mtime_ns, 'base_path': str(original)}})
                     db_dirty = True
                     full_commit_needed = True
+            except (MergeLowSpaceError, OSError) as exc:
+                if isinstance(exc, MergeLowSpaceError) or exc.errno == errno.ENOSPC or getattr(exc, 'winerror', None) == 112:
+                    operations.pop()  # The unfinished file must be retried on resume.
+                    state['warning'] = (str(exc) if isinstance(exc, MergeLowSpaceError) else
+                                        '디스크 공간 부족으로 병합을 중단했습니다. 공간 확보 후 이어하기로 재개하세요.')
+                    interrupted = True
+                    break
+                op.update(status='error', error=str(exc))
             except Exception as exc:
                 op.update(status='error', error=str(exc))
             # Keep the last completed target in checkpoints, including every
@@ -1216,6 +1296,7 @@ class Library:
                           **(estimate.snapshot() if estimate else {})})
         checkpoint('stopped' if interrupted else 'completed')
         report = {'plan_id': uid(), 'preview': preview, 'operations': operations, 'created_at': now(),
+                  'scope': state.get('scope', 'all'), 'scope_source_id': source_id,
                   'merge_id': state['merge_id'], 'status': state['status'],
                   'total': state['total'], 'processed': state['processed'], 'percent': state['percent']}
         report['fast_skipped_count'] = state['fast_skipped_count']
@@ -1244,6 +1325,8 @@ class Library:
                              if conflicts else '동일 이름·동일 내용은 재사용하며, 내용이 다르면 _중복, _중복_2 등의 이름으로 보존합니다. 미리보기 이후 파일이 바뀌면 실행 경로도 달라질 수 있습니다.')
         if places and places.warning:
             report['warning'] += '\n' + places.warning
+        if state.get('warning'):
+            report['warning'] = state['warning'] + '\n' + report['warning']
         atomic_json(self.db / 'plans' / (report['plan_id'] + '.json'), report)
         return report
 

@@ -71,6 +71,7 @@ def main(argv=None):
     options.add_argument('--preview', action='store_true', help='복사 없이 대상 경로 확인')
     options.add_argument('--resume', metavar='MERGE_ID', help='중지한 병합 이어하기')
     merge.add_argument('--media-id', action='append', help='대상 미디어 ID (여러 번 지정 가능, 기본 전체)')
+    merge.add_argument('--source-id', help='이 소스의 활성 미디어만 병합 (생략 시 전체 소스)')
     args = parser.parse_args(argv)
     with version_logging(info, args.version_log_interval):
         return run_command(args, parser)
@@ -143,7 +144,7 @@ def run_command(args, parser):
             stop = threading.Event()
             previous = signal.signal(signal.SIGINT, lambda *_: stop.set())
             try:
-                result = library.merge(ids=args.media_id, preview=args.preview, stopped=stop.is_set, resume=args.resume)
+                result = library.merge(ids=args.media_id, preview=args.preview, stopped=stop.is_set, resume=args.resume, source_id=args.source_id)
             finally:
                 signal.signal(signal.SIGINT, previous)
         print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -105,6 +105,7 @@ def render_html(report):
         ('보고서 ID', report['report_id']), ('병합 ID', report['merge_id']), ('상태', report['status']),
         ('시작 시간', local_time(report['started_at'])), ('종료 시간', local_time(report.get('finished_at'))),
         ('소요 시간(초)', report.get('duration_seconds', '진행 중')), ('이어하기 실행', report['resumed']),
+        ('병합 범위', '소스 ' + report['scope_source_id'] if report.get('scope_source_id') else '전체 소스'),
         ('관리 디렉토리', report['managed_root']), ('DB 디렉토리', report['db']),
         ('이번 실행 처리 / 실행 대상', f"{summary['processed_count']} / {summary['target_count']}"),
         ('새 복사 / 동일 내용 재사용', f"{summary['copied_count']} / {summary['reused_count']}"),
@@ -162,6 +163,8 @@ class MergeHistory:
         self.items = {i['media_id']: i for i in items}
         self.wanted = set(state['ids']) - {o['media_id'] for o in self.operations}
         self.data['merge_started_at'] = state.get('merge_started_at', self.data['started_at'])
+        self.data['scope'] = state.get('scope', 'all')
+        self.data['scope_source_id'] = state.get('scope_source_id')
         self.save()
 
     def summarize(self):
@@ -188,6 +191,8 @@ class MergeHistory:
             c = item['classification']
             for location in (l for l in item['locations'] if l['role'] == 'source'):
                 sid = location.get('source_id', '')
+                if self.data.get('scope_source_id') is not None and sid != self.data['scope_source_id']:
+                    continue
                 key = sid, c['category_id'], c['owner_id']
                 if key not in groups:
                     groups[key] = {'source_id': sid, 'category_id': c['category_id'], 'owner_id': c['owner_id'],
@@ -208,6 +213,7 @@ class MergeHistory:
         atomic_json(self.directory / (self.report_id + '.json'), self.data)
         atomic_text(self.directory / (self.report_id + '.html'), render_html(self.data))
         metadata = {key: self.data[key] for key in ('report_id', 'merge_id', 'started_at', 'finished_at', 'duration_seconds', 'status', 'resumed', 'summary', 'managed_root')}
+        metadata.update(scope=self.data.get('scope', 'all'), scope_source_id=self.data.get('scope_source_id'))
         metadata['files'] = {format: str(self.directory / (self.report_id + '.' + format)) for format in ('json', 'html')}
         metadata['before'] = {k: self.data['before'][k] for k in ('file_count', 'directory_count', 'total_bytes', 'complete')}
         if self.data.get('after'):

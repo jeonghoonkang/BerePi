@@ -748,6 +748,49 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual((self.library.db / 'index.json').read_bytes(), index)
         self.assertFalse((self.library.db / 'merges').exists())
 
+    def test_merge_running_low_space_stops_and_can_resume(self):
+        from types import SimpleNamespace
+        self.photo()
+        self.library.scan('local')
+        copying = [False]
+        def progress(state):
+            if state.get('current_action') == 'copying':
+                copying[0] = True
+        def usage(path):
+            return SimpleNamespace(free=0 if copying[0] else 10**12)
+        with patch('library.shutil.disk_usage', side_effect=usage):
+            result = self.library.merge(progress=progress)
+        self.assertEqual(result['status'], 'stopped')
+        self.assertIn('공간 부족', result['warning'])
+        self.assertEqual(result['operations'], [])
+        self.assertFalse(list(Path(self.config['managed_root']).rglob('*.part')))
+        saved = read_json(self.library.db / 'merges' / (result['merge_id'] + '.json'))
+        self.assertTrue(result['warning'].startswith(saved['warning']))
+        resumed = self.library.merge(resume=result['merge_id'])
+        self.assertEqual(resumed['status'], 'completed')
+        self.assertEqual(resumed['operations'][0]['status'], 'copied')
+        self.assertNotIn('공간 부족', resumed['warning'])
+
+    def test_merge_low_space_preserves_completed_files(self):
+        from types import SimpleNamespace
+        self.photo('first.jpg')
+        self.photo('second.jpg')
+        self.library.scan('local')
+        low = [False]
+        def progress(state):
+            if state.get('processed') == 1 and state.get('current_action') == 'copied':
+                low[0] = True
+        with patch('library.shutil.disk_usage', side_effect=lambda path: SimpleNamespace(free=0 if low[0] else 10**12)):
+            result = self.library.merge(progress=progress)
+        self.assertEqual(result['status'], 'stopped')
+        self.assertEqual(len(result['operations']), 1)
+        first = result['operations'][0]
+        self.assertTrue(Path(first['destination']).is_file())
+        self.assertTrue(any(loc['role'] == 'managed' for loc in self.library.item(first['media_id'])['locations']))
+        resumed = self.library.merge(resume=result['merge_id'])
+        self.assertEqual(resumed['status'], 'completed')
+        self.assertEqual(len(resumed['operations']), 2)
+
     def test_merge_space_counts_unique_targets_and_excludes_existing_files(self):
         import copy
         from types import SimpleNamespace
@@ -798,7 +841,7 @@ class LibraryTests(unittest.TestCase):
         self.library.scan('local')
         original_publish = self.library.publish_merge_copy
         calls = []
-        def collision(temporary, target):
+        def collision(temporary, target, check_space=None):
             if not calls:
                 calls.append(target)
                 target.write_bytes(b'late external file')
@@ -825,7 +868,7 @@ class LibraryTests(unittest.TestCase):
     def test_merge_late_identical_file_is_reused(self):
         source = self.photo()
         self.library.scan('local')
-        def appeared(temporary, target):
+        def appeared(temporary, target, check_space=None):
             target.write_bytes(source.read_bytes())
             raise FileExistsError(str(target))
         with patch.object(self.library, 'publish_merge_copy', side_effect=appeared):
