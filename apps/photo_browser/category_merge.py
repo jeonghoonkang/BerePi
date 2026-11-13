@@ -127,8 +127,43 @@ class CategoryMerger:
         record['copy_bytes'] = sum(copies.values())
         return copies
 
-    def preview(self, categories, target_category, progress=None):
+    @staticmethod
+    def source_ids(item):
+        return {loc.get('source_id') for loc in item['locations'] if loc['role'] == 'source'} or {None}
+
+    def matches_scope(self, item, categories, selections):
+        return (item['lifecycle']['status'] == 'active'
+                and item['classification']['category_id'] in categories
+                and (selections is None or any(
+                    choice['category'] == item['classification']['category_id']
+                    and choice['owner_id'] == item['classification']['owner_id']
+                    and choice['source_id'] in self.source_ids(item) for choice in selections)))
+
+    def choices(self):
+        from collections import Counter
+        counts = Counter()
+        for item in self.library.items():
+            if item['lifecycle']['status'] != 'active':
+                continue
+            c = item['classification']
+            for source_id in self.source_ids(item):
+                counts[(source_id, c['category_id'], c['owner_id'])] += 1
+        return [{'source_id': source, 'category': category, 'owner_id': owner, 'count': count}
+                for (source, category, owner), count in sorted(counts.items(), key=lambda pair: tuple(v or '' for v in pair[0]))]
+
+    def preview(self, categories, target_category, progress=None, selections=None):
         progress = progress or (lambda state: None)
+        if selections is not None:
+            if not isinstance(selections, list) or not selections or len(selections) > 1000:
+                raise ValueError('통합할 소스·카테고리·소유자 조합을 1~1000개 선택하세요.')
+            normalized = []
+            for choice in selections:
+                if not isinstance(choice, dict) or not {'source_id', 'category', 'owner_id'} <= choice.keys():
+                    raise ValueError('소스 ID·카테고리·소유자 ID가 모두 필요합니다.')
+                normalized.append({'source_id': component(choice['source_id']) if choice['source_id'] is not None else None,
+                                   'category': component(choice['category']), 'owner_id': component(choice['owner_id'])})
+            selections = normalized
+            categories = list(dict.fromkeys(choice['category'] for choice in selections))
         if not isinstance(categories, list) or not categories or len(categories) > 100 or any(not isinstance(c, str) for c in categories):
             raise ValueError('통합할 카테고리를 1~100개 선택하세요.')
         categories = list(dict.fromkeys(component(c) for c in categories))
@@ -140,13 +175,13 @@ class CategoryMerger:
         with self.library.writing():
             root = self.root()
             items = self.library.items()
-            selected = [item for item in items if item['lifecycle']['status'] == 'active'
-                        and item['classification']['category_id'] in categories]
+            selected = [item for item in items if self.matches_scope(item, categories, selections)]
             if not selected:
                 raise ValueError('선택한 카테고리에 활성 사진이 없습니다.')
             record = {'schema_version': 1, 'operation_id': uid(), 'created_at': now(), 'status': 'preview',
                       'stage': 'preview', 'managed_root': str(root), 'source_categories': categories,
                       'target_category': target_category, 'total_count': len(selected), 'rows': [], 'moves': [], 'created_files': [], 'processed': 0}
+            record['source_selections'] = selections
             reserved, hashes = {}, {}
             for item in selected:
                 done = len(record['rows'])
@@ -285,7 +320,8 @@ class CategoryMerger:
                 db_state = self.database_state(record, items)
                 if db_state == 'before':
                     expected = {row['before']['media_id'] for row in record['rows']}
-                    actual = {item['media_id'] for item in items if item['lifecycle']['status'] == 'active' and item['classification']['category_id'] in record['source_categories']}
+                    actual = {item['media_id'] for item in items
+                              if self.matches_scope(item, record['source_categories'], record.get('source_selections'))}
                     if actual != expected:
                         raise ValueError('카테고리의 사진 목록이 변경되었습니다. 새 미리보기를 실행하세요.')
                     self.ensure_space(record)

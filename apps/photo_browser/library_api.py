@@ -135,7 +135,7 @@ def register_library(app, boundary, db):
     def category_choices():
         from collections import Counter
         counts = Counter(item['classification']['category_id'] for item in library.items() if item['lifecycle']['status'] == 'active')
-        return jsonify(items=[{'category': key, 'count': value} for key, value in sorted(counts.items())])
+        return jsonify(items=[{'category': key, 'count': value} for key, value in sorted(counts.items())], groups=categories.choices())
 
     @app.get('/api/category-merges')
     def category_records():
@@ -150,7 +150,8 @@ def register_library(app, boundary, db):
     @app.post('/api/category-merges/preview')
     def category_preview():
         data = body()
-        return launch(lambda progress, stopped: categories.preview(data.get('categories'), data.get('target_category'), progress), 'category_merge_preview')
+        return launch(lambda progress, stopped: categories.preview(data.get('categories'), data.get('target_category'), progress,
+                                                                  selections=data.get('selections')), 'category_merge_preview')
 
     @app.post('/api/category-merges/<operation_id>/run')
     def category_run(operation_id):

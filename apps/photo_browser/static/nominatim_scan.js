@@ -65,6 +65,7 @@
   });
   el('stop').addEventListener('click', async () => {
     if (!jobId || !active) return;
+    if (!confirm('위치 태그 추가 스캔 작업을 중지하시겠습니까?\n다른 접속자에게도 적용됩니다. 중지 요청 후 현재 처리 결과를 정리합니다.')) return;
     try { await api(`api/jobs/${encodeURIComponent(jobId)}/stop`, 'POST'); await refresh(); }
     catch (err) { error(err.message); }
   });

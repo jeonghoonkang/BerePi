@@ -47,6 +47,44 @@ class CategoryMergeTests(unittest.TestCase):
     def preview(self):
         return self.store.preview(['family_a', 'family_b'], 'family')
 
+    def test_exact_source_category_owner_scope_roundtrip(self):
+        first = copy.deepcopy(self.before[0])
+        other_source = copy.deepcopy(first)
+        other_source['media_id'] = 'other_source'
+        other_source['locations'][0]['source_id'] = 'family_b'
+        other_owner = copy.deepcopy(first)
+        other_owner['media_id'] = 'other_owner'
+        other_owner['classification']['owner_id'] = 'bob'
+        before = self.before + [other_source, other_owner]
+        self.library.commit(before)
+        selection = [{'source_id': 'family_a', 'category': first['classification']['category_id'], 'owner_id': 'alice'}]
+        groups = self.client.get('/api/category-merges/categories').json['groups']
+        self.assertIn({**selection[0], 'count': 1}, groups)
+        plan = self.store.preview(None, 'family', selections=selection)
+        self.assertEqual([row['before']['media_id'] for row in plan['rows']], [first['media_id']])
+        self.assertEqual(self.store.load(plan['operation_id'])['source_selections'], selection)
+        self.store.execute(plan['operation_id'])
+        for item in self.library.items():
+            if item['media_id'] != first['media_id']:
+                self.assertEqual(item, next(old for old in before if old['media_id'] == item['media_id']))
+        self.store.undo(plan['operation_id'])
+        self.assertEqual({item['media_id']: item for item in self.library.items()},
+                         {item['media_id']: item for item in before})
+
+    def test_multiple_combinations_deduplicate_shared_item(self):
+        items = copy.deepcopy(self.before)
+        items[0]['locations'].append({**items[0]['locations'][0], 'source_id': 'alias'})
+        self.library.commit(items)
+        selections = [{'source_id': source, 'category': items[0]['classification']['category_id'], 'owner_id': 'alice'}
+                      for source in ('family_a', 'alias')]
+        plan = self.store.preview(None, 'family', selections=selections)
+        self.assertEqual(len(plan['rows']), 1)
+        for invalid in ([], [{}], [{'source_id': 'family_a', 'category': 'family_a'}]):
+            with self.assertRaises(ValueError):
+                self.store.preview(None, 'family', selections=invalid)
+        with self.assertRaises(ValueError):
+            self.store.preview(None, 'family', selections=[{**selections[0], 'owner_id': 'nobody'}])
+
     def test_managed_only_roundtrip_preserves_metadata_and_original_times(self):
         for item in self.before:
             Path(item['locations'][0]['path']).unlink()
@@ -308,7 +346,8 @@ class CategoryMergeTests(unittest.TestCase):
     @patch.dict(os.environ, {'PHOTO_BROWSER_PASSWORD': 'secret'})
     def test_api_auth_validation_and_background_execution(self):
         url = '/api/category-merges/preview'
-        body = {'categories': ['family_a', 'family_b'], 'target_category': 'family'}
+        body = {'selections': [{'source_id': category, 'category': category, 'owner_id': 'alice'}
+                               for category in ('family_a', 'family_b')], 'target_category': 'family'}
         self.assertEqual(self.client.get('/api/category-merges').status_code, 401)
         self.assertEqual(self.client.post('/api/auth/login', json={'password': 'secret'}, headers=self.headers).status_code, 200)
         self.assertEqual(self.client.post(url, json=body).status_code, 403)

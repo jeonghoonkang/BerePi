@@ -321,7 +321,11 @@
       changes.append(changesTitle, changesList);
       row.open = activeStates.includes(status.status);
       bar.max = 100; bar.setAttribute('aria-label', '작업 처리 진행률');
-      const stop = action('중지하고 저장', async () => { const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {}); drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.'); });
+      const stop = action('중지하고 저장', async () => {
+        if (!confirm(`${jobLabel(status)} 작업을 중지하시겠습니까?\n다른 접속자에게도 적용됩니다. 진행 상황을 저장한 뒤 중지합니다.`)) return;
+        const result = await api(`api/jobs/${status.job_id}/stop`, 'POST', {});
+        drawJob(result); notify('중지를 요청했습니다. 현재 작업을 정리하고 저장하는 동안 기다려 주세요.');
+      });
       const resume = action('병합 이어하기', () => job('api/merge', {preview: false, resume: card.mergeId}));
       const reports = make('p');
       const timing = make('p', '', 'job-timing');
