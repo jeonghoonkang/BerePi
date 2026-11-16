@@ -35,6 +35,8 @@ def register_library(app, boundary, db):
     from library_summary import LibrarySummary
     summary = LibrarySummary(library)
     app.extensions['photo_library_summary'] = summary
+    from source_comparison import SourceComparison
+    source_comparisons = SourceComparison(library)
     for path in (library.db / 'jobs').glob('*.json'):
         try:
             previous = read_json(path)
@@ -110,8 +112,8 @@ def register_library(app, boundary, db):
                 jobs[job_id]['started_at'] = now()
                 atomic_json(library.db / 'jobs' / (job_id + '.json'), jobs[job_id])
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan'} else function()
-                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan'} else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'source_compare'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'source_compare'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -278,6 +280,27 @@ def register_library(app, boundary, db):
     @app.get('/api/library-summary')
     def library_summary():
         return jsonify(summary.snapshot(refresh=request.args.get('refresh') == '1'))
+
+    @app.post('/api/source-comparisons')
+    def compare_sources():
+        data = body()
+        left, right = source_comparisons.scope(data.get('left')), source_comparisons.scope(data.get('right'))
+        if left == right:
+            raise ValueError('서로 다른 소스 또는 카테고리를 선택하세요.')
+        return launch(lambda progress, stopped: source_comparisons.compare(left, right, progress), 'source_compare')
+
+    @app.get('/api/source-comparisons/<comparison_id>')
+    def source_comparison_page(comparison_id):
+        offset = max(0, int(request.args.get('offset', 0)))
+        limit = max(1, min(100, int(request.args.get('limit', 100))))
+        return jsonify(source_comparisons.page(comparison_id, request.args.get('status', 'all'), offset, limit))
+
+    @app.get('/api/source-comparisons/<comparison_id>/download')
+    def source_comparison_download(comparison_id):
+        path = source_comparisons.path(comparison_id)
+        if not path.is_file():
+            abort(404)
+        return send_file(path, as_attachment=True, download_name=f'source-comparison-{comparison_id}.json')
 
     @app.get('/api/workflow')
     def workflow_status():

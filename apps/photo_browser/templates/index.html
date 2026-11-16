@@ -10,6 +10,7 @@
 <div class="tab-menu-item"><button data-tab="folder-panel" aria-describedby="folder-menu-help">기존 폴더 탐색</button><p id="folder-menu-help" class="tab-menu-help">서버 폴더의 사진·동영상을 직접 둘러봅니다.</p></div>
 <div class="tab-menu-item"><button data-tab="upload-panel" aria-describedby="upload-menu-help">파일 업로드</button><p id="upload-menu-help" class="tab-menu-help">내 기기의 파일을 서버 폴더에 올립니다.</p></div>
 <div class="tab-menu-item"><button data-tab="category-merge-panel" aria-describedby="category-menu-help">카테고리 통합</button><p id="category-menu-help" class="tab-menu-help">관리 파일의 분류와 저장 경로를 합칩니다.</p></div>
+<div class="tab-menu-item"><button data-tab="source-comparison-panel" aria-describedby="source-comparison-help">소스 사진 비교</button><p id="source-comparison-help" class="tab-menu-help">두 소스·카테고리의 원본 경로·해시·관리 경로를 비교합니다.</p></div>
 <div class="tab-menu-item"><button data-tab="nominatim-panel" aria-describedby="nominatim-menu-help">Nominatim</button><p id="nominatim-menu-help" class="tab-menu-help">위치 조회 서비스 상태와 위치 태그를 관리합니다.</p></div>
 <div class="tab-menu-item"><button id="summary-toggle" type="button" aria-expanded="false" aria-controls="library-summary" aria-describedby="summary-menu-help">소스·분류·사용자 현황</button><p id="summary-menu-help" class="tab-menu-help">소스·분류·사용자별 파일 수와 용량을 봅니다.</p></div>
 </nav>
@@ -20,6 +21,25 @@
 <h3>소스별 현황</h3><div class="summary-table-scroll" tabindex="0" aria-label="소스별 현황 표, 가로 스크롤 가능"><table><caption>설정값과 DB에 실제 기록된 분류·사용자 ID</caption><thead><tr><th scope="col">소스 ID / 경로</th><th scope="col">분류 목록</th><th scope="col">사용자 ID 목록</th><th scope="col">활성 항목</th><th scope="col">원본 파일</th><th scope="col">원본 디렉토리</th><th scope="col">관리 파일</th><th scope="col">관리 디렉토리</th><th scope="col">항목 용량</th></tr></thead><tbody id="summary-sources"></tbody></table></div>
 <h3>소스 × 분류 × 사용자 조합</h3><label>조합 검색 <input id="summary-filter" type="search" placeholder="소스 ID·분류·사용자 ID"></label><p id="summary-group-count"></p><div class="summary-table-scroll" tabindex="0" aria-label="분류·사용자 조합별 현황 표, 가로 스크롤 가능"><table><caption>활성 항목 기준, 여러 조합이 있는 소스는 행을 나누어 표시</caption><thead><tr><th scope="col">소스 ID</th><th scope="col">분류</th><th scope="col">사용자 ID</th><th scope="col">항목 수</th><th scope="col">원본 파일</th><th scope="col">원본 디렉토리</th><th scope="col">관리 파일</th><th scope="col">관리 디렉토리</th><th scope="col">항목 용량</th></tr></thead><tbody id="summary-groups"></tbody></table></div><button id="summary-more" type="button" hidden>조합 100개 더 보기</button><p id="summary-note" class="summary-note"></p>
 </div></details>
+<section id="source-comparison-panel" class="panel" hidden>
+<h2>소스·카테고리 사진 비교</h2>
+<p>현재 DB의 활성 항목을 비교합니다. 누락으로 표시된 원본도 포함하며 실제 파일을 읽거나 SHA-256을 재계산하지 않습니다. 사진·DB 분류·파일 경로는 변경하지 않습니다.</p>
+<form id="source-comparison-form" class="tools">
+<fieldset><legend>비교 A</legend><label>소스 ID <select id="compare-left-source" required></select></label><label>카테고리 <select id="compare-left-category"></select></label></fieldset>
+<fieldset><legend>비교 B</legend><label>소스 ID <select id="compare-right-source" required></select></label><label>카테고리 <select id="compare-right-category"></select></label></fieldset>
+<button id="source-comparison-run" type="submit">선택 범위 비교</button><button id="source-comparison-refresh" type="button">선택 목록 새로고침</button>
+</form>
+<p id="source-comparison-status" role="status" aria-live="polite"></p>
+<div id="source-comparison-result" hidden>
+<h3 id="source-comparison-verdict"></h3><p id="source-comparison-scope"></p>
+<div id="source-comparison-metrics" class="summary-metrics"></div><p id="source-comparison-basis"></p>
+<a id="source-comparison-download">전체 비교 기록 JSON 다운로드</a>
+<div class="tools"><label>결과 구분 <select id="source-comparison-filter"><option value="all">전체</option><option value="same">동일 내용</option><option value="left_only">A에만 있는 내용</option><option value="right_only">B에만 있는 내용</option><option value="unknown">해시 정보 부족</option><option value="conflict">같은 원본 경로의 내용 불일치</option></select></label></div>
+<p id="source-comparison-page-status"></p>
+<div class="summary-table-scroll" tabindex="0" aria-label="소스 사진 비교 결과, 가로 스크롤 가능"><table><caption>SHA-256·파일 크기별 내용 그룹. 그룹당 각 측의 처음 20개 항목을 표시하며 전체 항목은 JSON 기록에서 확인합니다.</caption><thead><tr><th>판정 / SHA-256 / 크기</th><th>A 원본 경로</th><th>B 원본 경로</th><th>A 관리 경로</th><th>B 관리 경로</th></tr></thead><tbody id="source-comparison-rows"></tbody></table></div>
+<div class="tools"><button id="source-comparison-prev" type="button">이전 100개 그룹</button><button id="source-comparison-next" type="button">다음 100개 그룹</button></div>
+</div>
+</section>
 <section id="merge-workflow" class="merge-workflow" aria-labelledby="workflow-title">
 <div class="workflow-heading"><div><h2 id="workflow-title">사진 병합 단계</h2><p>설정부터 관리 디렉토리 복사까지 저장된 상태를 표시합니다. 단계 버튼을 누르면 해당 작업 위치로 이동합니다.</p></div><button id="workflow-refresh" type="button">진행 상태 새로고침</button></div>
 <div class="workflow-overall"><strong id="workflow-summary" role="status" aria-live="polite">진행 상태 확인 중…</strong><progress id="workflow-total" max="100" aria-label="병합 전체 단계 진행률"></progress></div>
@@ -109,4 +129,5 @@
 <dialog id="edit-dialog"><form id="edit-form"><h2>선택 항목 분류 편집</h2><p>체크한 필드만 변경합니다. 여러 값은 쉼표로 구분하며, 기존 값을 교체합니다. 빈 값은 연결을 해제합니다.</p><div id="edit-fields"></div><button>저장</button><button type="button" id="edit-close">취소</button></form></dialog>
 <dialog id="viewer"><div class="viewerbar"><button id="previous" aria-label="이전 파일">←</button><span id="title"></span><button id="next" aria-label="다음 파일">→</button><button id="close">닫기 ×</button></div><div id="preview"></div><a id="folder-viewer-download" download>이 파일 다운로드</a> · <a id="original" target="_blank" rel="noopener">원본 열기 ↗</a></dialog>
 <script src="{{ url_for('static', filename='library_summary.js') }}"></script>
+<script src="{{ url_for('static', filename='source_comparison.js') }}"></script>
 <script src="{{ url_for('static', filename='server_network.js') }}"></script><script src="{{ url_for('static', filename='app.js') }}"></script><script src="{{ url_for('static', filename='job_records.js') }}"></script><script src="{{ url_for('static', filename='library.js') }}"></script><script src="{{ url_for('static', filename='workflow.js') }}"></script><script src="{{ url_for('static', filename='directory_update.js') }}"></script><script src="{{ url_for('static', filename='uploads.js') }}"></script><script src="{{ url_for('static', filename='category_merges.js') }}"></script><script src="{{ url_for('static', filename='nominatim.js') }}"></script><script src="{{ url_for('static', filename='nominatim_statistics.js') }}"></script><script src="{{ url_for('static', filename='nominatim_scan.js') }}"></script></body></html>

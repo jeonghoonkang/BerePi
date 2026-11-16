@@ -1532,3 +1532,24 @@ DB 전체와 managed 전체를 백업하면 이 기록과 복구 보관함도 �
 python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --source-id photo_sonno --preview
 python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --source-id photo_sonno
 ```
+
+## 소스·카테고리별 사진 비교
+
+**소스 사진 비교** 탭에서 A와 B의 소스 ID, 카테고리(또는 전체 카테고리)를 각각 선택하고 **선택 범위 비교**를 실행합니다. 예를 들어 `134server / photo_box`와 `bigsoft / photo_box`를 비교할 수 있습니다. 현재 설정에서 해제됐어도 DB에 남아 있는 소스는 `(DB 기록)`으로 표시합니다.
+
+비교는 현재 DB의 활성 항목에 저장된 **SHA-256과 파일 크기**를 사용하며 실제 사진을 열거나 해시를 재계산하지 않습니다. 누락으로 표시된 원본도 포함하고 비활성·휴지통 항목은 제외합니다. 동일 해시·크기는 동일 바이너리 기준이며 리사이즈·편집된 유사 사진은 별개입니다. 원본 서버에 연결할 수 없어도 비교할 수 있지만 현재 디스크의 실재 여부·내용을 검증하는 기능은 아닙니다.
+
+- 동일 내용, A에만 있는 내용, B에만 있는 내용, 유효한 해시가 없는 항목을 구분합니다.
+- 내용 집합이 같은지와 내용별 등록 개수까지 같은지를 별도로 판정합니다. 대상이 비어 있거나 해시가 부족하면 전체 동일로 판정하지 않습니다.
+- 공통 원본 경로, 공통 관리 경로, 동일 DB 항목 ID, 누락 표시 원본 항목 수를 집계합니다. 경로는 기존 현황과 동일하게 URI/경로 기준으로 중복 제거합니다.
+- 같은 원본 경로에 서로 다른 해시·크기가 기록된 경우 별도 집계합니다. 경로가 같다는 사실만으로 같은 사진이라고 판정하지 않습니다.
+- 결과 표에서 파일명을 펼치면 원본 경로·상태, 관리 경로, 소유자, DB 항목 ID를 확인할 수 있습니다. SHA-256·크기별 내용 그룹을 100개씩 표시하며 그룹당 각 측의 처음 20개 항목을 보여줍니다. 전체 항목은 JSON 다운로드에서 확인합니다.
+
+비교는 기존 단일 백그라운드 작업 큐에서 실행하므로 스캔·병합이 실행 중이면 그 뒤에서 대기합니다. 비교 중 원본이나 카탈로그를 수정하지 않으며 결과만 `db/source_comparisons/<comparison_id>.json`에 저장합니다. 조회 조건 변경 시 기존 결과 화면을 숨기고 새 비교를 요구합니다. 서버 재시작으로 중단된 비교는 다시 실행하세요. API로 저장된 결과를 다시 조회·다운로드할 수 있습니다.
+
+| API | 기능 |
+|---|---|
+| `POST /api/source-comparisons` | `{"left":{"source_id":"134server","category":"photo_box"},"right":{"source_id":"bigsoft","category":"photo_box"}}`로 비교 작업 시작. 카테고리 `null`은 해당 소스 전체. 기존 인증·Origin 검사 및 `X-Photo-Browser: 1` 적용 |
+| `GET /api/jobs/<job_id>` | 비교 대기·진행·완료 상태와 결과 ID 조회 |
+| `GET /api/source-comparisons/<comparison_id>?status=all&offset=0&limit=100` | 결과 요약과 페이지 조회. 구분: `all`, `same`, `left_only`, `right_only`, `unknown`, `conflict` |
+| `GET /api/source-comparisons/<comparison_id>/download` | 표시 제한 없는 전체 비교 JSON 다운로드 |

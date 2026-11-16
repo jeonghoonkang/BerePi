@@ -22,6 +22,7 @@
   }
   el('merge-source').onchange = () => selectMergeSource(el('merge-source').value);
   function jobLabel(status) {
+    if (status.kind === 'source_compare') return '소스 사진 비교';
     if (['merge', 'merge_preview'].includes(status.kind)) {
       const source = status.source_id || status.result?.scope_source_id || status.progress?.scope_source_id;
       return `${source ? '소스 병합 · ' + source : '전체 소스 병합'}${status.kind === 'merge_preview' ? ' 미리보기' : ''}`;
@@ -246,6 +247,12 @@
         result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
       ];
     }
+    if (status.kind === 'source_compare') {
+      return [`A: ${result.left?.source_id} / ${result.left?.category || '전체 카테고리'} · ${count(result.left_items)}개`,
+        `B: ${result.right?.source_id} / ${result.right?.category || '전체 카테고리'} · ${count(result.right_items)}개`,
+        `동일 내용 ${count(result.counts?.same)}개 그룹 · 공통 원본 경로 ${count(result.shared_source_paths)}개 · 공통 관리 경로 ${count(result.shared_managed_paths)}개`,
+        result.basis];
+    }
     if (status.kind === 'source_cleanup') {
       return [`관리 복사본 삭제 ${count(result.deleted_managed_files)}개 · 공유 복사본 보존 ${count(result.retained_shared_files)}개`, result.warning];
     }
@@ -261,6 +268,7 @@
     return [];
   }
   function mergeProgress(progress) {
+    if (progress?.phase === 'source_comparing') return `DB 비교: ${(progress.processed ?? 0).toLocaleString()}/${(progress.total ?? 0).toLocaleString()}개 확인`;
     const timing = window.photoBrowserJobRecords?.mergeEstimateText(progress);
     const withTiming = text => timing ? `${text}\n${timing}` : text;
     if (progress?.phase === 'report_inventory') return withTiming(`보고서용 관리 디렉토리 집계 중 · ${(progress.report_files ?? 0).toLocaleString()}개 확인`);
