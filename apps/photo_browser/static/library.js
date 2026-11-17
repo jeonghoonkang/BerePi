@@ -22,6 +22,7 @@
   }
   el('merge-source').onchange = () => selectMergeSource(el('merge-source').value);
   function jobLabel(status) {
+    if (status.kind?.startsWith('duplicate_db_')) return '중복 DB 항목 정리';
     if (status.kind === 'source_compare') return '소스 사진 비교';
     if (['merge', 'merge_preview'].includes(status.kind)) {
       const source = status.source_id || status.result?.scope_source_id || status.progress?.scope_source_id;
@@ -246,6 +247,11 @@
         `파일명 충돌로 이름을 구분한 항목: ${count(result.renamed_count)}개 (_중복, _중복_2 등)`,
         result.preview ? '병합 실행 시 관리 디렉토리에 복사본을 생성합니다.' : '성공한 복사본의 위치를 사진 JSON에 반영했습니다. 원본 파일은 유지합니다.',
       ];
+    }
+    if (status.kind?.startsWith('duplicate_db_')) {
+      const names = {preview: '미리보기 완료 · 아직 DB에 반영하지 않음', completed: '중복 DB 항목 비활성 보관 완료', undone: 'DB 항목 복원 완료'};
+      return [`정리 ${result.remove?.source_id} / ${result.remove?.category} → 유지 ${result.keep?.source_id} / ${result.keep?.category}`,
+        `${names[result.status] || result.status} · ${count(result.archive_count)}개`, result.basis];
     }
     if (status.kind === 'source_compare') {
       return [`A: ${result.left?.source_id} / ${result.left?.category || '전체 카테고리'} · ${count(result.left_items)}개`,

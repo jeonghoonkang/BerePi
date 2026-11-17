@@ -654,7 +654,7 @@ class Library:
                 chunks = [c for c in chunks if c['first_date'] <= filters['to']]
         return [item for entry in chunks for item in read_json(self.db / entry['path'])['items']]
 
-    def commit(self, items, control=None):
+    def commit(self, items, control=None, normalize_metadata=True):
         # Immutable generations + atomic manifest: readers never see half-written chunks.
         generation = uid()
         from metadata_store import chunk_entry
@@ -662,9 +662,10 @@ class Library:
         for item in items:
             c = item['classification']
             # A later normal scan may discover GPS for a previously marked photo.
-            if 'no_gps' in c.get('tags', []) and gps_coordinates(item['capture']) is not None:
+            if normalize_metadata and 'no_gps' in c.get('tags', []) and gps_coordinates(item['capture']) is not None:
                 c['tags'] = [tag for tag in c['tags'] if tag != 'no_gps']
-            c['location_tags'] = capture_location_tags(item['capture'])
+            if normalize_metadata:
+                c['location_tags'] = capture_location_tags(item['capture'])
             date = item['capture']['date_key']
             year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
             groups[f"{component(c['category_id'])}/{component(c['owner_id'])}/{year}/{month}"].append(item)

@@ -1,7 +1,7 @@
 /* Read-only catalog comparison. All recorded paths are rendered as text. */
 (() => {
   const el = id => document.getElementById(id);
-  let choices, comparisonId, offset = 0, busy = false, requestVersion = 0;
+  let choices, comparisonId, offset = 0, busy = false, requestVersion = 0, choicesLoading = false;
   const labels = {same: '동일 내용', left_only: 'A에만 있는 내용', right_only: 'B에만 있는 내용', unknown: '해시 정보 부족'};
   const number = n => Number(n || 0).toLocaleString('ko-KR');
   const make = (tag, text) => { const node = document.createElement(tag); node.textContent = text; return node; };
@@ -22,7 +22,11 @@
     select.value = values.includes(previous) ? previous : '';
   }
   async function loadChoices() {
-    choices = await api('api/library-summary?refresh=1');
+    if (choicesLoading) return;
+    choicesLoading = true;
+    try {
+    message('소스 ID·카테고리 선택 목록을 불러오는 중입니다…');
+    choices = await api('api/source-comparisons/options');
     for (const [index, side] of ['left', 'right'].entries()) {
       const select = el(`compare-${side}-source`), previous = select.value;
       select.replaceChildren();
@@ -30,7 +34,8 @@
       select.value = choices.sources.some(source => source.source_id === previous) ? previous : (choices.sources[index]?.source_id || choices.sources[0]?.source_id || '');
       categories(side);
     }
-    message('A와 B의 소스 ID·카테고리를 선택하세요.');
+    message(choices.sources.length ? 'A와 B의 소스 ID·카테고리를 선택하세요.' : '등록되거나 DB에 기록된 소스가 없습니다. 먼저 소스를 등록하고 스캔하세요.');
+    } finally { choicesLoading = false; }
   }
   function scope(side) { return {source_id: el(`compare-${side}-source`).value, category: el(`compare-${side}-category`).value || null}; }
   function render(data) {
@@ -111,4 +116,5 @@
   el('source-comparison-filter').onchange = () => { offset = 0; page(); };
   el('source-comparison-prev').onclick = () => { offset = Math.max(0, offset - 100); page(); };
   el('source-comparison-next').onclick = () => { offset += 100; page(); };
+  loadChoices().catch(error => { message(`선택 목록을 불러오지 못했습니다: ${error.message}. ‘선택 목록 새로고침’을 눌러 다시 시도하세요.`); });
 })();

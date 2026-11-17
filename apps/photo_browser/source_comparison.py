@@ -1,5 +1,6 @@
 """Compare two catalog scopes without opening originals or managed media."""
 import re
+import threading
 from collections import Counter, defaultdict
 
 from library import atomic_json, component, now, read_json, uid
@@ -10,6 +11,35 @@ class SourceComparison:
     def __init__(self, library):
         self.library = library
         self.directory = library.db / 'source_comparisons'
+        self.options_lock = threading.Lock()
+        self.options_cache = None
+
+    def options(self):
+        """Small selector payload, independent of expensive directory/path summary counts."""
+        config = self.library.config()
+        index = read_json(self.library.db / 'index.json', {'chunks': []})
+        key = (str(config.get('sources')), index.get('updated_at'), tuple(chunk['path'] for chunk in index['chunks']))
+        with self.options_lock:
+            if self.options_cache and self.options_cache[0] == key:
+                return self.options_cache[1]
+            sources = {source['source_id']: {'source_id': source['source_id'], 'registered': True,
+                                           'categories': {source.get('category', 'family')}}
+                       for source in config.get('sources', [])}
+            counts = Counter()
+            for chunk in index['chunks']:
+                for item in read_json(self.library.db / chunk['path'])['items']:
+                    if item['lifecycle']['status'] != 'active':
+                        continue
+                    category = item['classification']['category_id']
+                    for sid in {loc.get('source_id') for loc in item['locations'] if loc['role'] == 'source' and loc.get('source_id')}:
+                        source = sources.setdefault(sid, {'source_id': sid, 'registered': False, 'categories': set()})
+                        source['categories'].add(category)
+                        counts[(sid, category)] += 1
+            result = {'sources': [{**source, 'categories': sorted(source['categories'])} for sid, source in sorted(sources.items())],
+                      'groups': [{'source_id': sid, 'category_id': category, 'media_count': counts[(sid, category)]}
+                                 for sid, source in sorted(sources.items()) for category in sorted(source['categories'])]}
+            self.options_cache = key, result
+            return result
 
     def path(self, comparison_id):
         return self.directory / (component(comparison_id) + '.json')

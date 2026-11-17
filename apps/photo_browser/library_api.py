@@ -37,6 +37,8 @@ def register_library(app, boundary, db):
     app.extensions['photo_library_summary'] = summary
     from source_comparison import SourceComparison
     source_comparisons = SourceComparison(library)
+    from duplicate_cleanup import DuplicateCleanup
+    duplicate_cleanups = DuplicateCleanup(library)
     for path in (library.db / 'jobs').glob('*.json'):
         try:
             previous = read_json(path)
@@ -86,7 +88,7 @@ def register_library(app, boundary, db):
         stop = threading.Event()
         with guard:
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
-            exclusive = {'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan'}
+            exclusive = {'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'duplicate_db_preview', 'duplicate_db_cleanup', 'duplicate_db_undo'}
             if (kind in exclusive and active) or any(j.get('kind') in exclusive for j in active):
                 raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
@@ -288,6 +290,35 @@ def register_library(app, boundary, db):
         if left == right:
             raise ValueError('서로 다른 소스 또는 카테고리를 선택하세요.')
         return launch(lambda progress, stopped: source_comparisons.compare(left, right, progress), 'source_compare')
+
+    @app.get('/api/source-comparisons/options')
+    def source_comparison_options():
+        return jsonify(source_comparisons.options())
+
+    @app.get('/api/duplicate-db-cleanups')
+    def duplicate_db_records():
+        return jsonify(items=duplicate_cleanups.records())
+
+    @app.post('/api/duplicate-db-cleanups/preview')
+    def duplicate_db_preview():
+        data = body()
+        remove, keep = duplicate_cleanups.scope(data.get('remove')), duplicate_cleanups.scope(data.get('keep'))
+        return launch(lambda: duplicate_cleanups.preview(remove, keep), 'duplicate_db_preview')
+
+    @app.get('/api/duplicate-db-cleanups/<operation_id>')
+    def duplicate_db_record(operation_id):
+        offset = max(0, int(request.args.get('offset', 0)))
+        return jsonify(duplicate_cleanups.page(operation_id, offset, 100))
+
+    @app.post('/api/duplicate-db-cleanups/<operation_id>/run')
+    def duplicate_db_run(operation_id):
+        duplicate_cleanups.load(operation_id)
+        return launch(lambda: duplicate_cleanups.execute(operation_id), 'duplicate_db_cleanup')
+
+    @app.post('/api/duplicate-db-cleanups/<operation_id>/undo')
+    def duplicate_db_undo(operation_id):
+        duplicate_cleanups.load(operation_id)
+        return launch(lambda: duplicate_cleanups.undo(operation_id), 'duplicate_db_undo')
 
     @app.get('/api/source-comparisons/<comparison_id>')
     def source_comparison_page(comparison_id):

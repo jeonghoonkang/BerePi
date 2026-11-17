@@ -1553,3 +1553,34 @@ python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --sourc
 | `GET /api/jobs/<job_id>` | 비교 대기·진행·완료 상태와 결과 ID 조회 |
 | `GET /api/source-comparisons/<comparison_id>?status=all&offset=0&limit=100` | 결과 요약과 페이지 조회. 구분: `all`, `same`, `left_only`, `right_only`, `unknown`, `conflict` |
 | `GET /api/source-comparisons/<comparison_id>/download` | 표시 제한 없는 전체 비교 JSON 다운로드 |
+
+## 소스·카테고리 범위의 중복 DB 항목 정리
+
+**소스 사진 비교** 탭 아래의 **선택 범위의 중복 DB 항목 정리**를 사용합니다. 기존 **중복 소스 찾기 → 소스 해제·관리 복사본 삭제**와 달리 소스 등록이나 사진 파일을 삭제하지 않습니다.
+
+1. **정리할 범위**에서 `134server / photo_box`를 선택합니다.
+2. **유지할 범위**에서 `bigsoft / photo_box`를 선택합니다.
+3. **DB 정리 미리보기**로 대상 수, 제외 사유, 정리·유지 DB 항목 ID, SHA-256, 원본·관리 경로를 확인합니다. 미리보기는 카탈로그를 변경하지 않습니다.
+4. **미리본 중복 DB 항목 정리 실행**을 누르고 확인합니다. 같은 DB 해시·크기의 별도 항목만 비활성 보관합니다. `134server / family`, 유지측 항목 및 원본·관리 파일은 그대로 유지됩니다.
+5. **DB 정리 기록 · 되돌리기**에서 대상 확인 또는 **DB 정리 되돌리기**를 실행합니다.
+
+소스 ID와 특정 카테고리를 모두 선택해야 하며 전체 카테고리 정리는 허용하지 않습니다. 활성 항목 중 유효한 SHA-256·크기가 유지측 항목과 같은 경우만 처리합니다. 실제 파일을 읽어 재검증하지 않으며, 누락 표시 원본도 DB 비교에 포함합니다. 유지측에 없는 내용, 해시 정보 부족 항목, 양쪽 공통 DB ID, 여러 소스 연결 항목은 제외합니다.
+
+정리측의 `lifecycle.status`를 `duplicate_archived`로 바꾸고 `duplicate_of`, `cleanup_id`, 보관 시각을 남깁니다. 활성 현황·라이브러리·일반 병합 대상에서는 제외되며 비활성 항목 수에는 포함됩니다. 태그·이벤트·소유자와 경로는 복구용으로 보존하고, 유지측 메타데이터로 자동 병합하지 않습니다. 파일 공간이나 전체 JSON 레코드 수를 줄이는 기능은 아닙니다. 원래 레코드를 유지하므로 같은 소스를 재스캔해도 자동으로 활성 복원하지 않습니다.
+
+미리보기 후 정리·유지 범위의 DB가 바뀌면 실행을 거부하고 새 미리보기를 요구합니다. 정리 후 대상 항목이 편집·재스캔되어 달라지면 기존 기록으로 덮어쓰지 않도록 되돌리기를 거부합니다. 다른 카테고리에 대한 변경은 유지됩니다.
+
+기록은 `db/duplicate_cleanups/<operation_id>.json`에 저장합니다. 변경 전·후 스냅샷을 DB 반영 전에 저장하고 기존 원자적 카탈로그 발행 방식으로 반영합니다. 서버 중단 시 기록의 **미리본 DB 정리 실행 / 복구** 또는 **DB 정리 되돌리기**로 재요청합니다. DB가 변경 전인지 변경 후인지 검사하여 중복 적용하지 않습니다. 정리 작업과 다른 서버 파일 작업은 동시에 시작할 수 없습니다.
+
+선택 목록은 `GET /api/source-comparisons/options` 전용 API로 페이지 초기 진입부터 불러오며 DB에만 남은 소스도 표시합니다. 소스별 카테고리를 연동하고 조회 실패를 화면에 표시합니다. **선택 목록 새로고침**으로 재시도할 수 있고, UI·스타일에 캐시 버전을 적용합니다.
+
+| API | 기능 |
+|---|---|
+| `GET /api/source-comparisons/options` | 소스·카테고리 선택 목록 |
+| `POST /api/duplicate-db-cleanups/preview` | `{"remove":{"source_id":"134server","category":"photo_box"},"keep":{"source_id":"bigsoft","category":"photo_box"}}`로 미리보기 시작 |
+| `GET /api/duplicate-db-cleanups` | 정리·되돌리기 기록 목록 |
+| `GET /api/duplicate-db-cleanups/<operation_id>?offset=0` | 기록 및 100개씩 대상 항목 조회 |
+| `POST /api/duplicate-db-cleanups/<operation_id>/run` | 미리본 DB 정리 실행 또는 중단된 반영 확인·완료 |
+| `POST /api/duplicate-db-cleanups/<operation_id>/undo` | 변경 전 항목 복원 또는 중단된 복구 완료 |
+
+변경 API에는 기존 인증·Origin 검사 및 `X-Photo-Browser: 1`이 적용됩니다. 시작 응답의 `job_id`로 작업 조회 API에서 완료 여부를 확인합니다. 파일 영구 삭제 API는 사용하지 않습니다.

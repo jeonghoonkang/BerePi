@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PINKFL_Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PINKFL_Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261118-db-cleanup') }}"></head>
 <body{% if jobs_page %} class="jobs-page"{% endif %}><header>{% include 'version_banner.html' %}{% include 'auth_bar.html' %}<div class="server-network" aria-label="웹서버 IP 주소" role="status"><strong>웹서버 IP</strong><span>내부 IP: <b id="server-internal-ip">조회 중…</b></span><span>외부 IP: <b id="server-external-ip">조회 중…</b></span></div><span class="brand">BerePi <b> / PHOTO BROWSER</b></span><h1>기억을 저장하는 파일 시스템</h1><p>사진과 동영상을 날짜별로 둘러보세요.</p></header>
 <main><nav class="tabs" aria-label="탐색 메뉴">
 <div class="tab-menu-item"><button data-tab="library-panel" aria-describedby="library-menu-help">라이브러리</button><p id="library-menu-help" class="tab-menu-help">사진을 검색하고 태그·분류를 편집합니다.</p></div>
@@ -29,7 +29,7 @@
 <fieldset><legend>비교 B</legend><label>소스 ID <select id="compare-right-source" required></select></label><label>카테고리 <select id="compare-right-category"></select></label></fieldset>
 <button id="source-comparison-run" type="submit">선택 범위 비교</button><button id="source-comparison-refresh" type="button">선택 목록 새로고침</button>
 </form>
-<p id="source-comparison-status" role="status" aria-live="polite"></p>
+<p id="source-comparison-status" role="status" aria-live="polite">소스 ID·카테고리 목록을 불러오는 중입니다. 표시되지 않으면 선택 목록 새로고침을 눌러 주세요.</p>
 <div id="source-comparison-result" hidden>
 <h3 id="source-comparison-verdict"></h3><p id="source-comparison-scope"></p>
 <div id="source-comparison-metrics" class="summary-metrics"></div><p id="source-comparison-basis"></p>
@@ -39,6 +39,20 @@
 <div class="summary-table-scroll" tabindex="0" aria-label="소스 사진 비교 결과, 가로 스크롤 가능"><table><caption>SHA-256·파일 크기별 내용 그룹. 그룹당 각 측의 처음 20개 항목을 표시하며 전체 항목은 JSON 기록에서 확인합니다.</caption><thead><tr><th>판정 / SHA-256 / 크기</th><th>A 원본 경로</th><th>B 원본 경로</th><th>A 관리 경로</th><th>B 관리 경로</th></tr></thead><tbody id="source-comparison-rows"></tbody></table></div>
 <div class="tools"><button id="source-comparison-prev" type="button">이전 100개 그룹</button><button id="source-comparison-next" type="button">다음 100개 그룹</button></div>
 </div>
+<section class="duplicate-db-cleanup" aria-labelledby="duplicate-db-title">
+<h2 id="duplicate-db-title">선택 범위의 중복 DB 항목 정리</h2>
+<p>정리할 소스·카테고리와 유지할 소스·카테고리를 각각 선택하세요. SHA-256·크기가 같은 별도 DB 항목만 비활성 보관합니다. 원본·관리 파일은 삭제하거나 이동하지 않으며, 다른 카테고리·소스 설정과 유지측 항목은 그대로 둡니다. 비활성 항목의 태그·이벤트도 복구용으로 보존합니다.</p>
+<form id="duplicate-db-form" class="tools">
+<fieldset><legend>정리할 범위 (중복 항목 비활성 보관)</legend><label>소스 ID <select id="cleanup-remove-source" required><option value="">목록 불러오는 중…</option></select></label><label>카테고리 <select id="cleanup-remove-category" required><option value="">카테고리 선택</option></select></label></fieldset>
+<fieldset><legend>유지할 범위 (변경 없음)</legend><label>소스 ID <select id="cleanup-keep-source" required><option value="">목록 불러오는 중…</option></select></label><label>카테고리 <select id="cleanup-keep-category" required><option value="">카테고리 선택</option></select></label></fieldset>
+<button id="duplicate-db-preview" type="submit">DB 정리 미리보기</button><button id="duplicate-db-refresh" type="button">선택 목록·기록 새로고침</button>
+</form>
+<p id="duplicate-db-status" role="status" aria-live="polite">소스 ID·카테고리 목록을 불러오는 중입니다.</p>
+<div id="duplicate-db-preview-result" hidden><h3>중복 DB 정리 미리보기</h3><p id="duplicate-db-preview-summary"></p><p id="duplicate-db-page-status"></p>
+<div class="summary-table-scroll" tabindex="0" aria-label="DB 정리 대상 미리보기"><table><thead><tr><th>파일명 / SHA-256</th><th>정리할 DB ID / 소유자</th><th>유지할 DB ID</th><th>원본·관리 경로 (유지)</th></tr></thead><tbody id="duplicate-db-preview-rows"></tbody></table></div>
+<div class="tools"><button id="duplicate-db-prev" type="button">이전 100개 항목</button><button id="duplicate-db-next" type="button">다음 100개 항목</button><button id="duplicate-db-run" type="button" disabled>미리본 중복 DB 항목 정리 실행</button></div></div>
+<h3>DB 정리 기록 · 되돌리기</h3><p>정리 항목은 활성 목록에서 제외하며 파일과 DB 복구 정보를 보존합니다. 이후 대상 항목이 변경되면 덮어쓰지 않도록 되돌리기를 거부합니다.</p><div id="duplicate-db-history"></div>
+</section>
 </section>
 <section id="merge-workflow" class="merge-workflow" aria-labelledby="workflow-title">
 <div class="workflow-heading"><div><h2 id="workflow-title">사진 병합 단계</h2><p>설정부터 관리 디렉토리 복사까지 저장된 상태를 표시합니다. 단계 버튼을 누르면 해당 작업 위치로 이동합니다.</p></div><button id="workflow-refresh" type="button">진행 상태 새로고침</button></div>
@@ -129,5 +143,6 @@
 <dialog id="edit-dialog"><form id="edit-form"><h2>선택 항목 분류 편집</h2><p>체크한 필드만 변경합니다. 여러 값은 쉼표로 구분하며, 기존 값을 교체합니다. 빈 값은 연결을 해제합니다.</p><div id="edit-fields"></div><button>저장</button><button type="button" id="edit-close">취소</button></form></dialog>
 <dialog id="viewer"><div class="viewerbar"><button id="previous" aria-label="이전 파일">←</button><span id="title"></span><button id="next" aria-label="다음 파일">→</button><button id="close">닫기 ×</button></div><div id="preview"></div><a id="folder-viewer-download" download>이 파일 다운로드</a> · <a id="original" target="_blank" rel="noopener">원본 열기 ↗</a></dialog>
 <script src="{{ url_for('static', filename='library_summary.js') }}"></script>
-<script src="{{ url_for('static', filename='source_comparison.js') }}"></script>
+<script src="{{ url_for('static', filename='source_comparison.js', v='20261118-db-cleanup') }}"></script>
+<script src="{{ url_for('static', filename='duplicate_cleanup.js', v='20261118-db-cleanup') }}"></script>
 <script src="{{ url_for('static', filename='server_network.js') }}"></script><script src="{{ url_for('static', filename='app.js') }}"></script><script src="{{ url_for('static', filename='job_records.js') }}"></script><script src="{{ url_for('static', filename='library.js') }}"></script><script src="{{ url_for('static', filename='workflow.js') }}"></script><script src="{{ url_for('static', filename='directory_update.js') }}"></script><script src="{{ url_for('static', filename='uploads.js') }}"></script><script src="{{ url_for('static', filename='category_merges.js') }}"></script><script src="{{ url_for('static', filename='nominatim.js') }}"></script><script src="{{ url_for('static', filename='nominatim_statistics.js') }}"></script><script src="{{ url_for('static', filename='nominatim_scan.js') }}"></script></body></html>
