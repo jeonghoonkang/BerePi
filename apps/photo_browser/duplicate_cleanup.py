@@ -77,6 +77,11 @@ class DuplicateCleanup:
                 if key:
                     by_content[key].append(item)
             operation_id, changes, skipped = uid(), [], Counter()
+            preserved_categories = Counter(item['classification']['category_id'] for item in items
+                                           if item['lifecycle']['status'] == 'active'
+                                           and item['classification']['category_id'] != remove['category']
+                                           and any(loc['role'] == 'source' and loc.get('source_id') == remove['source_id']
+                                                   for loc in item['locations']))
             for item in selected:
                 key = self.content_key(item)
                 if item['media_id'] in keep_ids:
@@ -99,6 +104,7 @@ class DuplicateCleanup:
                       'remove': remove, 'keep': keep, 'remove_items': len(selected), 'keep_items': len(retained),
                       'remove_signature': self.scope_signature(selected), 'keep_signature': self.scope_signature(retained),
                       'archive_count': len(changes), 'skipped': dict(skipped), 'changes': changes,
+                      'preserved_categories': [{'category': category, 'count': count} for category, count in sorted(preserved_categories.items())],
                       'basis': 'DB에 저장된 SHA-256·크기가 같은 별도 항목만 비활성 보관합니다. 실제 파일을 검증하거나 삭제하지 않습니다. 원본·관리 파일, 유지측 항목·태그, 다른 카테고리와 소스 설정은 변경하지 않습니다.'}
             self.save(record)
             return self.overview(record)

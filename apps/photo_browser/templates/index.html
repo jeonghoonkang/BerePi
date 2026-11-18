@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PINKFL_Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261118-db-cleanup') }}"></head>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PINKFL_Browser</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261118-cleanup-summary') }}"></head>
 <body{% if jobs_page %} class="jobs-page"{% endif %}><header>{% include 'version_banner.html' %}{% include 'auth_bar.html' %}<div class="server-network" aria-label="웹서버 IP 주소" role="status"><strong>웹서버 IP</strong><span>내부 IP: <b id="server-internal-ip">조회 중…</b></span><span>외부 IP: <b id="server-external-ip">조회 중…</b></span></div><span class="brand">BerePi <b> / PHOTO BROWSER</b></span><h1>기억을 저장하는 파일 시스템</h1><p>사진과 동영상을 날짜별로 둘러보세요.</p></header>
 <main><nav class="tabs" aria-label="탐색 메뉴">
 <div class="tab-menu-item"><button data-tab="library-panel" aria-describedby="library-menu-help">라이브러리</button><p id="library-menu-help" class="tab-menu-help">사진을 검색하고 태그·분류를 편집합니다.</p></div>
@@ -48,6 +48,12 @@
 <button id="duplicate-db-preview" type="submit">DB 정리 미리보기</button><button id="duplicate-db-refresh" type="button">선택 목록·기록 새로고침</button>
 </form>
 <p id="duplicate-db-status" role="status" aria-live="polite">소스 ID·카테고리 목록을 불러오는 중입니다.</p>
+<section id="duplicate-db-info" class="cleanup-info" aria-labelledby="duplicate-db-info-title" aria-live="polite" hidden>
+<h3 id="duplicate-db-info-title">DB 정리 정보 요약</h3><p id="duplicate-db-info-state"></p>
+<div class="cleanup-info-grid"><section class="cleanup-info-keep"><h4>활성 상태로 유지되는 정보</h4><ul id="duplicate-db-info-keep"></ul></section>
+<section class="cleanup-info-archive"><h4>활성 목록에서 제외 · 복구용 보관 정보</h4><ul id="duplicate-db-info-archive"></ul></section></div>
+<p id="duplicate-db-info-files"></p>
+</section>
 <div id="duplicate-db-preview-result" hidden><h3>중복 DB 정리 미리보기</h3><p id="duplicate-db-preview-summary"></p><p id="duplicate-db-page-status"></p>
 <div class="summary-table-scroll" tabindex="0" aria-label="DB 정리 대상 미리보기"><table><thead><tr><th>파일명 / SHA-256</th><th>정리할 DB ID / 소유자</th><th>유지할 DB ID</th><th>원본·관리 경로 (유지)</th></tr></thead><tbody id="duplicate-db-preview-rows"></tbody></table></div>
 <div class="tools"><button id="duplicate-db-prev" type="button">이전 100개 항목</button><button id="duplicate-db-next" type="button">다음 100개 항목</button><button id="duplicate-db-run" type="button" disabled>미리본 중복 DB 항목 정리 실행</button></div></div>
@@ -144,5 +150,5 @@
 <dialog id="viewer"><div class="viewerbar"><button id="previous" aria-label="이전 파일">←</button><span id="title"></span><button id="next" aria-label="다음 파일">→</button><button id="close">닫기 ×</button></div><div id="preview"></div><a id="folder-viewer-download" download>이 파일 다운로드</a> · <a id="original" target="_blank" rel="noopener">원본 열기 ↗</a></dialog>
 <script src="{{ url_for('static', filename='library_summary.js') }}"></script>
 <script src="{{ url_for('static', filename='source_comparison.js', v='20261118-db-cleanup') }}"></script>
-<script src="{{ url_for('static', filename='duplicate_cleanup.js', v='20261118-db-cleanup') }}"></script>
+<script src="{{ url_for('static', filename='duplicate_cleanup.js', v='20261118-cleanup-summary') }}"></script>
 <script src="{{ url_for('static', filename='server_network.js') }}"></script><script src="{{ url_for('static', filename='app.js') }}"></script><script src="{{ url_for('static', filename='job_records.js') }}"></script><script src="{{ url_for('static', filename='library.js') }}"></script><script src="{{ url_for('static', filename='workflow.js') }}"></script><script src="{{ url_for('static', filename='directory_update.js') }}"></script><script src="{{ url_for('static', filename='uploads.js') }}"></script><script src="{{ url_for('static', filename='category_merges.js') }}"></script><script src="{{ url_for('static', filename='nominatim.js') }}"></script><script src="{{ url_for('static', filename='nominatim_statistics.js') }}"></script><script src="{{ url_for('static', filename='nominatim_scan.js') }}"></script></body></html>

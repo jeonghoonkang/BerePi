@@ -34,6 +34,7 @@ class DuplicateCleanupTests(unittest.TestCase):
         files = self.files()
         result = self.cleanup.preview(self.left, self.right)
         self.assertEqual(result['archive_count'], 2)
+        self.assertEqual(result['preserved_categories'], [{'category': 'family', 'count': 1}])
         self.assertEqual(self.library.items(), self.before)
         page = self.cleanup.page(result['operation_id'])
         self.assertEqual(len(page['rows']), 2)

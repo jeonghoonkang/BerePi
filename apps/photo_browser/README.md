@@ -1584,3 +1584,5 @@ python3 apps/photo_browser/cli.py --db /data/photo_db --root /data merge --sourc
 | `POST /api/duplicate-db-cleanups/<operation_id>/undo` | 변경 전 항목 복원 또는 중단된 복구 완료 |
 
 변경 API에는 기존 인증·Origin 검사 및 `X-Photo-Browser: 1`이 적용됩니다. 시작 응답의 `job_id`로 작업 조회 API에서 완료 여부를 확인합니다. 파일 영구 삭제 API는 사용하지 않습니다.
+
+DB 정리 미리보기·완료·되돌리기 및 기록의 대상 확인 화면에는 **DB 정리 정보 요약** 박스를 표시합니다. 왼쪽에는 유지측 항목 수, 정리측에서 활성 상태로 남는 수, 정리하지 않는 사유, 같은 소스의 다른 카테고리별 보존 항목 수를 표시합니다. 오른쪽에는 활성 목록에서 제외되어 비활성 보관되는 중복 항목 수, 보존 메타데이터, `duplicate_cleanups/<operation_id>.json` 복구 기록 경로와 되돌리기 방법을 표시합니다. 수치는 미리보기 시점 기준이며, 실제 사진 파일을 백업·이동·삭제하는 기능과 구분해 안내합니다. 이전 기록에 다른 카테고리 집계가 없으면 해당 상세 수치는 표시하지 않습니다.

@@ -13,7 +13,7 @@
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
     return result;
   }
-  function invalidate() { plan = null; executable = false; pageVersion++; el('duplicate-db-run').disabled = true; el('duplicate-db-preview-result').hidden = true; }
+  function invalidate() { plan = null; executable = false; pageVersion++; el('duplicate-db-run').disabled = true; el('duplicate-db-preview-result').hidden = true; el('duplicate-db-info').hidden = true; }
   function categories(side) {
     const select = el(`cleanup-${side}-category`), previous = select.value;
     select.replaceChildren(new Option('카테고리 선택', ''));
@@ -33,6 +33,26 @@
   }
   function scope(side) { return {source_id: el(`cleanup-${side}-source`).value, category: el(`cleanup-${side}-category`).value}; }
   const scopeText = scope => `${scope.source_id} / ${scope.category}`;
+  function renderSummary(record) {
+    const undone = record.status === 'undone', completed = record.status === 'completed';
+    const uncertain = ['applying', 'undoing'].includes(record.status);
+    el('duplicate-db-info').hidden = false;
+    el('duplicate-db-info-state').textContent = `${statusNames[record.status] || record.status} · ${scopeText(record.remove)} → 유지 ${scopeText(record.keep)}${uncertain ? ' · 반영 상태 확인이 필요합니다. 아래는 기록된 계획 기준입니다.' : ' · 미리보기 시점의 DB 항목 수 기준입니다.'}`;
+    const keep = el('duplicate-db-info-keep'), archive = el('duplicate-db-info-archive');
+    keep.replaceChildren(); archive.replaceChildren();
+    const add = (list, text) => list.append(make('li', text));
+    add(keep, `유지측 ${scopeText(record.keep)}: ${number(record.keep_items)}개. 해당 항목과 태그·이벤트·소유자·경로를 변경하지 않습니다.`);
+    add(keep, `정리측 ${scopeText(record.remove)}: ${number(undone ? record.remove_items : record.remove_items - record.archive_count)}개 ${undone ? '복원 후 활성 유지' : completed ? '정리 후 활성 유지' : '정리 후 활성 유지 예정'}.`);
+    const skippedNames = {shared_item: '양쪽 공통 DB ID', shared_source: '여러 소스 연결', unknown_hash: '해시 정보 부족', no_duplicate: '유지측에 동일 내용 없음'};
+    for (const [reason, count] of Object.entries(record.skipped || {})) add(keep, `정리하지 않고 보존: ${skippedNames[reason] || reason} ${number(count)}개.`);
+    for (const category of record.preserved_categories || []) add(keep, `다른 카테고리 ${record.remove.source_id} / ${category.category}: ${number(category.count)}개 유지.`);
+    add(keep, '선택 범위 밖의 DB 항목과 소스 등록 설정은 유지합니다.');
+    add(archive, `${scopeText(record.remove)}의 중복 DB 항목 ${number(record.archive_count)}개: ${undone ? '비활성 보관을 되돌려 원래 상태로 복원했습니다.' : completed ? '비활성 보관했습니다.' : '비활성 보관 대상입니다.'}`);
+    add(archive, '복구 정보: 정리 항목의 변경 전·후 DB 스냅샷, 태그·이벤트·소유자, 원본·관리 경로, 유지측 DB ID. 유지측 항목에 자동 합치지 않습니다.');
+    add(archive, `복구 기록: DB 디렉토리 / duplicate_cleanups/${record.operation_id}.json`);
+    add(archive, undone ? '복원 완료 후에도 작업 이력은 남습니다.' : '기록의 ‘DB 정리 되돌리기’로 복원합니다. 미리보기만 한 경우 아직 활성 항목을 제외하지 않습니다.');
+    el('duplicate-db-info-files').textContent = '원본·관리 사진 파일은 모두 현재 위치에 그대로 유지합니다. 파일 복사·이동·삭제나 ZIP 백업은 수행하지 않으며 DB 복구 기록만 보관합니다.';
+  }
   function lock(value) {
     busy = value;
     el('duplicate-db-form').querySelectorAll('select, button').forEach(node => { node.disabled = value; });
@@ -54,6 +74,7 @@
     const version = ++pageVersion;
     const record = await api(`api/duplicate-db-cleanups/${encodeURIComponent(id)}?offset=${offset}`);
     if (version !== pageVersion) return;
+    renderSummary(record);
     const skippedNames = {shared_item: '양쪽 공통 DB 항목 보존', shared_source: '여러 소스 연결 항목 보존', unknown_hash: '해시 정보 부족', no_duplicate: '일치하는 내용 없음'};
     const skipped = Object.entries(record.skipped).map(([key, count]) => `${skippedNames[key] || key} ${number(count)}개`).join(' · ');
     el('duplicate-db-preview-summary').textContent = `정리: ${scopeText(record.remove)} → 유지: ${scopeText(record.keep)}\n정리 범위 ${number(record.remove_items)}개 중 중복 ${number(record.archive_count)}개 비활성 보관 예정 · ${statusNames[record.status]}\n${skipped || '제외 항목 없음'}\n${record.basis}`;
@@ -83,7 +104,7 @@
       if (['completed', 'applying', 'undoing'].includes(record.status)) button('DB 정리 되돌리기', async () => {
         if (busy || !confirm(`${scopeText(record.remove)}의 정리된 DB 항목 ${number(record.archive_count)}개를 복원하시겠습니까?\n원본·관리 파일과 유지측 항목은 변경하지 않습니다.`)) return;
         lock(true); invalidate();
-        try { await job(`api/duplicate-db-cleanups/${encodeURIComponent(record.operation_id)}/undo`); message('정리한 DB 항목을 복원했습니다.'); }
+        try { const result = await job(`api/duplicate-db-cleanups/${encodeURIComponent(record.operation_id)}/undo`); renderSummary(result); message('정리한 DB 항목을 복원했습니다.'); }
         finally { lock(false); await history(); await loadOptions(); }
       });
       root.append(row);
@@ -93,7 +114,7 @@
   async function execute(record) {
     if (busy || !record.archive_count || !confirm(`정리할 범위: ${scopeText(record.remove)}\n유지할 범위: ${scopeText(record.keep)}\n중복 DB 항목 ${number(record.archive_count)}개만 비활성 보관하시겠습니까?\n원본·관리 파일과 다른 카테고리는 변경하지 않습니다. 다른 접속자의 라이브러리에도 적용됩니다.`)) return;
     lock(true); invalidate();
-    try { await job(`api/duplicate-db-cleanups/${encodeURIComponent(record.operation_id)}/run`); message(`${number(record.archive_count)}개 중복 DB 항목을 정리했습니다. 기록에서 되돌릴 수 있습니다.`); }
+    try { const result = await job(`api/duplicate-db-cleanups/${encodeURIComponent(record.operation_id)}/run`); renderSummary(result); message(`${number(record.archive_count)}개 중복 DB 항목을 정리했습니다. 기록에서 되돌릴 수 있습니다.`); }
     finally { lock(false); await history(); await loadOptions(); }
   }
   el('duplicate-db-form').onsubmit = async event => {
