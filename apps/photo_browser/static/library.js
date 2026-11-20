@@ -5,6 +5,8 @@
   const watchers = new Map(), jobCards = new Map();
   const jobsPage = document.body.classList.contains('jobs-page');
   const sourcesOnly = new URLSearchParams(window.location.search).get('panel') === 'sources';
+  const managedPage = new URLSearchParams(window.location.search).get('panel') === 'managed';
+  let managedOnly = false, loadVersion = 0;
   let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
   let mergeScopeInitialized = false;
@@ -41,11 +43,25 @@
   const safe = fn => async (...args) => { try { await fn(...args); } catch (error) { notify(error.message); } };
   function make(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
   function action(text, fn) { const node = make('button', text); node.type = 'button'; node.onclick = safe(fn); return node; }
+  function fileURL(mediaId, download = false) {
+    const params = new URLSearchParams();
+    if (download) params.set('download', '1');
+    if (managedOnly) params.set('managed_only', '1');
+    return `api/library/${encodeURIComponent(mediaId)}/file${params.size ? '?' + params : ''}`;
+  }
   function tab(id) {
+    const previousMode = managedOnly;
+    managedOnly = id === 'managed-panel';
+    if (['library-panel', 'managed-panel'].includes(id)) el(id).append(el('library-content'));
+    if (previousMode !== managedOnly) {
+      loadVersion++; chosen.clear(); selection(); page = []; offset = null;
+      el('library-gallery').replaceChildren(); el('select-page').checked = false;
+      el('library-count').textContent = '목록 불러오는 중…';
+    }
     document.querySelectorAll('.panel').forEach(panel => { panel.hidden = panel.id !== id; });
     document.querySelectorAll('[data-tab]').forEach(button => { button.setAttribute('aria-pressed', button.dataset.tab === id); });
   }
-  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (button.dataset.tab === 'library-panel') { await facets(); offset = null; await load(); } if (button.dataset.tab === 'sources-panel') await loadMergeReports(); if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
+  document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = safe(async () => { tab(button.dataset.tab); if (['library-panel', 'managed-panel'].includes(button.dataset.tab)) { await facets(); offset = null; await load(); } if (button.dataset.tab === 'sources-panel') await loadMergeReports(); if (button.dataset.tab === 'trash-panel') await loadTrash(); if (button.dataset.tab === 'duplicates-panel') await loadDuplicates(); }); });
   function selection() { el('selection-count').textContent = `${chosen.size}개 선택`; }
   async function facets() {
     const values = await api('api/facets');
@@ -63,10 +79,10 @@
     el('detail-metadata-toggle').setAttribute('aria-expanded', String(visible));
   }
   function detail(item, showInfo = false) {
-    el('detail-download').href = `api/library/${encodeURIComponent(item.media_id)}/file?download=1`;
+    el('detail-download').href = fileURL(item.media_id, true);
     const container = el('detail-preview'); container.replaceChildren();
     const media = make(item.media_type === 'video' ? 'video' : 'img');
-    media.src = `api/library/${encodeURIComponent(item.media_id)}/file`;
+    media.src = fileURL(item.media_id);
     if (item.media_type === 'video') media.controls = true; else media.alt = item.name;
     container.append(media);
     const classification = item.classification;
@@ -90,9 +106,12 @@
   el('detail-close').onclick = () => el('library-detail').close();
   el('library-detail').onclose = () => el('detail-preview').replaceChildren();
   async function load() {
+    const version = ++loadVersion, mode = managedOnly;
     const params = new URLSearchParams(new FormData(el('library-filters')));
+    if (mode) params.set('managed_only', '1');
     if (offset !== null) params.set('offset', offset);
     const result = await api('api/library?' + params);
+    if (version !== loadVersion || mode !== managedOnly) return;
     page = result.items; total = result.total; offset = result.offset; chosen.clear(); selection(); el('select-page').checked = false;
     el('library-count').textContent = `${total.toLocaleString()}개 · ${offset + (page.length ? 1 : 0)}–${offset + page.length}` + (result.window ? ` · 기준 ${result.window.date}: 당일 ${result.window.on_date.toLocaleString()}개 · 이전 ${result.window.before.toLocaleString()}/${result.window.before_total.toLocaleString()}개 · 이후 ${result.window.after.toLocaleString()}/${result.window.after_total.toLocaleString()}개 · 전후 각각 최대 ${result.window.per_side.toLocaleString()}개 (다른 검색 조건 적용)` : '');
     el('library-prev').disabled = offset === 0; el('library-next').disabled = offset + page.length >= total;
@@ -102,7 +121,7 @@
       check.onchange = () => { if (check.checked) chosen.add(item.media_id); else chosen.delete(item.media_id); selection(); };
       const button = action('', () => detail(item)); button.className = 'card';
       if (item.media_type === 'video') button.append(make('div', '▶ 동영상', 'video-placeholder'));
-      else { const image = make('img'); image.src = `api/library/${encodeURIComponent(item.media_id)}/file`; image.loading = 'lazy'; image.alt = item.name; button.append(image); }
+      else { const image = make('img'); image.src = fileURL(item.media_id); image.loading = 'lazy'; image.alt = item.name; button.append(image); }
       button.append(make('span', item.name), make('span', item.capture.date_key + ' · ' + item.classification.events.join(', ')));
       const info = action('태그·DB 정보', () => detail(item, true));
       info.className = 'library-info-button';
@@ -125,14 +144,14 @@
   el('download-selected').onclick = safe(async () => {
     const values = selected();
     if (values.length === 1) {
-      saveDownload(`api/library/${encodeURIComponent(values[0])}/file?download=1`);
+      saveDownload(fileURL(values[0], true));
       notify('선택한 파일의 다운로드를 요청했습니다. 브라우저 다운로드 목록을 확인하세요.');
       return;
     }
     const button = el('download-selected'); button.disabled = true;
     try {
       notify(`${values.length}개 파일을 ZIP으로 준비합니다…`);
-      const started = await api('api/downloads', 'POST', {ids: values});
+      const started = await api('api/downloads', 'POST', {ids: values, managed_only: managedOnly});
       let status;
       do {
         status = await api('api/jobs/' + started.job_id);
@@ -413,7 +432,7 @@
       }
       await loadConfig();
       if (status.kind === 'merge') await loadMergeReports();
-      if (!el('library-panel').hidden) { await facets(); await load(); }
+      if (!el('library-panel').hidden || !el('managed-panel').hidden) { await facets(); await load(); }
       notify(warning || (status.status === 'stopped' ? '작업을 중지하고 저장했습니다. 이어하기로 재개할 수 있습니다.' : '작업이 완료되었습니다. 결과의 오류 항목도 확인하세요.'));
     })();
     watchers.set(id, watching);
@@ -470,7 +489,7 @@
     return [config.managed_root.replace(/[\\/]+$/, ''), source.category || 'family', source.owner_id || 'default'].join(separator);
   }
   async function loadConfig() {
-    config = await api('api/config'); el('managed-root').value = config.managed_root; el('scan-min-free').value = config.scan_min_free_mb ?? 512; el('source-list').replaceChildren();
+    config = await api('api/config'); el('managed-root').value = config.managed_root; el('managed-library-root').textContent = `관리 디렉토리: ${config.managed_root}`; el('scan-min-free').value = config.scan_min_free_mb ?? 512; el('source-list').replaceChildren();
     const previousScope = el('merge-source').value;
     el('merge-source').replaceChildren(new Option('전체 소스 (기존 소스 포함)', ''));
     for (const source of config.sources) el('merge-source').add(new Option(`${source.source_id} · ${source.root}`, source.source_id));
@@ -701,7 +720,7 @@
   el('refresh-jobs').onclick = safe(async () => { await loadConfig(); await loadJobs(); });
   el('jobs-prev').onclick = safe(async () => { jobsOffset = Math.max(0, jobsOffset - 20); await loadJobs(); });
   el('jobs-next').onclick = safe(async () => { jobsOffset += 20; await loadJobs(); });
-  tab(jobsPage || sourcesOnly ? 'sources-panel' : 'library-panel');
+  tab(jobsPage || sourcesOnly ? 'sources-panel' : managedPage ? 'managed-panel' : 'library-panel');
   safe(async () => {
     await loadConfig();
     if (!jobsPage && !sourcesOnly) { await facets(); await load(); }

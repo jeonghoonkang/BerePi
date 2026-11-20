@@ -52,7 +52,7 @@ class DownloadStore:
             except (OSError, ValueError, KeyError, TypeError):
                 continue
 
-    def selected_items(self, ids):
+    def selected_items(self, ids, managed_only=False):
         if not isinstance(ids, list) or not 1 <= len(ids) <= self.limit or any(not isinstance(value, str) for value in ids):
             raise ValueError('다운로드할 파일은 1~100개 선택하세요.')
         values = []
@@ -60,11 +60,16 @@ class DownloadStore:
             item = self.library.item(media_id)
             if not item or item['lifecycle']['status'] != 'active':
                 raise ValueError('선택한 미디어가 없거나 휴지통에 있습니다. 목록을 갱신하세요.')
+            if managed_only:
+                location = self.library.managed_location(item)
+                if location is None:
+                    raise ValueError('선택한 항목에 현재 관리 디렉토리의 관리 복사본이 없습니다. 목록을 갱신하세요.')
+                item = {**item, 'locations': [location]}
             values.append(item)
         return values
 
-    def prepare(self, ids, progress=None):
-        return self._prepare(self.selected_items(ids), progress)
+    def prepare(self, ids, progress=None, managed_only=False):
+        return self._prepare(self.selected_items(ids, managed_only=managed_only), progress)
 
     def folder_items(self, paths):
         if not isinstance(paths, list) or not 1 <= len(paths) <= self.limit or any(not isinstance(p, str) or not p for p in paths):

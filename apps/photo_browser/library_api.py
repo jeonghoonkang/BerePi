@@ -371,6 +371,9 @@ def register_library(app, boundary, db):
         items = library.items(request.args)
         state = request.args.get('state', 'active')
         items = [i for i in items if i['lifecycle']['status'] == state]
+        if request.args.get('managed_only') == '1':
+            root = library.local(library.config()['managed_root'])
+            items = [item for item in items if library.managed_location(item, root) is not None]
         if request.args.get('location'):
             items = [i for i in items if request.args['location'] in item_location_tags(i)]
         for argument, key in [('event', 'events'), ('tag', 'tags'), ('person', 'person_ids')]:
@@ -552,7 +555,12 @@ def register_library(app, boundary, db):
         item = library.item(media_id)
         if not item or item['lifecycle']['status'] != 'active':
             abort(404, description='미디어가 없습니다.')
-        location = next((l for l in reversed(item['locations']) if l['role'] == 'managed' and l['status'] == 'available'), item['locations'][0])
+        if request.args.get('managed_only') == '1':
+            location = library.managed_location(item)
+            if location is None:
+                abort(404, description='현재 관리 디렉토리에 등록된 관리 복사본이 없습니다.')
+        else:
+            location = next((l for l in reversed(item['locations']) if l['role'] == 'managed' and l['status'] == 'available'), item['locations'][0])
         if location['protocol'] == 'file':
             path = library.local(location['path'])
         else:
@@ -575,9 +583,11 @@ def register_library(app, boundary, db):
 
     @app.post('/api/downloads')
     def prepare_download():
-        values = ids(body())
-        downloads.selected_items(values)
-        return launch(lambda progress, stopped: downloads.prepare(values, progress), 'download')
+        data = body()
+        values = ids(data)
+        managed_only = data.get('managed_only') is True
+        downloads.selected_items(values, managed_only=managed_only)
+        return launch(lambda progress, stopped: downloads.prepare(values, progress, managed_only=managed_only), 'download')
 
     @app.post('/api/folder-downloads')
     def prepare_folder_download():

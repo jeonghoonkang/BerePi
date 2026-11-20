@@ -641,6 +641,21 @@ class Library:
                 self.facets_generation = generation
             return self.facets_cache
 
+    def managed_location(self, item, root=None):
+        """Find an available managed reference within the current managed root."""
+        root = root or self.local(self.config()['managed_root'])
+        for location in reversed(item['locations']):
+            if (location['role'] != 'managed' or location.get('status') != 'available'
+                    or location.get('protocol') != 'file' or not location.get('path')):
+                continue
+            try:
+                path = self.local(location['path'])
+            except (ValueError, OSError):
+                continue
+            if path != root and path.is_relative_to(root) and not path.is_relative_to(root / '.trash'):
+                return location
+        return None
+
     def items(self, filters=None):
         manifest = read_json(self.db / 'index.json', {'chunks': []})
         chunks = manifest['chunks']
