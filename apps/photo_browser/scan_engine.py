@@ -12,6 +12,7 @@ from urllib.parse import unquote, urlsplit
 
 from library import EXTENSIONS, VIDEO_EXTENSIONS, atomic_json, component, digest, metadata, now, read_json, uid
 from place_lookup import PlaceLookup
+from source_inventory import compare_source_inventory, inventory_size
 
 MIB = 1024 * 1024
 RECORD_ESTIMATE = 16384
@@ -251,6 +252,7 @@ class ScanEngine:
             for key in ('added', 'updated', 'unchanged', 'ignored'):
                 self.state[key] = sum(r['outcome'] == key for r in records)
             self.state['errors'] = [r['error'] for r in records if r.get('error')]
+            self.state['cross_group_duplicate_count'] = sum(bool(r.get('duplicate_check')) for r in records)
             self.save()
             try:
                 self.check(force=True)
@@ -264,7 +266,7 @@ class ScanEngine:
                                 self.check()
                                 if uri in seen:
                                     continue
-                                entry = {'uri': uri, 'info': info}
+                                entry = {'uri': uri, 'info': info, 'size_bytes': inventory_size(library, source, info)}
                                 inventory.write((json.dumps(entry, ensure_ascii=False) + '\n').encode('utf-8'))
                                 self.entries.append(entry)
                                 seen.add(uri)
@@ -276,8 +278,14 @@ class ScanEngine:
                             self.flush(inventory)
                     self.state['inventory_complete'] = True
                     self.save()
-                self.state['phase'] = 'processing'
+                self.state['phase'] = 'comparing_sources'
+                self.emit()
                 items = self.apply_records(library.items(), records)
+                self.state['source_inventory'] = compare_source_inventory(library, source, self.entries, items)
+                self.save()
+                self.state['phase'] = 'processing'
+                from scan_duplicates import ScanDuplicateIndex
+                duplicates = ScanDuplicateIndex(library, items)
                 known = {loc['uri']: item for item in items for loc in item['locations'] if loc['role'] == 'source' and loc.get('source_id') == self.source_id}
                 with results_path.open('ab') as results:
                     try:
@@ -293,7 +301,11 @@ class ScanEngine:
                                 item, outcome = self.process(source, uri, info, known.get(uri))
                                 record = {'ordinal': ordinal, 'outcome': outcome, 'item': item}
                                 if item:
+                                    match = duplicates.check(item)
+                                    if match:
+                                        record['duplicate_check'] = match
                                     known[uri] = item
+                                    duplicates.add(item)
                             except ScanPause:
                                 raise
                             except OSError as exc:
@@ -306,6 +318,8 @@ class ScanEngine:
                             records.append(record)
                             self.state['published'] = False
                             self.state['processed'] = len(records)
+                            if record.get('duplicate_check'):
+                                self.state['cross_group_duplicate_count'] += 1
                             if record['outcome'] == 'error':
                                 self.state['errors'].append(record['error'])
                             else:

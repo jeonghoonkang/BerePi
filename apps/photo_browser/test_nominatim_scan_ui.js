@@ -13,6 +13,7 @@ async function main() {
   panel.addEventListener('nominatim-scan-complete', () => completedEvents++);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'static/nominatim_scan.js'), 'utf8'), {
     document: {hidden: false, getElementById: id => ids[id]},
+    confirm: () => true,
     CustomEvent: class { constructor(type) { this.type = type; } },
     MutationObserver: class { constructor(callback) { open = callback; } observe() {} },
     setInterval(callback) { interval = callback; },

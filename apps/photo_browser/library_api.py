@@ -239,6 +239,20 @@ def register_library(app, boundary, db):
                 value['merge_started_at'] = min(stamps) if stamps else job.get('started_at') or job['created_at']
         return value
 
+    @app.get('/api/scans/<scan_id>/duplicates')
+    def scan_duplicate_matches(scan_id):
+        from scan_duplicates import duplicate_page
+        try:
+            offset = int(request.args.get('offset', '0'))
+            if offset < 0:
+                raise ValueError
+        except ValueError:
+            return jsonify(error='페이지 위치가 올바르지 않습니다.'), 400
+        try:
+            return jsonify(duplicate_page(library, scan_id, offset))
+        except FileNotFoundError:
+            abort(404, description='스캔 결과가 없습니다.')
+
     @app.get('/api/jobs/<job_id>')
     def job_status(job_id):
         with guard:

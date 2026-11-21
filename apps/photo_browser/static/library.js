@@ -240,7 +240,8 @@
   function progressText(progress) {
     if (!progress) return '시작 대기 중';
     if (!progress.inventory_complete) return `전체 파일 목록 집계 중 · 현재 ${progress.total.toLocaleString()}개 발견 · 전체 개수 확인 중`;
-    return `전체 ${progress.total.toLocaleString()}개 · 처리 ${progress.processed.toLocaleString()}개 (${progress.percent ?? 0}%) · 신규 ${progress.added} · 갱신 ${progress.updated} · 변경 없음 ${progress.unchanged} · 제외 ${progress.ignored} · 오류 ${progress.error_count ?? progress.errors?.length ?? 0}`;
+    if (progress.phase === 'comparing_sources') return '1차 확인: 디렉토리 구조·파일 수·전체 용량을 기존 소스 DB와 비교 중';
+    return `전체 ${progress.total.toLocaleString()}개 · 처리 ${progress.processed.toLocaleString()}개 (${progress.percent ?? 0}%) · 신규 ${progress.added} · 갱신 ${progress.updated} · 변경 없음 ${progress.unchanged} · 제외 ${progress.ignored} · 오류 ${progress.error_count ?? progress.errors?.length ?? 0} · 다른 분류·ID의 동일 파일 ${progress.cross_group_duplicate_count ?? 0}개`;
   }
   function jobSummary(status) {
     const result = status.result;
@@ -250,9 +251,14 @@
     if (status.kind === 'scan') {
       const lines = [
         `스캔 분석: 신규 ${count(result.added)}개 · 갱신 ${count(result.updated)}개 · 변경 없음 ${count(result.unchanged)}개`,
+        `다른 소스·카테고리·소유자 ID의 동일 파일: ${count(result.cross_group_duplicate_count)}개 · 아래 상세보기에서 기존 등록·저장 위치 확인`,
         `월별 JSON: ${result.published ? '반영 완료' : '반영 완료되지 않음 · 작업 상태와 경고를 확인하세요.'}`,
         '원본 사진·동영상은 변경하지 않았습니다. 사진 복사본 생성은 별도의 병합 실행이 필요합니다.',
       ];
+      if (result.source_inventory) {
+        const inventory = result.source_inventory;
+        lines.push(`1차 구성 비교: 유사 소스 후보 ${count(inventory.same_layout_count)}개 · 별도 소스 추정 ${count(inventory.different_source_count)}개 · 정보 부족 ${count(inventory.unknown_count)}개`);
+      }
       if (result.updated) lines.push('갱신은 스캔 분석 결과를 다시 반영한 개수이며, 사진 내용이나 태그가 변경된 개수는 아닙니다.');
       lines.push(`제외 ${count(result.ignored)}개 · 처리 오류 ${count(result.errors?.length ?? result.error_count)}개`);
       return lines;
@@ -363,8 +369,9 @@
       const reports = make('p');
       const timing = make('p', '', 'job-timing');
       const archive = window.photoBrowserJobRecords.createArchiveControls(api);
-      row.append(title, timing, text, bar, file, warning, changes, reports, stop, resume, archive.root); el('scan-jobs').prepend(row);
-      card = {row, title, timing, text, bar, file, warning, changes, changesList, reports, stop, resume, archive}; jobCards.set(status.job_id, card);
+      const scanDuplicates = window.photoBrowserScanDuplicates.createControls(api);
+      row.append(title, timing, text, bar, file, warning, changes, scanDuplicates.root, reports, stop, resume, archive.root); el('scan-jobs').prepend(row);
+      card = {row, title, timing, text, bar, file, warning, changes, changesList, reports, stop, resume, archive, scanDuplicates}; jobCards.set(status.job_id, card);
     }
     card.createdAt = status.created_at;
     if (!jobsPage) {
@@ -376,6 +383,7 @@
     card.clockStatus = status; card.observedAt = performance.now(); card.serverClock = Date.parse(status.server_time) || Date.now();
     updateJobClock(card);
     card.archive.update(status);
+    card.scanDuplicates.update(status);
     card.reports.replaceChildren();
     if (status.result?.history_report) reportLinks(card.reports, status.result.history_report.report_id);
     if (status.kind === 'download' && status.result?.download_id) {
