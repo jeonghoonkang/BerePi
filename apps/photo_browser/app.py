@@ -181,6 +181,10 @@ def main(argv=None):
     parser.add_argument('--version', action='version', version=version_label(info))
     parser.add_argument('--version-log-interval', type=log_interval, default=DEFAULT_LOG_INTERVAL,
                         help='터미널 버전 재출력 간격, 초 (기본 1800, 0이면 시작 시에만 출력)')
+    parser.add_argument('--source-check-interval', type=log_interval, default=5,
+                        help='원본 경로 점검 간격, 초 (기본 5, 0이면 자동 점검 안 함)')
+    parser.add_argument('--source-log-interval', type=log_interval, default=60,
+                        help='미해결 원본 경로 문제의 반복 기록 간격, 초 (기본 60)')
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=7081)
     parser.add_argument('--https', action='store_true', help='내장 HTTPS 사용 (인증서·키 필수)')
@@ -215,6 +219,7 @@ def main(argv=None):
         parser.error(str(exc))
     library = app.extensions['photo_library']
     config = library.config()
+    app.extensions['storage_usage'].startup(background=True)
     print('\n사진 브라우저 경로 설정', flush=True)
     print(f'허용된 루트 디렉토리: {library.boundary}', flush=True)
     print(f"시작 디렉토리: {app.config['PHOTO_BROWSER_START']}", flush=True)
@@ -230,7 +235,9 @@ def main(argv=None):
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
     print(f'웹 연결 방식: {"HTTPS (TLS 1.2 이상)" if context is not None else "HTTP"}', flush=True)
     try:
-        with version_logging(app.config['PHOTO_BROWSER_VERSION'], args.version_log_interval), \
+        with app.extensions['storage_usage'].running(), \
+                version_logging(app.config['PHOTO_BROWSER_VERSION'], args.version_log_interval), \
+                app.extensions['source_health'].running(args.source_check_interval, args.source_log_interval), \
                 nominatim_shutdown_signals(args.nominatim_docker), \
                 app.extensions['nominatim_monitor'].running(args.nominatim_docker, image=args.nominatim_image,
                                      pbf_url=args.nominatim_pbf_url, volume=args.nominatim_volume,

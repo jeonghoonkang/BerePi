@@ -19,6 +19,17 @@ def register_library(app, boundary, db):
     downloads = DownloadStore(library)
     app.extensions['photo_downloads'] = downloads
     app.extensions['photo_library'] = library
+    from storage_usage import StorageUsage
+    storage_usage = StorageUsage(library.db, library.boundary)
+    app.extensions['storage_usage'] = storage_usage
+    from source_health import SourceHealth
+    import sys
+    source_health = SourceHealth(library, stream=sys.stderr)
+    app.extensions['source_health'] = source_health
+    from directory_tree import register_tree
+    register_tree(app, library)
+    from source_folders import SourceFolders
+    source_folders = SourceFolders(library)
     from access_control import register_access
     register_access(app, library.db)
     from category_merge import CategoryMerger
@@ -88,7 +99,7 @@ def register_library(app, boundary, db):
         stop = threading.Event()
         with guard:
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
-            exclusive = {'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'duplicate_db_preview', 'duplicate_db_cleanup', 'duplicate_db_undo'}
+            exclusive = {'source_path_repair', 'source_folder_sync', 'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'duplicate_db_preview', 'duplicate_db_cleanup', 'duplicate_db_undo'}
             if (kind in exclusive and active) or any(j.get('kind') in exclusive for j in active):
                 raise ValueError('실행 중인 작업이 있습니다. 작업이 완료되거나 중지된 뒤 다시 시도하세요.')
             if kind == 'merge' and any(j.get('kind') == 'merge' and j['status'] in {'queued', 'running', 'stopping'} for j in jobs.values()):
@@ -114,8 +125,8 @@ def register_library(app, boundary, db):
                 jobs[job_id]['started_at'] = now()
                 atomic_json(library.db / 'jobs' / (job_id + '.json'), jobs[job_id])
             try:
-                result = function(progress, stop.is_set) if kind in {'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'source_compare'} else function()
-                update = {'status': result.get('status', 'completed') if kind in {'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'source_compare'} else 'completed', 'result': result}
+                result = function(progress, stop.is_set) if kind in {'source_folder_sync', 'scan', 'merge', 'merge_preview', 'download', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'source_compare'} else function()
+                update = {'status': result.get('status', 'completed') if kind in {'source_folder_sync', 'scan', 'merge', 'merge_preview', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'source_compare'} else 'completed', 'result': result}
             except Exception as exc:
                 update = {'status': 'failed', 'error': str(exc)}
             with guard:
@@ -185,9 +196,45 @@ def register_library(app, boundary, db):
     def get_config():
         return jsonify(library.config())
 
+    @app.get('/api/source-path-health')
+    def source_path_summary():
+        return jsonify(source_health.summary())
+
+    @app.get('/api/storage-usage')
+    def storage_overview():
+        return jsonify(storage_usage.snapshot(force=request.args.get('refresh') == '1'))
+
+    @app.get('/api/source-path-health/issues')
+    def source_path_issues():
+        return jsonify(source_health.page(request.args.get('view', 'open'), int(request.args.get('offset', 0))))
+
+    @app.post('/api/source-path-health/check')
+    def check_source_paths():
+        return launch(lambda: source_health.check(), 'source_path_check')
+
+    @app.post('/api/source-path-health/find')
+    def find_original_path():
+        issue_id = body().get('issue_id')
+        source_health.issue(issue_id)
+        return launch(lambda: source_health.find(issue_id), 'source_path_find')
+
+    @app.post('/api/source-path-health/repair')
+    def repair_original_path():
+        data = body()
+        source_health.issue(data.get('issue_id'))
+        return launch(lambda: source_health.repair(data.get('issue_id'), data.get('path')), 'source_path_repair')
+
+    @app.get('/api/library/<media_id>/sources')
+    def original_locations(media_id):
+        return jsonify(source_health.origins(media_id))
+
     @app.put('/api/config')
     def set_config():
-        library.save_config(body())
+        data = body()
+        with guard:
+            if any(job['status'] in {'queued', 'running', 'stopping'} for job in jobs.values()):
+                raise ValueError('실행 중인 작업을 완료하거나 중지한 뒤 소스·관리 설정을 저장하세요.')
+            library.save_config(data)
         return jsonify(library.config())
 
     @app.post('/api/sources/check')
@@ -213,6 +260,28 @@ def register_library(app, boundary, db):
     def apply_source_classification():
         source_id = component(body()['source_id'])
         return launch(lambda: library.apply_source_classification(source_id), 'source_update', source_id)
+
+    @app.get('/api/source-folders')
+    def source_folder_settings():
+        config = library.config()
+        return jsonify(items=[{**entry, 'sources': [source for source in config['sources']
+                         if source.get('protocol', 'file') == 'file' and
+                         Path(source['root']).parent == Path(entry['root'])]}
+                              for entry in config.get('source_folder_roots', [])])
+
+    @app.post('/api/source-folders')
+    def register_source_folders():
+        data = body()
+        with guard:
+            if any(job['status'] in {'queued', 'running', 'stopping'} for job in jobs.values()):
+                raise ValueError('실행 중인 작업을 완료하거나 중지한 뒤 기준 디렉토리를 저장하세요.')
+            result = source_folders.register(data.get('root'), data.get('category', 'family'), data.get('owner_id', 'default'))
+        return jsonify(result)
+
+    @app.post('/api/source-folders/sync')
+    def sync_source_folders():
+        path = str(source_folders.directory(body().get('root')))
+        return launch(lambda progress, stopped: source_folders.sync(path, progress, stopped), 'source_folder_sync')
 
     @app.post('/api/sources/rename')
     def rename_source():
@@ -286,7 +355,7 @@ def register_library(app, boundary, db):
     def stop_scan(job_id):
         with guard:
             job = jobs.get(job_id)
-            if not job or job.get('kind') not in {'scan', 'merge', 'category_merge', 'location_scan'}:
+            if not job or job.get('kind') not in {'source_folder_sync', 'scan', 'merge', 'category_merge', 'location_scan'}:
                 raise ValueError('중지할 스캔 또는 병합 작업이 없습니다.')
             if job['status'] in {'queued', 'running', 'stopping'}:
                 controls[job_id].set()
@@ -365,6 +434,8 @@ def register_library(app, boundary, db):
         from scan_engine import scan_sessions
         with guard:
             active = {j.get('source_id') for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}}
+            active.update(j.get('progress', {}).get('folder_source_id') for j in jobs.values()
+                          if j.get('kind') == 'source_folder_sync' and j['status'] in {'queued', 'running', 'stopping'})
         sessions = scan_sessions(library)
         for state in sessions:
             if state['status'] == 'running' and state['source_id'] not in active:

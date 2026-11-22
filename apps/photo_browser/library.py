@@ -386,7 +386,9 @@ class Library:
             minimum = config.get('scan_min_free_mb', 512)
             if isinstance(minimum, bool) or not isinstance(minimum, int) or not 32 <= minimum <= 1048576:
                 raise ValueError('스캔 디스크 여유 기준은 32~1,048,576 MiB 정수여야 합니다.')
-            write_library_locations(self.db, root, config={'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum}, reason='settings_changed')
+            from source_folders import normalize_roots
+            folder_roots = normalize_roots(config.get('source_folder_roots', self.config().get('source_folder_roots', [])))
+            write_library_locations(self.db, root, config={'schema_version': 1, 'managed_root': str(root), 'sources': config.get('sources', []), 'scan_min_free_mb': minimum, 'source_folder_roots': folder_roots}, reason='settings_changed')
             if root != old_root and old_root.is_relative_to(self.boundary):
                 old_marker = old_root / LOCATION_FILE
                 try:

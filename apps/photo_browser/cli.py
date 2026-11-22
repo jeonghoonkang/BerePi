@@ -35,6 +35,22 @@ def main(argv=None):
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('pair-history', help='소스·DB·관리 폴더 연결 변경 이력 조회 (최근 100건)')
     commands.add_parser('config', help='저장된 설정 조회')
+    storage_parser = commands.add_parser('storage-usage', help='DB·원본·관리 폴더 사용량과 파일시스템별 여유 공간 조회')
+    storage_parser.add_argument('--refresh', action='store_true', help='전체 폴더를 실제 집계하고 캐시 갱신 (대용량 경로는 시간이 걸릴 수 있음)')
+    originals = commands.add_parser('original-paths', help='사진 DB의 원본 파일 경로와 현재 접근 상태 조회')
+    originals.add_argument('--media-id', required=True)
+    health = commands.add_parser('source-health', help='원본 이동·누락 점검 및 미해결·해결 이력 조회')
+    health.add_argument('--check', action='store_true', help='현재 경로를 점검하고 이력에 반영')
+    health.add_argument('--watch', action='store_true', help='종료할 때까지 원본 경로를 지속 점검')
+    health.add_argument('--interval', type=refresh_interval, default=5, help='감시 간격, 초 (기본 5)')
+    health.add_argument('--log-interval', type=refresh_interval, default=60, help='미해결 문제 반복 기록 간격, 초 (기본 60)')
+    health.add_argument('--resolved', action='store_true', help='해결·참조 종료 이력 조회')
+    health.add_argument('--offset', type=int, default=0)
+    find_path = commands.add_parser('source-path-find', help='문제 파일과 SHA-256이 같은 파일을 소스 안에서 검색')
+    find_path.add_argument('--issue-id', required=True)
+    repair_path = commands.add_parser('source-path-repair', help='크기·SHA-256을 검증한 새 원본 경로를 DB에 반영')
+    repair_path.add_argument('--issue-id', required=True)
+    repair_path.add_argument('--path', required=True)
     commands.add_parser('skills', help='사진·명함·견적서 분석 Skill과 응답 규격 조회')
     skill_save = commands.add_parser('skill-save', help='사용자 페르소나 JSON 등록·버전 갱신')
     skill_save.add_argument('--file', required=True, help='Skill 정의 JSON 경로')
@@ -74,13 +90,33 @@ def main(argv=None):
     merge.add_argument('--source-id', help='이 소스의 활성 미디어만 병합 (생략 시 전체 소스)')
     args = parser.parse_args(argv)
     with version_logging(info, args.version_log_interval):
-        return run_command(args, parser)
+        from storage_usage import StorageUsage
+        storage = StorageUsage(args.db, args.root, persist=args.command == 'storage-usage' and args.refresh)
+        try:
+            with storage.running():
+                uncached = not storage.value.get('checked_at') or storage.value.get('roots') != storage.layout()
+                if uncached and (storage.db / 'config.json').is_file() and args.command != 'storage-usage':
+                    storage.snapshot()
+                    storage.worker.join(timeout=.5)
+                    if storage.worker.is_alive(): storage.announce = sys.stderr
+                storage.startup()
+                return run_command(args, parser, storage)
+        except (OSError, ValueError, TypeError) as exc:
+            print('오류: ' + str(exc), file=sys.stderr)
+            return 1
 
 
-def run_command(args, parser):
+def run_command(args, parser, storage=None):
     if args.command == 'merge' and args.resume and args.media_id:
         parser.error('--resume과 --media-id는 함께 사용할 수 없습니다.')
     try:
+        if storage is None:
+            from storage_usage import StorageUsage
+            storage = StorageUsage(args.db, args.root)
+        if args.command == 'storage-usage':
+            result = storage.measure() if args.refresh else storage.current()
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == 'backup-check':
             from backup import verify_backup
             print(json.dumps(verify_backup(args.backup), ensure_ascii=False, indent=2))
@@ -100,6 +136,26 @@ def run_command(args, parser):
         if not (db / 'config.json').is_file():
             raise ValueError(f'설정 DB가 없습니다: {db}. 서버에서 설정한 DB 경로를 지정하세요.')
         library = Library(db, Path(args.root).expanduser())
+        if args.command in {'original-paths', 'source-health', 'source-path-find', 'source-path-repair'}:
+            from source_health import SourceHealth
+            monitor = SourceHealth(library, stream=sys.stderr)
+            if args.command == 'original-paths':
+                result = monitor.origins(args.media_id)
+            elif args.command == 'source-path-find':
+                result = monitor.find(args.issue_id)
+            elif args.command == 'source-path-repair':
+                result = monitor.repair(args.issue_id, args.path)
+            else:
+                with monitor.runtime_lock:
+                    monitor.runtime.update(monitoring=bool(args.watch), interval=args.interval)
+                while True:
+                    if args.check or args.watch: monitor.check(args.log_interval)
+                    result = {'summary': monitor.summary(), **monitor.page('resolved' if args.resolved else 'open', args.offset)}
+                    if not args.watch: break
+                    print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+                    time.sleep(args.interval)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command in {'skills', 'skill-save', 'analysis-prepare', 'analysis-save', 'analysis-results'}:
             from analysis_skills import AnalysisSkills
             store = AnalysisSkills(library)

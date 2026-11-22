@@ -9,7 +9,7 @@ function node() {
 async function main() {
   const ids = Object.fromEntries(['start', 'stop', 'state', 'progress', 'detail', 'error'].map(id => [`nominatim-scan-${id}`, node()]));
   const panel = ids['nominatim-panel'] = node();
-  const requests = []; let interval, open, ready = false, complete = false, stopped = false, completedEvents = 0, serial = 0;
+  const requests = []; let interval, open, ready = false, complete = false, stopped = false, completedEvents = 0, serial = 0, allowStop = false;
   panel.addEventListener('nominatim-scan-complete', () => completedEvents++);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'static/nominatim_scan.js'), 'utf8'), {
     document: {hidden: false, getElementById: id => ids[id]},
@@ -17,6 +17,7 @@ async function main() {
     CustomEvent: class { constructor(type) { this.type = type; } },
     MutationObserver: class { constructor(callback) { open = callback; } observe() {} },
     setInterval(callback) { interval = callback; },
+    confirm() { return allowStop; },
     fetch: async (url, options) => {
       requests.push({url, options});
       let data = {}, ok = true;
@@ -40,6 +41,9 @@ async function main() {
   assert.equal(ids['nominatim-scan-stop'].hidden, false);
   assert.equal(ids['nominatim-scan-progress'].value, 20);
   assert.match(ids['nominatim-scan-detail'].textContent, /<photo.jpg>/);
+  await ids['nominatim-scan-stop'].handlers.click();
+  assert.equal(requests.some(request => request.url.includes('/stop')), false);
+  allowStop = true;
   await ids['nominatim-scan-stop'].handlers.click();
   assert.match(ids['nominatim-scan-state'].textContent, /중지됨/);
   assert.equal(completedEvents, 1);

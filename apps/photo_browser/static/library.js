@@ -24,6 +24,7 @@
   }
   el('merge-source').onchange = () => selectMergeSource(el('merge-source').value);
   function jobLabel(status) {
+    if (status.kind === 'source_folder_sync') return '하위 폴더 새 파일 스캔·병합';
     if (status.kind?.startsWith('duplicate_db_')) return '중복 DB 항목 정리';
     if (status.kind === 'source_compare') return '소스 사진 비교';
     if (['merge', 'merge_preview'].includes(status.kind)) {
@@ -79,6 +80,8 @@
     el('detail-metadata-toggle').setAttribute('aria-expanded', String(visible));
   }
   function detail(item, showInfo = false) {
+    el('library-detail').dataset.mediaId = item.media_id;
+    el('detail-original-locations').replaceChildren();
     el('detail-download').href = fileURL(item.media_id, true);
     const container = el('detail-preview'); container.replaceChildren();
     const media = make(item.media_type === 'video' ? 'video' : 'img');
@@ -247,6 +250,10 @@
     const result = status.result;
     if (!result) return [];
     const count = value => Number(value || 0).toLocaleString();
+    if (status.kind === 'source_folder_sync') {
+      return [`기준 경로: ${result.root}`, `소스 ${count(result.items?.length)}개 처리 · 오류 ${count(result.error_count)}건`,
+        ...(result.items || []).map(item => `${item.source_id}: 스캔 ${item.scan?.status || '미완료'} · 병합 ${item.merge?.status || '미실행'}${item.error ? ' · ' + item.error : ''}`)];
+    }
     if (status.status === 'blocked_low_space') return [result.warning, '새 사진 복사와 병합 DB 반영을 시작하지 않았습니다. 공간 확보 후 전체 병합 실행을 다시 누르세요.'];
     if (status.kind === 'scan') {
       const lines = [
@@ -397,7 +404,7 @@
     if (!activeStates.includes(status.status)) {
       card.title.textContent += ` · ${status.status === 'completed' ? '완료' : '종료'}: ${window.photoBrowserJobRecords.formatTime(status.finished_at)}`;
     }
-    card.text.textContent = ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'download' ? `ZIP 준비: ${p?.processed ?? p?.file_count ?? 0}/${p?.total ?? p?.file_count ?? 0}개` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
+    card.text.textContent = status.kind === 'source_folder_sync' ? `하위 소스 ${p?.folder_source_id || ''} · ${p?.folder_processed ?? p?.items?.length ?? 0}/${p?.folder_total ?? p?.registration?.items?.length ?? 0}개 · ${p?.phase || ''} · ${p?.processed || 0}/${p?.total || 0}개 파일` : ['merge', 'merge_preview'].includes(status.kind) ? mergeProgress(p) : status.kind === 'download' ? `ZIP 준비: ${p?.processed ?? p?.file_count ?? 0}/${p?.total ?? p?.file_count ?? 0}개` : status.kind === 'scan' ? progressText(p) : '결과는 아래 작업 결과에 표시합니다.';
     card.bar.hidden = !['scan', 'merge', 'merge_preview', 'download'].includes(status.kind);
     if (status.kind === 'download' && status.result?.download_id) card.bar.value = 100;
     else if (p?.inventory_complete || (['merge', 'merge_preview', 'download'].includes(status.kind) && p?.total !== undefined)) card.bar.value = p?.percent ?? 0; else card.bar.removeAttribute('value');
@@ -406,7 +413,7 @@
     const disk = p?.disk;
     const spaceText = p?.disk_space ? `신규 복사 ${(p.disk_space.copy_bytes / 1073741824).toFixed(2)} GiB · DB 예상 증가 ${(p.disk_space.db_estimated_bytes / 1073741824).toFixed(2)} GiB\n` + p.disk_space.volumes.map(v => `${v.path}: 여유 ${(v.free_bytes / 1073741824).toFixed(2)} GiB / 필요 ${(v.required_bytes / 1073741824).toFixed(2)} GiB (여유 기준 포함)`).join('\n') : '';
     card.warning.textContent = [spaceText, p?.warning || status.result?.warning || status.warning || status.error, disk ? `DB 여유 ${(disk.free_bytes / 1048576).toFixed(0)} MiB / 예상 필요 ${(disk.required_bytes / 1048576).toFixed(0)} MiB` : ''].filter(Boolean).join('\n');
-    card.stop.hidden = !['scan', 'merge'].includes(status.kind) || !activeStates.includes(status.status);
+    card.stop.hidden = !['source_folder_sync', 'scan', 'merge'].includes(status.kind) || !activeStates.includes(status.status);
     card.stop.disabled = status.status === 'stopping';
     card.mergeId = p?.merge_id;
     card.resume.hidden = status.kind !== 'merge' || !card.mergeId || !['stopped', 'interrupted', 'failed'].includes(status.status);

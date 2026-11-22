@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 from library import atomic_json, digest, now, read_json, write_library_locations, PAIR_HISTORY, pair_snapshot
+from source_health import audit_lock
 
 
 def separate(first, second):
@@ -64,7 +65,7 @@ def create_backup(library, destination, archive_format=None):
     if destination.exists() or destination.is_symlink():
         raise ValueError('백업 대상은 존재하지 않는 새 디렉토리여야 합니다.')
     destination = destination.resolve()
-    with library.writing():
+    with library.writing(), audit_lock(library.db, blocking=True):
         managed = library.local(library.config()['managed_root'])
         if not separate(library.db, managed) or not all(separate(destination, root) for root in (library.db, managed)):
             raise ValueError('DB·관리 디렉토리·백업 경로는 서로 분리되어야 합니다.')
@@ -167,7 +168,7 @@ def create_zip_backup(library, destination):
     if destination.exists() or destination.is_symlink():
         raise ValueError('백업 대상은 존재하지 않는 새 ZIP 파일이어야 합니다.')
     destination = destination.resolve()
-    with library.writing():
+    with library.writing(), audit_lock(library.db, blocking=True):
         managed = library.local(library.config()['managed_root'])
         if not separate(library.db, managed) or not all(separate(destination, root) for root in (library.db, managed)):
             raise ValueError('DB·관리 디렉토리·백업 경로는 서로 분리되어야 합니다.')
