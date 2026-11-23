@@ -98,12 +98,14 @@ function appendPage() {
   folderSelection();
 }
 function openViewer(index) {
+  if (!filtered.length) return;
   selected = (index + filtered.length) % filtered.length;
   const item = filtered[selected]; $('preview').replaceChildren();
   const element = document.createElement(item.video ? 'video' : 'img'); element.src = mediaURL(item.path);
   if (item.video) { element.controls = true; element.autoplay = true; } else element.alt = item.name;
   $('preview').append(element); $('title').textContent = item.name; $('original').href = mediaURL(item.path);
   $('folder-viewer-download').href = mediaURL(item.path) + '&download=1';
+  $('previous').disabled = $('next').disabled = filtered.length < 2;
   if (!$('viewer').open) $('viewer').showModal();
 }
 $('location').onsubmit = event => { event.preventDefault(); browse($('path').value); };
@@ -179,5 +181,13 @@ $('folder-download-selected').onclick = async () => {
 $('close').onclick = () => $('viewer').close();
 $('viewer').addEventListener('close', () => $('preview').replaceChildren());
 $('previous').onclick = () => openViewer(selected - 1); $('next').onclick = () => openViewer(selected + 1);
-$('viewer').addEventListener('keydown', event => { if (event.key === 'ArrowLeft') openViewer(selected - 1); if (event.key === 'ArrowRight') openViewer(selected + 1); });
+$('viewer').addEventListener('cancel', event => { event.preventDefault(); $('viewer').close(); });
+$('viewer').addEventListener('keydown', event => {
+  if (event.key === 'Escape') { event.preventDefault(); $('viewer').close(); return; }
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+      || event.target.closest('input, textarea, select, [contenteditable="true"], video, audio')) return;
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault(); openViewer(selected + (event.key === 'ArrowLeft' ? -1 : 1));
+  }
+});
 // Only submitting the scan form starts a directory scan.

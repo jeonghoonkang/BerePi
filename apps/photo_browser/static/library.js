@@ -7,6 +7,7 @@
   const sourcesOnly = new URLSearchParams(window.location.search).get('panel') === 'sources';
   const managedPage = new URLSearchParams(window.location.search).get('panel') === 'managed';
   let managedOnly = false, loadVersion = 0;
+  let detailState = null, detailVersion = 0, pageOffset = 0;
   let jobsOffset = 0, visibleJobs = new Set();
   const activeStates = ['queued', 'running', 'stopping'];
   let mergeScopeInitialized = false;
@@ -44,10 +45,10 @@
   const safe = fn => async (...args) => { try { await fn(...args); } catch (error) { notify(error.message); } };
   function make(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
   function action(text, fn) { const node = make('button', text); node.type = 'button'; node.onclick = safe(fn); return node; }
-  function fileURL(mediaId, download = false) {
+  function fileURL(mediaId, download = false, managed = managedOnly) {
     const params = new URLSearchParams();
     if (download) params.set('download', '1');
-    if (managedOnly) params.set('managed_only', '1');
+    if (managed) params.set('managed_only', '1');
     return `api/library/${encodeURIComponent(mediaId)}/file${params.size ? '?' + params : ''}`;
   }
   function tab(id) {
@@ -80,12 +81,34 @@
     el('detail-metadata-toggle').setAttribute('aria-expanded', String(visible));
   }
   function detail(item, showInfo = false) {
+    detailVersion++;
+    const index = page.findIndex(value => value.media_id === item.media_id);
+    const inLibrary = !el('library-panel').hidden || !el('managed-panel').hidden;
+    detailState = {items: index >= 0 && inLibrary ? page.slice() : [item], index: index >= 0 && inLibrary ? index : 0,
+      base: index >= 0 && inLibrary ? pageOffset : 0, total: index >= 0 && inLibrary ? total : 1,
+      params: new URLSearchParams(new FormData(el('library-filters'))), managed: managedOnly, busy: false};
+    if (managedOnly) detailState.params.set('managed_only', '1');
+    renderDetail(item, showInfo);
+    if (showInfo) el('detail-metadata-toggle').focus();
+  }
+  function detailButtons() {
+    const state = detailState;
+    el('detail-previous').disabled = !state || state.busy || state.base + state.index <= 0;
+    el('detail-next').disabled = !state || state.busy || state.base + state.index >= state.total - 1;
+    const focused = document.activeElement;
+    if (el('library-detail').open && [el('detail-previous'), el('detail-next')].includes(focused) && focused.disabled) el('library-detail').focus();
+  }
+  function renderDetail(item, showInfo = false) {
     el('library-detail').dataset.mediaId = item.media_id;
     el('detail-original-locations').replaceChildren();
-    el('detail-download').href = fileURL(item.media_id, true);
+    const state = detailState;
+    el('detail-download').href = fileURL(item.media_id, true, state.managed);
+    el('detail-title').textContent = `${item.name} · ${state.base + state.index + 1} / ${state.total.toLocaleString()}개`;
+    el('detail-navigation-status').textContent = '';
+    detailButtons();
     const container = el('detail-preview'); container.replaceChildren();
     const media = make(item.media_type === 'video' ? 'video' : 'img');
-    media.src = fileURL(item.media_id);
+    media.src = fileURL(item.media_id, false, state.managed);
     if (item.media_type === 'video') media.controls = true; else media.alt = item.name;
     container.append(media);
     const classification = item.classification;
@@ -102,12 +125,49 @@
     el('detail-info').textContent = JSON.stringify(item, null, 2);
     el('detail-raw-record').open = false;
     showDetailInfo(showInfo);
-    el('library-detail').showModal();
-    if (showInfo) el('detail-metadata-toggle').focus();
+    if (!el('library-detail').open) el('library-detail').showModal();
+  }
+  async function moveDetail(direction) {
+    const state = detailState;
+    if (!state || state.busy) return;
+    const position = state.base + state.index + direction;
+    if (position < 0 || position >= state.total) return;
+    const showInfo = !el('detail-metadata').hidden;
+    const next = state.index + direction;
+    if (next >= 0 && next < state.items.length) {
+      state.index = next; renderDetail(state.items[next], showInfo); return;
+    }
+    const version = detailVersion;
+    state.busy = true; detailButtons();
+    el('detail-navigation-status').textContent = '사진 목록을 불러오는 중…';
+    try {
+      const params = new URLSearchParams(state.params);
+      params.set('offset', Math.max(0, direction > 0 ? state.base + state.items.length : state.base - 100));
+      params.set('limit', '100');
+      const result = await api('api/library?' + params);
+      if (version !== detailVersion || state !== detailState || !el('library-detail').open) return;
+      if (!result.items.length) throw new Error('목록이 변경되었습니다. 팝업을 닫고 목록을 새로고침해 주세요.');
+      state.items = result.items; state.base = result.offset; state.total = result.total;
+      state.index = direction > 0 ? 0 : result.items.length - 1;
+      renderDetail(state.items[state.index], showInfo);
+    } catch (error) {
+      if (version === detailVersion && state === detailState) el('detail-navigation-status').textContent = error.message;
+    } finally { if (state === detailState) { state.busy = false; detailButtons(); } }
   }
   el('detail-metadata-toggle').onclick = () => showDetailInfo(el('detail-metadata').hidden);
   el('detail-close').onclick = () => el('library-detail').close();
-  el('library-detail').onclose = () => el('detail-preview').replaceChildren();
+  el('library-detail').onclose = () => { detailVersion++; detailState = null; el('detail-preview').replaceChildren(); };
+  el('detail-previous').onclick = () => moveDetail(-1);
+  el('detail-next').onclick = () => moveDetail(1);
+  el('library-detail').addEventListener('cancel', event => { event.preventDefault(); el('library-detail').close(); });
+  el('library-detail').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); el('library-detail').close(); return; }
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+        || event.target.closest('input, textarea, select, [contenteditable="true"], video, audio')) return;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault(); moveDetail(event.key === 'ArrowLeft' ? -1 : 1);
+    }
+  });
   async function load() {
     const version = ++loadVersion, mode = managedOnly;
     const params = new URLSearchParams(new FormData(el('library-filters')));
@@ -115,7 +175,7 @@
     if (offset !== null) params.set('offset', offset);
     const result = await api('api/library?' + params);
     if (version !== loadVersion || mode !== managedOnly) return;
-    page = result.items; total = result.total; offset = result.offset; chosen.clear(); selection(); el('select-page').checked = false;
+    page = result.items; total = result.total; offset = result.offset; pageOffset = result.offset; chosen.clear(); selection(); el('select-page').checked = false;
     el('library-count').textContent = `${total.toLocaleString()}개 · ${offset + (page.length ? 1 : 0)}–${offset + page.length}` + (result.window ? ` · 기준 ${result.window.date}: 당일 ${result.window.on_date.toLocaleString()}개 · 이전 ${result.window.before.toLocaleString()}/${result.window.before_total.toLocaleString()}개 · 이후 ${result.window.after.toLocaleString()}/${result.window.after_total.toLocaleString()}개 · 전후 각각 최대 ${result.window.per_side.toLocaleString()}개 (다른 검색 조건 적용)` : '');
     el('library-prev').disabled = offset === 0; el('library-next').disabled = offset + page.length >= total;
     el('library-gallery').replaceChildren();

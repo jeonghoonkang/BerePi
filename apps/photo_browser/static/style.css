@@ -60,3 +60,4 @@ body{overflow-wrap:anywhere}.tools>*{min-width:0}.source-row{min-width:0}input,s
 .tabs [data-tab][aria-pressed=true],.tabs #summary-toggle[aria-expanded=true]{background:var(--panel-accent,#a4efc5);color:#10261b;border-color:var(--panel-accent,#a4efc5)}
 #library-summary{background:var(--panel-bg);border-top:4px solid var(--panel-accent)}
 @media(max-width:600px){.panel{padding:16px 12px}}
+.detail-viewerbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}#detail-title{flex:1;min-width:120px;overflow-wrap:anywhere}#detail-navigation-status:empty{display:none}#detail-navigation-status{color:#ffce83}#detail-preview{margin-top:14px}
