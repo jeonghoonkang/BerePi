@@ -86,7 +86,7 @@ class StartupSourcesTests(unittest.TestCase):
         args = ['--root', str(self.root), '--db', str(self.library.db),
                 '--directory', str(self.first), '--directory', str(self.second)]
         for expected in ('[신규 추가]', '[기존 등록]'):
-            with patch('app.Flask.run') as run, contextlib.redirect_stdout(io.StringIO()) as stream:
+            with patch('server_restart.ServerRestart.serve') as run, contextlib.redirect_stdout(io.StringIO()) as stream:
                 main(args)
             run.assert_called_once()
             self.assertIn(expected, stream.getvalue())
@@ -97,7 +97,7 @@ class StartupSourcesTests(unittest.TestCase):
 
     @patch.dict('os.environ', {'PHOTO_BROWSER_PASSWORD': TEST_PASSWORD})
     def test_cli_single_directory_keeps_browse_only_behavior(self):
-        with patch('app.Flask.run'), contextlib.redirect_stdout(io.StringIO()) as stream:
+        with patch('server_restart.ServerRestart.serve'), contextlib.redirect_stdout(io.StringIO()) as stream:
             main(['--root', str(self.root), '--db', str(self.library.db), '--directory', str(self.second)])
         self.assertNotIn('하나의 라이브러리로 통합', stream.getvalue())
         self.assertIn(f'시작 디렉토리: {self.second}', stream.getvalue())

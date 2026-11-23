@@ -30,7 +30,7 @@ class TLSConfigurationTests(unittest.TestCase):
 
     def test_bad_tls_settings_never_start_http_server(self):
         for args in [['--https'], ['--certfile', 'missing.pem', '--keyfile', 'missing.key']]:
-            with patch('app.Flask.run') as run, patch('app.faulthandler.enable'), contextlib.redirect_stderr(io.StringIO()):
+            with patch('server_restart.ServerRestart.serve') as run, patch('app.faulthandler.enable'), contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as result:
                     main(args)
                 self.assertEqual(result.exception.code, 2)
@@ -56,14 +56,13 @@ class HTTPSIntegrationTests(unittest.TestCase):
     def test_cert_chain_loads_and_cli_enables_secure_cookie_automatically(self):
         context = tls_context(self.cert, self.key)
         self.assertGreaterEqual(context.minimum_version, ssl.TLSVersion.TLSv1_2)
-        with tempfile.TemporaryDirectory() as folder, patch('app.Flask.run', autospec=True) as run, contextlib.redirect_stdout(io.StringIO()):
+        with tempfile.TemporaryDirectory() as folder, patch('server_restart.ServerRestart.serve', autospec=True) as run, contextlib.redirect_stdout(io.StringIO()):
             main(['--root', folder, '--directory', folder, '--db', str(Path(folder) / 'db'),
                   '--https', '--certfile', str(self.cert), '--keyfile', str(self.key)])
-        app = run.call_args.args[0]
+        app = run.call_args.args[1]
         self.assertTrue(app.config['SESSION_COOKIE_SECURE'])
         self.assertIsInstance(run.call_args.kwargs['ssl_context'], ssl.SSLContext)
-        self.assertFalse(run.call_args.kwargs['debug'])
-        self.assertFalse(run.call_args.kwargs['use_reloader'])
+        self.assertEqual(run.call_args.kwargs['host'], '127.0.0.1')
 
     def test_invalid_certificate_pair_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:

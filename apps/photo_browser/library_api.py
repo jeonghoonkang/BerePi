@@ -32,6 +32,14 @@ def register_library(app, boundary, db):
     source_folders = SourceFolders(library)
     from access_control import register_access
     register_access(app, library.db)
+    from server_restart import ServerRestart
+    restart = ServerRestart()
+    app.extensions['server_restart'] = restart
+
+    @app.before_request
+    def restart_write_guard():
+        if restart.pending and request.method not in {'GET', 'HEAD', 'OPTIONS'} and request.path != '/api/server-restart':
+            abort(503, description='서버 재시작 중에는 새 변경 작업을 시작할 수 없습니다. 재연결 후 다시 시도하세요.')
     from category_merge import CategoryMerger
     categories = CategoryMerger(library)
     app.extensions['category_merger'] = categories
@@ -98,6 +106,8 @@ def register_library(app, boundary, db):
         job_id = uid()
         stop = threading.Event()
         with guard:
+            if restart.pending:
+                raise ValueError('서버 재시작 중입니다. 재연결 후 다시 시도하세요.')
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
             exclusive = {'source_path_repair', 'source_folder_sync', 'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'duplicate_db_preview', 'duplicate_db_cleanup', 'duplicate_db_undo'}
             if (kind in exclusive and active) or any(j.get('kind') in exclusive for j in active):
@@ -365,6 +375,21 @@ def register_library(app, boundary, db):
     @app.get('/api/library-summary')
     def library_summary():
         return jsonify(summary.snapshot(refresh=request.args.get('refresh') == '1'))
+
+    @app.get('/api/server-lifecycle')
+    def server_lifecycle():
+        return jsonify(restart.state())
+
+    @app.post('/api/server-restart')
+    def restart_server():
+        with guard:
+            if any(job['status'] in {'queued', 'running', 'stopping'} for job in jobs.values()):
+                abort(409, description='실행 중이거나 대기 중인 작업이 있습니다. 중지하고 저장한 뒤 중지 완료를 확인하거나, 작업 완료 후 재시작하세요.')
+            try:
+                result = restart.request()
+            except ValueError as exc:
+                abort(409, description=str(exc))
+        return jsonify(result), 202
 
     @app.post('/api/source-comparisons')
     def compare_sources():

@@ -68,6 +68,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
     @app.errorhandler(400)
     @app.errorhandler(409)
     @app.errorhandler(413)
+    @app.errorhandler(503)
     @app.errorhandler(InsufficientUploadSpace)
     def error(exc):
         return jsonify(error=exc.description), exc.code
@@ -76,7 +77,7 @@ def create_app(root=None, start=None, db=None, limit=20000):
     @app.get('/jobs')
     def index():
         return render_template('index.html', initial=str(initial), boundary=str(boundary),
-                               db_path=str(app.extensions['photo_library'].db), scan_limit=limit, jobs_page=request.path == '/jobs')
+                               db_path=str(app.extensions['photo_library'].db), scan_limit=limit, jobs_page=request.path == '/jobs', show_server_restart=True)
 
     @app.get('/api/directory-history')
     def get_directory_history():
@@ -173,6 +174,10 @@ def create_app(root=None, start=None, db=None, limit=20000):
 
 
 def main(argv=None):
+    # Capture the launch command and environment before startup services mutate them.
+    from server_restart import ServerRestart
+    launch = ServerRestart()
+    launch.capture(argv)
     # Preserve all Python thread stacks if the interpreter/native code crashes.
     faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -209,6 +214,9 @@ def main(argv=None):
         from server_tls import tls_context
         context = tls_context(args.certfile, args.keyfile, args.https)
         app = create_app(args.root, args.directory[0] if args.directory else None, args.db, limit=args.limit)
+        controller = app.extensions['server_restart']
+        controller.command, controller.cwd, controller.environment = launch.command, launch.cwd, launch.environment
+        launch = controller
         if context is not None:
             app.config['SESSION_COOKIE_SECURE'] = True
         if args.directory and len(args.directory) > 1:
@@ -242,8 +250,8 @@ def main(argv=None):
                 app.extensions['nominatim_monitor'].running(args.nominatim_docker, image=args.nominatim_image,
                                      pbf_url=args.nominatim_pbf_url, volume=args.nominatim_volume,
                                      port=args.nominatim_port, timeout=args.nominatim_ready_timeout):
-            app.run(host=args.host, port=args.port, threaded=True, ssl_context=context,
-                    debug=False, use_reloader=False)
+            launch.serve(app, host=args.host, port=args.port, ssl_context=context)
+        launch.replace_process()
     except (ValueError, OSError, RuntimeError) as exc:
         parser.error(str(exc))
 

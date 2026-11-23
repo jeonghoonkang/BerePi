@@ -3,4 +3,5 @@
 <span>버전 기준일 {{ software_version.release_date }}</span>
 {% if software_version.revision %}<span>커밋 {{ software_version.revision }} · {{ software_version.committed_at }}</span>{% endif %}
 {% if software_version.modified %}<span>미커밋 변경 포함</span>{% endif %}
+{% if show_server_restart %}<button id="server-restart" type="button" disabled>웹서버 재시작</button><span id="server-restart-status" role="status" aria-live="polite">재시작 지원 여부 확인 중…</span>{% endif %}
 </div>
