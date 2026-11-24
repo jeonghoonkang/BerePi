@@ -23,6 +23,18 @@ def refresh_interval(value):
     return seconds
 
 
+def bounded_number(minimum, maximum):
+    def parse(value):
+        try:
+            result = int(value)
+        except (TypeError, ValueError):
+            raise argparse.ArgumentTypeError('정수를 입력하세요.')
+        if not minimum <= result <= maximum:
+            raise argparse.ArgumentTypeError(f'{minimum}~{maximum} 범위의 정수를 입력하세요.')
+        return result
+    return parse
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     from version_info import version_info, version_label, version_logging, log_interval, DEFAULT_LOG_INTERVAL
@@ -35,6 +47,17 @@ def main(argv=None):
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('pair-history', help='소스·DB·관리 폴더 연결 변경 이력 조회 (최근 100건)')
     commands.add_parser('config', help='저장된 설정 조회')
+    audit = commands.add_parser('db-audit', help='읽기 전용 DB 분류별 파일 수·JSON 내용 요약·용량 집계')
+    audit.add_argument('--format', choices=['table', 'json'], default='table')
+    audit.add_argument('--top', type=bounded_number(0, 1000), default=20, help='큰 파일 표시 개수 (기본 20)')
+    audit.add_argument('--sizes-only', action='store_true', help='현재 미디어 청크의 내용 요약을 생략하고 파일 크기만 집계')
+    audit.add_argument('--max-files', type=bounded_number(1, 1000000000), help='지정 개수까지만 부분 집계')
+    audit.add_argument('--max-json-mib', type=bounded_number(1, 1024), default=32, help='현재 청크·인덱스 하나당 JSON 읽기 한도 MiB')
+    audit.add_argument('--progress-interval', type=refresh_interval, default=5, help='진행 상황 stderr 출력 간격(초)')
+    show = commands.add_parser('db-show', help='DB 내부 JSON/JSONL 내용·크기 미리보기 (읽기 전용)')
+    show.add_argument('--file', required=True, help='DB 내부 상대 경로 (예: index.json)')
+    show.add_argument('--limit', type=bounded_number(1, 1000), default=3, help='배열·JSONL 레코드 표시 개수')
+    show.add_argument('--max-bytes', type=bounded_number(1, 1024 * 1024 * 1024), default=1024 * 1024, help='JSON 읽기 한도 바이트 (기본 1 MiB)')
     storage_parser = commands.add_parser('storage-usage', help='DB·원본·관리 폴더 사용량과 파일시스템별 여유 공간 조회')
     storage_parser.add_argument('--refresh', action='store_true', help='전체 폴더를 실제 집계하고 캐시 갱신 (대용량 경로는 시간이 걸릴 수 있음)')
     originals = commands.add_parser('original-paths', help='사진 DB의 원본 파일 경로와 현재 접근 상태 조회')
@@ -90,6 +113,29 @@ def main(argv=None):
     merge.add_argument('--source-id', help='이 소스의 활성 미디어만 병합 (생략 시 전체 소스)')
     args = parser.parse_args(argv)
     with version_logging(info, args.version_log_interval):
+        if args.command in {'db-audit', 'db-show'}:
+            # Do not construct Library or StorageUsage: inspection must not migrate,
+            # create locks/caches, or launch a second traversal of a huge DB.
+            try:
+                from db_audit import DBAudit, human_bytes, inspect_json, table
+                if args.command == 'db-show':
+                    result = inspect_json(args.db, args.file, args.limit, args.max_bytes)
+                    print(json.dumps(result, ensure_ascii=False, indent=2))
+                    return 0
+                last_progress = [0.0]
+                def progress(phase, count, value):
+                    clock = time.monotonic()
+                    if clock - last_progress[0] >= args.progress_interval:
+                        message = f'현재 청크 내용 {count:,}/{value:,}개 확인' if phase == 'contents' else f'파일 {count:,}개 · {human_bytes(value)} 집계 (전체 수는 완료 후 확정)'
+                        print(message, file=sys.stderr, flush=True)
+                        last_progress[0] = clock
+                report = DBAudit(args.db, args.max_json_mib * 1024 * 1024).scan(
+                    top=args.top, with_contents=not args.sizes_only, max_files=args.max_files, progress=progress)
+                print(json.dumps(report, ensure_ascii=False, indent=2) if args.format == 'json' else table(report), flush=True)
+                return 130 if report['interrupted'] else 0 if report['complete'] else 2
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                print('오류: ' + str(exc), file=sys.stderr)
+                return 1
         from storage_usage import StorageUsage
         storage = StorageUsage(args.db, args.root, persist=args.command == 'storage-usage' and args.refresh)
         try:

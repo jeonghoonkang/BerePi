@@ -1739,3 +1739,38 @@ DB 정리 미리보기·완료·되돌리기 및 기록의 대상 확인 화면�
 - 모든 접속자의 연결이 잠시 끊어집니다. 요청한 페이지는 새 서버의 인스턴스 ID를 확인하면 같은 URL로 자동 새로고침합니다. 최대 5분간 재연결을 시도하며 시작 작업이 오래 걸리거나 실패하면 서버 로그를 확인하고 새로고침하세요.
 
 `GET /api/server-lifecycle`은 지원 여부·재시작 대기 여부·인스턴스 ID를 반환합니다. `POST /api/server-restart`는 서버에 보존된 명령만 사용하며 접수 시 HTTP 202를 반환합니다. 전체 명령행·환경변수 값은 API에 노출하지 않습니다. 버튼을 사용하려면 이 버전으로 한 번 서버를 수동 재실행해야 합니다.
+
+## CLI: DB 내부 JSON 내용·분류별 용량 진단 (읽기 전용)
+
+운영 서버에서 `db-audit`를 실행하면 현재 참조 청크와 미참조 미디어 JSON, 중복 정보, 스캔 저널, 병합 보고서, 복구 기록, 원격 캐시, 다운로드 ZIP, AI 결과, 기타 파일을 분류하여 파일 수·JSON 수·논리 용량·할당량·비율과 큰 파일 목록을 출력합니다. 기존 `storage-usage`는 DB·원본·관리 루트 전체의 용량을 비교하고, `db-audit`는 **DB 내부에서 무엇이 큰지** 분석합니다.
+
+```bash
+# DB 내부 전체 집계 + 현재 JSON의 사진·동영상/활성·비활성 항목 요약
+python3 apps/photo_browser/cli.py --db /home/tinyos/devel/BerePi/apps/photo_browser/db db-audit
+
+# 현재 청크 내용 요약은 생략하고 파일 크기만 집계, 큰 파일 30개 표시
+python3 apps/photo_browser/cli.py --db /data/photo_db db-audit --sizes-only --top 30
+
+# 결과를 JSON 보고서로 저장: 보고서 파일은 DB 밖에 두는 것을 권장
+python3 apps/photo_browser/cli.py --db /data/photo_db db-audit --format json > db-audit-report.json
+
+# 10만 파일까지만 시험 집계: 전체 용량으로 해석하면 안 됨
+python3 apps/photo_browser/cli.py --db /data/photo_db db-audit --sizes-only --max-files 100000
+
+# 현재 인덱스 내용 미리보기: 배열당 처음 5개 표시
+python3 apps/photo_browser/cli.py --db /data/photo_db db-show --file index.json --limit 5
+
+# index.json에서 확인한 현재 청크의 사진 정보 보기 (경로는 실제 값으로 교체)
+python3 apps/photo_browser/cli.py --db /data/photo_db db-show --file media/family/tinyos/2024/01/media_ID_000001.json --limit 3
+```
+
+대용량 동작과 결과 해석:
+
+- 과거 JSON 수백만 개는 내용을 열지 않고 파일 메타데이터만 읽습니다. 기본 내용 요약은 현재 `index.json`이 참조하는 청크만 읽어 전체 DB 기록 수, 고유 media_id 수, 사진·동영상 수, 활성·비활성 수, 활성 소스·카테고리별 개수를 집계합니다. 물리적인 원본 사진을 다시 세거나 해시를 계산하지 않습니다.
+- 진행 상황은 기본 5초 간격으로 stderr에 표시합니다(`--progress-interval`). 사전 전체 개수 집계로 디렉토리를 두 번 읽지 않으며, 전체 파일 수는 종료 후 확정합니다. Ctrl+C를 누르면 집계한 부분까지 출력하고 종료 코드 130을 반환합니다. 재실행은 처음부터 집계하며 이어하기는 지원하지 않습니다.
+- 파일 목록 전체를 메모리에 보관하지 않고 디렉토리 단위로 순회하며 큰 파일 목록은 `--top` 개수로 제한합니다. 심볼릭 링크·정션은 따라가지 않습니다. 용량은 경로별 합계이므로 하드링크를 중복 계산할 수 있고, `st_blocks` 미지원 환경의 할당량은 논리 용량으로 추정합니다.
+- 현재/미참조 구분은 파일명이나 날짜가 아닌 **시작 시점 index.json의 실제 참조 경로** 기준입니다. 부분 갱신에서는 오래된 식별자의 파일도 현재 청크일 수 있습니다. 미참조는 삭제 허가 판정이 아니며, 이 명령은 파일 삭제·정리·DB 마이그레이션·캐시 기록을 수행하지 않습니다.
+- 인덱스를 읽지 못하면 미디어 파일을 ‘확인 불가’로 분류합니다. 집계 중 인덱스 변경, 참조 파일 누락, 읽기 오류, `--max-files` 제한 등은 부분 결과로 표시하고 종료 코드 2를 반환합니다. 정상 집계는 0, 요청·파일 형식 오류는 1입니다. 오류 상세는 최대 20개만 표시합니다. 정확한 비교가 필요하면 스캔·병합이 멈춘 상태에서 실행하세요.
+- 현재 인덱스·청크 하나당 읽기 한도는 기본 32 MiB이며 `db-audit --max-json-mib`로 조정합니다. `db-show`는 기본 1 MiB 한도이며 `--max-bytes`로 늘릴 수 있습니다. JSONL은 `--limit`개 레코드까지만 읽습니다. 인증 관련 필드와 URL 자격증명은 내용 미리보기에서 가립니다.
+
+기존 `--root`는 이 진단에 필요하지 않습니다. `--db`로 명시한 디렉토리 안의 상대 경로만 조회하며, 존재하지 않는 DB를 생성하거나 라이브러리 쓰기 잠금을 만들지 않습니다.
