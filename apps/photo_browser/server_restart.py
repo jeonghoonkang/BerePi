@@ -51,7 +51,9 @@ class ServerRestart:
 
     def serve(self, app, host, port, ssl_context=None):
         from werkzeug.serving import make_server
-        with make_server(host, port, app, threaded=True, ssl_context=ssl_context) as server:
+        from db_locks import exclusive_file_lock
+        with exclusive_file_lock(app.extensions['photo_library'].db / '.server.lock'), \
+                make_server(host, port, app, threaded=True, ssl_context=ssl_context) as server:
             # Drain in-flight requests, including uploads, before replacing Python.
             server.daemon_threads = False
             self.shutdown = server.shutdown

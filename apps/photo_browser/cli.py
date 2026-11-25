@@ -58,6 +58,22 @@ def main(argv=None):
     show.add_argument('--file', required=True, help='DB 내부 상대 경로 (예: index.json)')
     show.add_argument('--limit', type=bounded_number(1, 1000), default=3, help='배열·JSONL 레코드 표시 개수')
     show.add_argument('--max-bytes', type=bounded_number(1, 1024 * 1024 * 1024), default=1024 * 1024, help='JSON 읽기 한도 바이트 (기본 1 MiB)')
+    prune = commands.add_parser('db-prune-plan', help='현재 DB 정보와 소스·managed SHA-256을 검증해 과거 JSON 삭제 계획 생성')
+    prune.add_argument('--plan', required=True, help='DB·원본·managed 밖의 새 SQLite 계획 파일')
+    prune.add_argument('--server-stopped', action='store_true', help='모든 작업 중지·저장 및 웹서버 종료 확인')
+    prune.add_argument('--resume', action='store_true', help='삭제 전 동일 계획의 검사를 이어하기')
+    prune.add_argument('--under', default='media', help='검사할 media 하위 경로 (DB 상대 경로)')
+    prune.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 새로 검사할 최대 JSON 수')
+    prune.add_argument('--max-json-mib', type=bounded_number(1, 1024), default=64)
+    prune.add_argument('--progress-interval', type=refresh_interval, default=5)
+    apply = commands.add_parser('db-prune-apply', help='다시 검증한 뒤 계획에서 통과한 과거 JSON만 삭제')
+    apply.add_argument('--plan', required=True)
+    apply.add_argument('--confirm', required=True, help='계획에 표시된 plan_id로 과거 JSON 영구 삭제 확인')
+    apply.add_argument('--server-stopped', action='store_true')
+    apply.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 처리할 최대 후보 수')
+    apply.add_argument('--progress-interval', type=refresh_interval, default=5)
+    prune_status = commands.add_parser('db-prune-status', help='SQLite 계획의 통과·보존·삭제 수와 사유 조회')
+    prune_status.add_argument('--plan', required=True)
     storage_parser = commands.add_parser('storage-usage', help='DB·원본·관리 폴더 사용량과 파일시스템별 여유 공간 조회')
     storage_parser.add_argument('--refresh', action='store_true', help='전체 폴더를 실제 집계하고 캐시 갱신 (대용량 경로는 시간이 걸릴 수 있음)')
     originals = commands.add_parser('original-paths', help='사진 DB의 원본 파일 경로와 현재 접근 상태 조회')
@@ -113,6 +129,31 @@ def main(argv=None):
     merge.add_argument('--source-id', help='이 소스의 활성 미디어만 병합 (생략 시 전체 소스)')
     args = parser.parse_args(argv)
     with version_logging(info, args.version_log_interval):
+        if args.command in {'db-prune-plan', 'db-prune-apply', 'db-prune-status'}:
+            import sqlite3
+            from db_prune import plan_prune, apply_prune, prune_status
+            last = [0.0]
+            def prune_progress(phase, count, path):
+                clock = time.monotonic()
+                if clock - last[0] >= args.progress_interval:
+                    print(f'{phase}: {count:,} · {path}', file=sys.stderr, flush=True)
+                    last[0] = clock
+            try:
+                if args.command == 'db-prune-plan':
+                    result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
+                                        args.max_json_mib * 1024 * 1024, args.max_files, args.under, prune_progress)
+                elif args.command == 'db-prune-apply':
+                    result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, prune_progress)
+                else:
+                    result = prune_status(args.plan)
+                print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+                return 2 if result['status'] in {'partial', 'partial_apply'} else 0
+            except KeyboardInterrupt:
+                print('검사를 중단했습니다. 계획 상태를 확인하고 이어서 실행하세요.', file=sys.stderr)
+                return 130
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+                print('오류: ' + str(exc), file=sys.stderr)
+                return 1
         if args.command in {'db-audit', 'db-show'}:
             # Do not construct Library or StorageUsage: inspection must not migrate,
             # create locks/caches, or launch a second traversal of a huge DB.

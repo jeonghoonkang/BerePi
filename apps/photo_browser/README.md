@@ -1774,3 +1774,58 @@ python3 apps/photo_browser/cli.py --db /data/photo_db db-show --file media/famil
 - 현재 인덱스·청크 하나당 읽기 한도는 기본 32 MiB이며 `db-audit --max-json-mib`로 조정합니다. `db-show`는 기본 1 MiB 한도이며 `--max-bytes`로 늘릴 수 있습니다. JSONL은 `--limit`개 레코드까지만 읽습니다. 인증 관련 필드와 URL 자격증명은 내용 미리보기에서 가립니다.
 
 기존 `--root`는 이 진단에 필요하지 않습니다. `--db`로 명시한 디렉토리 안의 상대 경로만 조회하며, 존재하지 않는 DB를 생성하거나 라이브러리 쓰기 잠금을 만들지 않습니다.
+
+## CLI: 검증된 과거 미디어 JSON 삭제
+
+`db-audit`의 ‘과거 세대 후보’는 삭제 가능 판정이 아닙니다. 새 명령은 **검사·계획 → 확인 → 재검증·삭제** 순서로 처리합니다. 삭제는 `DB/media/` 아래의 과거 JSON만 대상으로 하며 현재 DB 청크, 설정·작업·복구 기록, 실제 원본·managed 사진 파일은 삭제하지 않습니다. 삭제한 과거 JSON 자체를 되살리는 기능은 없으므로 세대별 이력을 보관해야 한다면 별도 백업을 먼저 확보하세요.
+
+삭제 후보 인정 조건:
+
+- 현재 `index.json` 참조가 없고, DB의 다른 JSON/JSONL(스캔·병합·보고서·카테고리 통합·DB 정리·복구 기록 등)에서도 미디어 JSON 경로를 참조하지 않아야 합니다. 참조 기록의 JSON 문자열은 스트리밍 검사하며 Unicode 이스케이프 경로도 해석합니다.
+- 과거 청크의 **모든 항목**에 현재 DB의 동일 media_id가 있어야 합니다. SHA-256·크기·촬영/EXIF·카테고리·소유자·태그·이벤트·사람·원본/관리 위치 등 과거의 비어 있지 않은 정보가 현재 정보에 포함되어야 합니다. 과거에만 있는 값이나 서로 다른 값은 보존 사유가 됩니다.
+- revision, last_seen_at, verification 및 위치의 status/verified_at/merge_verification 같은 처리·검증 이력은 비교에서 제외합니다. 나머지 lifecycle 상태와 메타데이터는 비교합니다. 태그 등의 배열은 과거 값이 현재 배열에 포함되는지 확인합니다.
+- 항목마다 **실제 로컬 원본과 현재 managed 파일 양쪽**이 존재하고, 파일 크기와 SHA-256이 현재 DB와 일치해야 합니다. 현재 managed 루트 밖·휴지통·심볼릭 링크·정션은 사용하지 않습니다. HTTP/WebDAV 원본을 자동 다운로드하지 않으므로 로컬 원본을 검증할 수 없으면 해당 청크는 남깁니다.
+- 파일명·용량만으로 삭제하지 않습니다. 중복 이미지가 다른 media_id에만 있거나 원본이 없고 managed만 있는 경우에도 자동 삭제하지 않습니다.
+
+### 실행 순서
+
+먼저 웹페이지에서 실행·대기 작업을 중지하고 저장한 뒤 웹서버와 다른 CLI 작업을 종료합니다. 새 버전으로 실행한 내장 서버는 실행 중인 동안 `.server.lock`을 보유하여 정리를 차단합니다. 정리 CLI는 서버 잠금·DB 쓰기 잠금·경로 점검 기록 잠금을 확보하고 대기/실행 중인 작업 기록도 거부합니다. 외부 WSGI 또는 이전 서버 버전은 자동 감지가 제한되므로 직접 종료한 후 `--server-stopped`로 확인해야 합니다.
+
+운영 서버의 BerePi 저장소에서 실행합니다.
+
+```bash
+DB=/home/tinyos/devel/BerePi/apps/photo_browser/db
+PLAN=/var/tmp/photo-db-prune.sqlite
+
+# 1. 처음에는 작은 범위/개수로 검사합니다. 이 단계는 과거 JSON을 삭제하지 않습니다.
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped --max-files 1000
+
+# 2. 통과·보존 사유, 파일 수·논리 용량, 샘플, plan_id를 확인합니다.
+python3 apps/photo_browser/cli.py db-prune-status --plan "$PLAN"
+
+# 3. 출력된 apply_command_posix를 복사해 실행하거나 아래 PLAN_ID를 실제 값으로 교체합니다.
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-apply \
+  --plan "$PLAN" --server-stopped --confirm PLAN_ID --max-files 1000
+
+# 4. 삭제 결과 확인. 남은 pending/deleting은 같은 apply 명령으로 이어서 처리합니다.
+python3 apps/photo_browser/cli.py db-prune-status --plan "$PLAN"
+
+# 5. 정리 후 다시 용량을 집계합니다.
+python3 apps/photo_browser/cli.py --db "$DB" db-audit --sizes-only
+```
+
+처음부터 전체 범위를 검사하려면 `db-prune-plan`의 `--max-files`를 생략합니다. 특정 월만 검사하려면 `--under media/photo_box/tinyos/2024/01`처럼 실제 존재하는 경로를 지정하세요. 부분 계획을 삭제 전에 더 검사하려면 동일한 계획·범위로 `db-prune-plan --plan "$PLAN" --server-stopped --resume --max-files 1000`을 실행합니다. `--under`를 사용했다면 이어하기에도 같은 값을 지정합니다. 삭제를 시작한 계획에는 검사 행을 추가할 수 없으므로 나머지 범위는 새 계획 파일로 검사합니다.
+
+### 결과와 주의 사항
+
+- `counts.pending`: 삭제 전 검증을 통과한 후보 수·논리 용량. `counts.kept`: 보호 참조·고유 메타데이터·검증 불가 등으로 남긴 수입니다. `reason_labels`, `kept_samples`에서 사유를 확인합니다.
+- `counts.deleted`: 삭제 완료. `recovered_deleted`: 중단 후 삭제 중 상태와 파일 부재를 확인해 정리한 기록. `already_missing`: CLI가 삭제하기 전에 이미 없었던 파일. `kept_after_change`: 계획 후 JSON 또는 실제 사진 검증 조건이 달라져 남긴 파일입니다.
+- 계획은 DB·원본·managed 밖의 **단일 SQLite 파일**로 저장합니다. 수백만 개 후보를 메모리에 보관하지 않으며 검증 결과·삭제 상태를 디스크에 기록합니다. 계획 자체에도 디스크 공간이 필요합니다. 큰 규모에서는 계획 파일이 수 GiB가 될 수 있으므로 여유 공간을 확보하세요.
+- 실제 SHA-256은 소스와 managed를 모두 읽으므로 시간이 오래 걸릴 수 있습니다. 과거 JSON도 내용을 확인해야 합니다. 같은 실제 파일은 실행 중 stat 서명으로 검증 결과를 재사용하지만, 삭제 실행을 다시 시작하면 새로 검증합니다. 파일과 외부 NAS가 작업 도중 변경되지 않도록 유지하세요.
+- 진행 상황은 stderr에 표시합니다. Ctrl+C 시 검사된 계획 또는 삭제된 부분을 저장합니다. 같은 apply 명령 재실행은 미처리 후보부터 진행하고, 삭제 중 끊긴 기록도 확인합니다. 예기치 않은 오류로 중단되어도 계획 파일을 버리지 말고 상태부터 조회하세요.
+- 검사 후 삭제 실행 시 현재 인덱스·현재 청크·설정·작업/복구 기록을 다시 검사합니다. 이 정보가 계획 시점과 달라졌으면 전체 삭제를 거부하고 새 계획을 요구합니다. 각 후보의 내용과 실제 사진도 다시 검증합니다. 후보 내용만 바뀌었거나 파일이 사라진 경우 해당 파일은 보존/부재 상태로 기록합니다.
+- 삭제 작업은 현재 DB를 다시 저장하거나 소스·managed를 변경하지 않습니다. 논리 용량과 실제 확보 공간은 하드링크·파일시스템 특성 때문에 다를 수 있습니다. 진행 중 사진 파일을 별도로 이동·수정하지 마세요.
+- `--max-json-mib`는 청크와 참조 문자열의 읽기 한도이며 기본 64 MiB입니다. 현재 전체 미디어 메타데이터와 검증 캐시는 메모리에 유지하므로 현재 항목 수에 비례하는 메모리는 필요합니다. 과거 세대 전체를 메모리에 올리지는 않습니다.
+
+새 버전 적용 전 서버를 종료하고 위 명령을 실행하세요. 정리 후 웹서버를 다시 시작하여 사진 조회·검색과 필요한 이어하기/되돌리기를 확인하세요. 이 기능은 기존 병합의 전체 JSON 반복 저장 방식을 바꾸지 않으므로 장기적인 재누적 방지는 별도 개선 사항입니다.
