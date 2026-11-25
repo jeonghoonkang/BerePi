@@ -1828,6 +1828,63 @@ python3 apps/photo_browser/cli.py --db "$DB" db-audit --sizes-only
 
 처음부터 전체 범위를 검사하려면 `db-prune-plan`의 `--max-files`를 생략합니다. 특정 월만 검사하려면 `--under media/photo_box/tinyos/2024/01`처럼 실제 존재하는 경로를 지정하세요. 부분 계획을 삭제 전에 더 검사하려면 동일한 계획·범위로 `db-prune-plan --plan "$PLAN" --server-stopped --resume --max-files 1000`을 실행합니다. `--under`를 사용했다면 이어하기에도 같은 값을 지정합니다. 삭제를 시작한 계획에는 검사 행을 추가할 수 없으므로 나머지 범위는 새 계획 파일로 검사합니다.
 
+### 한 번의 명령으로 검사·확인·삭제하기 (`db_prune.sh`)
+
+여러 CLI 명령을 매번 입력하는 대신 Linux 서버에서 아래 스크립트를 실행할 수 있습니다.
+현재 작업 디렉토리와 관계없이 스크립트 위치의 `cli.py`를 호출하며, 기본 DB는 스크립트 옆 `db`입니다.
+웹 작업을 중지·저장하고 웹서버와 다른 CLI 작업을 종료한 뒤 실행하세요.
+
+```bash
+# 기본: 최대 1,000개 검사 → 결과 표시 → plan_id 입력 시에만 삭제
+bash /home/tinyos/devel/BerePi/apps/photo_browser/db_prune.sh
+
+# 경로를 직접 지정할 때 (공백이 있는 경로도 지원)
+bash apps/photo_browser/db_prune.sh \
+  --db /home/tinyos/devel/BerePi/apps/photo_browser/db \
+  --plan /var/tmp/photo-db-prune.sqlite --max-files 1000
+```
+
+처음에는 서버 종료 확인에 `yes`를 입력합니다. 검사 결과의 `counts.pending`·용량·보존 사유를
+확인한 뒤 표시된 `plan_id`를 입력하면 재검증 후 삭제합니다. Enter 또는 다른 값을 입력하면
+삭제하지 않고 계획만 보존합니다. 자동으로 서버를 종료하거나 시작하지는 않습니다.
+`--server-stopped`는 서버 종료 확인 질문만 생략하며 삭제 확인은 생략하지 않습니다.
+
+```bash
+# 검사만 수행, 삭제하지 않음
+bash apps/photo_browser/db_prune.sh plan --plan /var/tmp/photo-db-test.sqlite
+
+# 기존 계획 결과만 보기 (서버 종료 확인이나 삭제 질문 없음)
+bash apps/photo_browser/db_prune.sh status --plan /var/tmp/photo-db-test.sqlite
+
+# 삭제 시작 전: 같은 계획을 최대 1,000개 더 검사
+# --under를 지정했던 계획은 같은 --under 값을 사용
+bash apps/photo_browser/db_prune.sh plan --resume --plan /var/tmp/photo-db-test.sqlite
+
+# 기존 계획의 미처리 후보 삭제 / 중단된 삭제 이어하기 (다시 결과와 plan_id 확인)
+bash apps/photo_browser/db_prune.sh apply --plan /var/tmp/photo-db-test.sqlite
+
+# 처음부터 개수 제한 없이 전체 검사 → 결과 확인 후 전체 후보 삭제
+# 대용량 DB는 오래 걸리며 실제 원본·managed의 SHA-256도 검증
+bash apps/photo_browser/db_prune.sh --all --plan /var/tmp/photo-db-full.sqlite
+
+# 특정 월만 검사, Python 실행 파일 지정
+PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
+  --under media/photo_box/tinyos/2024/01 --plan /var/tmp/photo-db-month.sqlite
+```
+
+기본 `run`에서 계획 파일이 이미 있으면 **기존 계획을 재사용**하며 덮어쓰거나 자동으로 검사를
+추가하지 않습니다. `--resume`은 삭제 시작 전 검사 이어하기이고, `apply`는 이미 계획에 들어 있는
+미처리 후보의 삭제 이어하기입니다. 삭제를 시작한 계획에 검사 항목을 추가할 수 없으므로 나머지
+전체 범위는 새 `--plan` 경로로 실행하세요. 스크립트는 계획 파일을 자동 삭제하지 않습니다.
+
+`--max-files`는 이번 검사와 삭제 각각의 한도이며 기본 1,000개입니다. `--all`은 두 한도를 해제합니다.
+한도 도달로 부분 처리된 경우 종료 코드 `2`는 실패가 아닌 부분 완료를 뜻하며, 실제 오류는 즉시 중단합니다.
+스크립트 내부에서는 계획 생성의 부분 완료 뒤에도 결과 확인과 삭제 확인을 진행합니다.
+`DB`, `PHOTO_BROWSER_DB`, `PLAN`, `PYTHON` 환경변수도 지원하고 명령행 경로 옵션이 우선합니다.
+예: `DB=/data/photo_db PLAN=/var/tmp/my-plan.sqlite bash apps/photo_browser/db_prune.sh`.
+현재 청크와 원본·managed 사진은 삭제하지 않으며, 기존 CLI의 보호 참조·메타데이터·실제 파일 검증을
+그대로 사용합니다. 정리 후 전체 용량을 확인하려면 `cli.py --db "$DB" db-audit --sizes-only`를 별도로 실행하세요.
+
 ### 결과와 주의 사항
 
 - `counts.pending`: 삭제 전 검증을 통과한 후보 수·논리 용량. `counts.kept`: 보호 참조·고유 메타데이터·검증 불가 등으로 남긴 수입니다. `reason_labels`, `kept_samples`에서 사유를 확인합니다.
