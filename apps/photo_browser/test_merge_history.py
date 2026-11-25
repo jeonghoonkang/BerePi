@@ -150,7 +150,7 @@ class MergeHistoryTests(unittest.TestCase):
     def test_unexpected_merge_failure_leaves_failed_history(self):
         self.photo()
         self.library.scan('family_photos')
-        with patch.object(self.library, 'commit', side_effect=OSError('DB write failed')):
+        with patch.object(self.library, '_patch_merge_items', side_effect=OSError('DB write failed')):
             with self.assertRaisesRegex(OSError, 'DB write failed'):
                 self.library.merge()
         summary = list_reports(self.library)[0]

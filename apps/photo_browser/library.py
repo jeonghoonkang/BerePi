@@ -849,6 +849,10 @@ class Library:
         from metadata_store import patch_metadata
         return patch_metadata(self, changes, minimum_free_bytes)
 
+    def _patch_merge_items(self, changes, minimum_free_bytes=0):
+        from metadata_store import patch_merge_items
+        return patch_merge_items(self, changes, minimum_free_bytes)
+
     def merge_target(self, root, item):
         c, date = item['classification'], item['capture']['date_key']
         year, month = (date[:4], date[5:7]) if date != 'unknown' else ('unknown', 'unknown')
@@ -952,6 +956,8 @@ class Library:
         targets = {}
         reserved, hashes = {}, {} if hashes is None else hashes
         fast_count = 0
+        dirty_estimates = []
+        from place_lookup import current_policy
         for index, item in enumerate(pending):
             source = self.merge_source(item, source_id)
             def checking(path, role='comparison_target', action='comparing_existing'):
@@ -961,6 +967,9 @@ class Library:
                           'source_file': source.get('path') or source.get('uri'), 'target_file': str(path)})
             fast = self.fast_merge_target(root, item, reserved)
             fast_count += int(fast is not None)
+            if fast is None or (os.environ.get('PHOTO_BROWSER_REVERSE_GEOCODER_URL') and gps_coordinates(item['capture'])
+                                and not current_policy(item['capture'].get('place'))):
+                dirty_estimates.append((index, item))
             target = self.resolve_merge_target(root, item, reserved, hashes, on_compare=checking)
             if not target.exists():
                 key = str(target.resolve())
@@ -970,10 +979,9 @@ class Library:
                           'processed': 0, 'inventory_complete': False, 'current_file': str(target),
                           'current_file_role': 'merge_destination', 'current_action': 'checking_space',
                           'source_file': source.get('path') or source.get('uri'), 'target_file': str(target)})
-        # Each checkpoint retains a new immutable DB generation. Include their
-        # cumulative growth, reports and a reserve, rather than only image bytes.
-        generation_bytes = sum(len(json.dumps(item, ensure_ascii=False, indent=2).encode('utf-8')) + 4096 for item in items)
-        db_bytes = generation_bytes * ((len(pending) - fast_count + 24) // 25 + 3) + len(pending) * 4096
+        from metadata_store import estimate_merge_growth
+        estimate = estimate_merge_growth(self, len(pending), dirty_estimates)
+        db_bytes = estimate['db_estimated_bytes']
         reserve = self.config().get('scan_min_free_mb', 512) * 1048576
         volumes = {}
         def add(path, amount, role):
@@ -994,7 +1002,7 @@ class Library:
         checks = list(volumes.values())
         return {'copy_bytes': sum(targets.values()), 'copy_files': len(targets),
                 'fast_skip_files': fast_count,
-                'db_estimated_bytes': db_bytes, 'volumes': checks,
+                **estimate, 'volumes': checks,
                 'ok': all(v['free_bytes'] >= v['required_bytes'] for v in checks)}
 
     def check_merge_space(self, root, db_bytes, copy_bytes=0, temporary_bytes=0):
@@ -1150,23 +1158,19 @@ class Library:
                         'disk_space': space, 'warning': '공간 부족으로 병합을 시작하지 않았습니다. ' + details}
         from merge_estimate import MergeEstimate
         estimate = None if preview else MergeEstimate(len(wanted) - len(completed), state['disk_space']['fast_skip_files'])
-        db_dirty = full_commit_needed = False
-        metadata_updates = {}
+        db_dirty = False
+        merge_updates = {}
         state['fast_skipped_count'] = sum(bool(op.get('fast_skipped')) for op in operations)
         def checkpoint(status='running'):
-            nonlocal db_dirty, full_commit_needed
+            nonlocal db_dirty
             state.update(status=status, processed=len(operations), total=len(wanted),
                          percent=round(len(operations) * 100 / len(wanted), 1) if wanted else 100,
                          inventory_complete=True, updated_at=now())
             if not preview:
                 if db_dirty:
-                    if full_commit_needed:
-                        self.commit(items)
-                    else:
-                        self._patch_metadata(metadata_updates)
+                    self._patch_merge_items(merge_updates)
                     db_dirty = False
-                    full_commit_needed = False
-                    metadata_updates.clear()
+                    merge_updates.clear()
                 state.update(estimate.snapshot())
                 atomic_json(session_path, state)
                 estimate.checkpoint_finished()
@@ -1215,7 +1219,7 @@ class Library:
                     if places.enrich(item['capture']):
                         item['revision'] += 1
                         db_dirty = True
-                        metadata_updates[item['media_id']] = {'place': item['capture']['place']}
+                        merge_updates[item['media_id']] = item
                 original = target
                 fast = self.fast_merge_target(root, item, reserved)
                 if fast is not None:
@@ -1285,7 +1289,7 @@ class Library:
                                               'merge_verification': {'sha256': item['sha256'], 'size_bytes': stat.st_size,
                                                                      'mtime_ns': stat.st_mtime_ns, 'base_path': str(original)}})
                     db_dirty = True
-                    full_commit_needed = True
+                    merge_updates[item['media_id']] = item
             except (MergeLowSpaceError, OSError) as exc:
                 if isinstance(exc, MergeLowSpaceError) or exc.errno == errno.ENOSPC or getattr(exc, 'winerror', None) == 112:
                     operations.pop()  # The unfinished file must be retried on resume.
