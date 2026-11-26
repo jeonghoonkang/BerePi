@@ -1,0 +1,4 @@
+*.sqlite3
+*.sqlite3-*
+report.json
+__pycache__/

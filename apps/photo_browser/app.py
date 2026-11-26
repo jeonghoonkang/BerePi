@@ -45,6 +45,8 @@ def create_app(root=None, start=None, db=None, limit=20000):
     app.config['PHOTO_BROWSER_LIMIT'] = limit
     from uploads import InsufficientUploadSpace, register_uploads
     register_uploads(app)
+    from client_preprep.api import register_preprep
+    register_preprep(app)
     from server_network import ServerNetwork
     server_network = ServerNetwork()
     app.extensions['server_network'] = server_network
