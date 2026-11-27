@@ -96,6 +96,16 @@ class DBPruneScriptTests(unittest.TestCase):
         self.assertEqual(report['counts']['pending']['files'], 2)
         self.assertTrue(self.old.exists())
 
+    def test_progress_options_reach_cli_and_single_snapshot_is_saved(self):
+        log = self.root / 'script-progress.log'
+        result = self.run_script('plan', '--server-stopped', '--progress-log', str(log),
+                                 '--progress-log-files', '1', '--progress-interval', '0.05')
+        self.assertIn(result.returncode, (0, 2), result.stderr)
+        state = json.loads(log.read_text(encoding='utf-8'))
+        self.assertIn(state['status'], ('ready', 'partial'))
+        self.assertIn('finished_at', state)
+        self.assertIn(str(log), result.stderr)
+
     def test_status_does_not_require_interactive_input(self):
         self.prepare()
         result = self.run_script('status')

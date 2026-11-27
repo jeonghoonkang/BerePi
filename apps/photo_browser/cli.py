@@ -74,6 +74,12 @@ def main(argv=None):
     apply.add_argument('--server-stop-timeout', type=bounded_number(1, 86400), default=120, help='서버 정상 종료 대기 초 (기본 120)')
     apply.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 처리할 최대 후보 수')
     apply.add_argument('--progress-interval', type=refresh_interval, default=5)
+    for command in (prune, apply):
+        command.add_argument('--progress-log', help='자동 진행 로그 경로 (기본: 계획 폴더/photo-db-prune-DB식별자.progress.log)')
+        command.add_argument('--progress-log-files', type=int, choices=[1, 5], default=5,
+                             help='1: 현재 상태만 덮어쓰기, 5: 최대 5개 순환 로그 (기본 5)')
+        command.add_argument('--progress-log-mib', type=bounded_number(1, 64), default=1,
+                             help='순환 로그 한 파일 크기 한도 MiB (기본 1)')
     prune_status = commands.add_parser('db-prune-status', help='SQLite 계획의 통과·보존·삭제 수와 사유 조회')
     prune_status.add_argument('--plan', required=True)
     storage_parser = commands.add_parser('storage-usage', help='DB·원본·관리 폴더 사용량과 파일시스템별 여유 공간 조회')
@@ -134,22 +140,22 @@ def main(argv=None):
         if args.command in {'db-prune-plan', 'db-prune-apply', 'db-prune-status'}:
             import sqlite3
             from db_prune import plan_prune, apply_prune, prune_status
-            last = [0.0]
-            def prune_progress(phase, count, path):
-                clock = time.monotonic()
-                if clock - last[0] >= args.progress_interval:
-                    print(f'{phase}: {count:,} · {path}', file=sys.stderr, flush=True)
-                    last[0] = clock
             try:
-                if args.command == 'db-prune-plan':
-                    result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
-                                        args.max_json_mib * 1024 * 1024, args.max_files, args.under, prune_progress,
-                                        stop_timeout=args.server_stop_timeout)
-                elif args.command == 'db-prune-apply':
-                    result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, prune_progress,
-                                         stop_timeout=args.server_stop_timeout)
-                else:
+                if args.command == 'db-prune-status':
                     result = prune_status(args.plan)
+                else:
+                    from prune_progress import PruneProgress
+                    with PruneProgress(args.db, args.plan, args.command, args.progress_interval,
+                                       args.progress_log, args.progress_log_files, args.progress_log_mib * 1024 * 1024) as monitor:
+                        if args.command == 'db-prune-plan':
+                            result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
+                                                args.max_json_mib * 1024 * 1024, args.max_files, args.under, monitor,
+                                                stop_timeout=args.server_stop_timeout)
+                        else:
+                            result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, monitor,
+                                                 stop_timeout=args.server_stop_timeout)
+                        monitor.finish(result['status'])
+                    result['progress_log'] = str(monitor.path)
                 print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
                 return 2 if result['status'] in {'partial', 'partial_apply'} else 0
             except KeyboardInterrupt:

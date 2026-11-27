@@ -13,6 +13,10 @@ UNDER=media
 RESUME=0
 STOPPED=0
 STOP_TIMEOUT=120
+PROGRESS_INTERVAL=5
+LOG_FILES=5
+LOG_MIB=1
+LOG_PATH=''
 
 usage() {
     cat <<'HELP'
@@ -29,6 +33,10 @@ usage() {
   --resume            기존 계획의 검사를 이어서 진행 (run/plan만, 삭제 시작 전)
   --server-stopped    내장 서버 확인·정상 종료 허용 질문 생략
   --server-stop-timeout N  서버 종료 대기 초 (기본: 120)
+  --progress-interval N    진행 로그 출력 간격, 초 (기본: 5)
+  --progress-log PATH      로그 경로 (기본: 계획 폴더/photo-db-prune-DB식별자.progress.log)
+  --progress-log-files N   1: 현재 상태만 유지, 5: 순환 로그 최대 5개 (기본: 5)
+  --progress-log-mib N     순환 로그 하나의 최대 MiB (기본: 1)
   -h, --help          도움말
 환경변수: DB, PHOTO_BROWSER_DB, PLAN, PYTHON (Python 실행 파일 경로 하나)
 삭제 전에는 출력된 plan_id를 직접 입력해야 합니다. 실제 사진은 삭제하지 않습니다.
@@ -41,12 +49,16 @@ if [[ $# -gt 0 ]]; then
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --db|--plan|--max-files|--under|--server-stop-timeout)
+        --db|--plan|--max-files|--under|--server-stop-timeout|--progress-interval|--progress-log|--progress-log-files|--progress-log-mib)
             [[ $# -ge 2 && -n "$2" ]] || fail "$1 값이 필요합니다."
             case "$1" in
                 --db) DB=$2 ;; --plan) PLAN=$2 ;;
                 --max-files) LIMIT=$2 ;; --under) UNDER=$2 ;;
                 --server-stop-timeout) STOP_TIMEOUT=$2 ;;
+                --progress-interval) PROGRESS_INTERVAL=$2 ;;
+                --progress-log) LOG_PATH=$2 ;;
+                --progress-log-files) LOG_FILES=$2 ;;
+                --progress-log-mib) LOG_MIB=$2 ;;
             esac
             shift 2 ;;
         --all) LIMIT=all; shift ;;
@@ -67,6 +79,8 @@ if (( RESUME )) && [[ "$ACTION" != run && "$ACTION" != plan ]]; then
 fi
 command -v "$PYTHON" >/dev/null || fail 'Python을 찾지 못했습니다. PYTHON 환경변수를 지정하세요.'
 LIMIT_ARGS=()
+PROGRESS_ARGS=(--progress-interval "$PROGRESS_INTERVAL" --progress-log-files "$LOG_FILES" --progress-log-mib "$LOG_MIB")
+[[ -z "$LOG_PATH" ]] || PROGRESS_ARGS+=(--progress-log "$LOG_PATH")
 [[ "$LIMIT" == all ]] || LIMIT_ARGS=(--max-files "$LIMIT")
 trap 'printf "\n중단했습니다. 같은 계획의 status로 진행 상황을 확인하세요.\n" >&2; exit 130' INT
 
@@ -100,7 +114,7 @@ if [[ "$ACTION" == plan || "$ACTION" == run ]]; then
         RESUME_ARGS=()
         (( ! RESUME )) || RESUME_ARGS=(--resume)
         run_cli --db "$DB" db-prune-plan --plan "$PLAN" --server-stopped --server-stop-timeout "$STOP_TIMEOUT" \
-            --under "$UNDER" "${LIMIT_ARGS[@]}" "${RESUME_ARGS[@]}"
+            --under "$UNDER" ${LIMIT_ARGS[@]+"${LIMIT_ARGS[@]}"} ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} "${PROGRESS_ARGS[@]}"
         if [[ "$ACTION" == plan ]]; then exit "$CLI_STATUS"; fi
     fi
 fi
@@ -133,7 +147,7 @@ if ! read -r -p '삭제 확인 plan_id (Enter: 취소): ' answer || [[ "$answer"
     printf '삭제를 취소했습니다. 검사 계획은 보존됩니다.\n'; exit 0
 fi
 run_cli --db "$DB" db-prune-apply --plan "$PLAN" --server-stopped --server-stop-timeout "$STOP_TIMEOUT" \
-    --confirm "$plan_id" "${LIMIT_ARGS[@]}"
+    --confirm "$plan_id" ${LIMIT_ARGS[@]+"${LIMIT_ARGS[@]}"} "${PROGRESS_ARGS[@]}"
 apply_status=$CLI_STATUS
 show_status
 printf '현재 계획의 미처리 후보는 같은 명령 또는 apply로 이어서 처리할 수 있습니다.\n'

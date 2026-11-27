@@ -1906,6 +1906,33 @@ PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
 현재 청크와 원본·managed 사진은 삭제하지 않으며, 기존 CLI의 보호 참조·메타데이터·실제 파일 검증을
 그대로 사용합니다. 정리 후 전체 용량을 확인하려면 `cli.py --db "$DB" db-audit --sizes-only`를 별도로 실행하세요.
 
+### DB prune 자동 진행 로그
+
+`db-prune-plan`과 `db-prune-apply`는 시작부터 진행 로그를 자동 저장하고, 별도 스레드에서 기본 **5초마다** stderr와 파일에 현재 상태를 기록합니다. 검사 대상이 1,000개 이상이어도 자동 저장하며 작은 작업에도 적용합니다. 해시 읽기·디렉토리 순회·참조 검사에 오래 걸려 콜백이 오지 않아도 마지막 단계·처리 경로와 현재 시각·경과 시간을 출력합니다. 정상·부분 완료, 오류, Ctrl+C 때도 종료 상태를 기록합니다. stdout은 최종 JSON 결과로 유지합니다.
+
+기본 파일은 계획 파일과 같은 폴더의 `photo-db-prune-<DB경로 식별자>.progress.log`이며 시작 안내와 결과의 `progress_log`에 정확한 경로를 출력합니다. 같은 DB·폴더에서는 새 계획 이름을 써도 로그 파일 이름을 재사용합니다. 기본은 **현재 파일과 `.1`~`.4`, 총 최대 5개**로 순환하며 파일당 1 MiB, 전체 약 5 MiB로 제한합니다. `--progress-log-files 1`은 이력을 누적하지 않고 현재 상태 JSON 한 개만 원자적으로 덮어쓰며 기존 순환 백업을 제거합니다. 중복 기록 방지를 위한 `.lock` 파일은 별도이며 0바이트(Windows는 최대 1바이트)입니다.
+
+```bash
+# 진행 이력을 최대 5개 파일로 유지 (검사·계획만 수행)
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped --progress-interval 5 \
+  --progress-log /var/tmp/photo-db-prune.progress.log --progress-log-files 5
+
+# 현재 상태 한 파일만 유지
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped \
+  --progress-log /var/tmp/photo-db-prune.progress.log --progress-log-files 1
+
+# 실행 중 다른 터미널에서 확인 (순환으로 파일이 교체되어도 추적)
+tail -F /var/tmp/photo-db-prune.progress.log
+```
+
+apply에도 같은 로그 옵션을 지정할 수 있으며 `db_prune.sh`도 `--progress-log`, `--progress-log-files`, `--progress-log-mib`, `--progress-interval`을 전달합니다. `--progress-log-mib`는 순환 파일 하나의 크기 한도(1~64 MiB, 기본 1)입니다. 로그는 DB·원본·관리 디렉토리 밖에 저장하며 기존 일반 파일을 로그로 덮어쓰지 않습니다. 필수 로그를 만들거나 계속 저장할 수 없으면 오류로 중단합니다. 상태 조회 전용 `db-prune-status`는 로그를 생성하거나 변경하지 않습니다.
+
+각 줄은 JSON으로 시작·현재·종료 시각(KST), 실행 상태, 단계, 처리 경로, 단계별 수치, 이번 실행의 JSON 처리 수·전체 수·진행률, 경과 초·분, 예상 남은 시간·총소요·종료 시각을 기록합니다. 예상은 최근 최대 100개 완료 항목의 처리 속도로 계산하며 기본 10개 표본부터 표시합니다. 참조 확인·대상 개수 집계처럼 전체 수가 아직 없거나 표본이 부족하면 `null`과 계산 대기 사유를 기록합니다. 현재 단계가 기존 속도보다 오래 걸리면 예상 시각을 확정하지 않고 재산정을 기다립니다.
+
+plan은 대상 JSON 수를 먼저 집계한 뒤 검증하며, resume에서는 이미 계획에 기록된 경로를 빼고 셉니다. `--max-files`를 지정하면 **이번 실행 한도 기준** 진행률·예상 시간입니다. 부분 완료의 100%는 DB 전체 정리가 끝났다는 뜻이 아닙니다. apply의 수치는 삭제뿐 아니라 재검증 후 보존·부재 확인까지 포함한 처리 후보 수입니다. 사전 참조 확인 등 전체 실행의 모든 단계를 합친 확정 종료 시각은 보장하지 않습니다.
+
 ### 결과와 주의 사항
 
 - `counts.pending`: 삭제 전 검증을 통과한 후보 수·논리 용량. `counts.kept`: 보호 참조·고유 메타데이터·검증 불가 등으로 남긴 수입니다. `reason_labels`, `kept_samples`에서 사유를 확인합니다.

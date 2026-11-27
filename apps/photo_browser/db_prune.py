@@ -55,12 +55,14 @@ def meaningful(item):
     return result
 
 
-def walk(root, skip_media=False):
+def walk(root, skip_media=False, on_path=None):
     folders = [Path(root)]
     while folders:
         folder = folders.pop()
+        if on_path: on_path(folder)
         with os.scandir(folder) as entries:
             for entry in entries:
+                if on_path: on_path(Path(entry.path))
                 info = entry.stat(follow_symlinks=False)
                 if link(info):
                     if not skip_media:
@@ -131,10 +133,12 @@ def offline(db, acknowledged, stop_timeout=120):
 
 class Context:
     def __init__(self, db, maximum, progress=None):
+        if progress: progress('initializing', 0, str(db))
         self.audit = DBAudit(db, maximum)
         if self.audit.manifest is None:
             raise ValueError('현재 index.json을 정상적으로 읽어야 정리할 수 있습니다.')
         self.db, self.maximum, self.progress = self.audit.db, maximum, progress
+        if progress: progress('config', 0, 'config.json')
         self.config = json.loads(self.audit.read_bytes('config.json'))
         self.managed = Path(self.config['managed_root']).expanduser().resolve()
         if self.managed == self.db or self.managed.is_relative_to(self.db) or self.db.is_relative_to(self.managed):
@@ -142,8 +146,11 @@ class Context:
         self.items = {}
         fingerprint = hashlib.sha256()
         self.protected = {reference_key(path) for path in self.audit.current}
-        for path in sorted(path for path in walk(self.db, skip_media=True) if path.suffix.lower() in {'.json', '.jsonl'}):
+        for path in sorted(path for path in walk(self.db, skip_media=True,
+                           on_path=(lambda path: progress('discovering-references', 0, str(path))) if progress else None)
+                           if path.suffix.lower() in {'.json', '.jsonl'}):
             relative = path.relative_to(self.db).as_posix()
+            if progress: progress('references', len(self.protected), relative)
             before = signature(path.stat())
             fingerprint.update(relative.encode()); fingerprint.update(b'\0' + str(before[2]).encode() + b'\0')
             for value in strings(path, maximum, fingerprint):
@@ -159,6 +166,7 @@ class Context:
                 raise ValueError('참조 기록이 검사 중 변경되었습니다. 서버·작업을 종료하세요.')
             if progress: progress('references', len(self.protected), relative)
         for relative in sorted(self.audit.current):
+            if progress: progress('current', len(self.items), relative)
             data = self.audit.read_bytes(relative)
             fingerprint.update(relative.encode()); fingerprint.update(hashlib.sha256(data).digest())
             page = json.loads(data)
@@ -178,6 +186,7 @@ class Context:
         if location.get('protocol') != 'file' or not location.get('path'):
             return False
         path = Path(location['path']).expanduser().absolute()
+        if self.progress: self.progress('hash-stat', len(self.media_cache), str(path))
         if path.suffix.lower() not in EXTENSIONS:
             return False
         # No symlinks/junctions, including ancestor directories.
@@ -312,6 +321,7 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
     under = DBAudit.reference(under)
     if under != 'media' and not under.startswith('media/'):
         raise ValueError('--under는 media 또는 그 하위 디렉토리여야 합니다.')
+    if progress: progress('waiting-server', 0, str(db))
     with offline(db, stopped, stop_timeout):
         context = Context(db, maximum, progress)
         for source in context.config.get('sources', []):
@@ -319,6 +329,7 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
                 raise ValueError('계획 파일은 원본 폴더 밖에 저장하세요.')
         if plan.is_relative_to(context.managed): raise ValueError('계획 파일은 managed 밖에 저장하세요.')
         folder = db / under
+        if progress: progress('validating-scope', 0, str(folder))
         if not folder.is_dir() or folder.is_symlink() or not folder.resolve().is_relative_to(db / 'media'):
             raise ValueError('안전한 media 하위 디렉토리가 아닙니다.')
         connection = connect_plan(plan, create=not resume)
@@ -336,10 +347,19 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
                 connection.commit()
             count, partial = 0, False
             try:
-                for path in walk(folder):
+                total = 0
+                for path in walk(folder, on_path=(lambda path: progress('counting', total, str(path))) if progress else None):
+                    if path.suffix.lower() != '.json': continue
+                    relative = path.relative_to(db).as_posix()
+                    if resume and connection.execute('SELECT 1 FROM files WHERE path=?', (relative,)).fetchone(): continue
+                    total += 1
+                    if max_files and total >= max_files: break
+                if progress: progress('plan-total', total, str(folder))
+                for path in walk(folder, on_path=(lambda path: progress('plan-walk', count, str(path))) if progress else None):
                     if path.suffix.lower() != '.json': continue
                     relative = path.relative_to(db).as_posix()
                     if connection.execute('SELECT 1 FROM files WHERE path=?', (relative,)).fetchone(): continue
+                    if progress: progress('plan-check', count, relative)
                     size, sha, reason = path.stat().st_size, None, 'protected_reference'
                     if reference_key(relative) not in context.protected:
                         try:
@@ -360,6 +380,7 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
                 partial = True
             set_meta(connection, 'status', 'partial' if partial else 'ready')
             connection.commit()
+            if progress: progress('summary', count, str(plan))
             return summary(connection, plan)
         finally:
             connection.close()
@@ -368,11 +389,13 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
 def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None, stop_timeout=120):
     db = Path(db).expanduser().resolve()
     plan = validate_plan_path(db, plan)
+    if progress: progress('opening-plan', 0, str(plan))
     connection = connect_plan(plan)
     try:
         meta = metadata(connection)
         if meta['db'] != str(db) or confirm != meta['plan_id']:
             raise ValueError('DB 경로와 --confirm 계획 ID를 정확히 지정하세요.')
+        if progress: progress('waiting-server', 0, str(db))
         with offline(db, stopped, stop_timeout):
             context = Context(db, meta['maximum'], progress)
             if context.fingerprint != meta['fingerprint']:
@@ -380,6 +403,8 @@ def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None,
             set_meta(connection, 'status', 'applying'); connection.commit()
             count, partial = 0, False
             try:
+                total = connection.execute("SELECT COUNT(*) FROM files WHERE verdict='eligible' AND state IN ('pending','deleting')").fetchone()[0]
+                if progress: progress('delete-total', min(total, max_files) if max_files else total, str(plan))
                 cursor = connection.execute("SELECT path,sha,state FROM files WHERE verdict='eligible' AND state IN ('pending','deleting')")
                 while True:
                     batch = cursor.fetchmany(min(100, max_files - count) if max_files else 100)
@@ -392,6 +417,7 @@ def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None,
                     connection.executemany("UPDATE files SET state='deleting' WHERE path=?", [(row[0],) for row in batch])
                     connection.commit()
                     for relative, expected, state in batch:
+                        if progress: progress('delete-check', count, relative)
                         try:
                             path = context.audit.safe_file(relative)
                         except FileNotFoundError:
@@ -414,6 +440,7 @@ def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None,
             except KeyboardInterrupt:
                 partial = True
             set_meta(connection, 'status', 'partial_apply' if partial else 'completed'); connection.commit()
+            if progress: progress('summary', count, str(plan))
             return summary(connection, plan)
     finally:
         connection.close()

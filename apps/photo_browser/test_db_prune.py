@@ -225,6 +225,25 @@ class DBPruneTests(unittest.TestCase):
         run(['db-prune-apply', '--plan', str(self.plan), '--server-stopped', '--confirm', report['plan_id']])
         self.assertFalse(self.old.exists())
 
+    def test_cli_over_1000_files_automatically_persists_bounded_progress(self):
+        for i in range(1000):
+            self.write(f'extra-{i}.json', self.item)
+        out, error = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(error):
+            code = main(['--db', str(self.db), 'db-prune-plan', '--plan', str(self.plan),
+                         '--server-stopped', '--under', self.folder, '--max-files', '1000', '--progress-log-files', '1'])
+        self.assertEqual(code, 2, error.getvalue())
+        report = json.loads(out.getvalue())
+        log = Path(report['progress_log'])
+        data = json.loads(log.read_text(encoding='utf-8'))
+        self.assertEqual(data['total'], 1000)
+        self.assertEqual(data['processed'], 1000)
+        self.assertEqual(data['progress_percent'], 100)
+        self.assertEqual(data['status'], 'partial')
+        self.assertEqual(report['counts']['pending']['files'], 1000)
+        self.assertTrue(self.old.exists())
+        self.assertFalse(any(Path(f'{log}.{i}').exists() for i in range(1, 5)))
+
 
 if __name__ == '__main__':
     unittest.main()
