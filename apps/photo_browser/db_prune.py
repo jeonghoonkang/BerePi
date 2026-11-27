@@ -108,9 +108,11 @@ def strings(path, maximum, hasher=None):
 
 
 @contextmanager
-def offline(db, acknowledged):
+def offline(db, acknowledged, stop_timeout=120):
     if not acknowledged:
-        raise ValueError('작업을 중지·저장하고 웹서버를 종료한 뒤 --server-stopped를 지정하세요.')
+        raise ValueError('서버 확인·정상 종료를 허용하려면 --server-stopped를 지정하세요.')
+    from server_control import ensure_server_stopped
+    ensure_server_stopped(db, stop_timeout)
     with exclusive_file_lock(db / '.server.lock'), exclusive_file_lock(db / '.write.lock'):
         from source_health import audit_lock
         with audit_lock(db):
@@ -303,14 +305,14 @@ def validate_plan_path(db, plan):
     return plan
 
 
-def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, max_files=None, under='media', progress=None):
+def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, max_files=None, under='media', progress=None, stop_timeout=120):
     db = Path(db).expanduser().resolve()
     if not db.is_dir(): raise ValueError('DB 디렉토리가 없습니다.')
     plan = validate_plan_path(db, plan)
     under = DBAudit.reference(under)
     if under != 'media' and not under.startswith('media/'):
         raise ValueError('--under는 media 또는 그 하위 디렉토리여야 합니다.')
-    with offline(db, stopped):
+    with offline(db, stopped, stop_timeout):
         context = Context(db, maximum, progress)
         for source in context.config.get('sources', []):
             if source.get('protocol', 'file') == 'file' and plan.is_relative_to(Path(source['root']).expanduser().resolve()):
@@ -363,7 +365,7 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
             connection.close()
 
 
-def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None):
+def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None, stop_timeout=120):
     db = Path(db).expanduser().resolve()
     plan = validate_plan_path(db, plan)
     connection = connect_plan(plan)
@@ -371,7 +373,7 @@ def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None)
         meta = metadata(connection)
         if meta['db'] != str(db) or confirm != meta['plan_id']:
             raise ValueError('DB 경로와 --confirm 계획 ID를 정확히 지정하세요.')
-        with offline(db, stopped):
+        with offline(db, stopped, stop_timeout):
             context = Context(db, meta['maximum'], progress)
             if context.fingerprint != meta['fingerprint']:
                 raise ValueError('현재 DB 또는 복구 참조가 계획 이후 변경되었습니다. 삭제하지 않고 중단합니다.')

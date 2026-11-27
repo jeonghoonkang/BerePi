@@ -60,7 +60,8 @@ def main(argv=None):
     show.add_argument('--max-bytes', type=bounded_number(1, 1024 * 1024 * 1024), default=1024 * 1024, help='JSON 읽기 한도 바이트 (기본 1 MiB)')
     prune = commands.add_parser('db-prune-plan', help='현재 DB 정보와 소스·managed SHA-256을 검증해 과거 JSON 삭제 계획 생성')
     prune.add_argument('--plan', required=True, help='DB·원본·managed 밖의 새 SQLite 계획 파일')
-    prune.add_argument('--server-stopped', action='store_true', help='모든 작업 중지·저장 및 웹서버 종료 확인')
+    prune.add_argument('--server-stopped', action='store_true', help='대상 DB의 내장 서버 확인 및 작업 중지·저장 후 정상 종료 허용')
+    prune.add_argument('--server-stop-timeout', type=bounded_number(1, 86400), default=120, help='서버 정상 종료 대기 초 (기본 120)')
     prune.add_argument('--resume', action='store_true', help='삭제 전 동일 계획의 검사를 이어하기')
     prune.add_argument('--under', default='media', help='검사할 media 하위 경로 (DB 상대 경로)')
     prune.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 새로 검사할 최대 JSON 수')
@@ -69,7 +70,8 @@ def main(argv=None):
     apply = commands.add_parser('db-prune-apply', help='다시 검증한 뒤 계획에서 통과한 과거 JSON만 삭제')
     apply.add_argument('--plan', required=True)
     apply.add_argument('--confirm', required=True, help='계획에 표시된 plan_id로 과거 JSON 영구 삭제 확인')
-    apply.add_argument('--server-stopped', action='store_true')
+    apply.add_argument('--server-stopped', action='store_true', help='대상 DB의 내장 서버 확인 및 정상 종료 허용')
+    apply.add_argument('--server-stop-timeout', type=bounded_number(1, 86400), default=120, help='서버 정상 종료 대기 초 (기본 120)')
     apply.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 처리할 최대 후보 수')
     apply.add_argument('--progress-interval', type=refresh_interval, default=5)
     prune_status = commands.add_parser('db-prune-status', help='SQLite 계획의 통과·보존·삭제 수와 사유 조회')
@@ -141,9 +143,11 @@ def main(argv=None):
             try:
                 if args.command == 'db-prune-plan':
                     result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
-                                        args.max_json_mib * 1024 * 1024, args.max_files, args.under, prune_progress)
+                                        args.max_json_mib * 1024 * 1024, args.max_files, args.under, prune_progress,
+                                        stop_timeout=args.server_stop_timeout)
                 elif args.command == 'db-prune-apply':
-                    result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, prune_progress)
+                    result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, prune_progress,
+                                         stop_timeout=args.server_stop_timeout)
                 else:
                     result = prune_status(args.plan)
                 print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)

@@ -245,7 +245,7 @@ def main(argv=None):
     print(f'기존 폴더 탐색 스캔 한도: {args.limit:,}개\n', flush=True)
     print(f'웹 연결 방식: {"HTTPS (TLS 1.2 이상)" if context is not None else "HTTP"}', flush=True)
     try:
-        with app.extensions['storage_usage'].running(), \
+        with launch.ownership(app), app.extensions['storage_usage'].running(), \
                 version_logging(app.config['PHOTO_BROWSER_VERSION'], args.version_log_interval), \
                 app.extensions['source_health'].running(args.source_check_interval, args.source_log_interval), \
                 nominatim_shutdown_signals(args.nominatim_docker), \

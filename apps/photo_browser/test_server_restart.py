@@ -90,6 +90,7 @@ class ServerRestartTests(unittest.TestCase):
 
     def test_owned_server_drains_http_threads_and_disables_after_exit(self):
         server = Mock()
+        server.server_port = 7081
         server.__enter__ = Mock(return_value=server)
         server.__exit__ = Mock(return_value=False)
         self.restart.capture([])
@@ -98,6 +99,23 @@ class ServerRestartTests(unittest.TestCase):
         self.assertFalse(server.daemon_threads)
         server.serve_forever.assert_called_once()
         self.assertFalse(self.restart.state()['supported'])
+
+    def test_ownership_keeps_server_lock_until_background_teardown_finishes(self):
+        from db_locks import exclusive_file_lock, LockBusyError
+        server = Mock(server_port=7081)
+        server.__enter__ = Mock(return_value=server)
+        server.__exit__ = Mock(return_value=False)
+        db = self.app.extensions['photo_library'].db
+        with self.restart.ownership(self.app):
+            with patch('werkzeug.serving.make_server', return_value=server):
+                self.restart.serve(self.app, '127.0.0.1', 0)
+            # HTTP already stopped; background service context managers have
+            # not yet exited, so maintenance still must not enter.
+            with self.assertRaises(LockBusyError):
+                with exclusive_file_lock(db / '.server.lock'):
+                    pass
+        with exclusive_file_lock(db / '.server.lock'):
+            pass
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 """Owned development-server lifecycle; restart only the captured Python command."""
 import os
+from contextlib import contextmanager
 from pathlib import Path
 import sys
 import threading
@@ -16,6 +17,9 @@ class ServerRestart:
         self.error = None
         self.shutdown = None
         self.command = None
+        self.stopping = False
+        self.owned_db = None
+        self.local_control = None
 
     def capture(self, argv=None):
         # orig_argv retains interpreter options such as -X, -u and -m.
@@ -27,7 +31,7 @@ class ServerRestart:
     def state(self):
         with self.lock:
             return {'instance_id': self.instance_id, 'pid': os.getpid(), 'supported': self.enabled,
-                    'pending': self.pending, 'error': self.error,
+                    'pending': self.pending, 'stopping': self.stopping, 'error': self.error,
                     'reason': '' if self.enabled else 'python app.py로 직접 실행한 서버에서 재시작할 수 있습니다. 외부 WSGI 서버는 서비스 관리자를 사용하세요.'}
 
     def request(self):
@@ -36,6 +40,8 @@ class ServerRestart:
                 raise ValueError('현재 실행 방식에서는 웹 재시작을 지원하지 않습니다.')
             if self.pending:
                 raise ValueError('이미 서버 재시작을 요청했습니다.')
+            if self.stopping:
+                raise ValueError('DB 정리를 위해 서버를 종료하는 중입니다.')
             self.pending, self.error = True, None
         def stop_server():
             try:
@@ -49,22 +55,43 @@ class ServerRestart:
         timer.start()
         return self.state()
 
+    @contextmanager
+    def ownership(self, app):
+        """Keep offline maintenance out until all server services have drained."""
+        from db_locks import exclusive_file_lock
+        db = app.extensions['photo_library'].db
+        with exclusive_file_lock(db / '.server.lock'):
+            self.owned_db = db
+            try:
+                yield
+            finally:
+                try:
+                    if self.local_control:
+                        self.local_control.finish()
+                finally:
+                    self.owned_db = None
+
     def serve(self, app, host, port, ssl_context=None):
         from werkzeug.serving import make_server
-        from db_locks import exclusive_file_lock
-        with exclusive_file_lock(app.extensions['photo_library'].db / '.server.lock'), \
-                make_server(host, port, app, threaded=True, ssl_context=ssl_context) as server:
+        from server_control import LocalServerControl
+        if self.owned_db is None:
+            with self.ownership(app):
+                return self.serve(app, host, port, ssl_context)
+        with make_server(host, port, app, threaded=True, ssl_context=ssl_context) as server:
             # Drain in-flight requests, including uploads, before replacing Python.
             server.daemon_threads = False
             self.shutdown = server.shutdown
             with self.lock:
                 self.enabled = True
+            self.local_control = LocalServerControl(self.owned_db, self, app, host, server.server_port)
+            self.local_control.start()
             print(f'웹서버 시작: {"https" if ssl_context else "http"}://{host}:{server.server_port}', flush=True)
             try:
                 server.serve_forever()
             except KeyboardInterrupt:
                 pass
             finally:
+                self.local_control.stop_watching()
                 with self.lock:
                     self.enabled = False
 

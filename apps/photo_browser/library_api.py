@@ -38,8 +38,8 @@ def register_library(app, boundary, db):
 
     @app.before_request
     def restart_write_guard():
-        if restart.pending and request.method not in {'GET', 'HEAD', 'OPTIONS'} and request.path != '/api/server-restart':
-            abort(503, description='서버 재시작 중에는 새 변경 작업을 시작할 수 없습니다. 재연결 후 다시 시도하세요.')
+        if (restart.pending or restart.stopping) and request.method not in {'GET', 'HEAD', 'OPTIONS'} and request.path != '/api/server-restart':
+            abort(503, description='서버 재시작 또는 종료 중에는 새 변경 작업을 시작할 수 없습니다.')
     from category_merge import CategoryMerger
     categories = CategoryMerger(library)
     app.extensions['category_merger'] = categories
@@ -48,6 +48,17 @@ def register_library(app, boundary, db):
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='photo-library')
     jobs, guard = {}, threading.Lock()
     controls = {}
+    def maintenance_jobs():
+        # Called repeatedly by the local shutdown monitor. Cooperative jobs save
+        # their checkpoints; jobs without a stop hook are allowed to finish.
+        with guard:
+            active = [job for job in jobs.values() if job['status'] in {'queued', 'running', 'stopping'}]
+            for job in active:
+                event = controls.get(job['job_id'])
+                if event:
+                    event.set()
+            return len(active)
+    app.extensions['photo_jobs_maintenance'] = maintenance_jobs
     from workflow import WorkflowStatus
     workflow = WorkflowStatus(library)
     app.extensions['photo_workflow'] = workflow
@@ -106,8 +117,8 @@ def register_library(app, boundary, db):
         job_id = uid()
         stop = threading.Event()
         with guard:
-            if restart.pending:
-                raise ValueError('서버 재시작 중입니다. 재연결 후 다시 시도하세요.')
+            if restart.pending or restart.stopping:
+                raise ValueError('서버 재시작 또는 종료 중입니다. 새 작업을 시작할 수 없습니다.')
             active = [j for j in jobs.values() if j['status'] in {'queued', 'running', 'stopping'}]
             exclusive = {'source_path_repair', 'source_folder_sync', 'source_rename', 'source_update', 'source_cleanup', 'category_merge', 'category_merge_preview', 'category_merge_undo', 'location_scan', 'duplicate_db_preview', 'duplicate_db_cleanup', 'duplicate_db_undo'}
             if (kind in exclusive and active) or any(j.get('kind') in exclusive for j in active):

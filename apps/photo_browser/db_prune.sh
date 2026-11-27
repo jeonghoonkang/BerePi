@@ -12,6 +12,7 @@ LIMIT=1000
 UNDER=media
 RESUME=0
 STOPPED=0
+STOP_TIMEOUT=120
 
 usage() {
     cat <<'HELP'
@@ -26,7 +27,8 @@ usage() {
   --all               이번 검사/삭제 개수 제한 해제
   --under PATH        검사할 DB 상대 경로 (기본: media)
   --resume            기존 계획의 검사를 이어서 진행 (run/plan만, 삭제 시작 전)
-  --server-stopped    서버와 다른 작업의 종료 확인 질문 생략
+  --server-stopped    내장 서버 확인·정상 종료 허용 질문 생략
+  --server-stop-timeout N  서버 종료 대기 초 (기본: 120)
   -h, --help          도움말
 환경변수: DB, PHOTO_BROWSER_DB, PLAN, PYTHON (Python 실행 파일 경로 하나)
 삭제 전에는 출력된 plan_id를 직접 입력해야 합니다. 실제 사진은 삭제하지 않습니다.
@@ -39,11 +41,12 @@ if [[ $# -gt 0 ]]; then
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --db|--plan|--max-files|--under)
+        --db|--plan|--max-files|--under|--server-stop-timeout)
             [[ $# -ge 2 && -n "$2" ]] || fail "$1 값이 필요합니다."
             case "$1" in
                 --db) DB=$2 ;; --plan) PLAN=$2 ;;
                 --max-files) LIMIT=$2 ;; --under) UNDER=$2 ;;
+                --server-stop-timeout) STOP_TIMEOUT=$2 ;;
             esac
             shift 2 ;;
         --all) LIMIT=all; shift ;;
@@ -57,6 +60,8 @@ if [[ "$LIMIT" != all ]]; then
     [[ "$LIMIT" =~ ^[1-9][0-9]{0,9}$ ]] || fail '--max-files는 1~1000000000 정수입니다.'
     (( LIMIT <= 1000000000 )) || fail '--max-files는 1000000000 이하여야 합니다.'
 fi
+[[ "$STOP_TIMEOUT" =~ ^[1-9][0-9]{0,4}$ ]] || fail '--server-stop-timeout은 1~86400 정수입니다.'
+(( STOP_TIMEOUT <= 86400 )) || fail '--server-stop-timeout은 86400 이하여야 합니다.'
 if (( RESUME )) && [[ "$ACTION" != run && "$ACTION" != plan ]]; then
     fail '--resume은 run 또는 plan에서만 사용할 수 있습니다.'
 fi
@@ -81,9 +86,9 @@ fi
 
 printf 'DB: %s\n계획: %s\n실행: %s · 이번 개수 한도: %s\n' "$DB" "$PLAN" "$ACTION" "$LIMIT"
 if (( ! STOPPED )); then
-    printf '웹 작업을 중지·저장하고 웹서버 및 다른 CLI 작업을 종료했으면 yes를 입력하세요.\n'
+    printf '대상 DB의 내장 서버를 확인하고 작업 중지·저장 후 정상 종료합니다. 허용하면 yes를 입력하세요. 다른 CLI 작업은 직접 종료하세요.\n'
     answer=''
-    if ! read -r -p '서버 종료 확인: ' answer || [[ "$answer" != yes ]]; then
+    if ! read -r -p '서버 자동 종료 허용: ' answer || [[ "$answer" != yes ]]; then
         printf '취소했습니다. 변경하지 않았습니다.\n'; exit 0
     fi
 fi
@@ -94,7 +99,7 @@ if [[ "$ACTION" == plan || "$ACTION" == run ]]; then
     else
         RESUME_ARGS=()
         (( ! RESUME )) || RESUME_ARGS=(--resume)
-        run_cli --db "$DB" db-prune-plan --plan "$PLAN" --server-stopped \
+        run_cli --db "$DB" db-prune-plan --plan "$PLAN" --server-stopped --server-stop-timeout "$STOP_TIMEOUT" \
             --under "$UNDER" "${LIMIT_ARGS[@]}" "${RESUME_ARGS[@]}"
         if [[ "$ACTION" == plan ]]; then exit "$CLI_STATUS"; fi
     fi
@@ -127,7 +132,7 @@ answer=''
 if ! read -r -p '삭제 확인 plan_id (Enter: 취소): ' answer || [[ "$answer" != "$plan_id" ]]; then
     printf '삭제를 취소했습니다. 검사 계획은 보존됩니다.\n'; exit 0
 fi
-run_cli --db "$DB" db-prune-apply --plan "$PLAN" --server-stopped \
+run_cli --db "$DB" db-prune-apply --plan "$PLAN" --server-stopped --server-stop-timeout "$STOP_TIMEOUT" \
     --confirm "$plan_id" "${LIMIT_ARGS[@]}"
 apply_status=$CLI_STATUS
 show_status
