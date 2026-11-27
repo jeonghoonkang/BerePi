@@ -1753,6 +1753,8 @@ DB 정리 미리보기·완료·되돌리기 및 기록의 대상 확인 화면�
 
 ## CLI: DB 내부 JSON 내용·분류별 용량 진단 (읽기 전용)
 
+DB 파일의 중복 용량을 확인하고 과거 JSON을 제거하는 작업의 실행 로그는 [로그 확인 방법 → DB prune](#db-prune-logs)을 참고하세요.
+
 운영 서버에서 `db-audit`를 실행하면 현재 참조 청크와 미참조 미디어 JSON, 중복 정보, 스캔 저널, 병합 보고서, 복구 기록, 원격 캐시, 다운로드 ZIP, AI 결과, 기타 파일을 분류하여 파일 수·JSON 수·논리 용량·할당량·비율과 큰 파일 목록을 출력합니다. 기존 `storage-usage`는 DB·원본·관리 루트 전체의 용량을 비교하고, `db-audit`는 **DB 내부에서 무엇이 큰지** 분석합니다.
 
 ```bash
@@ -1787,6 +1789,8 @@ python3 apps/photo_browser/cli.py --db /data/photo_db db-show --file media/famil
 기존 `--root`는 이 진단에 필요하지 않습니다. `--db`로 명시한 디렉토리 안의 상대 경로만 조회하며, 존재하지 않는 DB를 생성하거나 라이브러리 쓰기 잠금을 만들지 않습니다.
 
 ## CLI: 검증된 과거 미디어 JSON 삭제
+
+DB 파일 중복 용량 확인/제거를 위한 DB prune 절차입니다. 오래 걸리는 실행의 현재 단계·경로·진행률은 [로그 확인 방법 → DB prune](#db-prune-logs)에서 확인하세요.
 
 `db-audit`의 ‘과거 세대 후보’는 삭제 가능 판정이 아닙니다. 새 명령은 **검사·계획 → 확인 → 재검증·삭제** 순서로 처리합니다. 삭제는 `DB/media/` 아래의 과거 JSON만 대상으로 하며 현재 DB 청크, 설정·작업·복구 기록, 실제 원본·managed 사진 파일은 삭제하지 않습니다. 삭제한 과거 JSON 자체를 되살리는 기능은 없으므로 세대별 이력을 보관해야 한다면 별도 백업을 먼저 확보하세요.
 
@@ -1906,9 +1910,22 @@ PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
 현재 청크와 원본·managed 사진은 삭제하지 않으며, 기존 CLI의 보호 참조·메타데이터·실제 파일 검증을
 그대로 사용합니다. 정리 후 전체 용량을 확인하려면 `cli.py --db "$DB" db-audit --sizes-only`를 별도로 실행하세요.
 
-### DB prune 자동 진행 로그
+### 로그 확인 방법
+
+<a id="db-prune-logs"></a>
+
+#### DB prune · DB 파일 중복 용량 확인/제거
 
 `db-prune-plan`과 `db-prune-apply`는 시작부터 진행 로그를 자동 저장하고, 별도 스레드에서 기본 **5초마다** stderr와 파일에 현재 상태를 기록합니다. 검사 대상이 1,000개 이상이어도 자동 저장하며 작은 작업에도 적용합니다. 해시 읽기·디렉토리 순회·참조 검사에 오래 걸려 콜백이 오지 않아도 마지막 단계·처리 경로와 현재 시각·경과 시간을 출력합니다. 정상·부분 완료, 오류, Ctrl+C 때도 종료 상태를 기록합니다. stdout은 최종 JSON 결과로 유지합니다.
+
+**로그 저장 옵션은 필수가 아닙니다.** 아래처럼 기존 검사 명령만 실행해도 자동 저장됩니다. 이 명령은 검사·삭제 계획만 만들며 실제 JSON을 삭제하지 않습니다. `--server-stopped`는 실행 중인 해당 DB의 내장 서버를 작업 중지·저장 후 정상 종료하도록 허용합니다.
+
+```bash
+DB=/실제/DB/경로
+PLAN=/var/tmp/photo-db-prune.sqlite
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped
+```
 
 기본 파일은 계획 파일과 같은 폴더의 `photo-db-prune-<DB경로 식별자>.progress.log`이며 시작 안내와 결과의 `progress_log`에 정확한 경로를 출력합니다. 같은 DB·폴더에서는 새 계획 이름을 써도 로그 파일 이름을 재사용합니다. 기본은 **현재 파일과 `.1`~`.4`, 총 최대 5개**로 순환하며 파일당 1 MiB, 전체 약 5 MiB로 제한합니다. `--progress-log-files 1`은 이력을 누적하지 않고 현재 상태 JSON 한 개만 원자적으로 덮어쓰며 기존 순환 백업을 제거합니다. 중복 기록 방지를 위한 `.lock` 파일은 별도이며 0바이트(Windows는 최대 1바이트)입니다.
 
@@ -1925,6 +1942,21 @@ python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
 
 # 실행 중 다른 터미널에서 확인 (순환으로 파일이 교체되어도 추적)
 tail -F /var/tmp/photo-db-prune.progress.log
+```
+
+**로그 파일 위치는 실행 시작 시 stderr에 출력됩니다.** 예를 들어 위의 1개 파일 모드는 다음처럼 표시됩니다.
+
+```text
+DB prune 진행 로그: /var/tmp/photo-db-prune.progress.log · 최대 1개 파일
+```
+
+경로를 지정하지 않았으면 시작 안내에 나온 실제 `photo-db-prune-<DB경로 식별자>.progress.log` 경로로 `tail -F`를 실행하세요. 최종 JSON의 `progress_log`에도 같은 경로가 있습니다. 현재 상태 1개 파일 모드에서는 다음처럼 JSON을 보기 좋게 확인할 수도 있습니다.
+
+```bash
+python3 -m json.tool /var/tmp/photo-db-prune.progress.log
+
+# SQLite 계획에 저장된 검사·보존·삭제 건수도 별도 조회
+python3 apps/photo_browser/cli.py db-prune-status --plan "$PLAN"
 ```
 
 apply에도 같은 로그 옵션을 지정할 수 있으며 `db_prune.sh`도 `--progress-log`, `--progress-log-files`, `--progress-log-mib`, `--progress-interval`을 전달합니다. `--progress-log-mib`는 순환 파일 하나의 크기 한도(1~64 MiB, 기본 1)입니다. 로그는 DB·원본·관리 디렉토리 밖에 저장하며 기존 일반 파일을 로그로 덮어쓰지 않습니다. 필수 로그를 만들거나 계속 저장할 수 없으면 오류로 중단합니다. 상태 조회 전용 `db-prune-status`는 로그를 생성하거나 변경하지 않습니다.
