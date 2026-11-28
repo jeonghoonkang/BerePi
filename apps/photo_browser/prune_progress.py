@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from db_locks import exclusive_file_lock
+from prune_memory import system_memory
 
 FORMAT = 'photo-browser-db-prune-progress-v1'
 KST = timezone(timedelta(hours=9), 'KST')
@@ -49,6 +50,8 @@ class PruneProgress:
                       'scope': 'current_invocation', 'db': str(self.db), 'plan': str(self.plan), 'log_file': str(self.path)}
         self.samples = deque(maxlen=100)
         self.memory_provider = None
+        self.baseline_memory = {}
+        self.baseline_sampled_at = float('-inf')
 
     def _check_owned(self, path):
         if path.is_symlink() or (path.exists() and not path.is_file()):
@@ -135,6 +138,12 @@ class PruneProgress:
                           estimated_total_seconds=None, estimate_status='stopped')
         if self.memory_provider is not None:
             result['memory'] = self.memory_provider()
+        else:
+            # Show RSS before cache initialization, including server-stop waits.
+            if current - self.baseline_sampled_at >= 2:
+                self.baseline_memory = system_memory()
+                self.baseline_sampled_at = current
+            result['memory'] = dict(self.baseline_memory)
         return result
 
     def write(self):

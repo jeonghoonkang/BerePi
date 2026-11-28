@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -42,7 +43,7 @@ class PruneTerminalTests(unittest.TestCase):
             self.assertIs(sys.stderr, err)
             self.assertEqual(json.loads(monitor.path.read_text().splitlines()[-1])['processed'], 100)
         text = out.getvalue()
-        self.assertIn('\033[9;24r', text)
+        self.assertIn('\033[10;24r', text)
         self.assertIn('\033[2;1H\033[2K로그 파일:', text)
         self.assertIn('10.00%', text)
         self.assertIn('NORMAL_STDOUT', text)
@@ -50,6 +51,31 @@ class PruneTerminalTests(unittest.TestCase):
         self.assertIn('final JSON below the header', text)
         self.assertTrue(text.endswith('\0337\033[r\0338'))
         self.assertEqual(err.getvalue(), '')
+
+    def test_ram_header_is_visible_from_start_and_refreshes_during_blocked_io(self):
+        out, err = TTY(), TTY()
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                patch.dict(os.environ, {'TERM': 'xterm'}), \
+                patch('prune_terminal.shutil.get_terminal_size', return_value=os.terminal_size((80, 24))), \
+                patch('prune_progress.system_memory', return_value={'rss_bytes': 64 * 1024 * 1024,
+                                                                   'available_bytes': 512 * 1024 * 1024}):
+            db = Path(folder) / 'db'; db.mkdir()
+            with PruneTerminal() as terminal:
+                with PruneProgress(db, Path(folder) / 'plan.sqlite', 'db-prune-plan', interval=.02,
+                                   files=1, terminal=terminal) as monitor:
+                    self.assertIn('RAM 사용(RSS): 64.0 MiB', out.getvalue())
+                    monitor.set_memory_provider(lambda: {'rss_bytes': 128 * 1024 * 1024,
+                                                         'available_bytes': 256 * 1024 * 1024,
+                                                         'cache_used_bytes': 2 * 1024 * 1024,
+                                                         'cache_budget_bytes': 16 * 1024 * 1024})
+                    # No operation callbacks while the independent heartbeat refreshes.
+                    threading.Event().wait(.07)
+                    self.assertIn('RAM 사용(RSS): 128.0 MiB', out.getvalue())
+                    self.assertIn('가용: 256.0 MiB', out.getvalue())
+                    self.assertIn('캐시: 2.0/16.0 MiB', out.getvalue())
+                    self.assertEqual(json.loads(monitor.path.read_text())['memory']['rss_bytes'], 128 * 1024 * 1024)
+        self.assertIn('\033[3;1H\033[2KRAM 사용(RSS):', out.getvalue())
+        self.assertIn('\033[4;1H\033[2K캐시:', out.getvalue())
 
     def test_pipes_keep_plain_json_even_if_pretty_requested(self):
         out, err = io.StringIO(), io.StringIO()

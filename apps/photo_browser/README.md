@@ -1930,7 +1930,7 @@ python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
 
 `db-prune-apply`와 `db_prune.sh`에도 `--memory-budget-mib`를 사용할 수 있습니다. 이는 **캐시 상한이며 전체 프로세스 RAM의 강제 제한이 아닙니다**. 현재 인덱스와 JSON 청크는 한 파일씩 제한적으로 파싱하며 `--max-json-mib`도 유지됩니다. JSON은 파일 크기의 8배와 32 MiB 여유를 기준으로 메모리 확보 가능성을 사전 검사합니다. 이는 추정치이므로 Python 객체·할당기·OS 사용량까지 정확히 보장하지는 않습니다. 캐시를 비워도 RAM이 즉시 OS에 반환되지 않을 수 있습니다. 가용 메모리가 8 MiB 미만이거나 JSON 파싱 여유가 부족하면 오류로 중단하며, 같은 계획을 plan의 `--resume` 또는 apply로 이어서 실행할 수 있습니다. 계획 생성 이전에 중단되었다면 새 계획 명령을 실행하세요.
 
-기존 5초 진행 로그의 `memory` 객체에는 `rss_bytes`, `total_bytes`, `available_bytes`, `effective_limit_bytes`, `cache_budget_bytes`, `cache_used_bytes`, `sqlite_cache_limit_bytes`, `cache_entries`, `cache_hits`, `cache_misses`, `cache_evictions`, PSI 값, `metrics_source`, `adjustment`, `critical`을 기록합니다. 상단 고정 화면과 일반 stderr 출력에도 RSS·가용 RAM·캐시 사용량/예산·조절 사유가 표시됩니다. 로그 순환 개수·용량 제한은 그대로 적용됩니다.
+기존 5초 진행 로그의 `memory` 객체에는 `rss_bytes`, `total_bytes`, `available_bytes`, `effective_limit_bytes`, `cache_budget_bytes`, `cache_used_bytes`, `sqlite_cache_limit_bytes`, `cache_entries`, `cache_hits`, `cache_misses`, `cache_evictions`, PSI 값, `metrics_source`, `adjustment`, `critical`을 기록합니다. 상단 고정 화면은 로그 경로 바로 아래에 **RAM 사용(RSS)·가용 메모리**와 **캐시 사용량/예산**을 각각 전용 줄로 계속 표시합니다. 초기 준비·서버 종료 대기 단계부터 표시하며, 긴 파일 처리 중에도 기본 5초마다 갱신합니다(`--progress-interval`로 조정). 일반 stderr 출력에도 같은 메모리 정보를 표시합니다. 로그 순환 개수·용량 제한은 그대로 적용됩니다.
 
 ### 로그 확인 방법
 

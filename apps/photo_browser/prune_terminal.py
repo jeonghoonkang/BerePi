@@ -37,7 +37,7 @@ class OutputRegion:
 
 
 class PruneTerminal:
-    HEADER_ROWS = 8
+    HEADER_ROWS = 9
 
     def __init__(self, mode='auto'):
         self.mode = mode
@@ -104,14 +104,18 @@ class PruneTerminal:
             remaining = state['estimated_remaining_seconds']
             if remaining is not None:
                 eta += f' · 남은 {remaining / 60:.2f}분'
-            from prune_memory import memory_line
-            memory = memory_line(state['memory']) if 'memory' in state else '-' * (size.columns - 1)
+            memory = state.get('memory', {})
+            def mib(value): return '?' if value is None else f'{value / (1024 * 1024):,.1f}'
+            ram = (f"RAM 사용(RSS): {mib(memory.get('rss_bytes'))} MiB"
+                   f" · 가용: {mib(memory.get('available_bytes'))} MiB")
+            cache = (f"캐시: {mib(memory.get('cache_used_bytes'))}/{mib(memory.get('cache_budget_bytes'))} MiB"
+                     f" · {memory.get('adjustment', '예산 계산 준비 중')}")
             lines = [f"DB prune · {state['operation']} · {state['status']}",
                      f"로그 파일: {state['log_file']}",
-                     f"시작: {state['started_at']}",
+                     ram, cache, f"시작: {state['started_at']}",
                      f"현재: {state['current_time']} · 경과 {state['elapsed_minutes']:.2f}분",
                      f"단계: {state['phase']} · 처리 {state['processed']:,}/{total} ({percent})",
-                     f"경로: {state['path']}", f'종료 예상: {eta}', memory]
+                     f"경로: {state['path']}", f'종료 예상: {eta}']
             self.stream.write('\0337')
             for row, line in enumerate(lines, 1):
                 self.stream.write(f'\033[{row};1H\033[2K{clipped(line, size.columns - 1)}')
