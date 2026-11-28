@@ -1,5 +1,5 @@
 """Offline two-phase pruning of proven redundant media JSON, never media bytes."""
-from collections import Counter, OrderedDict
+from collections import Counter
 from contextlib import contextmanager
 import hashlib
 import json
@@ -11,6 +11,9 @@ import stat
 import shlex
 import sys
 import time
+import tempfile
+
+from prune_memory import AdaptiveMemory
 
 from db_audit import DBAudit, link
 from db_locks import exclusive_file_lock
@@ -56,26 +59,34 @@ def meaningful(item):
 
 
 def walk(root, skip_media=False, on_path=None):
-    folders = [Path(root)]
-    while folders:
-        folder = folders.pop()
-        if on_path: on_path(folder)
-        with os.scandir(folder) as entries:
-            for entry in entries:
-                if on_path: on_path(Path(entry.path))
-                info = entry.stat(follow_symlinks=False)
-                if link(info):
-                    if not skip_media:
-                        continue
-                    raise ValueError(f'참조 검사 경로에 링크·정션이 있습니다: {entry.path}')
-                if stat.S_ISDIR(info.st_mode):
-                    if not (skip_media and folder == root and entry.name == 'media'):
-                        folders.append(Path(entry.path))
-                elif stat.S_ISREG(info.st_mode):
-                    yield Path(entry.path)
+    # Keep one directory iterator per depth, not a list of every pending folder.
+    root = Path(root)
+    stack = []
+    try:
+        if on_path: on_path(root)
+        stack.append((root, os.scandir(root)))
+        while stack:
+            folder, entries = stack[-1]
+            entry = next(entries, None)
+            if entry is None:
+                entries.close(); stack.pop(); continue
+            if on_path: on_path(Path(entry.path))
+            info = entry.stat(follow_symlinks=False)
+            if link(info):
+                if skip_media: raise ValueError(f'참조 검사 경로에 링크·정션이 있습니다: {entry.path}')
+                continue
+            if stat.S_ISDIR(info.st_mode):
+                if not (skip_media and folder == root and entry.name == 'media'):
+                    child = Path(entry.path)
+                    if on_path: on_path(child)
+                    stack.append((child, os.scandir(child)))
+            elif stat.S_ISREG(info.st_mode):
+                yield Path(entry.path)
+    finally:
+        for _, entries in stack: entries.close()
 
 
-def strings(path, maximum, hasher=None):
+def strings(path, maximum, hasher=None, on_read=None):
     """Bounded streaming JSON string scanner, including escaped Unicode paths."""
     token = bytearray()
     inside = escaped = False
@@ -83,6 +94,7 @@ def strings(path, maximum, hasher=None):
         while True:
             data = stream.read(1024 * 1024)
             if not data: break
+            if on_read: on_read()
             if hasher is not None: hasher.update(data)
             position = 0
             if escaped:
@@ -131,10 +143,103 @@ def offline(db, acknowledged, stop_timeout=120):
             yield
 
 
+class DiskSet:
+    def __init__(self, connection):
+        self.connection, self.count = connection, 0
+        connection.execute('CREATE TABLE protected(path TEXT PRIMARY KEY) WITHOUT ROWID')
+
+    def add(self, path):
+        self.count += self.connection.execute('INSERT OR IGNORE INTO protected VALUES (?)', (path,)).rowcount
+
+    def __contains__(self, path):
+        return self.connection.execute('SELECT 1 FROM protected WHERE path=?', (path,)).fetchone() is not None
+
+    def __len__(self): return self.count
+
+
+class DiskItems:
+    def __init__(self, connection, memory):
+        self.connection, self.memory, self.count = connection, memory, 0
+        connection.execute('CREATE TABLE items(id TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID')
+
+    def __contains__(self, mid):
+        return self.connection.execute('SELECT 1 FROM items WHERE id=?', (mid,)).fetchone() is not None
+
+    def __setitem__(self, mid, item):
+        self.connection.execute('INSERT INTO items VALUES (?,?)', (mid, json.dumps(item, ensure_ascii=True)))
+        self.count += 1
+
+    def get(self, mid):
+        if mid is None: return None
+        key = ('item', mid)
+        value = self.memory.get(key)
+        if value is not None: return value
+        row = self.connection.execute('SELECT value FROM items WHERE id=?', (mid,)).fetchone()
+        if row is None: return None
+        value = json.loads(row[0])
+        self.memory.put(key, value)
+        return value
+
+    def __getitem__(self, mid):
+        value = self.get(mid)
+        if value is None: raise KeyError(mid)
+        return value
+
+    def __len__(self): return self.count
+
+
+@contextmanager
+def working_context(db, maximum, progress, memory_budget_mib):
+    memory = AdaptiveMemory(memory_budget_mib)
+    if hasattr(progress, 'set_memory_provider'): progress.set_memory_provider(memory.snapshot)
+    # Scratch indexes are rebuilt under the offline lock on every invocation;
+    # the durable plan remains independently resumable after a crash.
+    with tempfile.TemporaryDirectory(prefix='photo-db-prune-') as temporary:
+        connection = sqlite3.connect(str(Path(temporary) / 'lookup.sqlite'))
+        try:
+            tune_sqlite(connection)
+            connection.execute('PRAGMA journal_mode=OFF')
+            yield Context(db, maximum, progress, connection, memory)
+        finally:
+            connection.close()
+
+
+def tune_sqlite(connection):
+    connection.execute('PRAGMA cache_size=-512')
+    connection.execute('PRAGMA mmap_size=0')
+    connection.execute('PRAGMA temp_store=FILE')
+
+
+class PruneAudit(DBAudit):
+    def __init__(self, db, maximum, memory):
+        self.memory = memory
+        super().__init__(db, maximum)
+
+    def read_bytes(self, relative, limit=None):
+        path = self.safe_file(relative)
+        before = signature(path.stat())
+        size, maximum = before[2], limit or self.max_json_bytes
+        if size > maximum: raise ValueError('JSON 읽기 한도를 초과했습니다.')
+        self.memory.require_json(size)
+        # BufferedReader.read(maximum) can allocate the entire maximum even
+        # for a tiny file. Use the observed size, and reject concurrent growth.
+        with path.open('rb') as stream:
+            data = stream.read(size + 1)
+        if len(data) != size or signature(path.stat()) != before:
+            raise ValueError('JSON이 읽는 동안 변경되었습니다.')
+        return data
+
+
 class Context:
-    def __init__(self, db, maximum, progress=None):
+    def __init__(self, db, maximum, progress, connection, memory):
+        self.connection, self.memory = connection, memory
+        original_progress = progress
+        def report(phase, count, path):
+            memory.check()
+            if original_progress: original_progress(phase, count, path)
+        progress = report
         if progress: progress('initializing', 0, str(db))
-        self.audit = DBAudit(db, maximum)
+        self.audit = PruneAudit(db, maximum, memory)
         if self.audit.manifest is None:
             raise ValueError('현재 index.json을 정상적으로 읽어야 정리할 수 있습니다.')
         self.db, self.maximum, self.progress = self.audit.db, maximum, progress
@@ -143,17 +248,29 @@ class Context:
         self.managed = Path(self.config['managed_root']).expanduser().resolve()
         if self.managed == self.db or self.managed.is_relative_to(self.db) or self.db.is_relative_to(self.managed):
             raise ValueError('DB와 managed 경로가 겹쳐 정리할 수 없습니다.')
-        self.items = {}
+        self.items = DiskItems(connection, memory)
         fingerprint = hashlib.sha256()
-        self.protected = {reference_key(path) for path in self.audit.current}
-        for path in sorted(path for path in walk(self.db, skip_media=True,
-                           on_path=(lambda path: progress('discovering-references', 0, str(path))) if progress else None)
-                           if path.suffix.lower() in {'.json', '.jsonl'}):
+        self.protected = DiskSet(connection)
+        connection.execute('CREATE TABLE current(path TEXT PRIMARY KEY) WITHOUT ROWID')
+        connection.execute('CREATE TABLE refs(path TEXT PRIMARY KEY) WITHOUT ROWID')
+        for path in self.audit.current:
+            self.protected.add(reference_key(path))
+            connection.execute('INSERT INTO current VALUES (?)', (path,))
+        # Release index item-ID lists and path sets before reading photo chunks.
+        self.audit.current.clear()
+        self.audit.manifest = None
+        for path in walk(self.db, skip_media=True,
+                         on_path=lambda path: progress('discovering-references', 0, str(path))):
+            if path.suffix.lower() in {'.json', '.jsonl'}:
+                connection.execute('INSERT INTO refs VALUES (?)', (path.relative_to(self.db).as_posix(),))
+        connection.commit()
+        for (relative,) in connection.execute('SELECT path FROM refs ORDER BY path'):
+            path = self.db / relative
             relative = path.relative_to(self.db).as_posix()
             if progress: progress('references', len(self.protected), relative)
             before = signature(path.stat())
             fingerprint.update(relative.encode()); fingerprint.update(b'\0' + str(before[2]).encode() + b'\0')
-            for value in strings(path, maximum, fingerprint):
+            for value in strings(path, maximum, fingerprint, lambda: progress('references-read', len(self.protected), relative)):
                 value = value.replace('\\', '/')
                 position = value.lower().find('media/')
                 if value.lower().endswith('.json') and position >= 0 and (position == 0 or value[position - 1] == '/'):
@@ -165,7 +282,7 @@ class Context:
             if signature(path.stat()) != before:
                 raise ValueError('참조 기록이 검사 중 변경되었습니다. 서버·작업을 종료하세요.')
             if progress: progress('references', len(self.protected), relative)
-        for relative in sorted(self.audit.current):
+        for (relative,) in connection.execute('SELECT path FROM current ORDER BY path'):
             if progress: progress('current', len(self.items), relative)
             data = self.audit.read_bytes(relative)
             fingerprint.update(relative.encode()); fingerprint.update(hashlib.sha256(data).digest())
@@ -177,16 +294,18 @@ class Context:
                 if mid in self.items:
                     raise ValueError('현재 DB에 중복 media_id가 있어 정리를 중단합니다.')
                 self.items[mid] = item
+                if len(self.items) % 1000 == 0: progress('current', len(self.items), relative)
+            del page, data
+            item = None
             if progress: progress('current', len(self.items), relative)
         self.fingerprint = fingerprint.hexdigest()
-        self.media_cache = {}
-        self.chunk_cache = OrderedDict()
+        connection.commit()
 
     def physical(self, location, item, role):
         if location.get('protocol') != 'file' or not location.get('path'):
             return False
         path = Path(location['path']).expanduser().absolute()
-        if self.progress: self.progress('hash-stat', len(self.media_cache), str(path))
+        if self.progress: self.progress('hash-stat', self.memory.snapshot()['cache_entries'], str(path))
         if path.suffix.lower() not in EXTENSIONS:
             return False
         # No symlinks/junctions, including ancestor directories.
@@ -201,9 +320,10 @@ class Context:
         if not stat.S_ISREG(before.st_mode) or before.st_size != item['size_bytes']:
             return False
         key = (str(resolved), signature(before), item['sha256'])
-        if key in self.media_cache:
-            return self.media_cache[key]
-        if self.progress: self.progress('hash', len(self.media_cache), str(path))
+        cached = self.memory.get(('physical', key))
+        if cached is not None:
+            return cached
+        if self.progress: self.progress('hash', self.memory.snapshot()['cache_entries'], str(path))
         digest = hashlib.sha256()
         read_bytes = 0
         with path.open('rb') as stream:
@@ -212,14 +332,15 @@ class Context:
                 read_bytes += len(block)
                 if self.progress: self.progress('hash-bytes', read_bytes, str(path))
         valid = signature(path.stat()) == signature(before) and digest.hexdigest() == item['sha256'].lower()
-        self.media_cache[key] = valid
+        self.memory.put(('physical', key), valid)
         return valid
 
     def covered(self, data):
         sha = hashlib.sha256(data).hexdigest()
         # Cache parsed coverage, but re-stat/reverify physical references on every use.
-        if sha in self.chunk_cache:
-            reason, ids = self.chunk_cache.pop(sha)
+        cached = self.memory.get(('chunk', sha))
+        if cached is not None:
+            reason, ids = cached
         else:
             page = json.loads(data)
             if not isinstance(page, dict) or not isinstance(page.get('items'), list) or not page['items']:
@@ -236,8 +357,7 @@ class Context:
                 if not covers(meaningful(old), meaningful(current)):
                     reason = 'historical_metadata_not_covered'; break
                 ids.append(current['media_id'])
-        self.chunk_cache[sha] = (reason, ids)
-        if len(self.chunk_cache) > 512: self.chunk_cache.popitem(last=False)
+        self.memory.put(('chunk', sha), (reason, ids))
         if reason: return reason
         for mid in ids:
             item = self.items[mid]
@@ -267,6 +387,7 @@ def connect_plan(path, create=False):
     connection = sqlite3.connect(str(path))
     connection.execute('PRAGMA trusted_schema=OFF')
     connection.execute('PRAGMA synchronous=FULL')
+    tune_sqlite(connection)
     if create:
         connection.executescript('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);'
                                 'CREATE TABLE files(path TEXT PRIMARY KEY,sha TEXT,size INTEGER,verdict TEXT,reason TEXT,state TEXT);')
@@ -314,7 +435,7 @@ def validate_plan_path(db, plan):
     return plan
 
 
-def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, max_files=None, under='media', progress=None, stop_timeout=120):
+def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, max_files=None, under='media', progress=None, stop_timeout=120, memory_budget_mib=None):
     db = Path(db).expanduser().resolve()
     if not db.is_dir(): raise ValueError('DB 디렉토리가 없습니다.')
     plan = validate_plan_path(db, plan)
@@ -322,8 +443,8 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
     if under != 'media' and not under.startswith('media/'):
         raise ValueError('--under는 media 또는 그 하위 디렉토리여야 합니다.')
     if progress: progress('waiting-server', 0, str(db))
-    with offline(db, stopped, stop_timeout):
-        context = Context(db, maximum, progress)
+    with offline(db, stopped, stop_timeout), working_context(db, maximum, progress, memory_budget_mib) as context:
+        progress = context.progress
         for source in context.config.get('sources', []):
             if source.get('protocol', 'file') == 'file' and plan.is_relative_to(Path(source['root']).expanduser().resolve()):
                 raise ValueError('계획 파일은 원본 폴더 밖에 저장하세요.')
@@ -386,7 +507,7 @@ def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, 
             connection.close()
 
 
-def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None, stop_timeout=120):
+def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None, stop_timeout=120, memory_budget_mib=None):
     db = Path(db).expanduser().resolve()
     plan = validate_plan_path(db, plan)
     if progress: progress('opening-plan', 0, str(plan))
@@ -396,8 +517,8 @@ def apply_prune(db, plan, confirm, stopped=False, max_files=None, progress=None,
         if meta['db'] != str(db) or confirm != meta['plan_id']:
             raise ValueError('DB 경로와 --confirm 계획 ID를 정확히 지정하세요.')
         if progress: progress('waiting-server', 0, str(db))
-        with offline(db, stopped, stop_timeout):
-            context = Context(db, meta['maximum'], progress)
+        with offline(db, stopped, stop_timeout), working_context(db, meta['maximum'], progress, memory_budget_mib) as context:
+            progress = context.progress
             if context.fingerprint != meta['fingerprint']:
                 raise ValueError('현재 DB 또는 복구 참조가 계획 이후 변경되었습니다. 삭제하지 않고 중단합니다.')
             set_meta(connection, 'status', 'applying'); connection.commit()

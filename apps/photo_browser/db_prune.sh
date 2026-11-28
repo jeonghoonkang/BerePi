@@ -18,6 +18,7 @@ LOG_FILES=5
 LOG_MIB=1
 LOG_PATH=''
 PROGRESS_DISPLAY=auto
+MEMORY_BUDGET=''
 
 usage() {
     cat <<'HELP'
@@ -34,6 +35,7 @@ usage() {
   --resume            기존 계획의 검사를 이어서 진행 (run/plan만, 삭제 시작 전)
   --server-stopped    내장 서버 확인·정상 종료 허용 질문 생략
   --server-stop-timeout N  서버 종료 대기 초 (기본: 120)
+  --memory-budget-mib N    캐시 상한 MiB (기본: 자동 가용 메모리 계산)
   --progress-interval N    진행 로그 출력 간격, 초 (기본: 5)
   --progress-display MODE auto: 상단 고정 표시, pretty: 명시적 활성화, plain: 일반 출력
   --progress-log PATH      로그 경로 (기본: 계획 폴더/photo-db-prune-DB식별자.progress.log)
@@ -51,9 +53,10 @@ if [[ $# -gt 0 ]]; then
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --db|--plan|--max-files|--under|--server-stop-timeout|--progress-interval|--progress-display|--progress-log|--progress-log-files|--progress-log-mib)
+        --memory-budget-mib|--db|--plan|--max-files|--under|--server-stop-timeout|--progress-interval|--progress-display|--progress-log|--progress-log-files|--progress-log-mib)
             [[ $# -ge 2 && -n "$2" ]] || fail "$1 값이 필요합니다."
             case "$1" in
+                --memory-budget-mib) MEMORY_BUDGET=$2 ;;
                 --db) DB=$2 ;; --plan) PLAN=$2 ;;
                 --max-files) LIMIT=$2 ;; --under) UNDER=$2 ;;
                 --server-stop-timeout) STOP_TIMEOUT=$2 ;;
@@ -83,6 +86,7 @@ fi
 command -v "$PYTHON" >/dev/null || fail 'Python을 찾지 못했습니다. PYTHON 환경변수를 지정하세요.'
 LIMIT_ARGS=()
 PROGRESS_ARGS=(--progress-interval "$PROGRESS_INTERVAL" --progress-display "$PROGRESS_DISPLAY" --progress-log-files "$LOG_FILES" --progress-log-mib "$LOG_MIB")
+[[ -z "$MEMORY_BUDGET" ]] || PROGRESS_ARGS+=(--memory-budget-mib "$MEMORY_BUDGET")
 [[ -z "$LOG_PATH" ]] || PROGRESS_ARGS+=(--progress-log "$LOG_PATH")
 [[ "$LIMIT" == all ]] || LIMIT_ARGS=(--max-files "$LIMIT")
 trap 'printf "\n중단했습니다. 같은 계획의 status로 진행 상황을 확인하세요.\n" >&2; exit 130' INT

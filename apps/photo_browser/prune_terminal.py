@@ -104,12 +104,14 @@ class PruneTerminal:
             remaining = state['estimated_remaining_seconds']
             if remaining is not None:
                 eta += f' · 남은 {remaining / 60:.2f}분'
+            from prune_memory import memory_line
+            memory = memory_line(state['memory']) if 'memory' in state else '-' * (size.columns - 1)
             lines = [f"DB prune · {state['operation']} · {state['status']}",
                      f"로그 파일: {state['log_file']}",
                      f"시작: {state['started_at']}",
                      f"현재: {state['current_time']} · 경과 {state['elapsed_minutes']:.2f}분",
                      f"단계: {state['phase']} · 처리 {state['processed']:,}/{total} ({percent})",
-                     f"경로: {state['path']}", f'종료 예상: {eta}', '-' * (size.columns - 1)]
+                     f"경로: {state['path']}", f'종료 예상: {eta}', memory]
             self.stream.write('\0337')
             for row, line in enumerate(lines, 1):
                 self.stream.write(f'\033[{row};1H\033[2K{clipped(line, size.columns - 1)}')

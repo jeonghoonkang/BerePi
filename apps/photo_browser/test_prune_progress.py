@@ -41,6 +41,18 @@ class PruneProgressTests(unittest.TestCase):
         self.assertEqual(self.latest(monitor.path)['status'], 'completed')
         self.assertIn('finished_at', self.latest(monitor.path))
 
+    def test_heartbeat_records_memory_without_operation_callbacks(self):
+        from prune_memory import AdaptiveMemory
+        manager = AdaptiveMemory(1, provider=lambda: {'available_bytes': 128 * 1024 * 1024,
+                                                      'rss_bytes': 50 * 1024 * 1024})
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.monitor(interval=.02, files=1) as monitor:
+                monitor.set_memory_provider(manager.snapshot)
+                threading.Event().wait(.07)
+                state = self.latest(monitor.path)
+                self.assertEqual(state['memory']['rss_bytes'], 50 * 1024 * 1024)
+                self.assertIn('cache_budget_bytes', state['memory'])
+
     def test_rotation_stays_within_five_files_and_single_mode_removes_backups(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.monitor(interval=3600, max_bytes=4096) as monitor:

@@ -75,6 +75,8 @@ def main(argv=None):
     apply.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 처리할 최대 후보 수')
     apply.add_argument('--progress-interval', type=refresh_interval, default=5)
     for command in (prune, apply):
+        command.add_argument('--memory-budget-mib', type=bounded_number(1, 1048576),
+                             help='캐시 예산 상한 MiB. 기본 자동 계산, 큰 값을 지정해도 가용 메모리에 맞춰 제한')
         command.add_argument('--progress-display', choices=['auto', 'pretty', 'plain'], default='auto',
                              help='auto: 터미널 상단 고정 stdout, pretty: 명시적 활성화, plain: 기존 stderr 로그')
         command.add_argument('--progress-log', help='자동 진행 로그 경로 (기본: 계획 폴더/photo-db-prune-DB식별자.progress.log)')
@@ -142,6 +144,7 @@ def main(argv=None):
         if args.command in {'db-prune-plan', 'db-prune-apply', 'db-prune-status'}:
             import sqlite3
             from db_prune import plan_prune, apply_prune, prune_status
+            from prune_memory import MemoryBudgetError
             try:
                 if args.command == 'db-prune-status':
                     result = prune_status(args.plan)
@@ -156,10 +159,10 @@ def main(argv=None):
                             if args.command == 'db-prune-plan':
                                 result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
                                                     args.max_json_mib * 1024 * 1024, args.max_files, args.under, monitor,
-                                                    stop_timeout=args.server_stop_timeout)
+                                                    stop_timeout=args.server_stop_timeout, memory_budget_mib=args.memory_budget_mib)
                             else:
                                 result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, monitor,
-                                                     stop_timeout=args.server_stop_timeout)
+                                                     stop_timeout=args.server_stop_timeout, memory_budget_mib=args.memory_budget_mib)
                             monitor.finish(result['status'])
                         result['progress_log'] = str(monitor.path)
                         print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
@@ -167,7 +170,7 @@ def main(argv=None):
             except KeyboardInterrupt:
                 print('검사를 중단했습니다. 계획 상태를 확인하고 이어서 실행하세요.', file=sys.stderr)
                 return 130
-            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, MemoryBudgetError, MemoryError) as exc:
                 print('오류: ' + str(exc), file=sys.stderr)
                 return 1
         if args.command in {'db-audit', 'db-show'}:

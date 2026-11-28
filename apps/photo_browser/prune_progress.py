@@ -48,6 +48,7 @@ class PruneProgress:
                       'path': str(self.db), 'phase_count': 0, 'processed': 0, 'total': None,
                       'scope': 'current_invocation', 'db': str(self.db), 'plan': str(self.plan), 'log_file': str(self.path)}
         self.samples = deque(maxlen=100)
+        self.memory_provider = None
 
     def _check_owned(self, path):
         if path.is_symlink() or (path.exists() and not path.is_file()):
@@ -97,6 +98,9 @@ class PruneProgress:
                 if phase in {'plan', 'delete'}:
                     self.samples.append((count, time.monotonic()))
 
+    def set_memory_provider(self, provider):
+        self.memory_provider = provider
+
     def snapshot(self):
         current = time.monotonic()
         with self.lock:
@@ -129,6 +133,8 @@ class PruneProgress:
         if result['status'] in {'failed', 'interrupted'} or (result['status'] != 'running' and (total is None or processed < total)):
             result.update(estimated_remaining_seconds=None, estimated_finish_at=None,
                           estimated_total_seconds=None, estimate_status='stopped')
+        if self.memory_provider is not None:
+            result['memory'] = self.memory_provider()
         return result
 
     def write(self):
@@ -156,9 +162,11 @@ class PruneProgress:
             return
         pct = ('미확정' if result['progress_percent'] is None else f"{result['progress_percent']:.2f}%")
         eta = result['estimated_finish_at'] or f"계산 대기({result['estimate_status']})"
+        from prune_memory import memory_line
+        memory = ' · ' + memory_line(result['memory']) if 'memory' in result else ''
         print(f"[{result['current_time']}] {result['status']} · 시작 {result['started_at']} · {result['phase']}: {result['phase_count']:,}"
               f" · 처리 {result['processed']:,}/{result['total'] if result['total'] is not None else '?'} ({pct})"
-              f" · 경과 {result['elapsed_minutes']:.2f}분 · 종료 예상 {eta} · {result['path']}", file=sys.stderr, flush=True)
+              f" · 경과 {result['elapsed_minutes']:.2f}분 · 종료 예상 {eta} · {result['path']}{memory}", file=sys.stderr, flush=True)
 
     def _heartbeat(self):
         while not self.stop.wait(self.interval):

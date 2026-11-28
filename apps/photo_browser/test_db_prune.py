@@ -213,6 +213,75 @@ class DBPruneTests(unittest.TestCase):
         self.apply(report)
         self.assertTrue((self.old.parent / 'broken.json').exists())
 
+    def test_sqlite_indexes_and_low_budget_keep_deletion_and_fingerprint_semantics(self):
+        import hashlib
+        from db_prune import working_context, signature
+        expected = hashlib.sha256()
+        for path in sorted(path for path in self.db.rglob('*') if path.is_file() and
+                           path.relative_to(self.db).parts[0] != 'media' and path.suffix.lower() in {'.json', '.jsonl'}):
+            relative = path.relative_to(self.db).as_posix()
+            expected.update(relative.encode())
+            expected.update(b'\0' + str(signature(path.stat())[2]).encode() + b'\0')
+            expected.update(path.read_bytes())
+        for chunk in sorted(json.loads((self.db / 'index.json').read_bytes())['chunks'], key=lambda c: c['path']):
+            expected.update(chunk['path'].encode())
+            expected.update(hashlib.sha256((self.db / chunk['path']).read_bytes()).digest())
+        with working_context(self.db, 64 * 1024 * 1024, None, 1) as context:
+            self.assertEqual(context.fingerprint, expected.hexdigest())
+            self.assertNotIsInstance(context.items, dict)
+            self.assertNotIsInstance(context.protected, set)
+            self.assertIsNone(context.audit.manifest)
+            self.assertEqual(context.items[self.item['media_id']], self.item)
+            self.assertEqual(context.connection.execute('SELECT COUNT(*) FROM items').fetchone()[0], 1)
+            self.assertEqual(context.memory.snapshot()['cache_used_bytes'], 0)
+            scratch = Path(context.connection.execute('PRAGMA database_list').fetchone()[2])
+        self.assertFalse(scratch.exists())
+        report = self.prepare(memory_budget_mib=1)
+        self.assertEqual(report['counts']['pending']['files'], 1)
+        self.apply(report, memory_budget_mib=1)
+        self.assertFalse(self.old.exists())
+
+    def test_large_current_metadata_is_retained_on_disk_not_python_heap(self):
+        import gc
+        import tracemalloc
+        from db_prune import working_context
+        chunks = []
+        # 16 MiB of metadata, with only one 200 KiB page live at a time.
+        for page in range(80):
+            relative = f'media/bounded/page-{page:03}.json'
+            path = self.db / relative
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(json.dumps({'items': [{'media_id': f'{page}-{i}', 'description': 'x' * 2048}
+                                                 for i in range(100)]}))
+            chunks.append({'path': relative})
+        (self.db / 'index.json').write_text(json.dumps({'chunks': chunks}))
+        gc.collect()
+        tracemalloc.start()
+        try:
+            with working_context(self.db, 64 * 1024 * 1024, None, 1) as context:
+                gc.collect()
+                retained, peak = tracemalloc.get_traced_memory()
+                self.assertEqual(len(context.items), 8000)
+                self.assertLess(retained, 3 * 1024 * 1024)
+                self.assertLess(peak, 8 * 1024 * 1024)
+                self.assertEqual(context.items['79-99']['description'], 'x' * 2048)
+        finally:
+            tracemalloc.stop()
+
+    def test_memory_exhaustion_preserves_plan_and_can_resume(self):
+        from prune_memory import AdaptiveMemory, MemoryBudgetError
+        original = AdaptiveMemory.check
+        def check(manager):
+            if self.plan.exists(): raise MemoryBudgetError('test pressure')
+            return original(manager)
+        with patch.object(AdaptiveMemory, 'check', check), self.assertRaises(MemoryBudgetError):
+            self.prepare()
+        self.assertTrue(self.old.exists())
+        report = self.prepare(resume=True)
+        self.assertEqual(report['counts']['pending']['files'], 1)
+        self.apply(report)
+        self.assertFalse(self.old.exists())
+
     def test_cli_plan_status_apply(self):
         def run(args):
             out, error = io.StringIO(), io.StringIO()
@@ -236,6 +305,10 @@ class DBPruneTests(unittest.TestCase):
         report = json.loads(out.getvalue())
         log = Path(report['progress_log'])
         data = json.loads(log.read_text(encoding='utf-8'))
+        self.assertIn('memory', data)
+        self.assertIn('rss_bytes', data['memory'])
+        self.assertIn('cache_evictions', data['memory'])
+        self.assertIn('RAM RSS', error.getvalue())
         self.assertEqual(data['total'], 1000)
         self.assertEqual(data['processed'], 1000)
         self.assertEqual(data['progress_percent'], 100)

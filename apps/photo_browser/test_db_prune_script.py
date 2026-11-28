@@ -56,6 +56,17 @@ class DBPruneScriptTests(unittest.TestCase):
         result.stderr = result.stderr.decode('utf-8')
         return result
 
+    def test_memory_budget_is_forwarded_to_plan_and_apply(self):
+        result = self.run_script('plan', '--under', self.folder, '--server-stopped', '--memory-budget-mib', '1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout.split('실행: plan · 이번 개수 한도: 1000\n', 1)[1])
+        log = Path(report['progress_log'])
+        state = json.loads(log.read_text().splitlines()[-1])
+        self.assertEqual(state['memory']['user_ceiling_bytes'], 1024 * 1024)
+        result = self.run_script('apply', '--server-stopped', '--memory-budget-mib', '1', input=report['plan_id'] + '\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.old.exists())
+
     def test_default_run_accepts_partial_plan_and_cancel_preserves_files(self):
         result = self.run_script('--max-files', '1', '--under', self.folder, input='yes\n\n')
         self.assertEqual(result.returncode, 0, result.stderr)

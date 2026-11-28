@@ -1910,6 +1910,28 @@ PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
 현재 청크와 원본·managed 사진은 삭제하지 않으며, 기존 CLI의 보호 참조·메타데이터·실제 파일 검증을
 그대로 사용합니다. 정리 후 전체 용량을 확인하려면 `cli.py --db "$DB" db-audit --sizes-only`를 별도로 실행하세요.
 
+### DB prune 자동 메모리 관리
+
+`db-prune-plan`과 `db-prune-apply`는 옵션 없이도 자동 메모리 예산을 사용합니다. 전체 사진 메타데이터·보호 경로·정렬할 참조 경로는 임시 SQLite에 저장하고, 최근 사진 조회·청크 판정·파일 검증 결과만 하나의 바이트 단위 LRU 캐시에 보관합니다. 사진 파일 해시는 1 MiB씩 읽습니다. 임시 SQLite는 시스템 임시 폴더에 생성되어 정상 종료·오류·Ctrl+C 시 제거되며 충분한 디스크 여유가 필요합니다. 강제 종료로 남은 임시 폴더는 실행 중인 작업이 없는지 확인한 후 제거할 수 있습니다. 영구 SQLite 계획은 그대로 유지합니다.
+
+초기 예산은 실제 가용 메모리에서 안전 여유(실행 한도의 5%, 최소 32 MiB·최대 512 MiB)를 제외한 값의 20%입니다. 실행 한도의 10%, 기본 최대 1 GiB도 함께 적용하며 메모리를 미리 할당하지 않습니다. Linux는 `MemAvailable`, 현재 cgroup과 확인 가능한 상위 cgroup의 v1/v2 한도·사용량, v2 `memory.high`, 프로세스 주소 공간 제한을 함께 확인합니다. macOS는 `vm_stat`의 여유·비활성·추측 페이지를 이용한 보수적 추정값, Windows는 시스템 가용 RAM·주소 공간을 사용합니다. Windows Job Object 등 별도 실행 제한은 자동 감지하지 않습니다. 지표 확인이 불가능하면 최대 32 MiB로 제한하고 자동 확대하지 않습니다.
+
+약 2초 간격으로 상태를 확인합니다. 메모리 압력이 높거나 안전 예산이 기존보다 20% 이상 줄면 캐시를 빠르게 축소하고, 30초 동안 안정적이면 최대 32 MiB씩 확대합니다. Linux PSI `full avg10 >= 1` 또는 `some avg10 >= 10`도 축소 조건입니다. 예산에는 SQLite 두 연결의 페이지 캐시 목표 합계 1 MiB를 우선 배정하고 남은 범위를 Python 캐시로 사용합니다. Python 객체 크기와 컨테이너 비용을 추정하며, 단일 항목이 예산보다 크면 캐시에 넣지 않습니다. SQLite mmap은 끄고 임시 정렬은 디스크를 사용합니다.
+
+```bash
+# 기본: 자동 계산
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped
+
+# 필요할 때 캐시 상한만 낮춤 (큰 값을 지정해도 자동 안전 범위를 적용)
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped --memory-budget-mib 256
+```
+
+`db-prune-apply`와 `db_prune.sh`에도 `--memory-budget-mib`를 사용할 수 있습니다. 이는 **캐시 상한이며 전체 프로세스 RAM의 강제 제한이 아닙니다**. 현재 인덱스와 JSON 청크는 한 파일씩 제한적으로 파싱하며 `--max-json-mib`도 유지됩니다. JSON은 파일 크기의 8배와 32 MiB 여유를 기준으로 메모리 확보 가능성을 사전 검사합니다. 이는 추정치이므로 Python 객체·할당기·OS 사용량까지 정확히 보장하지는 않습니다. 캐시를 비워도 RAM이 즉시 OS에 반환되지 않을 수 있습니다. 가용 메모리가 8 MiB 미만이거나 JSON 파싱 여유가 부족하면 오류로 중단하며, 같은 계획을 plan의 `--resume` 또는 apply로 이어서 실행할 수 있습니다. 계획 생성 이전에 중단되었다면 새 계획 명령을 실행하세요.
+
+기존 5초 진행 로그의 `memory` 객체에는 `rss_bytes`, `total_bytes`, `available_bytes`, `effective_limit_bytes`, `cache_budget_bytes`, `cache_used_bytes`, `sqlite_cache_limit_bytes`, `cache_entries`, `cache_hits`, `cache_misses`, `cache_evictions`, PSI 값, `metrics_source`, `adjustment`, `critical`을 기록합니다. 상단 고정 화면과 일반 stderr 출력에도 RSS·가용 RAM·캐시 사용량/예산·조절 사유가 표시됩니다. 로그 순환 개수·용량 제한은 그대로 적용됩니다.
+
 ### 로그 확인 방법
 
 <a id="db-prune-logs"></a>
