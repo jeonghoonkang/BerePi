@@ -99,7 +99,7 @@ class DBPruneScriptTests(unittest.TestCase):
     def test_progress_options_reach_cli_and_single_snapshot_is_saved(self):
         log = self.root / 'script-progress.log'
         result = self.run_script('plan', '--server-stopped', '--progress-log', str(log),
-                                 '--progress-log-files', '1', '--progress-interval', '0.05')
+                                 '--progress-log-files', '1', '--progress-interval', '0.05', '--progress-display', 'pretty')
         self.assertIn(result.returncode, (0, 2), result.stderr)
         state = json.loads(log.read_text(encoding='utf-8'))
         self.assertIn(state['status'], ('ready', 'partial'))

@@ -16,7 +16,7 @@ KST = timezone(timedelta(hours=9), 'KST')
 
 
 class PruneProgress:
-    def __init__(self, db, plan, operation, interval=5, log_path=None, files=5, max_bytes=1024 * 1024):
+    def __init__(self, db, plan, operation, interval=5, log_path=None, files=5, max_bytes=1024 * 1024, terminal=None):
         self.db = Path(db).expanduser().resolve()
         self.plan = Path(plan).expanduser().resolve()
         name = 'photo-db-prune-' + hashlib.sha256(str(self.db).encode()).hexdigest()[:12] + '.progress.log'
@@ -38,6 +38,7 @@ class PruneProgress:
         if family & reserved or any(path == root or path.is_relative_to(root) for path in family for root in roots):
             raise ValueError('진행 로그는 DB·원본·관리 디렉토리 밖에, SQLite 계획과 다른 파일로 지정하세요.')
         self.files, self.max_bytes, self.interval = files, max_bytes, interval
+        self.terminal = terminal
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.failure = None
@@ -151,6 +152,8 @@ class PruneProgress:
                 os.replace(self.path, Path(f'{self.path}.1'))
             with os.fdopen(os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600), 'ab') as stream:
                 stream.write(payload); stream.flush()
+        if self.terminal is not None and self.terminal.render(result):
+            return
         pct = ('미확정' if result['progress_percent'] is None else f"{result['progress_percent']:.2f}%")
         eta = result['estimated_finish_at'] or f"계산 대기({result['estimate_status']})"
         print(f"[{result['current_time']}] {result['status']} · 시작 {result['started_at']} · {result['phase']}: {result['phase_count']:,}"

@@ -75,6 +75,8 @@ def main(argv=None):
     apply.add_argument('--max-files', type=bounded_number(1, 1000000000), help='이번 실행에서 처리할 최대 후보 수')
     apply.add_argument('--progress-interval', type=refresh_interval, default=5)
     for command in (prune, apply):
+        command.add_argument('--progress-display', choices=['auto', 'pretty', 'plain'], default='auto',
+                             help='auto: 터미널 상단 고정 stdout, pretty: 명시적 활성화, plain: 기존 stderr 로그')
         command.add_argument('--progress-log', help='자동 진행 로그 경로 (기본: 계획 폴더/photo-db-prune-DB식별자.progress.log)')
         command.add_argument('--progress-log-files', type=int, choices=[1, 5], default=5,
                              help='1: 현재 상태만 덮어쓰기, 5: 최대 5개 순환 로그 (기본 5)')
@@ -143,20 +145,24 @@ def main(argv=None):
             try:
                 if args.command == 'db-prune-status':
                     result = prune_status(args.plan)
+                    print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
                 else:
                     from prune_progress import PruneProgress
-                    with PruneProgress(args.db, args.plan, args.command, args.progress_interval,
-                                       args.progress_log, args.progress_log_files, args.progress_log_mib * 1024 * 1024) as monitor:
-                        if args.command == 'db-prune-plan':
-                            result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
-                                                args.max_json_mib * 1024 * 1024, args.max_files, args.under, monitor,
-                                                stop_timeout=args.server_stop_timeout)
-                        else:
-                            result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, monitor,
-                                                 stop_timeout=args.server_stop_timeout)
-                        monitor.finish(result['status'])
-                    result['progress_log'] = str(monitor.path)
-                print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+                    from prune_terminal import PruneTerminal
+                    with PruneTerminal(args.progress_display) as terminal:
+                        with PruneProgress(args.db, args.plan, args.command, args.progress_interval,
+                                           args.progress_log, args.progress_log_files, args.progress_log_mib * 1024 * 1024,
+                                           terminal=terminal) as monitor:
+                            if args.command == 'db-prune-plan':
+                                result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
+                                                    args.max_json_mib * 1024 * 1024, args.max_files, args.under, monitor,
+                                                    stop_timeout=args.server_stop_timeout)
+                            else:
+                                result = apply_prune(args.db, args.plan, args.confirm, args.server_stopped, args.max_files, monitor,
+                                                     stop_timeout=args.server_stop_timeout)
+                            monitor.finish(result['status'])
+                        result['progress_log'] = str(monitor.path)
+                        print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
                 return 2 if result['status'] in {'partial', 'partial_apply'} else 0
             except KeyboardInterrupt:
                 print('검사를 중단했습니다. 계획 상태를 확인하고 이어서 실행하세요.', file=sys.stderr)

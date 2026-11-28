@@ -1916,6 +1916,20 @@ PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
 
 #### DB prune · DB 파일 중복 용량 확인/제거
 
+**터미널에서는 pretty stdout 화면이 자동 적용됩니다.** 상단 8줄에 로그 파일 경로·시작/현재 시각·단계·처리 경로·진행률·경과 시간·종료 예상을 고정하고, 일반 stdout/stderr 출력과 최종 결과는 그 아래에서 스크롤합니다. 기본 5초 주기 로그 기록 때 상단 표시도 갱신됩니다. 종료·오류·Ctrl+C 시 스크롤 영역과 출력 스트림을 복원합니다. 좁은 화면·ANSI 미지원 터미널에서는 일반 출력으로 전환합니다.
+
+```bash
+# 터미널 상단 고정 화면 명시 (TTY에서 사용)
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped --progress-display pretty
+
+# 기존 stderr 진행 로그 방식 사용
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped --progress-display plain
+```
+
+기본 `--progress-display auto`는 stdout/stderr가 모두 터미널일 때 상단 고정 화면을 사용합니다. 파이프·파일 저장에서는 stdout JSON을 유지하며, `pretty`를 지정해도 stdout이 터미널이 아니면 ANSI 코드를 출력하지 않습니다. 화면 표시 방식과 무관하게 진행 로그 파일은 계속 자동 저장합니다. `db_prune.sh`에도 같은 옵션을 사용할 수 있습니다.
+
 `db-prune-plan`과 `db-prune-apply`는 시작부터 진행 로그를 자동 저장하고, 별도 스레드에서 기본 **5초마다** stderr와 파일에 현재 상태를 기록합니다. 검사 대상이 1,000개 이상이어도 자동 저장하며 작은 작업에도 적용합니다. 해시 읽기·디렉토리 순회·참조 검사에 오래 걸려 콜백이 오지 않아도 마지막 단계·처리 경로와 현재 시각·경과 시간을 출력합니다. 정상·부분 완료, 오류, Ctrl+C 때도 종료 상태를 기록합니다. stdout은 최종 JSON 결과로 유지합니다.
 
 **로그 저장 옵션은 필수가 아닙니다.** 아래처럼 기존 검사 명령만 실행해도 자동 저장됩니다. 이 명령은 검사·삭제 계획만 만들며 실제 JSON을 삭제하지 않습니다. `--server-stopped`는 실행 중인 해당 DB의 내장 서버를 작업 중지·저장 후 정상 종료하도록 허용합니다.
