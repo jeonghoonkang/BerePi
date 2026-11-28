@@ -282,6 +282,42 @@ class DBPruneTests(unittest.TestCase):
         self.apply(report)
         self.assertFalse(self.old.exists())
 
+    def test_count_only_without_plan_never_stops_server_or_reads_json_contents(self):
+        (self.old.parent / 'broken.JSON').write_text('{broken')
+        (self.old.parent / 'not-json.txt').write_text('text')
+        try: (self.old.parent / 'link.json').symlink_to(self.old)
+        except OSError: pass
+        before = {path.relative_to(self.db).as_posix(): path.read_bytes() for path in self.db.rglob('*') if path.is_file()}
+        out, err = io.StringIO(), io.StringIO()
+        with patch('db_prune.offline', side_effect=AssertionError('must not stop server')), \
+             patch('db_prune.working_context', side_effect=AssertionError('must not load metadata')), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = main(['--db', str(self.db), 'db-prune-plan', '--count-only', '--under', self.folder, '--max-files', '1'])
+        self.assertEqual(code, 0, err.getvalue())
+        report = json.loads(out.getvalue())
+        self.assertEqual(report['total_json_files'], 2)
+        self.assertEqual(report['invocation_json_files'], 1)
+        self.assertTrue(report['read_only'])
+        self.assertFalse(self.plan.exists())
+        after = {path.relative_to(self.db).as_posix(): path.read_bytes() for path in self.db.rglob('*') if path.is_file()}
+        self.assertEqual(before, after)
+        state = json.loads(Path(report['progress_log']).read_text().splitlines()[-1])
+        self.assertEqual(state['progress_percent'], 100)
+        self.assertIn('memory', state)
+
+    def test_count_resume_counts_remaining_without_modifying_plan(self):
+        from db_prune import count_prune_json
+        self.prepare(max_files=1)
+        self.write('another.json', self.item)
+        before = self.plan.read_bytes()
+        report = count_prune_json(self.db, self.folder, self.plan, resume=True)
+        self.assertEqual(report['total_json_files'], 2)
+        self.assertEqual(report['already_planned_json_files'], 1)
+        self.assertEqual(report['remaining_json_files'], 1)
+        self.assertEqual(self.plan.read_bytes(), before)
+        with self.assertRaises(ValueError): count_prune_json(self.db, '../source')
+        with self.assertRaises(ValueError): count_prune_json(self.db, 'media', self.plan, resume=True)
+
     def test_cli_plan_status_apply(self):
         def run(args):
             out, error = io.StringIO(), io.StringIO()

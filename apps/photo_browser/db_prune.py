@@ -435,6 +435,53 @@ def validate_plan_path(db, plan):
     return plan
 
 
+def count_prune_json(db, under='media', plan=None, resume=False, max_files=None, progress=None):
+    """Count observed JSON paths only; no parsing, hashing, locks or DB writes."""
+    db = Path(db).expanduser().resolve()
+    if not db.is_dir(): raise ValueError('DB 디렉토리가 없습니다.')
+    under = DBAudit.reference(under)
+    if under != 'media' and not under.startswith('media/'):
+        raise ValueError('--under는 media 또는 그 하위 디렉토리여야 합니다.')
+    folder = db
+    for part in under.split('/'):
+        folder = folder / part
+        if link(folder.lstat()) or not folder.is_dir():
+            raise ValueError('안전한 media 하위 디렉토리가 아닙니다.')
+    connection = None
+    try:
+        if resume:
+            if not plan: raise ValueError('--resume 개수 조회에는 --plan이 필요합니다.')
+            path = validate_plan_path(db, plan)
+            if not path.is_file() or link(path.lstat()): raise ValueError('계획 파일이 없거나 안전하지 않습니다.')
+            connection = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
+            connection.execute('PRAGMA trusted_schema=OFF')
+            tune_sqlite(connection)
+            meta = metadata(connection)
+            if meta['db'] != str(db) or meta['under'] != under:
+                raise ValueError('계획의 DB·대상 범위가 다릅니다. 동일한 --db와 --under를 지정하세요.')
+            if meta['status'] not in {'planning', 'partial', 'ready'}:
+                raise ValueError('삭제를 시작한 계획은 검사 이어하기 개수를 조회할 수 없습니다. db-prune-status를 사용하세요.')
+        total = planned = 0
+        for path in walk(folder, on_path=(lambda path: progress('count', total, str(path))) if progress else None):
+            if path.suffix.lower() != '.json': continue
+            total += 1
+            if connection and connection.execute('SELECT 1 FROM files WHERE path=?', (path.relative_to(db).as_posix(),)).fetchone():
+                planned += 1
+            if progress: progress('count', total, str(path))
+        remaining = total - planned
+        if progress:
+            progress('count-total', total, str(folder))
+            progress('count', total, str(folder))
+        return {'status': 'counted', 'db': str(db), 'under': under,
+                'total_json_files': total, 'already_planned_json_files': planned,
+                'remaining_json_files': remaining,
+                'invocation_json_files': min(remaining, max_files) if max_files else remaining,
+                'resume': resume, 'read_only': True,
+                'note': '현재·보호 청크를 포함한 검사 범위의 JSON 파일 수입니다. 삭제 가능한 파일 수가 아닙니다. 실행 중 파일이 변경되면 실제 검사 개수와 달라질 수 있습니다.'}
+    finally:
+        if connection: connection.close()
+
+
 def plan_prune(db, plan, stopped=False, resume=False, maximum=64 * 1024 * 1024, max_files=None, under='media', progress=None, stop_timeout=120, memory_budget_mib=None):
     db = Path(db).expanduser().resolve()
     if not db.is_dir(): raise ValueError('DB 디렉토리가 없습니다.')

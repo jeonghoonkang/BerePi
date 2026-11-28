@@ -20,7 +20,8 @@ class PruneProgress:
     def __init__(self, db, plan, operation, interval=5, log_path=None, files=5, max_bytes=1024 * 1024, terminal=None):
         self.db = Path(db).expanduser().resolve()
         self.plan = Path(plan).expanduser().resolve()
-        name = 'photo-db-prune-' + hashlib.sha256(str(self.db).encode()).hexdigest()[:12] + '.progress.log'
+        prefix = 'photo-db-prune-count-' if operation == 'db-prune-count' else 'photo-db-prune-'
+        name = prefix + hashlib.sha256(str(self.db).encode()).hexdigest()[:12] + '.progress.log'
         self.path = Path(log_path).expanduser().absolute() if log_path else self.plan.parent / name
         if files not in {1, 5} or interval <= 0 or max_bytes < 4096:
             raise ValueError('진행 로그는 1개 또는 5개, 출력 간격은 양수여야 합니다.')
@@ -92,13 +93,13 @@ class PruneProgress:
             if self.failure:
                 raise OSError(f'필수 진행 로그 저장 실패: {self.failure}')
             self.state.update(phase=phase, phase_count=count, path=str(path)[-4096:])
-            if phase in {'plan-total', 'delete-total'}:
+            if phase in {'plan-total', 'delete-total', 'count-total'}:
                 self.state.update(total=count, processed=0)
                 self.samples.clear()
                 self.samples.append((0, time.monotonic()))
-            elif phase in {'plan', 'delete', 'plan-check', 'delete-check'}:
+            elif phase in {'plan', 'delete', 'plan-check', 'delete-check', 'count'}:
                 self.state['processed'] = count
-                if phase in {'plan', 'delete'}:
+                if phase in {'plan', 'delete', 'count'}:
                     self.samples.append((count, time.monotonic()))
 
     def set_memory_provider(self, provider):

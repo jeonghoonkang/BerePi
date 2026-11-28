@@ -59,7 +59,8 @@ def main(argv=None):
     show.add_argument('--limit', type=bounded_number(1, 1000), default=3, help='배열·JSONL 레코드 표시 개수')
     show.add_argument('--max-bytes', type=bounded_number(1, 1024 * 1024 * 1024), default=1024 * 1024, help='JSON 읽기 한도 바이트 (기본 1 MiB)')
     prune = commands.add_parser('db-prune-plan', help='현재 DB 정보와 소스·managed SHA-256을 검증해 과거 JSON 삭제 계획 생성')
-    prune.add_argument('--plan', required=True, help='DB·원본·managed 밖의 새 SQLite 계획 파일')
+    prune.add_argument('--plan', help='DB·원본·managed 밖의 새 SQLite 계획 파일')
+    prune.add_argument('--count-only', action='store_true', help='JSON 파일 총 개수만 조회. 내용·해시 검사나 삭제·계획 생성 없이 종료 (--plan 생략 가능)')
     prune.add_argument('--server-stopped', action='store_true', help='대상 DB의 내장 서버 확인 및 작업 중지·저장 후 정상 종료 허용')
     prune.add_argument('--server-stop-timeout', type=bounded_number(1, 86400), default=120, help='서버 정상 종료 대기 초 (기본 120)')
     prune.add_argument('--resume', action='store_true', help='삭제 전 동일 계획의 검사를 이어하기')
@@ -140,10 +141,12 @@ def main(argv=None):
     merge.add_argument('--media-id', action='append', help='대상 미디어 ID (여러 번 지정 가능, 기본 전체)')
     merge.add_argument('--source-id', help='이 소스의 활성 미디어만 병합 (생략 시 전체 소스)')
     args = parser.parse_args(argv)
+    if args.command == 'db-prune-plan' and not args.plan and (not args.count_only or args.resume):
+        parser.error('계획 생성 또는 --resume에는 --plan이 필요합니다.')
     with version_logging(info, args.version_log_interval):
         if args.command in {'db-prune-plan', 'db-prune-apply', 'db-prune-status'}:
             import sqlite3
-            from db_prune import plan_prune, apply_prune, prune_status
+            from db_prune import plan_prune, apply_prune, prune_status, count_prune_json
             from prune_memory import MemoryBudgetError
             try:
                 if args.command == 'db-prune-status':
@@ -152,11 +155,16 @@ def main(argv=None):
                 else:
                     from prune_progress import PruneProgress
                     from prune_terminal import PruneTerminal
+                    count_only = args.command == 'db-prune-plan' and args.count_only
+                    operation = 'db-prune-count' if count_only else args.command
+                    log_anchor = args.plan or str(Path(args.db).expanduser().resolve().parent / 'photo-db-prune-count.sqlite')
                     with PruneTerminal(args.progress_display) as terminal:
-                        with PruneProgress(args.db, args.plan, args.command, args.progress_interval,
+                        with PruneProgress(args.db, log_anchor, operation, args.progress_interval,
                                            args.progress_log, args.progress_log_files, args.progress_log_mib * 1024 * 1024,
                                            terminal=terminal) as monitor:
-                            if args.command == 'db-prune-plan':
+                            if count_only:
+                                result = count_prune_json(args.db, args.under, args.plan, args.resume, args.max_files, monitor)
+                            elif args.command == 'db-prune-plan':
                                 result = plan_prune(args.db, args.plan, args.server_stopped, args.resume,
                                                     args.max_json_mib * 1024 * 1024, args.max_files, args.under, monitor,
                                                     stop_timeout=args.server_stop_timeout, memory_budget_mib=args.memory_budget_mib)

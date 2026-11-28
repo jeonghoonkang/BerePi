@@ -1910,6 +1910,44 @@ PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
 현재 청크와 원본·managed 사진은 삭제하지 않으며, 기존 CLI의 보호 참조·메타데이터·실제 파일 검증을
 그대로 사용합니다. 정리 후 전체 용량을 확인하려면 `cli.py --db "$DB" db-audit --sizes-only`를 별도로 실행하세요.
 
+### DB prune 대상 JSON 개수만 확인
+
+아래 명령은 **BerePi 저장소 루트**에서 실행합니다. `$DB`는 실제 JSON DB 폴더로 바꾸고, `$PLAN`은 새 계획을 만들 때는 새 파일 경로, 이어서 실행할 때는 기존 계획 경로를 지정하세요. 계획 파일은 DB·소스·관리 디렉토리 밖에 둡니다.
+
+```bash
+DB=/실제/DB/경로
+PLAN=/var/tmp/photo-db-prune.sqlite
+```
+
+검사·삭제 전에 `--count-only`로 `--under` 범위(기본 `media`)의 전체 JSON 파일 수를 확인할 수 있습니다. 대상 JSON 내용을 읽거나 사진 해시를 계산하지 않으며 서버 종료와 `--plan` 지정도 필요하지 않습니다. 현재·보호 청크도 포함하므로 **삭제 가능한 파일 수와는 다릅니다**. 서버 실행 중에는 집계 도중 파일이 변경되어 이후 검사 개수와 달라질 수 있습니다. RAM·집계 진행 상황과 별도 `photo-db-prune-count-<DB식별자>.progress.log`도 표시합니다.
+
+```bash
+# media 아래 JSON 전체 개수만 확인 (계획 파일 불필요)
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --count-only --progress-display pretty --progress-interval 5
+
+# 특정 범위의 JSON 개수만 확인
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --count-only --under media/photo_box/tinyos/2024/01 --progress-display pretty
+
+# 중단한 검사 계획에서 전체·이미 검사한 개수·남은 개수 확인
+# 아래 media는 기존 계획의 --under 값과 같아야 함
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --count-only --plan "$PLAN" --resume --under media --progress-display pretty
+```
+
+stdout JSON 결과에서 다음 항목을 확인합니다.
+
+| 항목 | 의미 |
+| --- | --- |
+| `total_json_files` | 지정 범위에서 발견한 전체 JSON 파일 수 |
+| `already_planned_json_files` | `--resume`일 때 기존 계획에 기록된 현재 파일 수 (일반 조회는 0) |
+| `remaining_json_files` | 전체에서 이미 기록된 파일을 제외한 남은 검사 대상 수 |
+| `invocation_json_files` | 남은 대상에 `--max-files` 한도를 적용한 이번 검사 대상 수 |
+| `progress_log` | 집계 진행 로그의 실제 경로 |
+
+전체 집계는 `--max-files`와 무관하게 끝까지 진행합니다. 이어하기 조회에는 기존 계획과 동일한 `--under`를 지정하세요. 삭제를 시작한 계획은 `db-prune-status --plan "$PLAN"`에서 미처리 삭제 후보를 확인합니다. 실제 계획 생성 시에는 기존처럼 `--plan`과 `--server-stopped`를 지정합니다.
+
 ### DB prune 자동 메모리 관리
 
 `db-prune-plan`과 `db-prune-apply`는 옵션 없이도 자동 메모리 예산을 사용합니다. 전체 사진 메타데이터·보호 경로·정렬할 참조 경로는 임시 SQLite에 저장하고, 최근 사진 조회·청크 판정·파일 검증 결과만 하나의 바이트 단위 LRU 캐시에 보관합니다. 사진 파일 해시는 1 MiB씩 읽습니다. 임시 SQLite는 시스템 임시 폴더에 생성되어 정상 종료·오류·Ctrl+C 시 제거되며 충분한 디스크 여유가 필요합니다. 강제 종료로 남은 임시 폴더는 실행 중인 작업이 없는지 확인한 후 제거할 수 있습니다. 영구 SQLite 계획은 그대로 유지합니다.
@@ -1919,14 +1957,40 @@ PYTHON=/path/to/venv/bin/python3 bash apps/photo_browser/db_prune.sh plan \
 약 2초 간격으로 상태를 확인합니다. 메모리 압력이 높거나 안전 예산이 기존보다 20% 이상 줄면 캐시를 빠르게 축소하고, 30초 동안 안정적이면 최대 32 MiB씩 확대합니다. Linux PSI `full avg10 >= 1` 또는 `some avg10 >= 10`도 축소 조건입니다. 예산에는 SQLite 두 연결의 페이지 캐시 목표 합계 1 MiB를 우선 배정하고 남은 범위를 Python 캐시로 사용합니다. Python 객체 크기와 컨테이너 비용을 추정하며, 단일 항목이 예산보다 크면 캐시에 넣지 않습니다. SQLite mmap은 끄고 임시 정렬은 디스크를 사용합니다.
 
 ```bash
-# 기본: 자동 계산
+# 새 계획 생성: 자동 RAM 예산 + 상단 RAM/캐시 표시, 5초마다 갱신
 python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
-  --plan "$PLAN" --server-stopped
+  --plan "$PLAN" --server-stopped --progress-display pretty --progress-interval 5
 
-# 필요할 때 캐시 상한만 낮춤 (큰 값을 지정해도 자동 안전 범위를 적용)
+# 사용자 상한 지정 예시: 캐시를 최대 256 MiB까지 사용 (자동 안전 범위도 적용)
 python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
-  --plan "$PLAN" --server-stopped --memory-budget-mib 256
+  --plan "$PLAN" --server-stopped --memory-budget-mib 256 --progress-display pretty
+
+# 중단한 검사 이어하기: 기존 계획 경로와 기존 --under를 사용
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
+  --plan "$PLAN" --server-stopped --resume --under media \
+  --memory-budget-mib 256 --progress-display pretty
+
+# 계획 상태·plan_id 확인 후, 미처리 삭제 후보 실행 또는 삭제 이어하기
+python3 apps/photo_browser/cli.py db-prune-status --plan "$PLAN"
+python3 apps/photo_browser/cli.py --db "$DB" db-prune-apply \
+  --plan "$PLAN" --confirm "출력된_plan_id" --server-stopped \
+  --memory-budget-mib 256 --progress-display pretty
+
+# Bash 도우미에서도 RAM 상한·상단 표시 사용 가능 (검사·계획만 수행)
+bash apps/photo_browser/db_prune.sh plan --db "$DB" --plan "$PLAN" \
+  --memory-budget-mib 256 --progress-display pretty
 ```
+
+위 명령들은 용도별 예시입니다. 새 계획 생성은 존재하지 않는 계획 경로를 사용하고, 기존 검사 계획은 `--resume`으로 이어갑니다. 삭제를 시작한 계획은 `db-prune-apply`로 이어가며 `--resume`을 붙이지 않습니다. `--server-stopped`는 내장 서버의 정상 종료를 허용하는 옵션입니다. RAM 지표는 실행 중인 CLI 프로세스의 값이며, 수정된 화면은 새로 실행한 명령부터 적용됩니다.
+
+상단에는 다음과 같이 RAM과 캐시가 별도 줄로 표시됩니다(숫자는 예시).
+
+```text
+RAM 사용(RSS): 384.0 MiB · 가용: 4,096.0 MiB
+캐시: 96.0/256.0 MiB · automatic_initial
+```
+
+RSS는 프로세스가 실제로 사용하는 물리 메모리이며, 캐시 사용량보다 클 수 있습니다. 가용 메모리는 실행 환경의 제한을 반영한 추가 사용 가능량입니다. 지표를 읽을 수 없거나 캐시 예산을 준비 중이면 `?`로 표시합니다. 기본 `auto`도 일반 터미널에서는 같은 상단 표시를 사용하며, 파이프·파일 출력에서는 고정 화면 대신 stderr 진행 로그를 사용합니다. JSON 개수 확인의 `--count-only`는 `cli.py`에서 사용하며 Bash 도우미에는 해당 옵션을 전달하지 않습니다.
 
 `db-prune-apply`와 `db_prune.sh`에도 `--memory-budget-mib`를 사용할 수 있습니다. 이는 **캐시 상한이며 전체 프로세스 RAM의 강제 제한이 아닙니다**. 현재 인덱스와 JSON 청크는 한 파일씩 제한적으로 파싱하며 `--max-json-mib`도 유지됩니다. JSON은 파일 크기의 8배와 32 MiB 여유를 기준으로 메모리 확보 가능성을 사전 검사합니다. 이는 추정치이므로 Python 객체·할당기·OS 사용량까지 정확히 보장하지는 않습니다. 캐시를 비워도 RAM이 즉시 OS에 반환되지 않을 수 있습니다. 가용 메모리가 8 MiB 미만이거나 JSON 파싱 여유가 부족하면 오류로 중단하며, 같은 계획을 plan의 `--resume` 또는 apply로 이어서 실행할 수 있습니다. 계획 생성 이전에 중단되었다면 새 계획 명령을 실행하세요.
 
@@ -1938,7 +2002,7 @@ python3 apps/photo_browser/cli.py --db "$DB" db-prune-plan \
 
 #### DB prune · DB 파일 중복 용량 확인/제거
 
-**터미널에서는 pretty stdout 화면이 자동 적용됩니다.** 상단 8줄에 로그 파일 경로·시작/현재 시각·단계·처리 경로·진행률·경과 시간·종료 예상을 고정하고, 일반 stdout/stderr 출력과 최종 결과는 그 아래에서 스크롤합니다. 기본 5초 주기 로그 기록 때 상단 표시도 갱신됩니다. 종료·오류·Ctrl+C 시 스크롤 영역과 출력 스트림을 복원합니다. 좁은 화면·ANSI 미지원 터미널에서는 일반 출력으로 전환합니다.
+**터미널에서는 pretty stdout 화면이 자동 적용됩니다.** 상단 9줄에 로그 파일 경로·RAM 사용량·캐시 사용량·시작/현재 시각·단계·처리 경로·진행률·경과 시간·종료 예상을 고정하고, 일반 stdout/stderr 출력과 최종 결과는 그 아래에서 스크롤합니다. 기본 5초 주기 로그 기록 때 상단 표시도 갱신됩니다. 종료·오류·Ctrl+C 시 스크롤 영역과 출력 스트림을 복원합니다. 좁은 화면·ANSI 미지원 터미널에서는 일반 출력으로 전환합니다.
 
 ```bash
 # 터미널 상단 고정 화면 명시 (TTY에서 사용)
